@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      await supabase.rpc("accept_my_invitations");
+      return NextResponse.redirect(`${origin}${next}`);
+    }
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
   }
   return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("That sign-in link is invalid or has expired.")}`);

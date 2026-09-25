@@ -18,6 +18,7 @@ export async function signIn(_prev: AuthState, form: FormData): Promise<AuthStat
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!error) await supabase.rpc("accept_my_invitations");
   if (error) {
     return {
       error:

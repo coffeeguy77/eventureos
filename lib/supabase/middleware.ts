@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth"];
+// /p/* is the customer portal (it handles its own sign-in); /api/public and /api/cron authenticate by key/secret
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/p", "/api/public", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

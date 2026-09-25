@@ -30,11 +30,14 @@ export const getContext = cache(async () => {
         "role, title, organisation:organisations(id, name, slug, business_type, contact_email, brand_colour, logo_url, timezone, currency, plan, settings)"
       )
       .eq("user_id", user.id)
-      .eq("status", "active"),
+      .eq("status", "active")
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`),
   ]);
   if (error) throw new Error(`Could not load your organisations: ${error.message}`);
 
-  const memberships = ((rows ?? []) as unknown as Membership[])
+  const all = (rows ?? []) as unknown as (Membership & { title: string | null })[];
+  const portalOnly = all.filter((m) => m.organisation && m.role === "customer");
+  const memberships = all
     .filter((m) => m.organisation && m.role !== "customer")
     .sort((a, b) => a.organisation.name.localeCompare(b.organisation.name));
 
@@ -46,14 +49,20 @@ export const getContext = cache(async () => {
     user,
     profile: (profile ?? { id: user.id, email: user.email ?? "", full_name: null }) as Member,
     memberships,
+    portalOrgs: portalOnly.map((m) => m.organisation),
     current,
+    isSupportSession: current?.title === "EventureOS Support",
   };
 });
 
 /** Like getContext, but guarantees an organisation (sends new users to onboarding). */
 export async function requireOrg() {
   const ctx = await getContext();
-  if (!ctx.current) redirect("/onboarding");
+  if (!ctx.current) {
+    // Portal-only customers belong in their portal, not the staff app
+    if (ctx.portalOrgs.length) redirect(`/p/${ctx.portalOrgs[0].slug}`);
+    redirect("/onboarding");
+  }
   return { ...ctx, org: ctx.current.organisation, role: ctx.current.role };
 }
 
@@ -69,6 +78,12 @@ export const getMembers = cache(async (orgId: string) => {
   return ((data ?? []) as unknown as { role: OrgRole; title: string | null; user: Member }[])
     .filter((m) => m.user)
     .map((m) => ({ ...m.user, role: m.role, title: m.title }));
+});
+
+export const isSuperAdmin = cache(async () => {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("is_super_admin");
+  return data === true;
 });
 
 export function canManage(role: OrgRole) {
