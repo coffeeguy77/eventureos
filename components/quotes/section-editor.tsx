@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, ImageIcon, Loader2, Package, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { money } from "@/lib/format";
@@ -213,11 +213,22 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
 
 function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
+  const fit = () => {
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [props.value]);
-  return <textarea ref={ref} {...props} />;
+    // scrollHeight excludes the border; add it back so no scrollbar appears
+    el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+  };
+  useLayoutEffect(fit, [props.value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => { if (el.clientWidth !== w) { w = el.clientWidth; fit(); } });
+    ro.observe(el);
+    document.fonts?.ready.then(fit).catch(() => undefined);
+    return () => ro.disconnect();
+  }, []);
+  return <textarea ref={ref} {...props} className={cn(props.className, "overflow-hidden")} />;
 }
