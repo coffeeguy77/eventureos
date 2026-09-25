@@ -1,0 +1,44 @@
+import { requireOrg } from "@/lib/context";
+import { Sidebar, MobileNav } from "@/components/shell/sidebar";
+import { Topbar } from "@/components/shell/topbar";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const { supabase, org, profile, memberships } = await requireOrg();
+
+  const [notif, unread, openEnquiries] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("id, title, body, link, created_at, read_at, type")
+      .eq("organisation_id", org.id)
+      .order("created_at", { ascending: false })
+      .limit(15),
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", org.id)
+      .is("read_at", null),
+    supabase
+      .from("enquiries")
+      .select("id", { count: "exact", head: true })
+      .eq("organisation_id", org.id)
+      .in("status", ["new", "needs_review"]),
+  ]);
+  if (notif.error) throw new Error(`Could not load notifications: ${notif.error.message}`);
+
+  return (
+    <div className="min-h-screen">
+      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} />
+      <div className="lg:pl-[232px]">
+        <Topbar
+          user={{ name: profile.full_name ?? profile.email, email: profile.email }}
+          orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
+          currentOrgId={org.id}
+          notifications={notif.data ?? []}
+          unread={unread.count ?? 0}
+        />
+        <MobileNav />
+        <main className="mx-auto max-w-[1360px] px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+      </div>
+    </div>
+  );
+}

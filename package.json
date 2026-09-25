@@ -1,0 +1,36 @@
+{
+  "name": "eventureos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EventureOS — the operating system for event businesses",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "seed:generate": "python3 supabase/seed/generate_seed.py"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.2",
+    "clsx": "2.1.1",
+    "geist": "1.7.2",
+    "lucide-react": "0.577.0",
+    "next": "15.5.26",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
