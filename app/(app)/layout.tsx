@@ -1,9 +1,11 @@
-import { requireOrg } from "@/lib/context";
+import { requireOrg, isSuperAdmin } from "@/lib/context";
+import { SupportBanner } from "@/components/shell/support-banner";
 import { Sidebar, MobileNav } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, org, profile, memberships } = await requireOrg();
+  const { supabase, org, profile, memberships, isSupportSession, current } = await requireOrg();
+  const admin = await isSuperAdmin();
 
   const [notif, unread, openEnquiries] = await Promise.all([
     supabase
@@ -27,7 +29,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} />
+      {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
+      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} isSuperAdmin={admin} />
       <div className="lg:pl-[232px]">
         <Topbar
           user={{ name: profile.full_name ?? profile.email, email: profile.email }}

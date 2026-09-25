@@ -4,22 +4,23 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
+import { ButtonLink } from "@/components/ui/button";
 import { FilterBar } from "@/components/records/filter-bar";
-import { fmtDate, money } from "@/lib/format";
+import { fmtDate, money, todayISO } from "@/lib/format";
 
 export const metadata = { title: "Clients" };
 
 type Row = {
   id: string; name: string; company: string | null; email: string | null; phone: string | null; kind: string; tags: string[]; customer_since: string;
   events: { id: string; event_date: string | null; status: string }[];
-  invoices: { total: number; amount_paid: number; balance: number; status: string }[];
+  invoices: { total: number; amount_paid: number; balance: number; status: string; due_date: string | null; payments: { amount: number }[] }[];
 };
 
 export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; kind?: string }> }) {
   const sp = await searchParams;
   const { supabase, org } = await requireOrg();
   let query = supabase.from("customers")
-    .select("id, name, company, email, phone, kind, tags, customer_since, events(id, event_date, status), invoices(total, amount_paid, balance, status)")
+    .select("id, name, company, email, phone, kind, tags, customer_since, events(id, event_date, status), invoices(total, amount_paid, balance, status, due_date, payments(amount))")
     .eq("organisation_id", org.id).order("name").limit(500);
   if (sp.kind) query = query.eq("kind", sp.kind);
   if (sp.q) {
@@ -28,11 +29,13 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   }
   const { data, error } = await query;
   if (error) throw new Error(`Could not load clients: ${error.message}`);
-  const rows = (data ?? []) as Row[];
+  const rows = (data ?? []) as unknown as Row[];
+  const today = todayISO(org.timezone);
 
   return (
     <div>
-      <PageHeader title="Clients" subtitle="Everyone you’ve worked with, and what they’re worth." />
+      <PageHeader title="Clients" subtitle="Everyone you’ve worked with, and what they’re worth."
+        actions={<ButtonLink href="/clients/new" variant="primary">New client</ButtonLink>} />
       <Card>
         <div className="border-b border-line px-4 py-3">
           <FilterBar searchPlaceholder="Search name, company, email, phone…"
@@ -48,9 +51,10 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               </tr></thead>
               <tbody className="divide-y divide-line">
                 {rows.map((c) => {
-                  const ltv = c.invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.amount_paid), 0);
+                  const ltv = c.invoices.reduce((s, i) => s + i.payments.reduce((t, p) => t + Number(p.amount), 0), 0);
                   const owing = c.invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.balance), 0);
-                  const overdue = c.invoices.some((i) => i.status === "overdue");
+                  const overdue = c.invoices.some((i) => i.status !== "void" && Number(i.balance) > 0 && (i.status === "overdue" || (i.status !== "draft" && i.due_date != null && i.due_date < today)));
+                  const upcoming = c.events.filter((e) => e.event_date && e.event_date >= today && e.status !== "cancelled").length;
                   return (
                     <tr key={c.id} className="relative hover:bg-zinc-50/70">
                       <td className="px-4 py-3">
@@ -63,7 +67,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-ink-muted"><span className="block">{c.email ?? "—"}</span><span className="text-[12px] text-ink-faint">{c.phone}</span></td>
-                      <td className="tabular px-4 py-3 text-right text-ink">{c.events.length}</td>
+                      <td className="tabular px-4 py-3 text-right text-ink">{c.events.length}{upcoming > 0 && <span className="block text-[11.5px] text-ink-faint">{upcoming} upcoming</span>}</td>
                       <td className="tabular px-4 py-3 text-right text-ink">{money(ltv, org.currency, { cents: false })}</td>
                       <td className={`tabular px-4 py-3 text-right ${overdue ? "font-medium text-rose-700" : owing > 0 ? "text-ink" : "text-ink-faint"}`}>{owing > 0 ? money(owing, org.currency) : "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{fmtDate(c.customer_since)}</td>

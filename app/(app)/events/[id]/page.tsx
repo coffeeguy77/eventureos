@@ -14,6 +14,7 @@ import { ActivityFeed } from "@/components/records/activity-feed";
 import { NextActionBanner } from "@/components/records/next-action";
 import { EventTimeline } from "@/components/records/event-timeline";
 import { EventDetailsEditor, EventStatusSelect } from "./controls";
+import { StaffPortalMessages } from "@/components/portal/staff-messages";
 import { addNote, createTask } from "@/app/(app)/record-actions";
 import { eventNextAction } from "@/lib/next-action";
 import { EVENT_STATUS, INVOICE_STATUS, QUOTE_STATUS } from "@/lib/status";
@@ -226,50 +227,107 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         )}
 
         {tab === "communication" && (
-          <Card>
-            <CardHeader title="Email conversation" subtitle="Synced copies — Gmail stays the source of truth" />
-            <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={integrations.gmail === "connected"} />
-          </Card>
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <Card>
+              <CardHeader title="Email conversation" subtitle="Synced copies — Gmail stays the source of truth" />
+              <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={integrations.gmail === "connected"} />
+            </Card>
+            <StaffPortalMessages eventId={e.id} customerId={e.customer_id} />
+          </div>
         )}
 
         {tab === "quote" && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <Card>
-              <CardHeader
-                title={quote ? `Quote Q-${quote.number} · ${quote.title}` : "Quote"}
-                subtitle={quote ? `Issued ${fmtDate(quote.issue_date)}${quote.expiry_date ? ` · expires ${fmtDate(quote.expiry_date)}` : ""}` : undefined}
-                action={quote && <Badge tone={QUOTE_STATUS[quote.status].tone} dot>{QUOTE_STATUS[quote.status].label}</Badge>}
-              />
-              {!quote && <EmptyState title="No quote yet">The quote builder arrives in the next build. Quotes will belong to this event, with draft versions and immutable sent versions.</EmptyState>}
-              {quote && quote.has_unpublished_changes && (
-                <p className="mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">
-                  {currentVersion ? "The draft has changes the customer hasn’t seen. They still see version " + currentVersion.version_number + "." : "Draft — not yet sent. The customer can’t see it until it’s published."}
-                </p>
+            <div className="min-w-0 space-y-6">
+              <Card>
+                <CardHeader
+                  title="Quotes"
+                  subtitle={quotes.length ? "Drafts stay private until you publish a version" : "Build the proposal for this event"}
+                  action={quotes.length > 0 && (
+                    <Link href={`/quotes/new?event=${e.id}`} className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg bg-white px-3 text-[12.5px] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">New quote</Link>
+                  )}
+                />
+                {quotes.length === 0 ? (
+                  <EmptyState
+                    title="No quote yet"
+                    action={<Link href={`/quotes/new?event=${e.id}`} className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-3.5 text-[13px] font-medium text-white shadow-sm hover:bg-brand-600">Create quote</Link>}
+                  >
+                    Sections, packages and optional extras. The customer only sees the quote once you publish it.
+                  </EmptyState>
+                ) : (
+                  <ul className="divide-y divide-line border-t border-line">
+                    {quotes.map((q) => {
+                      const cv = versions.find((v) => v.id === q.current_version_id) ?? null;
+                      return (
+                        <li key={q.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-ink">
+                              <span className="tabular">Q-{q.number}</span><span className="truncate font-normal text-ink-muted">{q.title}</span>
+                            </p>
+                            <p className="mt-0.5 text-[12px] text-ink-muted">
+                              {cv ? `Customer sees version ${cv.version_number} · sent ${fmtDateTime(cv.published_at, tz, "date")}` : "Not sent yet — customer can’t see it"}
+                              {q.expiry_date ? ` · expires ${fmtDate(q.expiry_date)}` : ""}
+                              {cv && q.has_unpublished_changes && <span className="text-amber-800"> · unpublished changes</span>}
+                            </p>
+                          </div>
+                          <span className="tabular text-[13.5px] font-medium text-ink">{cv ? money(cv.total, cur) : <span className="font-normal text-ink-faint">Draft</span>}</span>
+                          <Badge tone={QUOTE_STATUS[q.status].tone} dot>{QUOTE_STATUS[q.status].label}</Badge>
+                          <Link href={`/quotes/${q.id}`} className={cn("inline-flex h-8 items-center whitespace-nowrap rounded-lg px-3 text-[12.5px] font-medium",
+                            q.status === "accepted" ? "bg-white text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50" : "bg-brand-500 text-white shadow-sm hover:bg-brand-600")}>
+                            {q.status === "accepted" ? "View quote" : "Open quote builder"}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </Card>
+              {quote && (
+                <Card>
+                  <CardHeader
+                    title={`What the customer sees · Q-${quote.number}`}
+                    subtitle={currentVersion ? `Version ${currentVersion.version_number} · issued ${fmtDate(quote.issue_date)}${quote.expiry_date ? ` · valid until ${fmtDate(quote.expiry_date)}` : ""}` : undefined}
+                    action={<Badge tone={QUOTE_STATUS[quote.status].tone} dot>{QUOTE_STATUS[quote.status].label}</Badge>}
+                  />
+                  {quote.has_unpublished_changes && (
+                    <p className="mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">
+                      {currentVersion ? "The draft has changes the customer hasn’t seen. They still see version " + currentVersion.version_number + "." : "Draft — not yet sent. The customer can’t see it until it’s published."}
+                    </p>
+                  )}
+                  {currentVersion ? (
+                    <QuoteSnapshot v={currentVersion} cur={cur} />
+                  ) : (
+                    <p className="px-5 pb-5 text-[12.5px] text-ink-muted">
+                      Nothing published yet. <Link href={`/quotes/${quote.id}`} className="font-medium text-brand-700 hover:underline">Open the quote builder</Link> to finish the draft and publish it.
+                    </p>
+                  )}
+                </Card>
               )}
-              {currentVersion ? (
-                <QuoteSnapshot v={currentVersion} cur={cur} />
-              ) : quote ? (
-                <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Editing drafts arrives with the quote builder in the next build.</p>
-              ) : null}
-            </Card>
-            <Card>
+            </div>
+            <Card className="self-start">
               <CardHeader title="Version history" subtitle="Sent versions are locked and can never change" />
               {versions.length === 0 ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Nothing published yet.</p> : (
                 <ol className="divide-y divide-line border-t border-line">
-                  {versions.map((v) => (
-                    <li key={v.id} className="px-5 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-medium text-ink">Version {v.version_number}</span>
-                        <Badge tone={QUOTE_STATUS[v.status].tone}>{QUOTE_STATUS[v.status].label}</Badge>
-                      </div>
-                      <p className="tabular mt-0.5 text-[13px] text-ink">{money(v.total, cur)}</p>
-                      <ul className="mt-1 space-y-0.5 text-[12px] text-ink-muted">
-                        <li>Sent {fmtDateTime(v.published_at, tz)}</li>
-                        {v.viewed_at && <li>Viewed {fmtDateTime(v.viewed_at, tz)}</li>}
-                        {v.accepted_by_name && <li className="text-emerald-700">Accepted by {v.accepted_by_name} · {fmtDateTime(v.responded_at, tz)}{v.acceptance_ip ? ` · IP ${v.acceptance_ip}` : ""}</li>}
-                      </ul>
-                    </li>
-                  ))}
+                  {versions.map((v) => {
+                    const vq = quotes.find((q) => q.id === v.quote_id);
+                    return (
+                      <li key={v.id} className="relative px-5 py-3 hover:bg-zinc-50/70">
+                        <div className="flex items-center justify-between gap-2">
+                          <Link href={`/quotes/${v.quote_id}?version=${v.version_number}`} className="text-[13px] font-medium text-ink after:absolute after:inset-0 hover:text-brand-700">
+                            {quotes.length > 1 && vq ? `Q-${vq.number} · ` : ""}Version {v.version_number}
+                          </Link>
+                          <Badge tone={QUOTE_STATUS[v.status].tone}>{QUOTE_STATUS[v.status].label}</Badge>
+                        </div>
+                        <p className="tabular mt-0.5 text-[13px] text-ink">{money(v.total, cur)}</p>
+                        <ul className="mt-1 space-y-0.5 text-[12px] text-ink-muted">
+                          <li>Sent {fmtDateTime(v.published_at, tz)}</li>
+                          {v.viewed_at && <li>Viewed {fmtDateTime(v.viewed_at, tz)}</li>}
+                          {v.status === "accepted" && <li className="text-emerald-700">Accepted{v.accepted_by_name ? ` by ${v.accepted_by_name}` : ""} · {fmtDateTime(v.responded_at, tz)}{v.acceptance_ip ? ` · IP ${v.acceptance_ip}` : ""}</li>}
+                          {v.status === "declined" && <li className="text-rose-700">Declined · {fmtDateTime(v.responded_at, tz)}</li>}
+                        </ul>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </Card>
@@ -280,7 +338,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader title="Calendar entries" action={<span className="text-[11.5px] text-ink-faint">{integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}</span>} />
-              {cal.length === 0 ? <EmptyState title="Not on the calendar yet">Confirmed events are added to a calendar automatically.</EmptyState> : (
+              {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<Link href={`/calendar?add=${e.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Add to calendar</Link>}>Confirmed events are added to a calendar automatically when the quote is accepted.</EmptyState> : (
                 <ul className="divide-y divide-line border-t border-line">
                   {cal.map((c) => (
                     <li key={c.id} className="flex items-center gap-3 px-5 py-3">
@@ -347,7 +405,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   <tbody className="divide-y divide-line">
                     {invoices.map((i) => (
                       <tr key={i.id}>
-                        <td className="px-5 py-3 font-medium text-ink">{i.number}</td>
+                        <td className="px-5 py-3 font-medium"><Link href={`/invoices/${i.id}`} className="text-ink hover:text-brand-700">{i.number}</Link></td>
                         <td className="px-5 py-3 capitalize text-ink-muted">{i.kind}</td>
                         <td className="px-5 py-3 text-ink-muted">{fmtDate(i.issue_date)}</td>
                         <td className={cn("px-5 py-3", i.status === "overdue" ? "font-medium text-rose-700" : "text-ink-muted")}>{fmtDate(i.due_date)}</td>
@@ -396,31 +454,45 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 }
 
 function QuoteSnapshot({ v, cur }: { v: VersionRow; cur: string }) {
+  type Item = VersionRow["snapshot"]["sections"][number]["items"][number] & { tax_rate?: number; discount_percent?: number; package?: boolean };
+  const sections = v.snapshot.sections as { title: string; optional?: boolean; items: Item[] }[];
+  const optionalTotal = sections.reduce((a, s) => a + s.items.filter((i) => i.optional)
+    .reduce((b, i) => b + Number(i.line_total) * (1 + Number(i.tax_rate ?? 0) / 100), 0), 0);
   return (
     <div className="px-5 pb-5">
-      {v.snapshot.sections.map((s) => (
-        <div key={s.title} className="mb-4">
-          <p className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">{s.title}</p>
-          <table className="w-full text-[13px]">
-            <tbody className="divide-y divide-line">
-              {s.items.map((it, idx) => (
-                <tr key={idx} className={cn(it.optional && "text-ink-faint")}>
-                  <td className="py-2 pr-3">
-                    <span className="text-ink">{it.name}</span>{it.optional && <Badge className="ml-2">Optional</Badge>}
-                    {it.description && <span className="block text-[12px] text-ink-muted">{it.description}</span>}
-                  </td>
-                  <td className="tabular whitespace-nowrap py-2 pr-3 text-right text-ink-muted">{Number(it.quantity)} {it.unit ?? ""} × {money(it.unit_price, cur)}</td>
-                  <td className="tabular whitespace-nowrap py-2 text-right text-ink">{money(it.line_total, cur)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {sections.map((s, si) => (
+        <div key={si} className="mb-4">
+          <p className="mb-1.5 flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">
+            {s.title}{s.optional && <span className="font-medium normal-case tracking-normal text-brand-700">Optional extras</span>}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-[13px]">
+              <tbody className="divide-y divide-line">
+                {s.items.map((it, idx) => (
+                  <tr key={idx} className={cn(it.optional && "text-ink-faint")}>
+                    <td className="py-2 pr-3">
+                      <span className={cn(it.optional ? "text-ink-muted" : "text-ink")}>{it.name}</span>
+                      {it.package && <Badge tone="brand" className="ml-2">Package</Badge>}
+                      {it.optional && !s.optional && <Badge className="ml-2">Optional</Badge>}
+                      {it.description && <span className="block text-[12px] text-ink-muted">{it.description}</span>}
+                    </td>
+                    <td className="tabular whitespace-nowrap py-2 pr-3 text-right text-ink-muted">
+                      {Number(it.quantity)} {it.unit ?? ""} × {money(it.unit_price, cur)}
+                      {Number(it.discount_percent ?? 0) > 0 && <span className="block text-[11.5px] text-emerald-700">{Number(it.discount_percent)}% off</span>}
+                    </td>
+                    <td className={cn("tabular whitespace-nowrap py-2 text-right", it.optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ))}
-      <dl className="ml-auto mt-2 w-full max-w-[260px] space-y-1 border-t border-line pt-3 text-[13px]">
+      <dl className="ml-auto mt-2 w-full max-w-[280px] space-y-1 border-t border-line pt-3 text-[13px]">
         <div className="flex justify-between"><dt className="text-ink-muted">Subtotal</dt><dd className="tabular">{money(v.subtotal, cur)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">GST</dt><dd className="tabular">{money(v.tax_total, cur)}</dd></div>
         <div className="flex justify-between text-[14px] font-semibold"><dt>Total</dt><dd className="tabular">{money(v.total, cur)}</dd></div>
+        {optionalTotal > 0 && <div className="flex justify-between text-[12px] text-ink-muted"><dt>Optional extras (not included)</dt><dd className="tabular">{money(optionalTotal, cur)}</dd></div>}
       </dl>
     </div>
   );

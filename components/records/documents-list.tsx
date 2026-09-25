@@ -5,7 +5,7 @@ import { relative } from "@/lib/format";
 export interface DocRow { id: string; name: string; size_bytes: number | null; visibility: string; requested_from_customer: boolean; created_at: string }
 
 export function DocumentsList({ docs }: { docs: DocRow[] }) {
-  if (docs.length === 0) return <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No documents yet. File uploads arrive with the customer portal.</p>;
+  if (docs.length === 0) return <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No documents yet. Request documents from customers in the Customer Portal page; customer uploads appear here.</p>;
   return (
     <ul className="divide-y divide-line border-t border-line">
       {docs.map((d) => (

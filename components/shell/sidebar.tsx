@@ -4,26 +4,26 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Globe, BarChart3, Settings,
+  CreditCard, Globe, BarChart3, Settings, ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/enquiries", label: "Enquiries", icon: Inbox, countKey: "enquiries" as const },
-  { href: "/crm", label: "CRM", icon: Workflow, soon: true },
-  { href: "/quotes", label: "Quotes", icon: FileText, soon: true },
+  { href: "/crm", label: "CRM", icon: Workflow },
+  { href: "/quotes", label: "Quotes", icon: FileText },
   { href: "/events", label: "Events", icon: CalendarCheck2 },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays, soon: true },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/clients", label: "Clients", icon: Users },
-  { href: "/invoices", label: "Invoices", icon: Receipt, soon: true },
-  { href: "/payments", label: "Payments", icon: CreditCard, soon: true },
-  { href: "/portal", label: "Customer Portal", icon: Globe, soon: true },
-  { href: "/reports", label: "Reports", icon: BarChart3, soon: true },
-  { href: "/settings", label: "Settings", icon: Settings, soon: true },
+  { href: "/invoices", label: "Invoices", icon: Receipt },
+  { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/portal", label: "Customer Portal", icon: Globe },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar({ orgName, counts }: { orgName: string; counts: { enquiries: number } }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false }: { orgName: string; counts: { enquiries: number }; isSuperAdmin?: boolean }) {
   const pathname = usePathname();
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-white lg:flex">
@@ -52,14 +52,17 @@ export function Sidebar({ orgName, counts }: { orgName: string; counts: { enquir
               {count > 0 && (
                 <span className="rounded-full bg-brand-500 px-1.5 py-px text-[10.5px] font-semibold text-white">{count}</span>
               )}
-              {item.soon && <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint/80">Soon</span>}
             </Link>
           );
         })}
+        {isSuperAdmin && (
+          <Link href="/admin" className="mt-3 flex items-center gap-2.5 rounded-lg border-t border-line px-2.5 pb-[7px] pt-3 text-[13px] font-medium text-ink-muted hover:text-ink">
+            <ShieldCheck className="h-[16px] w-[16px] text-ink-faint" strokeWidth={1.8} /> Platform admin
+          </Link>
+        )}
       </nav>
       <div className="border-t border-line px-5 py-3 text-[11.5px] text-ink-faint">
         <span className="font-medium text-ink-muted">{orgName}</span>
-        <span className="block">Phase 1 · demo data</span>
       </div>
     </aside>
   );
@@ -80,7 +83,7 @@ export function MobileNav() {
   const pathname = usePathname();
   return (
     <nav className="flex gap-1 overflow-x-auto border-b border-line bg-white px-3 py-2 lg:hidden">
-      {NAV.filter((n) => !n.soon).map((item) => {
+      {NAV.map((item) => {
         const active = pathname === item.href || pathname.startsWith(item.href + "/");
         return (
           <Link

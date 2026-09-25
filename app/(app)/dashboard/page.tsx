@@ -87,6 +87,12 @@ export default async function DashboardPage() {
   const messages = must<Row[]>(messagesRes, "messages");
   const overdueEvents = must<Row[]>(overdueEventsRes, "events");
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
+  const { data: integ } = await supabase.from("integrations").select("provider, status, last_sync_at").eq("organisation_id", org.id);
+  const conn = (p: string) => (integ ?? []).find((i) => i.provider === p);
+  const connLabel = (p: string, name: string) => {
+    const i = conn(p);
+    return i?.status === "connected" ? `${name} synced ${i.last_sync_at ? relative(i.last_sync_at) : "—"}` : `${name} not connected`;
+  };
 
   // ---- KPIs -------------------------------------------------------------
   const newEnquiries = enquiries.filter((e) => e.status === "new" || e.status === "needs_review");
@@ -135,14 +141,14 @@ export default async function DashboardPage() {
       key: "viewed", label: "Quote viewed",
       items: quotes.filter((q) => q.status === "viewed").map((q) => ({
         key: "q" + q.id, title: `Q-${q.number} · ${q.event?.name ?? q.title}`, subtitle: `${q.customer?.name} · ${money(q.version?.total, cur)}`,
-        href: `/events/${q.event_id}?tab=quote`, meta: `Viewed ${relative(q.version?.viewed_at)}`,
+        href: `/quotes/${q.id}`, meta: `Viewed ${relative(q.version?.viewed_at)}`,
       })),
     },
     {
       key: "approval", label: "Awaiting approval",
       items: quotes.filter((q) => q.status === "sent").map((q) => ({
         key: "q" + q.id, title: `Q-${q.number} · ${q.event?.name ?? q.title}`, subtitle: `${q.customer?.name} · ${money(q.version?.total, cur)}`,
-        href: `/events/${q.event_id}?tab=quote`, meta: `Sent ${relative(q.version?.published_at)} · not yet opened`,
+        href: `/quotes/${q.id}`, meta: `Sent ${relative(q.version?.published_at)} · not yet opened`,
       })),
     },
     {
@@ -183,13 +189,13 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="New enquiries" value={newEnquiries.length} href="/enquiries?status=new"
           sub={`${enquiries.filter((e) => e.status === "needs_review").length} need review`} />
-        <Kpi label="Quotes to action" value={drafts.length + awaiting.length} href="/events?status=quoted"
+        <Kpi label="Quotes to action" value={drafts.length + awaiting.length} href="/quotes"
           sub={`${drafts.length} draft · ${awaiting.length} awaiting reply`} />
         <Kpi label="Bookings confirmed" value={confirmedRes.count ?? 0} href="/events?status=confirmed" sub="Upcoming, confirmed" />
         <Kpi label="Upcoming events" value={events.length} href="/events" sub={`${eventsWeek.length} in the next 7 days`} />
-        <Kpi label="Outstanding invoices" value={compactMoney(outstanding, cur)} href="#outstanding" alert={overdueInvoices.length > 0}
+        <Kpi label="Outstanding invoices" value={compactMoney(outstanding, cur)} href="/invoices" alert={overdueInvoices.length > 0}
           sub={`${invoices.length} open · ${overdueInvoices.length} overdue`} />
-        <Kpi label={`Revenue · ${month.label}`} value={compactMoney(revenue, cur)} sub="Payments recorded this month" />
+        <Kpi label={`Revenue · ${month.label}`} value={compactMoney(revenue, cur)} href="/payments" sub="Payments recorded this month" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
@@ -232,7 +238,7 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<span className="text-[11.5px] text-ink-faint">Google Calendar not connected</span>} />
+            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[11.5px] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
             <div className="grid grid-cols-7 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line">
               {days.map((d) => {
                 const items = cal.filter((c) => localDay(c.starts_at) === d);
@@ -289,7 +295,7 @@ export default async function DashboardPage() {
 
           <Card id="outstanding">
             <CardHeader title="Outstanding payments" subtitle={`${money(outstanding, cur)} across ${invoices.length} invoices`}
-              action={<span className="text-[11.5px] text-ink-faint">Xero not connected</span>} />
+              action={<span className="text-[11.5px] text-ink-faint">{connLabel("xero", "Xero")}</span>} />
             {invoices.length === 0 ? <EmptyState title="Everything is paid" /> : (
               <ul className="divide-y divide-line border-t border-line">
                 {invoices.slice(0, 6).map((i) => {
@@ -297,7 +303,7 @@ export default async function DashboardPage() {
                   const daysLate = i.due_date ? daysBetween(i.due_date, today) : 0;
                   return (
                     <li key={i.id}>
-                      <Link href={i.event_id ? `/events/${i.event_id}?tab=invoice` : `/clients/${i.customer_id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-zinc-50/70">
+                      <Link href={`/invoices/${i.id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-zinc-50/70">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[13px] font-medium text-ink">{i.customer?.name}</p>
                           <p className="truncate text-[12px] text-ink-muted">{i.number} · {i.event?.name ?? "No event"}</p>
@@ -317,7 +323,7 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Recent customer communication" action={<span className="text-[11.5px] text-ink-faint">Gmail not connected · demo messages</span>} />
+            <CardHeader title="Recent customer communication" action={<span className="text-[11.5px] text-ink-faint">{conn("gmail")?.status === "connected" ? connLabel("gmail", "Gmail") : "Gmail not connected · demo messages"}</span>} />
             <ul className="divide-y divide-line border-t border-line">
               {messages.map((m) => (
                 <li key={m.id}>

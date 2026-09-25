@@ -1173,6 +1173,9 @@ for o in (bc, ct):
     insert("quote_sections", o.sections)
     insert("quote_items", o.items)
     insert("quote_versions", o.versions)
+    # item inserts fire the "unpublished changes" trigger — restore the intended flags
+    for r in o.quotes:
+        out.append(f"update public.quotes set has_unpublished_changes = {q(r['has_unpublished_changes'])} where id = {q(r['id'])};\n")
     for r in o.quotes:
         if r["_current"]:
             out.append(f"update public.quotes set current_version_id = {q(r['_current'])} where id = {q(r['id'])};\n")

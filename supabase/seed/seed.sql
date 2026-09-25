@@ -265,6 +265,18 @@ insert into public.quote_versions (id, organisation_id, quote_id, version_number
   (demo.u('bc:qver:wellness:1'), demo.u('org:bean-culture'), demo.u('bc:quote:wellness'), 1, demo.quote_snapshot('5b7427b5-d295-52bf-a92b-3118f0078cee'), 1236.00, 123.60, 1359.60, 'accepted', demo.ago(57600), demo.u('user:tom'), demo.ago(56160), demo.ago(54720), 'Hannah Brooks', '203.0.113.24'::inet, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)', null),
   (demo.u('bc:qver:summit-bfast:1'), demo.u('org:bean-culture'), demo.u('bc:quote:summit-bfast'), 1, demo.quote_snapshot('0e5f6c13-c704-5fbc-819d-8d9a2669a4bc'), 2232.00, 223.20, 2455.20, 'accepted', demo.ago(36000), demo.u('user:sarah'), demo.ago(34560), demo.ago(34260), 'Andrew Kim', '203.0.113.24'::inet, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)', null),
   (demo.u('bc:qver:makers:1'), demo.u('org:bean-culture'), demo.u('bc:quote:makers'), 1, demo.quote_snapshot('78375822-a8e9-54ff-840b-08cc59a619d5'), 3495.00, 349.50, 3844.50, 'accepted', demo.ago(21600), demo.u('user:sarah'), demo.ago(20160), demo.ago(18720), 'Sophie Turner', '203.0.113.24'::inet, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)', null);
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:smith');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:captech-offsite');
+update public.quotes set has_unpublished_changes = true where id = demo.u('bc:quote:captech-eoy');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:harper');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:summit-board');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:runclub');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:school');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:molonglo');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:sharma');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:wellness');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:summit-bfast');
+update public.quotes set has_unpublished_changes = false where id = demo.u('bc:quote:makers');
 update public.quotes set current_version_id = demo.u('bc:qver:smith:2') where id = demo.u('bc:quote:smith');
 update public.quotes set current_version_id = demo.u('bc:qver:captech-offsite:1') where id = demo.u('bc:quote:captech-offsite');
 update public.quotes set current_version_id = demo.u('bc:qver:harper:1') where id = demo.u('bc:quote:harper');
@@ -551,6 +563,9 @@ insert into public.quote_versions (id, organisation_id, quote_id, version_number
   (demo.u('ct:qver:wilson:1'), demo.u('org:copper-and-tonic'), demo.u('ct:quote:wilson'), 1, demo.quote_snapshot('53a11153-4d15-57a7-854a-e2a8812fd6e8'), 5100.00, 510.00, 5610.00, 'accepted', demo.ago(72000), demo.u('user:liam'), demo.ago(70560), demo.ago(67680), 'Hayley Wilson', '203.0.113.24'::inet, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)', null),
   (demo.u('ct:qver:govlaw:1'), demo.u('org:copper-and-tonic'), demo.u('ct:quote:govlaw'), 1, demo.quote_snapshot('f6fa52a7-de09-596d-8c2d-4c022c1f7172'), 3700.00, 370.00, 4070.00, 'sent', demo.ago(2880), demo.u('user:liam'), null, null, null, null, null, null),
   (demo.u('ct:qver:past:1'), demo.u('org:copper-and-tonic'), demo.u('ct:quote:past'), 1, demo.quote_snapshot('52c43248-1641-5a48-bf66-1dc36872aff3'), 4590.00, 459.00, 5049.00, 'accepted', demo.ago(86400), demo.u('user:liam'), demo.ago(84960), demo.ago(83520), 'Tim Park', '203.0.113.24'::inet, 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)', null);
+update public.quotes set has_unpublished_changes = false where id = demo.u('ct:quote:wilson');
+update public.quotes set has_unpublished_changes = false where id = demo.u('ct:quote:govlaw');
+update public.quotes set has_unpublished_changes = false where id = demo.u('ct:quote:past');
 update public.quotes set current_version_id = demo.u('ct:qver:wilson:1') where id = demo.u('ct:quote:wilson');
 update public.quotes set current_version_id = demo.u('ct:qver:govlaw:1') where id = demo.u('ct:quote:govlaw');
 update public.quotes set current_version_id = demo.u('ct:qver:past:1') where id = demo.u('ct:quote:past');

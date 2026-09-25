@@ -172,6 +172,9 @@ function QuickCreate() {
   const items = [
     { href: "/enquiries/new", label: "New enquiry", hint: "Log a call, DM or walk-in" },
     { href: "/events/new", label: "New event", hint: "For an existing customer" },
+    { href: "/quotes/new", label: "New quote", hint: "Build a proposal for an event" },
+    { href: "/clients/new", label: "New client", hint: "Checks for duplicates first" },
+    { href: "/invoices/new", label: "New invoice", hint: "Deposit, final or full" },
   ];
   return (
     <Menu
@@ -190,7 +193,6 @@ function QuickCreate() {
               <div className="text-[12px] text-ink-muted">{i.hint}</div>
             </Link>
           ))}
-          <div className="mt-1 border-t border-line px-3 pb-1 pt-2 text-[11.5px] text-ink-faint">Quotes are created inside an event.</div>
         </>
       )}
     </Menu>

@@ -1,10 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { sendReply, type ReplyState } from "@/app/(app)/inbox-actions";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected }: {
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
@@ -13,7 +18,7 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
     return (
       <div className="px-5 pb-5">
         <p className="text-[12.5px] text-ink-muted">No email conversation linked yet.</p>
-        <ReplyBox connected={gmailConnected} />
+        <NotConnectedHint connected={gmailConnected} empty />
       </div>
     );
   }
@@ -40,7 +45,7 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
                       <div className="flex flex-wrap items-baseline gap-x-2">
                         <span className={cn("text-[13px] text-ink", !m.is_read && "font-semibold")}>{m.from_name ?? m.from_email}</span>
                         <span className="text-[12px] text-ink-faint">{out ? `to ${m.to_emails.join(", ")}` : m.from_email}</span>
-                        <span className="ml-auto text-[11.5px] text-ink-faint" title={fmtDateTime(m.sent_at, tz)}>{relative(m.sent_at)}</span>
+                        <span suppressHydrationWarning className="ml-auto text-[11.5px] text-ink-faint" title={fmtDateTime(m.sent_at, tz)}>{relative(m.sent_at)}</span>
                       </div>
                       <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-ink-muted">{m.body_text ?? m.snippet}</p>
                     </div>
@@ -48,25 +53,60 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
                 );
               })}
             </ol>
+            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} />}
           </section>
         );
       })}
-      <ReplyBox connected={gmailConnected} />
+      {!gmailConnected && <NotConnectedHint connected={false} />}
     </div>
   );
 }
 
-function ReplyBox({ connected }: { connected: boolean }) {
+function ReplyBox({ threadId }: { threadId: string }) {
+  const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, action, pending] = useActionState<ReplyState, FormData>(sendReply.bind(null, threadId), undefined);
+  useEffect(() => {
+    if (state?.ok) { formRef.current?.reset(); setOpen(false); }
+  }, [state]);
+
+  if (!open) {
+    return (
+      <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5">
+        <span className="text-[12px] text-ink-faint">
+          {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
+        </span>
+        <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Reply</Button>
+      </div>
+    );
+  }
+  return (
+    <form ref={formRef} action={action} className="border-t border-line px-4 py-3">
+      <textarea name="body" rows={4} autoFocus required placeholder="Write a reply…"
+        className="w-full resize-y rounded-lg border border-line-strong bg-white px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+      {state?.error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700 ring-1 ring-inset ring-rose-100">{state.error}</p>}
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <span className="text-[12px] text-ink-faint">Sent through your Gmail account, in the same Gmail thread.</span>
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button size="sm" variant="primary" disabled={pending}>{pending ? "Sending…" : "Send reply"}</Button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function NotConnectedHint({ connected, empty }: { connected: boolean; empty?: boolean }) {
   return (
     <div className="mt-3 rounded-xl border border-dashed border-line-strong bg-zinc-50/50 px-4 py-3">
-      <textarea disabled placeholder={connected ? "Write a reply…" : "Reply from EventureOS — sent through your Gmail account"} rows={2}
-        className="w-full resize-none bg-transparent text-[13px] text-ink placeholder:text-ink-faint focus:outline-none disabled:cursor-not-allowed" />
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-ink-faint">
-          {connected ? "Replies send from your connected Gmail and stay in Gmail." : "Gmail isn’t connected yet. Replies will send through your own Gmail and thread back here automatically."}
+          {connected
+            ? empty ? "Emails with this customer will appear here automatically after the next Gmail sync." : "Replies send from your connected Gmail and stay in Gmail."
+            : "Gmail isn’t connected yet. Once it is, you can reply from here — replies send through your own Gmail and thread back automatically."}
         </span>
         {!connected && (
-          <Link href="/settings" className="shrink-0 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Connect Gmail</Link>
+          <Link href="/settings/integrations" className="shrink-0 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Connect Gmail</Link>
         )}
       </div>
     </div>

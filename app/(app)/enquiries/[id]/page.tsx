@@ -239,7 +239,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             <CardHeader title="Quote" />
             <div className="px-5 pb-5">
               {quotes.length ? quotes.map((q) => (
-                <Link key={q.id} href={`/events/${e.event_id}?tab=quote`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50">
+                <Link key={q.id} href={`/quotes/${q.id}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50">
                   <span className="text-[13px] text-ink">Q-{q.number} · {q.title}</span>
                   <span className="flex items-center gap-2">
                     {q.version && <span className="tabular text-[13px] text-ink">{money(q.version.total, org.currency)}</span>}
@@ -248,7 +248,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                 </Link>
               )) : (
                 <p className="text-[12.5px] text-ink-muted">
-                  {e.event_id ? "No quote yet — create one from the event." : "Quotes belong to events. Convert this enquiry to start a quote."}
+                  {e.event_id ? <Link href={`/quotes/new?event=${e.event_id}`} className="font-medium text-brand-600 hover:text-brand-700">Create a quote for this event</Link> : "Quotes belong to events. Convert this enquiry to start a quote."}
                 </p>
               )}
             </div>

@@ -10,6 +10,7 @@ export const ORG_COOKIE = "eos_org";
 export interface Membership {
   role: OrgRole;
   title: string | null;
+  expires_at?: string | null;
   organisation: Organisation;
 }
 
@@ -27,7 +28,7 @@ export const getContext = cache(async () => {
     supabase
       .from("organisation_users")
       .select(
-        "role, title, organisation:organisations(id, name, slug, business_type, contact_email, brand_colour, logo_url, timezone, currency, plan, settings)"
+        "role, title, expires_at, organisation:organisations(id, name, slug, business_type, contact_email, brand_colour, logo_url, timezone, currency, plan, settings)"
       )
       .eq("user_id", user.id)
       .eq("status", "active")
