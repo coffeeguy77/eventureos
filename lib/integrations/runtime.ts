@@ -76,9 +76,19 @@ export async function loadIntegration(db: SupabaseClient, orgId: string, provide
 
 export class ReconnectRequired extends Error {}
 
+/**
+ * Proves to the database that a token request comes from this server (not a browser).
+ * Managers can read tokens without it; staff (e.g. replying to an email) need it.
+ */
+function serverKey(): string | null {
+  return process.env.INTEGRATION_SERVER_KEY?.trim() || null;
+}
+
 async function readTokens(ctx: SyncContext) {
   const fn = ctx.mode === "service" ? "service_get_integration_tokens" : "get_integration_tokens";
-  const { data, error } = await ctx.db.rpc(fn, { p_integration_id: ctx.integration.id });
+  const args: Record<string, unknown> = { p_integration_id: ctx.integration.id };
+  if (ctx.mode === "user") args.p_server_key = serverKey();
+  const { data, error } = await ctx.db.rpc(fn, args);
   if (error) throw new Error(`Could not read ${ctx.integration.provider} credentials: ${error.message}`);
   const row = (Array.isArray(data) ? data[0] : data) as { access_token: string | null; refresh_token: string | null; expires_at: string | null } | undefined;
   if (!row?.access_token && !row?.refresh_token) throw new ReconnectRequired("No stored credentials — reconnect the integration.");
@@ -87,7 +97,9 @@ async function readTokens(ctx: SyncContext) {
 
 async function storeToken(ctx: SyncContext, access: string, exp: string, refresh?: string) {
   const fn = ctx.mode === "service" ? "service_update_integration_access_token" : "update_integration_access_token";
-  const { error } = await ctx.db.rpc(fn, { p_integration_id: ctx.integration.id, p_access_token: access, p_expires_at: exp, p_refresh_token: refresh ?? null });
+  const args: Record<string, unknown> = { p_integration_id: ctx.integration.id, p_access_token: access, p_expires_at: exp, p_refresh_token: refresh ?? null };
+  if (ctx.mode === "user") args.p_server_key = serverKey();
+  const { error } = await ctx.db.rpc(fn, args);
   if (error) throw new Error(`Could not save refreshed token: ${error.message}`);
 }
 

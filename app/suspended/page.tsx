@@ -1,0 +1,34 @@
+import { redirect } from "next/navigation";
+import { getContext } from "@/lib/context";
+import { Logo } from "@/components/shell/sidebar";
+import { signOut } from "@/app/(app)/shell-actions";
+
+export const metadata = { title: "Account paused" };
+
+export default async function SuspendedPage() {
+  const { memberships, suspended } = await getContext();
+  if (memberships.length > 0 || !suspended) redirect("/dashboard");
+
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="w-full max-w-[460px]">
+        <div className="mb-8 flex items-center gap-2.5">
+          <Logo size={30} />
+          <span className="text-[16px] font-semibold tracking-tight">EventureOS</span>
+        </div>
+        <div className="rounded-2xl border border-line bg-white p-8 shadow-card">
+          <h1 className="text-[20px] font-semibold tracking-tight">Your organisation’s account is paused</h1>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
+            Access has been paused by EventureOS. Your data is safe and nothing has been deleted.
+            Please contact EventureOS support to restore access.
+          </p>
+          <form action={signOut} className="mt-6">
+            <button type="submit" className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium hover:bg-canvas">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -34,8 +34,9 @@ export async function GET(req: NextRequest) {
   }
 
   const db = createServiceClient();
-  const { data, error } = await db.from("integrations").select("organisation_id, provider, status")
-    .in("provider", ["gmail", "google_calendar", "xero"]).in("status", ["connected", "error"]);
+  const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
+    .in("provider", ["gmail", "google_calendar", "xero"]).in("status", ["connected", "error"])
+    .eq("organisation.status", "active"); // suspended organisations are skipped
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   const started = Date.now();

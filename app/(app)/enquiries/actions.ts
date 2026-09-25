@@ -78,7 +78,7 @@ export async function createEnquiry(_prev: FormState, form: FormData): Promise<F
 
 export async function setEnquiryStatus(id: string, status: EnquiryStatus) {
   const { supabase, org, user, profile } = await requireOrg();
-  const { data: before, error: e1 } = await supabase.from("enquiries").select("status, number, customer_id, event_id").eq("id", id).single();
+  const { data: before, error: e1 } = await supabase.from("enquiries").select("status, number, customer_id, event_id").eq("id", id).eq("organisation_id", org.id).single();
   if (e1) throw new Error(`Enquiry not found: ${e1.message}`);
   if (before.status === status) return;
   const { error } = await supabase.from("enquiries").update({ status }).eq("id", id).eq("organisation_id", org.id);
@@ -97,7 +97,8 @@ export async function setEnquiryStatus(id: string, status: EnquiryStatus) {
 export async function assignEnquiry(id: string, assignee: string | null) {
   const { supabase, org, user, profile } = await requireOrg();
   const members = await getMembers(org.id);
-  const { data: before, error: e1 } = await supabase.from("enquiries").select("assigned_to, number, customer_id").eq("id", id).single();
+  if (assignee && !members.some((m) => m.id === assignee)) throw new Error("That person isn't an active member of your team.");
+  const { data: before, error: e1 } = await supabase.from("enquiries").select("assigned_to, number, customer_id").eq("id", id).eq("organisation_id", org.id).single();
   if (e1) throw new Error(`Enquiry not found: ${e1.message}`);
   const { error } = await supabase.from("enquiries").update({ assigned_to: assignee }).eq("id", id).eq("organisation_id", org.id);
   if (error) throw new Error(`Couldn't assign: ${error.message}`);
@@ -119,7 +120,7 @@ const DETAIL_FIELDS = [
 
 export async function updateEnquiryDetails(id: string, _prev: FormState, form: FormData): Promise<FormState> {
   const { supabase, org, user, profile } = await requireOrg();
-  const { data: before, error: e1 } = await supabase.from("enquiries").select("*").eq("id", id).single();
+  const { data: before, error: e1 } = await supabase.from("enquiries").select("*").eq("id", id).eq("organisation_id", org.id).single();
   if (e1) return { error: `Enquiry not found: ${e1.message}` };
 
   const patch: Record<string, unknown> = {};

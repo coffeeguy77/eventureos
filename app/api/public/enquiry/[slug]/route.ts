@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   const anon = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !anon) return new NextResponse("Enquiry capture isn't configured", { status: 503, headers: CORS });
   const supabase = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data, error: rpcError } = await supabase.rpc("capture_website_enquiry", { p_slug: slug, p_key: key, p_payload: payload });
+  const { data, error: rpcError } = await supabase.rpc("capture_website_enquiry", { p_slug: slug, p_key: key, p_payload: payload, p_ip: clientIp(req) });
   if (rpcError) {
     const known = /Invalid form key|Name or email is required|Invalid email|Too many enquiries/.exec(rpcError.message);
     return error(known ? known[0] + (known[0] === "Too many enquiries" ? " — please try again shortly" : "") : "Couldn't save the enquiry");
@@ -122,4 +122,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
   if (html) return thankYou(reference);
   return NextResponse.json({ ok: true, reference }, { headers: CORS });
+}
+
+/** The sender's IP for rate limiting. On Vercel, x-real-ip is set by the platform and can't be spoofed by the sender. */
+function clientIp(req: NextRequest | Request): string | null {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return fwd || null;
 }

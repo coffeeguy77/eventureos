@@ -6,8 +6,9 @@ import { OnboardingForm } from "./form";
 export const metadata = { title: "Set up your organisation" };
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
-  const { memberships, profile, supabase, portalOrgs } = await getContext();
+  const { memberships, profile, supabase, portalOrgs, suspended } = await getContext();
   const sp = await searchParams;
+  if (memberships.length === 0 && suspended && !sp.new) redirect("/suspended");
   if (memberships.length === 0) {
     const { data: joined } = await supabase.rpc("accept_my_invitations");
     if (joined && joined > 0) redirect("/dashboard");

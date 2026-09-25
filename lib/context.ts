@@ -38,6 +38,8 @@ export const getContext = cache(async () => {
 
   const all = (rows ?? []) as unknown as (Membership & { title: string | null })[];
   const portalOnly = all.filter((m) => m.organisation && m.role === "customer");
+  // An active membership whose organisation can't be read means the organisation is suspended.
+  const suspended = all.some((m) => !m.organisation && m.role !== "customer");
   const memberships = all
     .filter((m) => m.organisation && m.role !== "customer")
     .sort((a, b) => a.organisation.name.localeCompare(b.organisation.name));
@@ -51,6 +53,7 @@ export const getContext = cache(async () => {
     profile: (profile ?? { id: user.id, email: user.email ?? "", full_name: null }) as Member,
     memberships,
     portalOrgs: portalOnly.map((m) => m.organisation),
+    suspended,
     current,
     isSupportSession: current?.title === "EventureOS Support",
   };
@@ -62,6 +65,7 @@ export async function requireOrg() {
   if (!ctx.current) {
     // Portal-only customers belong in their portal, not the staff app
     if (ctx.portalOrgs.length) redirect(`/p/${ctx.portalOrgs[0].slug}`);
+    if (ctx.suspended) redirect("/suspended");
     redirect("/onboarding");
   }
   return { ...ctx, org: ctx.current.organisation, role: ctx.current.role };
