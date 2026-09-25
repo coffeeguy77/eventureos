@@ -108,7 +108,7 @@ export function appBaseUrl(requestOrigin?: string) {
   if (configured) return configured.replace(/\/+$/, "");
   if (requestOrigin) return requestOrigin.replace(/\/+$/, "");
   if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  return "https://eventureos.vercel.app";
+  return "https://www.eventureos.com.au";
 }
 
 export function redirectUri(provider: LiveProviderId, requestOrigin?: string) {

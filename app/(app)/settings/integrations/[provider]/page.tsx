@@ -30,7 +30,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
   const missing = missingEnv(provider);
   const env = envStatus();
   const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "eventureos.vercel.app"}`;
+  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "www.eventureos.com.au"}`;
 
   const { data: row } = await supabase.from("integrations")
     .select("id, status, account_label, external_account_id, scopes, settings, connected_at, last_sync_at, last_sync_status, last_error")
