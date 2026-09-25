@@ -5,7 +5,7 @@ export function Tabs({ tabs, active, baseHref }: {
   tabs: { key: string; label: string; count?: number }[]; active: string; baseHref: string;
 }) {
   return (
-    <nav className="-mb-px flex gap-1 overflow-x-auto border-b border-line" aria-label="Tabs">
+    <nav className="no-scrollbar -mb-px flex gap-1 overflow-x-auto border-b border-line" aria-label="Tabs">
       {tabs.map((t) => {
         const isActive = t.key === active;
         const href = t.key === tabs[0].key ? baseHref : `${baseHref}?tab=${t.key}`;

@@ -27,12 +27,12 @@ export function EventTimeline({ activity, tz, cancelled }: { activity: ActivityL
   const rows = STEPS.map((s) => ({ ...s, hit: asc.find(s.match) }));
   const lastDone = rows.reduce((i, r, idx) => (r.hit ? idx : i), -1);
   const visible = rows.filter((r, idx) => r.hit || !r.optional || idx > lastDone);
-  const firstPending = visible.findIndex((r, idx) => !r.hit && visible.slice(idx).every((x) => !x.hit));
+  const firstPending = visible.findIndex((r, idx) => !r.hit && !r.optional && visible.slice(idx).every((x) => !x.hit));
 
   return (
     <ol className="px-5 pb-5">
       {visible.map((r, i) => {
-        const skipped = !r.hit && i < firstPending;
+        const skipped = !r.hit && !r.optional && i < firstPending;
         const isNext = i === firstPending && !cancelled;
         return (
           <li key={r.key} className="relative flex gap-3 pb-3">

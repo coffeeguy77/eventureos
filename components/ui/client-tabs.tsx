@@ -13,7 +13,7 @@ export function ClientTabs({ tabs, className, variant = "pills" }: {
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
   return (
     <div className={className}>
-      <div className={cn("flex gap-1 overflow-x-auto px-4", variant === "underline" ? "border-b border-line" : "pb-2")} role="tablist">
+      <div className={cn("no-scrollbar flex gap-1 overflow-x-auto px-4", variant === "underline" ? "border-b border-line" : "pb-2")} role="tablist">
         {tabs.map((t) => {
           const on = t.key === current.key;
           return (

@@ -42,13 +42,19 @@ export function ActivityFeed({ items, names, tz, compact = false }: {
   );
 }
 
+const pretty = (v: unknown) => {
+  if (v == null || v === "") return "—";
+  const s = String(v);
+  return /^[a-z]+(_[a-z]+)*$/.test(s) ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : s;
+};
+
 function ChangeList({ changes }: { changes: Record<string, [unknown, unknown]> }) {
   return (
     <ul className="mt-1 space-y-0.5">
       {Object.entries(changes).map(([field, [from, to]]) => (
         <li key={field} className="text-[12px] text-ink-muted">
           <span className="capitalize">{field.replace(/_/g, " ")}</span>:{" "}
-          <span className="line-through decoration-ink-faint/60">{String(from ?? "—")}</span> → <span className="font-medium text-ink">{String(to ?? "—")}</span>
+          <span className="line-through decoration-ink-faint/60">{pretty(from)}</span> → <span className="font-medium text-ink">{pretty(to)}</span>
         </li>
       ))}
     </ul>
