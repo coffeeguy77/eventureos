@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { sendReply, type ReplyState } from "@/app/(app)/inbox-actions";
+import { draftReplyAction, sendReply, type ReplyState } from "@/app/(app)/inbox-actions";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected }: {
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
@@ -66,23 +67,45 @@ function ReplyBox({ threadId }: { threadId: string }) {
   const [open, setOpen] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState<ReplyState, FormData>(sendReply.bind(null, threadId), undefined);
+  const [body, setBody] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftNotes, setDraftNotes] = useState<string[]>([]);
+  const [draftError, setDraftError] = useState<string | null>(null);
   useEffect(() => {
-    if (state?.ok) { formRef.current?.reset(); setOpen(false); }
+    if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); }
   }, [state]);
+  async function draft() {
+    setDrafting(true); setDraftError(null);
+    const r = await draftReplyAction(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    setDrafting(false);
+    if (!r.ok) { setDraftError(r.error); return; }
+    setBody(r.body); setDraftNotes(r.notes); setOpen(true);
+  }
 
   if (!open) {
-    return (
+    return (<>
       <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5">
         <span className="min-w-0 text-[12px] text-ink-faint">
           {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
         </span>
-        <Button size="sm" variant="secondary" className="h-10 shrink-0 sm:h-8" onClick={() => setOpen(true)}>Reply</Button>
+        <div className="flex shrink-0 gap-2">
+          <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={draft} disabled={drafting}>
+            <Sparkles className="h-3.5 w-3.5 text-brand-600" />{drafting ? "Drafting…" : "Draft with AI"}
+          </Button>
+          <Button size="sm" variant="secondary" className="h-10 sm:h-8" onClick={() => setOpen(true)}>Reply</Button>
+        </div>
       </div>
-    );
+      {draftError && <p role="alert" className="mx-4 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700 ring-1 ring-inset ring-rose-100">{draftError}</p>}
+    </>);
   }
   return (
     <form ref={formRef} action={action} className="border-t border-line px-4 py-3">
-      <textarea name="body" rows={4} autoFocus required placeholder="Write a reply…"
+      {draftNotes.length > 0 && (
+        <ul className="mb-2 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900 ring-1 ring-inset ring-amber-100">
+          {draftNotes.map((n, i) => <li key={i}>• {n}</li>)}
+        </ul>
+      )}
+      <textarea name="body" rows={body ? 14 : 4} autoFocus required placeholder="Write a reply…" value={body} onChange={(e) => setBody(e.target.value)}
         className="w-full resize-y rounded-lg border border-line-strong bg-white px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
       {state?.error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[12.5px] text-rose-700 ring-1 ring-inset ring-rose-100">{state.error}</p>}
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">

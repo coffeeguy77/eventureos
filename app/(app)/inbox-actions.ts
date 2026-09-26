@@ -112,3 +112,18 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   revalidatePath("/dashboard");
   return { ok: true, sentTo: to };
 }
+
+export type DraftState = { ok: true; body: string; notes: string[] } | { ok: false; error: string };
+
+/** AI draft for the reply box — never sent automatically. */
+export async function draftReplyAction(threadId: string): Promise<DraftState> {
+  try {
+    const { supabase, org, profile } = await requireOrg();
+    const { draftReply } = await import("@/lib/ai/reply");
+    const r = await draftReply(supabase, { id: org.id, name: org.name, timezone: org.timezone, currency: org.currency }, threadId,
+      profile.full_name?.split(" ")[0] ?? org.name);
+    return { ok: true, body: r.body, notes: r.notes };
+  } catch (e) {
+    return { ok: false, error: errMessage(e) };
+  }
+}
