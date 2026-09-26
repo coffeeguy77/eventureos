@@ -57,8 +57,8 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
         title="Organisations"
         subtitle="Change plans, suspend accounts and open an audited support session."
         actions={
-          <form className="flex gap-2">
-            <Input name="q" defaultValue={q ?? ""} placeholder="Search business or owner" className="h-9 w-[240px] py-1.5" />
+          <form className="flex w-full gap-2 sm:w-auto">
+            <Input name="q" defaultValue={q ?? ""} placeholder="Search business or owner" className="h-10 w-full py-1.5 sm:h-9 sm:w-[240px]" />
           </form>
         }
       />
@@ -70,11 +70,11 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
             {[...sessions.entries()].map(([orgId, until]) => {
               const o = (orgsRes.data as OrgRow[]).find((x) => x.id === orgId);
               return (
-                <li key={orgId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-[13px]">
-                  <span><span className="font-medium text-ink">{o?.name ?? orgId}</span> <span className="text-ink-muted">· ends {relative(until)}</span></span>
+                <li key={orgId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px] sm:px-5">
+                  <span className="min-w-0 break-words"><span className="font-medium text-ink">{o?.name ?? orgId}</span> <span className="text-ink-muted">· ends {relative(until)}</span></span>
                   <span className="flex gap-2">
-                    <form action={openSupportSession.bind(null, orgId)}><button className={buttonClass("secondary", "sm")}>Open</button></form>
-                    <form action={endSupportSession.bind(null, orgId)}><button className={buttonClass("danger", "sm")}>End session</button></form>
+                    <form action={openSupportSession.bind(null, orgId)}><button className={buttonClass("secondary", "sm", "h-10 sm:h-8")}>Open</button></form>
+                    <form action={endSupportSession.bind(null, orgId)}><button className={buttonClass("danger", "sm", "h-10 sm:h-8")}>End session</button></form>
                   </span>
                 </li>
               );
@@ -87,7 +87,34 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
         {orgs.length === 0 ? (
           <EmptyState title={term ? `No organisations match “${q}”` : "No organisations yet"} />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {orgs.map((o) => {
+              const open = manage === o.id;
+              const inSession = sessions.has(o.id);
+              return (
+                <li key={o.id} className={open ? "bg-brand-50/40" : undefined}>
+                  <div className="flex min-h-[56px] items-start gap-3 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13.5px] font-medium text-ink">{o.name}</div>
+                      <div className="truncate text-[12.5px] text-ink-muted">{o.owner_email ?? o.owner_name ?? "—"}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-faint">
+                        <Badge tone={STATUS_TONE[o.status] ?? "neutral"} dot>{o.status}</Badge>
+                        <span>{PLAN_LABEL[o.plan] ?? o.plan} · {o.users} user{o.users === 1 ? "" : "s"} · {o.events} events</span>
+                        {inSession && <Badge tone="amber">Support session</Badge>}
+                      </div>
+                    </div>
+                    <Link href={open ? "/admin/organisations" : `/admin/organisations?manage=${o.id}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                      scroll={false} className={buttonClass(open ? "primary" : "secondary", "sm", "h-10 shrink-0")}>
+                      {open ? "Close" : "Manage"}
+                    </Link>
+                  </div>
+                  {open && <div className="px-4 pb-4"><ManagePanel o={o} inSession={inSession} until={sessions.get(o.id)} idp="m-" /></div>}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1120px] text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -145,70 +172,7 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
                     open && (
                       <tr key={o.id + ":manage"} className="bg-brand-50/40">
                         <td colSpan={10} className="px-5 pb-5 pt-1">
-                          <div className="grid gap-4 lg:grid-cols-2">
-                            <div className="rounded-xl border border-line bg-white p-4">
-                              <div className="text-[13px] font-semibold text-ink">Plan & status</div>
-                              <p className="mt-0.5 text-[12px] text-ink-muted">Suspending blocks the portal and website form. Logged in the organisation’s audit trail.</p>
-                              <ActionForm action={setOrganisationPlanStatus} className="mt-3">
-                                <input type="hidden" name="org_id" value={o.id} />
-                                <div className="flex flex-wrap items-end gap-3">
-                                  <div>
-                                    <Label htmlFor={`plan-${o.id}`}>Plan</Label>
-                                    <Select id={`plan-${o.id}`} name="plan" defaultValue={o.plan} className="w-[150px]">
-                                      {Object.entries(PLAN_LABEL).map(([k, l]) => <option key={k} value={k}>{l} ({money(PLAN_PRICE[k], "AUD", { cents: false })}/mo)</option>)}
-                                    </Select>
-                                  </div>
-                                  <div>
-                                    <Label htmlFor={`status-${o.id}`}>Status</Label>
-                                    <Select id={`status-${o.id}`} name="status" defaultValue={o.status} className="w-[140px]">
-                                      <option value="active">Active</option>
-                                      <option value="suspended">Suspended</option>
-                                      <option value="cancelled">Cancelled</option>
-                                    </Select>
-                                  </div>
-                                  <SubmitButton pendingLabel="Saving…">Save</SubmitButton>
-                                </div>
-                              </ActionForm>
-                            </div>
-                            <div className="rounded-xl border border-amber-200 bg-white p-4">
-                              <div className="text-[13px] font-semibold text-ink">Support session</div>
-                              {inSession ? (
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-muted">
-                                  Active — ends {relative(sessions.get(o.id))}.
-                                  <form action={openSupportSession.bind(null, o.id)}><button className={buttonClass("secondary", "sm")}>Open</button></form>
-                                  <form action={endSupportSession.bind(null, o.id)}><button className={buttonClass("danger", "sm")}>End session</button></form>
-                                </div>
-                              ) : (
-                                <>
-                                  <p className="mt-0.5 text-[12px] text-ink-muted">
-                                    You join {o.name} as a temporary admin. The reason and everything you do are recorded in their activity log, and access ends automatically.
-                                  </p>
-                                  <ActionForm action={startSupportSession} className="mt-3">
-                                    <input type="hidden" name="org_id" value={o.id} />
-                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px]">
-                                      <div>
-                                        <Label htmlFor={`reason-${o.id}`}>Reason</Label>
-                                        <Input id={`reason-${o.id}`} name="reason" required minLength={5} maxLength={500} placeholder="e.g. Ticket #1234 — Xero invoices not syncing" />
-                                      </div>
-                                      <div>
-                                        <Label htmlFor={`minutes-${o.id}`}>Duration</Label>
-                                        <Select id={`minutes-${o.id}`} name="minutes" defaultValue="60">
-                                          <option value="15">15 min</option>
-                                          <option value="30">30 min</option>
-                                          <option value="60">1 hour</option>
-                                          <option value="120">2 hours</option>
-                                          <option value="240">4 hours</option>
-                                        </Select>
-                                      </div>
-                                    </div>
-                                    <div className="mt-3 flex justify-end">
-                                      <SubmitButton pendingLabel="Starting…">Start support session</SubmitButton>
-                                    </div>
-                                  </ActionForm>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                          <ManagePanel o={o} inSession={inSession} until={sessions.get(o.id)} idp="" />
                         </td>
                       </tr>
                     ),
@@ -217,8 +181,78 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </>
+  );
+}
+
+function ManagePanel({ o, inSession, until, idp }: { o: OrgRow; inSession: boolean; until: string | undefined; idp: string }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-xl border border-line bg-white p-4">
+        <div className="text-[13px] font-semibold text-ink">Plan & status</div>
+        <p className="mt-0.5 text-[12px] text-ink-muted">Suspending blocks the portal and website form. Logged in the organisation’s audit trail.</p>
+        <ActionForm action={setOrganisationPlanStatus} className="mt-3">
+          <input type="hidden" name="org_id" value={o.id} />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <Label htmlFor={`plan-${idp}${o.id}`}>Plan</Label>
+              <Select id={`plan-${idp}${o.id}`} name="plan" defaultValue={o.plan} className="w-full sm:w-[150px]">
+                {Object.entries(PLAN_LABEL).map(([k, l]) => <option key={k} value={k}>{l} ({money(PLAN_PRICE[k], "AUD", { cents: false })}/mo)</option>)}
+              </Select>
+            </div>
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <Label htmlFor={`status-${idp}${o.id}`}>Status</Label>
+              <Select id={`status-${idp}${o.id}`} name="status" defaultValue={o.status} className="w-full sm:w-[140px]">
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
+            </div>
+            <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">Save</SubmitButton>
+          </div>
+        </ActionForm>
+      </div>
+      <div className="rounded-xl border border-amber-200 bg-white p-4">
+        <div className="text-[13px] font-semibold text-ink">Support session</div>
+        {inSession ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-muted">
+            Active — ends {relative(until)}.
+            <form action={openSupportSession.bind(null, o.id)}><button className={buttonClass("secondary", "sm", "h-10 sm:h-8")}>Open</button></form>
+            <form action={endSupportSession.bind(null, o.id)}><button className={buttonClass("danger", "sm", "h-10 sm:h-8")}>End session</button></form>
+          </div>
+        ) : (
+          <>
+            <p className="mt-0.5 text-[12px] text-ink-muted">
+              You join {o.name} as a temporary admin. The reason and everything you do are recorded in their activity log, and access ends automatically.
+            </p>
+            <ActionForm action={startSupportSession} className="mt-3">
+              <input type="hidden" name="org_id" value={o.id} />
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px]">
+                <div>
+                  <Label htmlFor={`reason-${idp}${o.id}`}>Reason</Label>
+                  <Input id={`reason-${idp}${o.id}`} name="reason" required minLength={5} maxLength={500} placeholder="e.g. Ticket #1234 — Xero invoices not syncing" />
+                </div>
+                <div>
+                  <Label htmlFor={`minutes-${idp}${o.id}`}>Duration</Label>
+                  <Select id={`minutes-${idp}${o.id}`} name="minutes" defaultValue="60">
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="240">4 hours</option>
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <SubmitButton pendingLabel="Starting…" className="w-full sm:w-auto">Start support session</SubmitButton>
+              </div>
+            </ActionForm>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

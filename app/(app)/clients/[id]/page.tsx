@@ -196,7 +196,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
+      <div className="mb-1 flex min-w-0 items-center gap-2 text-[12px] text-ink-faint">
         <Link href="/clients" className="hover:text-ink">Clients</Link><span>/</span><span className="truncate">{c.name}</span>
       </div>
 
@@ -204,18 +204,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       <Card className="mb-5 p-5 sm:p-6">
         <div className="flex flex-wrap items-start gap-4 sm:gap-5">
           <Avatar name={c.name} size={52} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-56">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-[22px] font-semibold tracking-tight text-ink">{c.name}</h1>
+              <h1 className="min-w-0 break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{c.name}</h1>
               <Badge tone="slate">{c.kind === "company" ? "Company" : "Individual"}</Badge>
               {c.tags.map((t) => <Badge key={t}>{t}</Badge>)}
             </div>
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink-muted">
               {c.company && c.company !== c.name && <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-ink-faint" />{c.company}</span>}
               {primary && c.kind === "company" && <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-ink-faint" />{primary.first_name} {primary.last_name}{primary.position ? ` · ${primary.position}` : ""}</span>}
-              {c.email && <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:text-brand-700"><Mail className="h-3.5 w-3.5 text-ink-faint" />{c.email}</a>}
+              {c.email && <a href={`mailto:${c.email}`} className="flex min-w-0 items-center gap-1.5 hover:text-brand-700"><Mail className="h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="min-w-0 break-all">{c.email}</span></a>}
               {c.phone && <a href={`tel:${c.phone.replace(/\s/g, "")}`} className="flex items-center gap-1.5 hover:text-brand-700"><Phone className="h-3.5 w-3.5 text-ink-faint" />{c.phone}</a>}
-              {c.address && <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-ink-faint" />{c.address}</span>}
+              {c.address && <span className="flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="min-w-0 break-words">{c.address}</span></span>}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
               {c.xero_contact_id ? (
@@ -227,7 +227,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             </div>
           </div>
           <div className="flex w-full gap-2 sm:w-auto">
-            <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="flex-1 sm:flex-none">New event for this client</ButtonLink>
+            <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">New event for this client</ButtonLink>
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-line pt-5 sm:grid-cols-4">
@@ -240,7 +240,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       </Card>
 
       <NextActionBanner action={na}>
-        {naLink && <ButtonLink href={naLink.href} size="sm" variant={na.urgency === "done" ? "secondary" : "primary"}>{naLink.label}</ButtonLink>}
+        {naLink && <ButtonLink href={naLink.href} size="sm" className="h-10 sm:h-8" variant={na.urgency === "done" ? "secondary" : "primary"}>{naLink.label}</ButtonLink>}
       </NextActionBanner>
 
       <div className="mt-6"><Tabs tabs={tabs} active={tab} baseHref={`/clients/${c.id}`} /></div>
@@ -264,7 +264,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                       <Field label="Quotes accepted">{money(acceptedValue, cur)}</Field>
                       <Field label="Xero">{c.xero_contact_id ? "Linked" : xeroConnected ? "Not linked" : "Not connected"}</Field>
                     </dl>
-                    {c.notes && <p className="mt-5 whitespace-pre-line rounded-lg bg-amber-50/60 px-3 py-2 text-[13px] text-ink ring-1 ring-inset ring-amber-100">{c.notes}</p>}
+                    {c.notes && <p className="mt-5 whitespace-pre-line break-words rounded-lg bg-amber-50/60 px-3 py-2 text-[13px] text-ink ring-1 ring-inset ring-amber-100">{c.notes}</p>}
                   </div>
                 } />
               </Card>
@@ -306,7 +306,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
               <Card>
                 <CardHeader title="Outstanding invoices" subtitle={openInvoices.length ? `${money(outstanding, cur)} across ${openInvoices.length} invoice${openInvoices.length === 1 ? "" : "s"}` : undefined}
-                  action={<span className="text-[11.5px] text-ink-faint">{xeroConnected ? "Synced with Xero" : "Xero not connected"}</span>} />
+                  action={<span className="block max-w-[10rem] text-right text-[11.5px] text-ink-faint sm:max-w-none">{xeroConnected ? "Synced with Xero" : "Xero not connected"}</span>} />
                 {openInvoices.length === 0 ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Nothing owing. {live.length ? "All invoices are paid." : ""}</p> : (
                   <ul className="divide-y divide-line border-t border-line">
                     {openInvoices.map((i) => {
@@ -320,7 +320,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                                 {late && i.due_date ? `${daysBetween(i.due_date, today)} days overdue` : i.due_date ? `Due ${fmtDate(i.due_date)}` : "No due date"}
                               </p>
                             </div>
-                            <span className="tabular text-[13px] font-medium text-ink">{money(i.balance, cur)}</span>
+                            <span className="tabular shrink-0 text-[13px] font-medium text-ink">{money(i.balance, cur)}</span>
                           </Link>
                         </li>
                       );
@@ -414,9 +414,30 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {tab === "events" && (
           <Card>
             <CardHeader title="Events" subtitle={`${upcoming.length} upcoming · ${events.length} in total`}
-              action={<ButtonLink href={`/events/new?customer=${c.id}`} size="sm">New event</ButtonLink>} />
-            {events.length === 0 ? <EmptyState title="No events yet">Create an event for this client, or convert one of their enquiries.</EmptyState> : (
-              <div className="overflow-x-auto">
+              action={<ButtonLink href={`/events/new?customer=${c.id}`} size="sm" className="h-10 sm:h-8">New event</ButtonLink>} />
+            {events.length === 0 ? <EmptyState title="No events yet">Create an event for this client, or convert one of their enquiries.</EmptyState> : (<>
+              <ul className="divide-y divide-line border-t border-line md:hidden">
+                {[...upcoming, ...events.filter((e) => !upcoming.includes(e))].map((e) => {
+                  const q = quotes.find((x) => x.event_id === e.id && x.status !== "superseded");
+                  const v = q ? currentVersion(q) : null;
+                  return (
+                    <li key={e.id}>
+                      <Link href={`/events/${e.id}`} className="flex items-center gap-3 px-5 py-3 active:bg-zinc-50">
+                        <DateChip iso={e.event_date} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13.5px] font-medium text-ink">{e.name}</p>
+                          <p className="truncate text-[12px] text-ink-muted">{[relativeDay(e.event_date, today), e.venue, e.guest_count ? `${e.guest_count} guests` : null].filter(Boolean).join(" · ") || `EV-${e.number}`}</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <Badge tone={EVENT_STATUS[e.status].tone} dot>{EVENT_STATUS[e.status].label}</Badge>
+                            <span className="tabular text-[13px] text-ink">{v ? money(v.total, cur) : q ? "Draft" : ""}</span>
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[820px] text-left text-[13px]">
                   <thead><tr className="border-y border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
                     {["Event", "Date", "Type", "Venue", "Guests", "Quote", "Status"].map((h) => <th key={h} className={cn("px-5 py-2.5 font-medium", ["Guests", "Quote"].includes(h) && "text-right")}>{h}</th>)}
@@ -443,14 +464,14 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   </tbody>
                 </table>
               </div>
-            )}
+            </>)}
           </Card>
         )}
 
         {tab === "emails" && (
           <Card>
             <CardHeader title="Email history" subtitle="Every conversation with this client, across all their enquiries and events. Gmail stays the source of truth."
-              action={<span className="text-[11.5px] text-ink-faint">{gmailConnected ? "Gmail connected" : "Gmail not connected"}</span>} />
+              action={<span className="block max-w-[10rem] text-right text-[11.5px] text-ink-faint sm:max-w-none">{gmailConnected ? "Gmail connected" : "Gmail not connected"}</span>} />
             {threads.length > 0 && (
               <div className="flex flex-wrap gap-1.5 px-5 pb-3">
                 {[...new Set(threads.map((t) => t.classification))].map((k) => (
@@ -474,14 +495,14 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                     <li key={q.id} className="px-5 py-4">
                       <div className="flex flex-wrap items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <Link href={`/quotes/${q.id}`} className="text-[13.5px] font-semibold text-ink hover:text-brand-700">Q-{q.number} · {q.title}</Link>
+                          <Link href={`/quotes/${q.id}`} className="break-words text-[13.5px] font-semibold text-ink hover:text-brand-700">Q-{q.number} · {q.title}</Link>
                           <p className="text-[12px] text-ink-muted">
                             <Link href={`/events/${q.event_id}?tab=quote`} className="hover:text-brand-700">{q.event?.name ?? "Event"}</Link>
                             {q.event?.event_date ? ` · ${fmtDate(q.event.event_date)}` : ""} · issued {fmtDate(q.issue_date)}{q.expiry_date ? ` · expires ${fmtDate(q.expiry_date)}` : ""}
                           </p>
                           {q.has_unpublished_changes && v && <p className="mt-1 text-[12px] text-amber-800">Draft has changes the client hasn’t seen yet.</p>}
                         </div>
-                        <div className="text-right">
+                        <div className="shrink-0 text-right">
                           <p className="tabular text-[14px] font-semibold text-ink">{v ? money(v.total, cur) : "—"}</p>
                           <Badge tone={QUOTE_STATUS[q.status].tone} dot>{QUOTE_STATUS[q.status].label}</Badge>
                         </div>
@@ -518,9 +539,25 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {tab === "invoices" && (
           <Card>
             <CardHeader title="Invoices" subtitle={`${money(live.reduce((s, i) => s + Number(i.total), 0), cur)} invoiced · ${money(outstanding, cur)} outstanding`}
-              action={<span className="text-[11.5px] text-ink-faint">{xeroConnected ? "Synced with Xero" : "Xero not connected · invoices recorded in EventureOS"}</span>} />
-            {invoices.length === 0 ? <EmptyState title="No invoices yet">Invoices raised for this client’s events appear here.</EmptyState> : (
-              <div className="overflow-x-auto">
+              action={<span className="block max-w-[10rem] text-right text-[11.5px] text-ink-faint sm:max-w-none">{xeroConnected ? "Synced with Xero" : "Xero not connected · invoices recorded in EventureOS"}</span>} />
+            {invoices.length === 0 ? <EmptyState title="No invoices yet">Invoices raised for this client’s events appear here.</EmptyState> : (<>
+              <ul className="divide-y divide-line border-t border-line md:hidden">
+                {invoices.map((i) => (
+                  <li key={i.id} className={cn("relative px-5 py-3 active:bg-zinc-50", i.status === "void" && "opacity-60")}>
+                    <div className="flex items-center justify-between gap-3">
+                      <Link href={`/invoices/${i.id}`} className="min-w-0 truncate text-[13.5px] font-medium text-ink after:absolute after:inset-0">{i.number} <span className="font-normal capitalize text-ink-faint">· {i.kind}</span></Link>
+                      <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>
+                    </div>
+                    {i.event?.name && <p className="mt-0.5 truncate text-[12px] text-ink-muted">{i.event.name}</p>}
+                    <div className="mt-1 flex items-baseline justify-between gap-3 text-[12.5px]">
+                      <span className={cn(overdue.includes(i) ? "font-medium text-rose-700" : "text-ink-muted")}>Due {fmtDate(i.due_date)}</span>
+                      <span className="tabular shrink-0 text-ink-muted">{money(i.amount_paid, cur)} of {money(i.total, cur)} paid</span>
+                    </div>
+                    <p className="tabular mt-0.5 text-right text-[13px] font-medium text-ink">Balance {money(i.balance, cur)}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[860px] text-left text-[13px]">
                   <thead><tr className="border-y border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
                     {["Invoice", "Event", "Issued", "Due", "Amount", "Paid", "Balance", "Status"].map((h) => <th key={h} className={cn("px-5 py-2.5 font-medium", ["Amount", "Paid", "Balance"].includes(h) && "text-right")}>{h}</th>)}
@@ -541,7 +578,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                   </tbody>
                 </table>
               </div>
-            )}
+            </>)}
           </Card>
         )}
 
@@ -558,7 +595,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                       </p>
                       <p className="text-[12px] text-ink-muted">{fmtDateTime(p.paid_at, tz, "date")} · {p.method ?? "Payment"}{p.reference ? ` · ref ${p.reference}` : ""}{p.xero_payment_id ? " · from Xero" : ""}</p>
                     </div>
-                    <span className="tabular text-[13.5px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                    <span className="tabular shrink-0 text-[13.5px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
                   </li>
                 ))}
               </ul>

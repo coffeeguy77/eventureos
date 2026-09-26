@@ -14,7 +14,20 @@ html, body {
   font-feature-settings: "cv11", "ss01";
 }
 
+@layer base {
+  /* Grid items never force their grid wider than the screen (long text, tables, calendars). */
+  .grid > * { min-width: 0; }
+  /* Tap highlights and text sizing feel native on phones. */
+  html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  /* iOS zooms into inputs smaller than 16px — keep form fields at 16px on phones. */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px !important; }
+  }
+}
+
 @layer utilities {
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
   .tabular { font-variant-numeric: tabular-nums; }
   .no-scrollbar { scrollbar-width: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }

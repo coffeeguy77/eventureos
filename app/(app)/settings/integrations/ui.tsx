@@ -25,6 +25,6 @@ export function Mark({ p, small }: { p: ProviderDef; small?: boolean }) {
 }
 
 export function Code({ children }: { children: React.ReactNode }) {
-  return <code className="rounded bg-zinc-100 px-1 py-0.5 text-[11.5px] text-ink">{children}</code>;
+  return <code className="break-all rounded bg-zinc-100 px-1 py-0.5 text-[11.5px] text-ink">{children}</code>;
 }
 

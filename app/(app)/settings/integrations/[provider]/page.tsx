@@ -52,7 +52,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
         title={<span className="flex items-center gap-3"><Mark p={p} small />{p.name}</span>}
         subtitle={p.description}
         actions={connected && manager ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none">
             <SyncNowButton provider={provider} variant="primary" />
             <DisconnectButton provider={provider} name={p.name} />
           </div>
@@ -62,7 +62,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
       {sp.connected && connected && (
         <div role="status" className="mb-5 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 ring-1 ring-inset ring-emerald-100">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{p.name} connected as <strong>{row!.account_label}</strong>.{" "}
+          <span className="min-w-0 break-words">{p.name} connected as <strong>{row!.account_label}</strong>.{" "}
             {provider === "gmail" && "Press Sync now to bring in the last 14 days, or import historical enquiries below."}
             {provider === "google_calendar" && "Now choose which EventureOS calendars sync to which Google calendar."}
             {provider === "xero" && "Press Sync now to fetch contacts for match review — nothing merges until you confirm."}
@@ -75,11 +75,11 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
           {!connected && (
             <Card>
               <CardHeader title="Not connected" />
-              <div className="px-5 pb-5 text-[13px] text-ink-muted">
+              <div className="px-4 pb-5 text-[13px] text-ink-muted sm:px-5">
                 {missing.length ? (
                   <p>Connecting is disabled until {missing.map((m, i) => <span key={m}>{i > 0 && ", "}<Code>{m}</Code></span>)} {missing.length === 1 ? "is" : "are"} set. See the setup notes on the right.</p>
                 ) : manager ? (
-                  <a href={`/api/integrations/${provider}/connect`} className={buttonClass("primary", "md")}>Connect {p.name}</a>
+                  <a href={`/api/integrations/${provider}/connect`} className={buttonClass("primary", "md", "h-10 w-full sm:h-9 sm:w-auto")}>Connect {p.name}</a>
                 ) : <p>Ask an owner, admin or manager to connect {p.name}.</p>}
               </div>
             </Card>
@@ -96,10 +96,10 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
                 {(logs ?? []).map((l) => {
                   const s = SYNC_STATUS[l.status as string] ?? { label: l.status as string, tone: "neutral" as const };
                   return (
-                    <li key={l.id as string} className="flex items-start gap-3 px-5 py-3">
+                    <li key={l.id as string} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 sm:flex-nowrap sm:px-5">
                       <Badge tone={s.tone}>{s.label}</Badge>
-                      <p className="min-w-0 flex-1 text-[12.5px] text-ink-muted">{(l.message as string | null) ?? l.entity}</p>
-                      <span className="shrink-0 text-[11.5px] text-ink-faint" title={fmtDateTime(l.started_at as string, org.timezone)}>{relative(l.started_at as string)}</span>
+                      <p className="order-last min-w-0 basis-full break-words text-[12.5px] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{(l.message as string | null) ?? l.entity}</p>
+                      <span className="ml-auto shrink-0 text-[11.5px] sm:ml-0 text-ink-faint" title={fmtDateTime(l.started_at as string, org.timezone)}>{relative(l.started_at as string)}</span>
                     </li>
                   );
                 })}
@@ -111,20 +111,20 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
         <div className="space-y-6">
           <Card>
             <CardHeader title="Connection" />
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 px-5 pb-5 text-[13px]">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 pb-5 text-[13px] sm:px-5">
               <dt className="text-ink-faint">Status</dt><dd><Badge tone={status.tone} dot>{status.label}</Badge></dd>
               <dt className="text-ink-faint">Account</dt><dd className="truncate">{connected ? row!.account_label : "—"}</dd>
               <dt className="text-ink-faint">Connected</dt><dd>{connected && row!.connected_at ? fmtDateTime(row!.connected_at, org.timezone, "date") : "—"}</dd>
               <dt className="text-ink-faint">Last sync</dt><dd>{connected && row!.last_sync_at ? relative(row!.last_sync_at) : "—"}</dd>
               <dt className="text-ink-faint">Sync status</dt><dd>{sync ? <Badge tone={sync.tone}>{sync.label}</Badge> : "—"}</dd>
-              {connected && row!.last_error && <><dt className="text-ink-faint">Problem</dt><dd className="text-rose-700">{row!.last_error}</dd></>}
+              {connected && row!.last_error && <><dt className="text-ink-faint">Problem</dt><dd className="break-words text-rose-700">{row!.last_error}</dd></>}
               <dt className="text-ink-faint">Background</dt><dd>{env.serviceRole && env.cronSecret ? "Every 15 minutes" : <span className="text-ink-muted">Manual only (needs <Code>CRON_SECRET</Code> + <Code>SUPABASE_SERVICE_ROLE_KEY</Code>)</span>}</dd>
             </dl>
           </Card>
 
           <Card>
             <CardHeader title="Setup notes" subtitle="For whoever manages the EventureOS deployment" />
-            <div className="space-y-3 px-5 pb-5 text-[12.5px] text-ink-muted">
+            <div className="min-w-0 space-y-3 px-4 pb-5 text-[12.5px] text-ink-muted sm:px-5">
               <p>Environment variables: {[...p.requiredEnv, "OAUTH_STATE_SECRET"].map((m, i) => <span key={m}>{i > 0 && ", "}<Code>{m}</Code></span>)}.</p>
               <div>
                 <p className="mb-1">Authorised redirect URI:</p>
@@ -210,8 +210,8 @@ async function CalendarSection({ orgId, settings, manager }: { orgId: string; se
   return (
     <Card>
       <CardHeader title="Which calendars sync" subtitle="Choose a Google calendar for each EventureOS calendar (resource). Entries are created and updated in Google — never duplicated." />
-      {errors > 0 && <p className="mx-5 mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
-      {calendars.length === 0 && <p className="mx-5 mb-3 text-[12.5px] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
+      {errors > 0 && <p className="mx-4 mb-3 sm:mx-5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
+      {calendars.length === 0 && <p className="mx-4 mb-3 sm:mx-5 text-[12.5px] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
       {manager
         ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} />
         : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change calendar sync.</p>}
@@ -257,7 +257,30 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
       <Card>
         <CardHeader title="Xero invoice history" subtitle="Synced from Xero — no need to open Xero." />
         {(invoices ?? []).length === 0 ? <EmptyState title="No Xero invoices yet">Link customers in match review, then sync.</EmptyState> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line border-t border-line md:hidden">
+            {((invoices ?? []) as unknown as Inv[]).map((i) => {
+              const body = (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium text-ink">{i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span></div>
+                    <div className="truncate text-[12px] text-ink-faint">{i.due_date ? `Due ${fmtDate(i.due_date)} · ` : ""}Total {money(i.total, currency)}</div>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="tabular text-[13px] font-medium text-ink">{money(i.balance, currency)}</span>
+                    <Badge tone={INVOICE_STATUS[i.status].tone}>{INVOICE_STATUS[i.status].label}</Badge>
+                  </div>
+                </>
+              );
+              const cls = "flex min-h-[56px] items-start gap-3 px-4 py-3";
+              return (
+                <li key={i.id}>
+                  {i.event_id ? <Link href={`/events/${i.event_id}?tab=invoice`} className={`${cls} active:bg-zinc-50`}>{body}</Link> : <div className={cls}>{body}</div>}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[560px] text-[13px]">
               <thead><tr className="border-y border-line bg-zinc-50/60 text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2 font-medium">Invoice</th><th className="px-3 py-2 font-medium">Customer</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 text-right font-medium">Total</th><th className="px-5 py-2 text-right font-medium">Balance</th>
@@ -275,6 +298,7 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
       <Card>
@@ -283,9 +307,9 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
           : credit.length === 0 ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No sales credit notes.</p> : (
             <ul className="divide-y divide-line border-t border-line">
               {credit.map((c) => (
-                <li key={c.CreditNoteID} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[13px]">
-                  <span>{c.CreditNoteNumber ?? "Credit note"} · {c.Contact?.Name ?? "—"} <span className="text-ink-faint">{fmtDate(xeroDate(c.Date, c.DateString))}</span></span>
-                  <span className="tabular">{money(c.Total ?? 0, currency)} <span className="text-[11.5px] text-ink-faint">({c.Status?.toLowerCase()}{c.RemainingCredit ? `, ${money(c.RemainingCredit, currency)} unapplied` : ""})</span></span>
+                <li key={c.CreditNoteID} className="flex flex-col gap-1 px-4 py-2.5 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
+                  <span className="min-w-0 break-words">{c.CreditNoteNumber ?? "Credit note"} · {c.Contact?.Name ?? "—"} <span className="text-ink-faint">{fmtDate(xeroDate(c.Date, c.DateString))}</span></span>
+                  <span className="tabular sm:shrink-0">{money(c.Total ?? 0, currency)} <span className="text-[11.5px] text-ink-faint">({c.Status?.toLowerCase()}{c.RemainingCredit ? `, ${money(c.RemainingCredit, currency)} unapplied` : ""})</span></span>
                 </li>
               ))}
             </ul>

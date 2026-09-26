@@ -88,15 +88,15 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1 basis-72">
           <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
             <Link href="/enquiries" className="hover:text-ink">Enquiries</Link><span>/</span><span>ENQ-{e.number}</span>
           </div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-ink">{e.title}</h1>
+          <h1 className="break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{e.title}</h1>
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-muted">
             <Badge tone={s.tone} dot>{s.label}</Badge>
-            <span>{displayName}</span><span className="text-ink-faint">·</span>
+            <span className="min-w-0 break-all">{displayName}</span><span className="text-ink-faint">·</span>
             <span>{ENQUIRY_SOURCE[e.source]}</span><span className="text-ink-faint">·</span>
             <span title={fmtDateTime(e.received_at, tz)}>Received {relative(e.received_at)}</span>
             {e.classification && (
@@ -106,11 +106,11 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             )}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <AssignSelect id={e.id} assignee={e.assigned_to} members={memberOpts} />
           <StatusSelect id={e.id} status={e.status} />
           {e.event ? (
-            <ButtonLink href={`/events/${e.event.id}`} variant="primary">Open event EV-{e.event.number} <ArrowUpRight className="h-4 w-4" /></ButtonLink>
+            <ButtonLink href={`/events/${e.event.id}`} variant="primary" className="col-span-2 h-10 sm:h-9">Open event EV-{e.event.number} <ArrowUpRight className="h-4 w-4" /></ButtonLink>
           ) : (
             !["lost", "archived"].includes(e.status) && <ConvertToEvent id={e.id} defaultName={e.title} />
           )}
@@ -119,12 +119,12 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
 
       <NextActionBanner action={na} />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
+        <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           {e.message && (
             <Card>
               <CardHeader title="Original enquiry" subtitle={`${ENQUIRY_SOURCE[e.source]} · ${fmtDateTime(e.received_at, tz)}`} />
-              <p className="whitespace-pre-line px-5 pb-5 text-[13.5px] leading-relaxed text-ink">{e.message}</p>
+              <p className="whitespace-pre-line break-words px-5 pb-5 text-[13.5px] leading-relaxed text-ink">{e.message}</p>
             </Card>
           )}
           <Card>
@@ -141,7 +141,8 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        <div className="space-y-6">
+        {/* Side column — on phones/tablets the summary cards come first, before the conversation. */}
+        <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
             <CardHeader title="Customer" action={e.customer && <Link href={`/clients/${e.customer.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
             <div className="px-5 pb-5">
@@ -156,13 +157,13 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
               </div>
               <ul className="mt-4 space-y-2 text-[13px]">
                 {(e.contact?.email ?? e.customer?.email ?? e.contact_email) && (
-                  <li className="flex items-center gap-2 text-ink"><Mail className="h-4 w-4 text-ink-faint" />{e.contact?.email ?? e.customer?.email ?? e.contact_email}</li>
+                  <li className="flex min-w-0 items-center gap-2 text-ink"><Mail className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`mailto:${e.contact?.email ?? e.customer?.email ?? e.contact_email}`} className="min-w-0 break-all hover:text-brand-700">{e.contact?.email ?? e.customer?.email ?? e.contact_email}</a></li>
                 )}
                 {(e.contact?.phone ?? e.customer?.phone ?? e.contact_phone) && (
-                  <li className="flex items-center gap-2 text-ink"><Phone className="h-4 w-4 text-ink-faint" />{e.contact?.phone ?? e.customer?.phone ?? e.contact_phone}</li>
+                  <li className="flex min-w-0 items-center gap-2 text-ink"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${(e.contact?.phone ?? e.customer?.phone ?? e.contact_phone ?? "").replace(/\s+/g, "")}`} className="min-w-0 break-words hover:text-brand-700">{e.contact?.phone ?? e.customer?.phone ?? e.contact_phone}</a></li>
                 )}
                 {(e.customer?.company ?? e.company) && (
-                  <li className="flex items-center gap-2 text-ink"><Building2 className="h-4 w-4 text-ink-faint" />{e.customer?.company ?? e.company}</li>
+                  <li className="flex min-w-0 items-center gap-2 text-ink"><Building2 className="h-4 w-4 shrink-0 text-ink-faint" /><span className="min-w-0 break-words">{e.customer?.company ?? e.company}</span></li>
                 )}
               </ul>
               {e.customer && (
@@ -215,17 +216,17 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                     </p>
                     <ul className="space-y-1.5">
                       {cal.map((c) => (
-                        <li key={c.id} className="flex items-center gap-2 text-[12.5px]">
-                          <span className="h-2 w-2 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
-                          <span className="flex-1 truncate text-ink">{c.title}</span>
-                          <span className="text-ink-faint">{fmtDateTime(c.starts_at, tz, "time")}–{fmtDateTime(c.ends_at, tz, "time")} · {c.calendar?.name}</span>
+                        <li key={c.id} className="flex flex-wrap items-center gap-x-2 text-[12.5px] sm:flex-nowrap">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
+                          <span className="min-w-0 flex-1 truncate text-ink">{c.title}</span>
+                          <span className="w-full pl-4 text-ink-faint sm:w-auto sm:pl-0">{fmtDateTime(c.starts_at, tz, "time")}–{fmtDateTime(c.ends_at, tz, "time")} · {c.calendar?.name}</span>
                         </li>
                       ))}
                       {sameDay.filter((x) => !cal.some((c) => c.event_id === x.id)).map((x) => (
-                        <li key={x.id} className="flex items-center gap-2 text-[12.5px]">
-                          <span className="h-2 w-2 rounded-full bg-zinc-300" />
-                          <Link href={`/events/${x.id}`} className="flex-1 truncate text-ink hover:text-brand-700">{x.name}</Link>
-                          <span className="text-ink-faint">{timeRange(x.start_time, x.finish_time)} · {EVENT_STATUS[x.status].label}</span>
+                        <li key={x.id} className="flex flex-wrap items-center gap-x-2 text-[12.5px] sm:flex-nowrap">
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-300" />
+                          <Link href={`/events/${x.id}`} className="min-w-0 flex-1 truncate text-ink hover:text-brand-700">{x.name}</Link>
+                          <span className="w-full pl-4 text-ink-faint sm:w-auto sm:pl-0">{timeRange(x.start_time, x.finish_time)} · {EVENT_STATUS[x.status].label}</span>
                         </li>
                       ))}
                     </ul>
@@ -239,9 +240,9 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             <CardHeader title="Quote" />
             <div className="px-5 pb-5">
               {quotes.length ? quotes.map((q) => (
-                <Link key={q.id} href={`/quotes/${q.id}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-zinc-50">
-                  <span className="text-[13px] text-ink">Q-{q.number} · {q.title}</span>
-                  <span className="flex items-center gap-2">
+                <Link key={q.id} href={`/quotes/${q.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-2 hover:bg-zinc-50 sm:py-1.5">
+                  <span className="min-w-0 break-words text-[13px] text-ink">Q-{q.number} · {q.title}</span>
+                  <span className="flex shrink-0 items-center gap-2">
                     {q.version && <span className="tabular text-[13px] text-ink">{money(q.version.total, org.currency)}</span>}
                     <Badge tone={QUOTE_STATUS[q.status].tone}>{QUOTE_STATUS[q.status].label}</Badge>
                   </span>
@@ -254,6 +255,9 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             </div>
           </Card>
 
+        </div>
+
+        <div className="space-y-6 xl:col-start-2 xl:row-start-2 xl:self-start">
           <Card>
             <CardHeader title="Tasks" />
             <TasksPanel tasks={(tasksRes.data ?? []) as Task[]} members={memberOpts} action={createTask.bind(null, { enquiryId: e.id, customerId: e.customer_id, eventId: e.event_id })} />

@@ -52,9 +52,9 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <p className="text-[13px] font-medium text-[color:var(--portal-brand-ink)]">{branding.name}</p>
-        <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-ink">Hi {firstName(contactName, user.email)}</h1>
+        <h1 className="mt-1 break-words text-[23px] font-semibold tracking-tight text-ink sm:text-[26px]">Hi {firstName(contactName, user.email)}</h1>
         <p className="mt-1.5 text-[14px] text-ink-muted">
           {actionCount > 0
             ? `${actionCount === 1 ? "One booking needs" : `${actionCount} bookings need`} your attention.`
@@ -95,19 +95,21 @@ function EventCard({ slug, card, today, currency, compact }: {
   const actionHref = next.tab === "overview" ? href : `${href}?tab=${next.tab}`;
   return (
     <article className={cn("overflow-hidden rounded-2xl border border-line bg-white shadow-card", compact && "opacity-90")}>
-      <div className="p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Link href={href} className="text-[17px] font-semibold tracking-tight text-ink hover:underline">{e.name}</Link>
+      <div className="p-4 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1 basis-56">
+            <Link href={href} className="break-words text-[17px] font-semibold tracking-tight text-ink hover:underline">{e.name}</Link>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5" />
-                {e.event_date ? `${fmtDate(e.event_date, "long")}` : "Date to be confirmed"}
-                {e.start_time && ` · ${timeRange(e.start_time, e.finish_time)}`}
-                {e.event_date && !compact && <span className="text-ink-faint">({relativeDay(e.event_date, today)})</span>}
+              <span className="flex min-w-0 items-start gap-1.5">
+                <CalendarDays className="mt-[3px] h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0">
+                  {e.event_date ? `${fmtDate(e.event_date, "long")}` : "Date to be confirmed"}
+                  {e.start_time && ` · ${timeRange(e.start_time, e.finish_time)}`}
+                  {e.event_date && !compact && <span className="text-ink-faint"> ({relativeDay(e.event_date, today)})</span>}
+                </span>
               </span>
               {(e.venue || e.address) && (
-                <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{e.venue ?? e.address}</span>
+                <span className="flex min-w-0 items-start gap-1.5"><MapPin className="mt-[3px] h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-words">{e.venue ?? e.address}</span></span>
               )}
             </div>
           </div>
@@ -115,8 +117,8 @@ function EventCard({ slug, card, today, currency, compact }: {
         </div>
 
         {!compact && (
-          <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:grid-cols-3">
-            <div>
+          <dl className="mt-4 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:mt-5 sm:grid-cols-3">
+            <div className="col-span-2 sm:col-span-1">
               <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Current quote</dt>
               <dd className="mt-1 text-[13.5px] text-ink">
                 {q && v ? (
@@ -129,7 +131,7 @@ function EventCard({ slug, card, today, currency, compact }: {
             </div>
             <div>
               <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Amount</dt>
-              <dd className="tabular mt-1 text-[13.5px] font-medium text-ink">{v ? money(v.total, currency) : "—"}</dd>
+              <dd className="tabular mt-1 text-[15px] font-semibold text-ink sm:text-[13.5px] sm:font-medium">{v ? money(v.total, currency) : "—"}</dd>
             </div>
             <div>
               <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Payment</dt>
@@ -141,7 +143,7 @@ function EventCard({ slug, card, today, currency, compact }: {
       <Link
         href={actionHref}
         className={cn(
-          "flex items-center justify-between gap-3 border-t px-5 py-3.5 text-[13.5px] font-medium sm:px-6",
+          "flex min-h-[52px] items-center justify-between gap-3 border-t px-4 py-3.5 text-[14px] font-medium sm:min-h-0 sm:px-6 sm:text-[13.5px]",
           next.urgent
             ? "border-[var(--portal-brand-line)] bg-[var(--portal-brand-soft)] text-[color:var(--portal-brand-ink)] hover:brightness-[0.98]"
             : "border-line bg-zinc-50/60 text-ink-muted hover:text-ink"

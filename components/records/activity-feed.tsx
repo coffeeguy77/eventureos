@@ -28,7 +28,7 @@ export function ActivityFeed({ items, names, tz, compact = false }: {
               </span>
             )}
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-[13px] leading-snug text-ink">{a.summary}</p>
+              <p className="break-words text-[13px] leading-snug text-ink">{a.summary}</p>
               {!compact && a.changes && <ChangeList changes={a.changes} />}
               <p className="mt-0.5 text-[11.5px] text-ink-faint" title={fmtDateTime(a.created_at, tz)}>
                 {a.actor_type !== "user" && <span>{who} · </span>}
@@ -52,7 +52,7 @@ function ChangeList({ changes }: { changes: Record<string, [unknown, unknown]> }
   return (
     <ul className="mt-1 space-y-0.5">
       {Object.entries(changes).map(([field, [from, to]]) => (
-        <li key={field} className="text-[12px] text-ink-muted">
+        <li key={field} className="break-words text-[12px] text-ink-muted">
           <span className="capitalize">{field.replace(/_/g, " ")}</span>:{" "}
           <span className="line-through decoration-ink-faint/60">{pretty(from)}</span> → <span className="font-medium text-ink">{pretty(to)}</span>
         </li>

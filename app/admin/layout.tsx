@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <AdminNav />
           <div className="ml-auto flex items-center gap-4 text-[12.5px] text-zinc-400">
             <span className="hidden sm:inline">{user?.email}</span>
-            <Link href="/dashboard" className="font-medium text-zinc-200 hover:text-white">Back to app →</Link>
+            <Link href="/dashboard" className="whitespace-nowrap py-2 font-medium text-zinc-200 hover:text-white sm:py-0">Back to app →</Link>
           </div>
         </div>
       </header>

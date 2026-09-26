@@ -20,16 +20,16 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
   const sections = snap.sections ?? [];
   const optionalTotal = sections.reduce((a, s) => a + s.items.filter((i) => i.optional)
     .reduce((b, i) => b + Number(i.line_total) * (1 + Number(i.tax_rate ?? 0) / 100), 0), 0);
-  const pad = compact ? "px-5" : "px-6 sm:px-10";
+  const pad = compact ? "px-4 sm:px-5" : "px-4 sm:px-10";
 
   return (
     <article className={cn("bg-white text-ink", !compact && "rounded-xl border border-line shadow-card")}>
       {!compact && (
-        <header className={cn(pad, "border-b border-line pb-6 pt-8")}>
+        <header className={cn(pad, "border-b border-line pb-5 pt-6 sm:pb-6 sm:pt-8")}>
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               {orgName && <p className="text-[13px] font-semibold text-ink">{orgName}</p>}
-              <h2 className="mt-3 text-[22px] font-semibold tracking-tight">{snap.title}</h2>
+              <h2 className="mt-3 break-words text-[20px] font-semibold tracking-tight sm:text-[22px]">{snap.title}</h2>
               {eventLabel && <p className="mt-1 text-[13px] text-ink-muted">{eventLabel}</p>}
             </div>
             <dl className="grid grid-cols-[auto_auto] gap-x-4 gap-y-1 text-[12.5px]">
@@ -62,12 +62,12 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
                     <img src={it.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-line" loading="lazy" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-1.5 text-[13.5px] font-medium">
+                    <p className="flex flex-wrap items-center gap-1.5 break-words text-[13.5px] font-medium">
                       {it.name}
                       {it.package && <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-1.5 py-0.5 text-[10.5px] font-medium text-brand-700"><Package className="h-3 w-3" />Package</span>}
                       {it.optional && !s.optional && <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10.5px] font-medium text-ink-muted">Optional</span>}
                     </p>
-                    {it.description && <p className="mt-0.5 whitespace-pre-line text-[12.5px] text-ink-muted">{it.description}</p>}
+                    {it.description && <p className="mt-0.5 whitespace-pre-line break-words text-[12.5px] text-ink-muted">{it.description}</p>}
                     <p className="tabular mt-0.5 text-[12px] text-ink-faint">
                       {Number(it.quantity)}{it.unit ? ` ${it.unit}` : ""} × {money(it.unit_price, currency)}
                       {Number(it.discount_percent ?? 0) > 0 && <span className="text-emerald-700"> · {Number(it.discount_percent)}% off</span>}
@@ -80,12 +80,12 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
           </section>
         ))}
 
-        <dl className="ml-auto mt-4 w-full max-w-[300px] space-y-1.5 border-t border-line pt-3 text-[13px]">
+        <dl className="ml-auto mt-4 w-full space-y-1.5 sm:max-w-[300px] border-t border-line pt-3 text-[13px]">
           <div className="flex justify-between"><dt className="text-ink-muted">Subtotal (ex GST)</dt><dd className="tabular">{money(snap.subtotal, currency)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">GST</dt><dd className="tabular">{money(snap.tax_total, currency)}</dd></div>
           <div className="flex justify-between border-t border-line pt-1.5 text-[15px] font-semibold"><dt>Total (inc GST)</dt><dd className="tabular">{money(snap.total, currency)}</dd></div>
           {optionalTotal > 0 && (
-            <div className="flex justify-between pt-1 text-[12px] text-ink-muted"><dt>Optional extras (not included)</dt><dd className="tabular">{money(optionalTotal, currency)}</dd></div>
+            <div className="flex justify-between gap-3 pt-1 text-[12px] text-ink-muted"><dt>Optional extras (not included)</dt><dd className="tabular">{money(optionalTotal, currency)}</dd></div>
           )}
         </dl>
 
@@ -94,13 +94,13 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
             {snap.notes && (
               <div>
                 <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">Notes</h4>
-                <p className="mt-1.5 whitespace-pre-line text-[12.5px] leading-relaxed text-ink-muted">{snap.notes}</p>
+                <p className="mt-1.5 whitespace-pre-line break-words text-[12.5px] leading-relaxed text-ink-muted">{snap.notes}</p>
               </div>
             )}
             {snap.terms && (
               <div className={cn(!snap.notes && "sm:col-span-2")}>
                 <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">Terms &amp; conditions</h4>
-                <p className="mt-1.5 whitespace-pre-line text-[12px] leading-relaxed text-ink-muted">{snap.terms}</p>
+                <p className="mt-1.5 whitespace-pre-line break-words text-[12px] leading-relaxed text-ink-muted">{snap.terms}</p>
               </div>
             )}
           </div>

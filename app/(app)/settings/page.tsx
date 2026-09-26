@@ -82,17 +82,17 @@ export default async function OrganisationSettingsPage() {
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
-                <SubmitButton pendingLabel="Saving…">Save changes</SubmitButton>
+                <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">Save changes</SubmitButton>
               </div>
             </ActionForm>
           ) : (
             <dl className="grid gap-5 sm:grid-cols-2">
               <Field label="Business name">{o.name}</Field>
               <Field label="Business type">{o.business_type ?? "—"}</Field>
-              <Field label="Contact email">{o.contact_email ?? "—"}</Field>
+              <Field label="Contact email"><span className="break-words">{o.contact_email ?? "—"}</span></Field>
               <Field label="Phone">{o.contact_phone ?? "—"}</Field>
               <Field label="Address" className="sm:col-span-2"><span className="whitespace-pre-line">{o.address ?? "—"}</span></Field>
-              <Field label="Website">{o.website ?? "—"}</Field>
+              <Field label="Website"><span className="break-all">{o.website ?? "—"}</span></Field>
               <Field label="Timezone">{o.timezone}</Field>
               <Field label="Currency">{o.currency}</Field>
             </dl>

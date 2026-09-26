@@ -80,12 +80,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1 basis-72">
           <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
             <Link href="/invoices" className="hover:text-ink">Invoices</Link><span>/</span><span>{inv.number}</span>
           </div>
-          <h1 className={cn("text-[22px] font-semibold tracking-tight text-ink", inv.status === "void" && "text-ink-muted line-through")}>
+          <h1 className={cn("break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]", inv.status === "void" && "text-ink-muted line-through")}>
             {inv.number} <span className="font-normal text-ink-muted">· {KIND_LABEL[inv.kind] ?? "Invoice"}</span>
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
@@ -98,7 +98,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             </span>
           </div>
         </div>
-        <div className="text-right">
+        <div className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-line bg-white px-4 py-2.5 sm:block sm:w-auto sm:border-0 sm:bg-transparent sm:p-0 sm:text-right">
           <p className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Balance</p>
           <p className={cn("tabular text-[24px] font-semibold tracking-tight", late ? "text-rose-700" : "text-ink")}>{money(inv.balance, cur)}</p>
         </div>
@@ -106,8 +106,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
       <NextActionBanner action={na} />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
+        <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <Card>
             <CardHeader title="Amounts" subtitle={xeroManaged ? "Xero is authoritative for these values" : "Prices include GST"} />
             <dl className="grid grid-cols-2 gap-4 px-5 pb-5 sm:grid-cols-5">
@@ -150,7 +150,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                     </ul>
                   </div>
                 ))}
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-[13px]">
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2 text-[13px]">
                   <span className="text-ink-muted">
                     {KIND_LABEL[inv.kind] ?? "Invoice"}
                     {Number(version.total) > 0 && Number(inv.total) !== Number(version.total) ? ` · ${Math.round((Number(inv.total) / Number(version.total)) * 100)}% of quote` : ""}
@@ -181,7 +181,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        <div className="space-y-6">
+        {/* On phones/tablets: actions, customer and event come first; activity goes last. */}
+        <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
             <CardHeader title="Actions" />
             <InvoiceActions id={inv.id} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
@@ -191,11 +192,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <Card>
             <CardHeader title="Customer" action={inv.customer && <Link href={`/clients/${inv.customer.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
             <div className="px-5 pb-5">
-              <p className="text-[14px] font-semibold text-ink">{inv.customer?.name ?? "—"}</p>
+              <p className="break-words text-[14px] font-semibold text-ink">{inv.customer?.name ?? "—"}</p>
               {inv.customer?.company && inv.customer.company !== inv.customer.name && <p className="text-[12.5px] text-ink-muted">{inv.customer.company}</p>}
               <ul className="mt-3 space-y-1.5 text-[13px] text-ink">
-                {inv.customer?.email && <li className="flex items-center gap-2"><Mail className="h-4 w-4 text-ink-faint" />{inv.customer.email}</li>}
-                {inv.customer?.phone && <li className="flex items-center gap-2"><Phone className="h-4 w-4 text-ink-faint" />{inv.customer.phone}</li>}
+                {inv.customer?.email && <li className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`mailto:${inv.customer.email}`} className="min-w-0 break-all hover:text-brand-700">{inv.customer.email}</a></li>}
+                {inv.customer?.phone && <li className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${inv.customer.phone.replace(/\s+/g, "")}`} className="hover:text-brand-700">{inv.customer.phone}</a></li>}
               </ul>
             </div>
           </Card>
@@ -213,6 +214,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Not linked to an event.</p>}
           </Card>
 
+        </div>
+        <div className="space-y-6 xl:col-start-2 xl:row-start-2 xl:self-start">
           <Card>
             <CardHeader title="Activity" subtitle="Every change to this invoice" />
             <ActivityFeed items={activity} names={names} tz={tz} />

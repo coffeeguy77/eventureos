@@ -64,29 +64,29 @@ export default async function CalendarsPage() {
         ) : (
           <ul className="divide-y divide-line border-t border-line">
             {cals.map((c) => (
-              <li key={c.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center">
+              <li key={c.id} className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-center">
                 <div className="min-w-0 flex-1">
                   {canEdit ? (
                     <ActionForm action={updateCalendar} showOk={false}>
                       <input type="hidden" name="id" value={c.id} />
                       <div className="flex flex-wrap items-center gap-2">
                         <input type="color" name="colour" defaultValue={c.colour} aria-label={`Colour for ${c.name}`}
-                          className="h-8 w-10 cursor-pointer rounded-md border border-line-strong bg-white p-0.5" />
-                        <Input name="name" defaultValue={c.name} aria-label="Calendar name" maxLength={80} required className="h-8 w-full max-w-[240px] py-1" />
-                        <SubmitButton size="sm" variant="secondary" pendingLabel="Saving…">Save</SubmitButton>
+                          className="h-10 w-11 shrink-0 cursor-pointer rounded-md border border-line-strong bg-white p-0.5 sm:h-8 sm:w-10" />
+                        <Input name="name" defaultValue={c.name} aria-label="Calendar name" maxLength={80} required className="h-10 min-w-0 flex-1 py-1 sm:h-8 sm:w-full sm:max-w-[240px] sm:flex-none" />
+                        <SubmitButton size="sm" variant="secondary" pendingLabel="Saving…" className="h-10 sm:h-8">Save</SubmitButton>
                       </div>
                     </ActionForm>
                   ) : (
                     <div className="flex items-center gap-2.5">
-                      <span className="h-3.5 w-3.5 rounded-full" style={{ background: c.colour }} />
-                      <span className="text-[13.5px] font-medium text-ink">{c.name}</span>
+                      <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: c.colour }} />
+                      <span className="min-w-0 truncate text-[13.5px] font-medium text-ink">{c.name}</span>
                     </div>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-muted">
                     <Badge tone="neutral">{PROVIDER[c.provider] ?? c.provider}</Badge>
                     {c.is_default && <Badge tone="brand">Default</Badge>}
                     <span>{upcoming.get(c.id) ?? 0} upcoming {upcoming.get(c.id) === 1 ? "entry" : "entries"}</span>
-                    {c.external_calendar_id && <span className="truncate font-mono text-[11px] text-ink-faint">{c.external_calendar_id}</span>}
+                    {c.external_calendar_id && <span className="min-w-0 max-w-full truncate font-mono text-[11px] text-ink-faint">{c.external_calendar_id}</span>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 lg:justify-end">
@@ -112,19 +112,19 @@ export default async function CalendarsPage() {
       {canEdit && (
         <Card>
           <CardHeader title="Add a calendar" subtitle="e.g. “Cart 2”, “Bar trailer”, “Site visits”." />
-          <div className="border-t border-line px-5 py-5">
+          <div className="border-t border-line px-4 py-5 sm:px-5">
             <ActionForm action={addCalendar} resetOnOk>
               <div className="flex flex-wrap items-end gap-3">
                 <div>
                   <Label htmlFor="new_cal_colour">Colour</Label>
                   <input id="new_cal_colour" type="color" name="colour" defaultValue="#0EA5E9"
-                    className="h-9 w-12 cursor-pointer rounded-lg border border-line-strong bg-white p-1" />
+                    className="h-10 w-12 cursor-pointer rounded-lg border border-line-strong bg-white p-1 sm:h-9" />
                 </div>
-                <div className="min-w-[200px] flex-1">
+                <div className="min-w-0 flex-1 sm:min-w-[200px]">
                   <Label htmlFor="new_cal_name">Name</Label>
                   <Input id="new_cal_name" name="name" required maxLength={80} placeholder="Cart 2" />
                 </div>
-                <SubmitButton pendingLabel="Adding…">Add calendar</SubmitButton>
+                <SubmitButton pendingLabel="Adding…" className="w-full sm:w-auto">Add calendar</SubmitButton>
               </div>
             </ActionForm>
           </div>

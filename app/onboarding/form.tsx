@@ -43,7 +43,7 @@ export function OnboardingForm() {
         </Select>
       </div>
       <FormError message={state?.error} />
-      <Button variant="primary" className="w-full" disabled={pending}>{pending ? "Setting up…" : "Create organisation"}</Button>
+      <Button variant="primary" className="h-11 w-full sm:h-9" disabled={pending}>{pending ? "Setting up…" : "Create organisation"}</Button>
     </form>
   );
 }

@@ -19,7 +19,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
       </div>
       <FormError message={state?.error} />
-      <Button variant="primary" className="w-full" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</Button>
+      <Button variant="primary" className="h-11 w-full sm:h-9" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</Button>
     </form>
   );
 }

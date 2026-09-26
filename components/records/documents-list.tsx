@@ -9,9 +9,9 @@ export function DocumentsList({ docs }: { docs: DocRow[] }) {
   return (
     <ul className="divide-y divide-line border-t border-line">
       {docs.map((d) => (
-        <li key={d.id} className="flex items-center gap-3 px-5 py-2.5">
+        <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-3 sm:flex-nowrap sm:py-2.5">
           <FileText className="h-4 w-4 shrink-0 text-ink-faint" />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-40">
             <p className="truncate text-[13px] text-ink">{d.name}</p>
             <p className="text-[11.5px] text-ink-faint">
               {d.requested_from_customer ? "Requested from customer" : `${d.size_bytes ? Math.round(d.size_bytes / 1024) + " KB · " : ""}added ${relative(d.created_at)}`}

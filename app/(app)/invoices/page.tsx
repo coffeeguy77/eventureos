@@ -69,7 +69,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     const on = status === key;
     return (
       <Link key={key ?? "all"} href={`/invoices${qs.size ? `?${qs}` : ""}`}
-        className={cn("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
+        className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
           on ? "bg-ink text-white" : "bg-white text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
         {label}
         <span className={cn("rounded-full px-1.5 text-[10.5px] font-semibold",
@@ -85,11 +85,11 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
       <div className={cn("mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-[12.5px]",
         xeroConnected ? "border-emerald-200 bg-emerald-50/60" : xero?.status === "error" ? "border-rose-200 bg-rose-50/60" : "border-line bg-white")}>
-        <RefreshCw className={cn("h-4 w-4", xeroConnected ? "text-emerald-600" : "text-ink-faint")} />
+        <RefreshCw className={cn("h-4 w-4 shrink-0", xeroConnected ? "text-emerald-600" : "text-ink-faint")} />
         {xeroConnected ? (
           <>
             <span className="font-semibold uppercase tracking-wide text-emerald-800">Synced with Xero</span>
-            <span className="text-emerald-900/80">
+            <span className="min-w-0 break-words text-emerald-900/80">
               {xero?.last_sync_at ? <>Last synchronised {relative(xero.last_sync_at)} · {fmtDateTime(xero.last_sync_at, tz)}</> : "Waiting for the first sync"}
               {xero?.account_label ? ` · ${xero.account_label}` : ""}
             </span>
@@ -98,7 +98,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         ) : xero?.status === "error" ? (
           <>
             <span className="font-semibold text-rose-800">Xero sync error</span>
-            <span className="text-rose-800/80">{xero.last_error ?? "The last sync failed."}{xero.last_sync_at ? ` · last successful sync ${relative(xero.last_sync_at)}` : ""}</span>
+            <span className="min-w-0 break-words text-rose-800/80">{xero.last_error ?? "The last sync failed."}{xero.last_sync_at ? ` · last successful sync ${relative(xero.last_sync_at)}` : ""}</span>
           </>
         ) : (
           <>
@@ -114,7 +114,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         <Kpi label={`Paid · ${month.label}`} value={money(paidMonth, cur)} sub="Payments received this month" href="/payments" />
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div className="no-scrollbar -mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
         {pill(null, "All", all.length)}
         {STATUSES.map((s) => pill(s, INVOICE_STATUS[s].label, counts[s]))}
       </div>
@@ -128,7 +128,38 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
             {all.length ? "Try a different status or search." : "Invoices are raised automatically when a quote is accepted, or you can create one."}
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((i) => {
+              const late = i.status === "overdue" || pastDue(i);
+              const lateDays = late && i.due_date ? daysBetween(i.due_date, today) : 0;
+              const s = INVOICE_STATUS[i.status];
+              return (
+                <li key={i.id} className={cn(late && "bg-rose-50/40")}>
+                  <Link href={`/invoices/${i.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
+                    <div className="min-w-0 flex-1">
+                      <div className={cn("truncate text-[13.5px] font-medium", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>
+                        {i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span>
+                      </div>
+                      {i.event && <div className="truncate text-[12.5px] text-ink-muted">{i.event.name}</div>}
+                      <div className={cn("mt-0.5 truncate text-[12px]", late ? "font-medium text-rose-700" : "text-ink-faint")}>
+                        Due {fmtDate(i.due_date)}{late && lateDays > 0 ? ` · ${lateDays}d overdue` : ""}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={cn("tabular text-[13px] font-medium", late ? "text-rose-700" : i.status === "void" ? "text-ink-faint" : "text-ink")}>{money(i.balance, cur)}</span>
+                      <Badge tone={s.tone} dot>{s.label}</Badge>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex items-center justify-between gap-3 border-t-2 border-line bg-zinc-50/70 px-4 py-3 text-[13px] font-semibold text-ink md:hidden">
+            <span className="min-w-0">Balance <span className="font-normal text-ink-muted">· {counted.length} invoice{counted.length === 1 ? "" : "s"}</span></span>
+            <span className="tabular shrink-0">{money(totals.balance, cur)}</span>
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[980px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -178,6 +209,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </Card>
     </div>

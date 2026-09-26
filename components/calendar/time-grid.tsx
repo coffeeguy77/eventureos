@@ -66,11 +66,11 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const cols = single ? "grid-cols-[56px_minmax(0,1fr)]" : "grid-cols-[56px_repeat(7,minmax(0,1fr))]";
+  const cols = single ? "grid-cols-[48px_minmax(0,1fr)] sm:grid-cols-[56px_minmax(0,1fr)]" : "grid-cols-[48px_repeat(7,minmax(0,1fr))] sm:grid-cols-[56px_repeat(7,minmax(0,1fr))]";
 
   return (
     <div className="overflow-x-auto">
-      <div className={cn(!single && "min-w-[760px]")}>
+      <div className={cn(!single && "min-w-[640px] sm:min-w-[760px]")}>
         {/* Day headers */}
         <div className={cn("grid border-b border-line", cols)}>
           <div />
@@ -101,7 +101,7 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
         )}
 
         {/* Timed grid */}
-        <div ref={scroller} className="max-h-[640px] overflow-y-auto">
+        <div ref={scroller} className="max-h-[62vh] overflow-y-auto overscroll-contain sm:max-h-[640px]">
           <div className={cn("relative grid", cols)} style={{ height: HOURS.length * HOUR_PX }}>
             <div className="relative">
               {HOURS.map((h, i) => (

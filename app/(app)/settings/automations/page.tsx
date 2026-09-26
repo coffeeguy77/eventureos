@@ -127,10 +127,10 @@ export default async function AutomationsPage() {
               const acts = (Array.isArray(r.actions) ? r.actions : []) as RuleAction[];
               const dep = dependency(r.trigger_type);
               return (
-                <li key={r.id} className="flex gap-4 px-5 py-4">
+                <li key={r.id} className="flex gap-3 px-4 py-4 sm:gap-4 sm:px-5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium text-ink">{r.name}</span>
+                      <span className="min-w-0 break-words text-[13.5px] font-medium text-ink">{r.name}</span>
                       <Badge tone={r.enabled ? "green" : "slate"} dot>{r.enabled ? "On" : "Off"}</Badge>
                     </div>
                     <p className="mt-1.5 text-[13px] leading-relaxed text-ink">
@@ -161,7 +161,7 @@ export default async function AutomationsPage() {
           </ul>
         )}
         {missing.length > 0 && (
-          <div className="border-t border-line px-5 py-4">
+          <div className="border-t border-line px-4 py-4 sm:px-5">
             <div className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Standard rules you don’t have yet</div>
             <ul className="mt-2 space-y-2">
               {missing.map((t) => (
@@ -185,7 +185,7 @@ export default async function AutomationsPage() {
           title="When a quote is accepted"
           subtitle="What the “Quote accepted” automation does about invoicing, plus follow-up timing."
         />
-        <div className="border-t border-line px-5 py-5">
+        <div className="border-t border-line px-4 py-5 sm:px-5">
           {canSettings ? (
             <ActionForm action={saveAutomationSettings}>
               <fieldset>
@@ -217,7 +217,7 @@ export default async function AutomationsPage() {
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
-                <SubmitButton pendingLabel="Saving…">Save settings</SubmitButton>
+                <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">Save settings</SubmitButton>
               </div>
             </ActionForm>
           ) : (
@@ -235,7 +235,30 @@ export default async function AutomationsPage() {
         {(runsRes.data ?? []).length === 0 ? (
           <EmptyState title="Nothing has run yet">Runs appear here when a quote is accepted or a follow-up is flagged.</EmptyState>
         ) : (
-          <div className="overflow-x-auto border-t border-line">
+          <>
+          <ul className="divide-y divide-line border-t border-line md:hidden">
+            {(runsRes.data ?? []).map((run) => {
+              const rule = run.rule as unknown as { name: string } | null;
+              const result = (run.result ?? {}) as Record<string, unknown>;
+              const payload = (run.trigger_payload ?? {}) as Record<string, unknown>;
+              const done = Array.isArray(result.actions) ? (result.actions as string[]).map((a) => a.replace(/_/g, " ")).join(", ") : result.task_id ? "follow-up task created" : result.error ? String(result.error) : "—";
+              const eventId = typeof payload.event_id === "string" ? payload.event_id : null;
+              return (
+                <li key={run.id} className="flex min-h-[56px] items-start gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium text-ink">{rule?.name ?? "Deleted rule"}</div>
+                    <div className="break-words text-[12.5px] text-ink-muted">
+                      {done}
+                      {eventId && <> · <Link href={`/events/${eventId}`} className="text-brand-600 hover:text-brand-700">event</Link></>}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-ink-faint">{relative(run.created_at)}</div>
+                  </div>
+                  <Badge tone={RUN_TONE[run.status] ?? "neutral"} className="shrink-0">{run.status}</Badge>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto border-t border-line md:block">
             <table className="w-full min-w-[560px] text-[13px]">
               <thead>
                 <tr className="text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -267,6 +290,7 @@ export default async function AutomationsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </>

@@ -80,7 +80,7 @@ export default async function EnquiriesPage({ searchParams }: {
         actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>}
       />
 
-      <div className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
+      <div className="no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
         {tabs.map((t) => {
           const on = t.key === statusKey;
           const c = counts[t.key] ?? 0;
@@ -110,7 +110,35 @@ export default async function EnquiriesPage({ searchParams }: {
             Try another status or clear your filters.
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((e) => {
+              const s = ENQUIRY_STATUS[e.status];
+              const na = enquiryNextAction(e);
+              const unread = e.status === "new" || e.status === "needs_review";
+              return (
+                <li key={e.id}>
+                  <Link href={`/enquiries/${e.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
+                    <div className="min-w-0 flex-1">
+                      <div className={cn("truncate text-[13.5px] text-ink", unread ? "font-semibold" : "font-medium")}>
+                        {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
+                      </div>
+                      <div className="truncate text-[12.5px] text-ink-muted">{e.title}</div>
+                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                        {e.event_date ? fmtDate(e.event_date) : "No date"} · {relative(e.received_at)}
+                        {na.due && na.due < now ? <span className="font-medium text-rose-700"> · Overdue</span> : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={s.tone} dot>{s.label}</Badge>
+                      {e.budget ? <span className="tabular text-[12.5px] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1180px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
@@ -166,6 +194,7 @@ export default async function EnquiriesPage({ searchParams }: {
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} enquir{rows.length === 1 ? "y" : "ies"}</div>
       </Card>

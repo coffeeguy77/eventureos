@@ -68,7 +68,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
   const n = Number(amount.replace(/[$,\s]/g, ""));
   return (
     <form action={action}>
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label htmlFor="customer_id">Customer</Label>
@@ -117,7 +117,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
             <Input id="amount" name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="0.00" />
             {Number.isFinite(n) && n > 0 && <p className="mt-1 text-[12px] text-ink-muted">{money(n, currency)} · GST {money(n - Math.round((n * 100) / 1.1) / 100, currency)}</p>}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
             <div><Label htmlFor="issue_date">Date</Label><Input id="issue_date" name="issue_date" type="date" value={issueDate} required
               onChange={(e) => { setIssueDate(e.target.value); if (e.target.value) setDueDate(addDaysISO(e.target.value, terms)); }} /></div>
             <div><Label htmlFor="due_date" hint={`${terms}-day terms`}>Due</Label><Input id="due_date" name="due_date" type="date" value={dueDate} min={issueDate} required onChange={(e) => setDueDate(e.target.value)} /></div>
@@ -125,10 +125,10 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
         </div>
         <p className="mt-5 text-[12px] text-ink-muted">The invoice number is assigned automatically.</p>
         <div className="mt-4"><FormError message={state?.error} /></div>
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <ButtonLink href="/invoices" variant="ghost">Cancel</ButtonLink>
-          <Button name="intent" value="draft" disabled={pending}>Save as draft</Button>
-          <Button name="intent" value="send" variant="primary" disabled={pending}>{pending ? "Creating…" : "Create · awaiting payment"}</Button>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <ButtonLink href="/invoices" variant="ghost" className="h-10 w-full sm:h-9 sm:w-auto">Cancel</ButtonLink>
+          <Button name="intent" value="draft" className="h-10 w-full sm:h-9 sm:w-auto" disabled={pending}>Save as draft</Button>
+          <Button name="intent" value="send" variant="primary" className="h-10 w-full sm:h-9 sm:w-auto" disabled={pending}>{pending ? "Creating…" : "Create · awaiting payment"}</Button>
         </div>
       </Card>
     </form>

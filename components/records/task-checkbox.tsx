@@ -14,7 +14,7 @@ export function TaskCheckbox({ id, done }: { id: string; done: boolean }) {
       aria-label={optimistic ? "Mark as not done" : "Mark as done"}
       onClick={() => start(async () => { setOptimistic(!optimistic); await setTaskDone(id, !optimistic); })}
       className={cn(
-        "mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors",
+        "relative mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors before:absolute before:-inset-3 before:content-[''] sm:before:hidden",
         optimistic ? "border-brand-500 bg-brand-500 text-white" : "border-line-strong bg-white hover:border-brand-400"
       )}
     >

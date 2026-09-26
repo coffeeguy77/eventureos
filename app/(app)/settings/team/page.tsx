@@ -64,7 +64,63 @@ export default async function TeamPage() {
             Only owners and admins can invite people or change roles.
           </p>
         )}
-        <div className="overflow-x-auto border-t border-line">
+        <ul className="divide-y divide-line border-t border-line md:hidden">
+          {members.map((m) => {
+            const name = m.user?.full_name ?? m.user?.email ?? "Team member";
+            const isMe = m.user_id === user.id;
+            const lastOwner = m.role === "owner" && ownerCount <= 1;
+            const lockReason = !canAdmin ? null
+              : isMe && m.role === "owner" ? "You can't change your own owner role"
+              : m.role === "owner" && role !== "owner" ? "Only owners can change an owner"
+              : lastOwner ? "The last owner can't be demoted"
+              : null;
+            const editable = canAdmin && !lockReason;
+            const options = roleOrder.filter((r) => r !== "owner" || role === "owner");
+            return (
+              <li key={m.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <Avatar name={name} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium text-ink">{name}{isMe && <span className="ml-1.5 text-[11.5px] font-normal text-ink-faint">(you)</span>}</div>
+                    <div className="truncate text-[12.5px] text-ink-muted">{m.user?.email}</div>
+                    <div className="truncate text-[12px] text-ink-faint">{m.title ? `${m.title} · ` : ""}Joined {fmtDateTime(m.created_at, org.timezone, "date")}</div>
+                  </div>
+                  {!editable && (
+                    <span title={lockReason ?? undefined} className="shrink-0">
+                      <Badge tone={m.role === "owner" ? "brand" : "neutral"}>{ROLE_LABEL[m.role as StaffRole] ?? m.role}</Badge>
+                    </span>
+                  )}
+                </div>
+                {(editable || (canAdmin && !isMe && m.role !== "owner")) && (
+                  <div className="mt-2.5 flex items-start gap-2 pl-[44px]">
+                    {editable && (
+                      <ActionForm action={changeMemberRole} showOk={false} className="min-w-0 flex-1">
+                        <input type="hidden" name="member_id" value={m.id} />
+                        <div className="flex items-center gap-1.5">
+                          <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-10 min-w-0 flex-1 py-1 text-[12.5px]">
+                            {options.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                          </Select>
+                          <SubmitButton size="sm" variant="secondary" pendingLabel="…" className="h-10">Save</SubmitButton>
+                        </div>
+                      </ActionForm>
+                    )}
+                    {canAdmin && !isMe && m.role !== "owner" && (
+                      <ActionButton
+                        action={removeMember.bind(null, m.id)}
+                        variant="ghost"
+                        className="h-10"
+                        confirm={`Remove ${name} from ${org.name}? They'll lose access immediately.`}
+                      >
+                        Remove
+                      </ActionButton>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto border-t border-line md:block">
           <table className="w-full min-w-[720px] text-[13px]">
             <thead>
               <tr className="text-left text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
@@ -142,8 +198,8 @@ export default async function TeamPage() {
           <CardHeader title="EventureOS Support access" subtitle="Temporary access granted by EventureOS to help with a support request. Everything they do is logged." />
           <ul className="divide-y divide-line border-t border-line">
             {support.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[13px]">
-                <span className="font-medium text-ink">{s.user?.full_name ?? s.user?.email}</span>
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-[13px] sm:px-5">
+                <span className="min-w-0 break-words font-medium text-ink">{s.user?.full_name ?? s.user?.email}</span>
                 <span className="text-ink-muted">Ends {relative(s.expires_at)} ({fmtDateTime(s.expires_at, org.timezone)})</span>
               </li>
             ))}
@@ -170,7 +226,7 @@ export default async function TeamPage() {
                     {(["admin", "manager", "staff"] as StaffRole[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </Select>
                 </div>
-                <SubmitButton pendingLabel="Inviting…">Invite</SubmitButton>
+                <SubmitButton pendingLabel="Inviting…" className="w-full sm:w-auto">Invite</SubmitButton>
               </div>
             </ActionForm>
           </div>
@@ -181,14 +237,14 @@ export default async function TeamPage() {
             ) : (
               <ul className="divide-y divide-line">
                 {invites.map((i) => (
-                  <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                  <li key={i.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:flex-wrap sm:px-5">
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-medium text-ink">{i.email}</div>
                       <div className="text-[12px] text-ink-muted">
                         {ROLE_LABEL[i.role]} · invited {relative(i.created_at)}{i.inviter ? ` by ${i.inviter.full_name ?? i.inviter.email}` : ""}
                       </div>
                     </div>
-                    <ActionButton action={revokeInvitation.bind(null, i.id)} variant="ghost" confirm={`Revoke the invitation for ${i.email}?`}>
+                    <ActionButton action={revokeInvitation.bind(null, i.id)} variant="ghost" className="h-10 sm:h-8" confirm={`Revoke the invitation for ${i.email}?`}>
                       Revoke
                     </ActionButton>
                   </li>
@@ -202,14 +258,14 @@ export default async function TeamPage() {
       <Card>
         <CardHeader title="What each role can do" subtitle="Customers never see the staff app — they only use the customer portal." />
         <div className="overflow-x-auto border-t border-line">
-          <table className="w-full min-w-[560px] text-[12.5px]">
+          <table className="w-full text-[12.5px] md:min-w-[560px]">
             <thead>
               <tr className="text-left">
-                <th className="px-5 py-2.5 font-medium text-ink-faint" />
+                <th className="px-4 py-2.5 font-medium text-ink-faint md:px-5" />
                 {roleOrder.map((r) => (
-                  <th key={r} className="px-3 py-2.5 text-center font-medium text-ink">
+                  <th key={r} className="px-1.5 py-2.5 text-center font-medium text-ink md:px-3">
                     {ROLE_LABEL[r]}
-                    <div className="text-[11px] font-normal text-ink-faint">{ROLE_HINT[r]}</div>
+                    <div className="hidden text-[11px] font-normal text-ink-faint md:block">{ROLE_HINT[r]}</div>
                   </th>
                 ))}
               </tr>
@@ -217,11 +273,11 @@ export default async function TeamPage() {
             <tbody className="divide-y divide-line">
               {PERMISSIONS.map((p) => (
                 <tr key={p.label}>
-                  <td className="px-5 py-2 text-ink">{p.label}</td>
+                  <td className="px-4 py-2 text-ink md:px-5">{p.label}</td>
                   {roleOrder.map((r) => {
                     const v = p[r];
                     return (
-                      <td key={r} className="px-3 py-2 text-center">
+                      <td key={r} className="px-1.5 py-2 text-center md:px-3">
                         {v === true ? <Check className="mx-auto h-4 w-4 text-emerald-600" aria-label="Yes" />
                           : v === "limited" ? <span className="text-[11.5px] text-amber-700">Limited</span>
                           : <Minus className="mx-auto h-4 w-4 text-ink-faint" aria-label="No" />}

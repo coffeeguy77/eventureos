@@ -10,6 +10,24 @@ import { recordPortalUpload, respondToQuote, sendPortalMessage, type ActionResul
 import { portalButton } from "../../ui";
 
 /* ------------------------------------------------------------------ */
+/* Section tabs: keeps the active tab scrolled into view on phones     */
+/* ------------------------------------------------------------------ */
+
+export function PortalTabsNav({ className, label, children }: { className?: string; label: string; children: React.ReactNode }) {
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const box = nav.current;
+    const el = box?.querySelector<HTMLElement>("[aria-current=page]");
+    if (!box || !el || box.scrollWidth <= box.clientWidth) return;
+    const left = el.getBoundingClientRect().left - box.getBoundingClientRect().left + box.scrollLeft;
+    if (left < box.scrollLeft || left + el.offsetWidth > box.scrollLeft + box.clientWidth) {
+      box.scrollLeft = Math.max(0, left - (box.clientWidth - el.offsetWidth) / 2);
+    }
+  });
+  return <nav ref={nav} className={className} aria-label={label}>{children}</nav>;
+}
+
+/* ------------------------------------------------------------------ */
 /* Accept / decline a quote                                            */
 /* ------------------------------------------------------------------ */
 
@@ -24,14 +42,16 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
   return (
     <div className="rounded-2xl border border-[var(--portal-brand-line)] bg-[var(--portal-brand-soft)] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-[15px] font-semibold text-ink">{mode === "accept" ? "Accept this quote" : "Decline this quote"}</h3>
-        <div className="flex rounded-lg bg-white p-0.5 ring-1 ring-inset ring-line">
+        <h3 className="text-[16px] font-semibold text-ink sm:text-[15px]">{mode === "accept" ? "Accept this quote" : "Decline this quote"}</h3>
+        <div className="grid w-full grid-cols-2 rounded-lg bg-white p-0.5 ring-1 ring-inset ring-line sm:flex sm:w-auto" role="radiogroup" aria-label="Your response">
           {(["accept", "decline"] as const).map((m) => (
             <button
               key={m}
               type="button"
+              role="radio"
+              aria-checked={mode === m}
               onClick={() => setMode(m)}
-              className={cn("rounded-md px-3 py-1 text-[12.5px] font-medium", mode === m ? "bg-ink text-white" : "text-ink-muted hover:text-ink")}
+              className={cn("h-10 rounded-md px-3 text-[14px] font-medium sm:h-auto sm:py-1 sm:text-[12.5px]", mode === m ? "bg-ink text-white" : "text-ink-muted hover:text-ink")}
             >
               {m === "accept" ? "Accept" : "Decline"}
             </button>
@@ -55,12 +75,12 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
               <Label htmlFor="accept-name">Your full name</Label>
               <Input id="accept-name" name="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={120} required className="bg-white" />
             </div>
-            <label className="flex items-start gap-2.5 text-[13px] text-ink">
-              <input type="checkbox" name="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-line-strong accent-[var(--portal-brand)]" />
+            <label className="flex cursor-pointer items-start gap-3 py-1 text-[14px] text-ink sm:gap-2.5 sm:py-0 sm:text-[13px]">
+              <input type="checkbox" name="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 rounded border-line-strong accent-[var(--portal-brand)] sm:h-4 sm:w-4" />
               <span>I accept the quote and terms from {businessName}.</span>
             </label>
             <FormError message={state?.error} />
-            <button className={portalButton("primary", "w-full sm:w-auto")} disabled={pending || !agree || name.trim().length < 2}>
+            <button className={portalButton("primary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending || !agree || name.trim().length < 2}>
               {pending ? "Recording your acceptance…" : "Accept quote"}
             </button>
           </>
@@ -72,7 +92,7 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
             </div>
             <input type="hidden" name="name" value={name} />
             <FormError message={state?.error} />
-            <button className={portalButton("secondary", "w-full sm:w-auto")} disabled={pending}>
+            <button className={portalButton("secondary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending}>
               {pending ? "Sending…" : "Decline quote"}
             </button>
           </>
@@ -97,11 +117,12 @@ export function MessageForm({ slug, eventId, placeholder }: { slug: string; even
       <input type="hidden" name="slug" value={slug} />
       <input type="hidden" name="event_id" value={eventId} />
       <Label htmlFor="message-body">Ask a question or send a message</Label>
-      <Textarea id="message-body" name="body" required maxLength={5000} placeholder={placeholder ?? "Type your message…"} />
+      <Textarea id="message-body" name="body" required maxLength={5000} rows={3} enterKeyHint="send" placeholder={placeholder ?? "Type your message…"}
+        onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el.form?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300); }} />
       <FormError message={state?.error} />
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[12px] text-ink-faint">{state?.ok ? "Sent — we'll reply here." : "We'll reply here in your portal."}</p>
-        <button className={portalButton("primary")} disabled={pending}>{pending ? "Sending…" : "Send message"}</button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <p className="text-center text-[12px] text-ink-faint sm:text-left">{state?.ok ? "Sent — we'll reply here." : "We'll reply here in your portal."}</p>
+        <button className={portalButton("primary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending}>{pending ? "Sending…" : "Send message"}</button>
       </div>
     </form>
   );
@@ -118,8 +139,10 @@ function safeFileName(name: string) {
   return cleaned || "file";
 }
 
-export function UploadButton({ slug, eventId, orgId, customerId, requestId, requestName, label = "Upload" }: {
+export function UploadButton({ slug, eventId, orgId, customerId, requestId, requestName, label = "Upload", fullOnMobile = false }: {
   slug: string; eventId: string; orgId: string; customerId: string; requestId: string | null; requestName?: string; label?: string;
+  /** Stretch to the full row width on phones (for list rows). */
+  fullOnMobile?: boolean;
 }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -156,12 +179,12 @@ export function UploadButton({ slug, eventId, orgId, customerId, requestId, requ
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className={cn("flex flex-col items-end gap-1.5", fullOnMobile && "w-full items-stretch sm:w-auto sm:items-end")}>
       <input ref={input} type="file" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} aria-label={label} />
-      <button type="button" onClick={() => input.current?.click()} disabled={busy} className={portalButton(requestId ? "primary" : "secondary", "h-9 text-[13px]")}>
+      <button type="button" onClick={() => input.current?.click()} disabled={busy} className={portalButton(requestId ? "primary" : "secondary", fullOnMobile ? "h-11 w-full text-[14px] sm:h-9 sm:w-auto sm:text-[13px]" : "h-10 text-[13px] sm:h-9")}>
         <Upload className="h-4 w-4" />{busy ? "Uploading…" : label}
       </button>
-      {error && <p role="alert" className="max-w-xs text-right text-[12px] text-rose-700">{error}</p>}
+      {error && <p role="alert" className={cn("max-w-xs text-right text-[12px] text-rose-700", fullOnMobile && "max-w-none text-left sm:max-w-xs sm:text-right")}>{error}</p>}
     </div>
   );
 }

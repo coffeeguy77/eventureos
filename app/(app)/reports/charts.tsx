@@ -18,20 +18,20 @@ export function ChartFrame({ title, subtitle, children, table, action, className
 }) {
   return (
     <figure className={cn("min-w-0 rounded-xl border border-line bg-white shadow-card", className)}>
-      <figcaption className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
+      <figcaption className="flex flex-col gap-2 px-4 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-5">
         <div className="min-w-0">
           <h2 className="text-[13.5px] font-semibold text-ink">{title}</h2>
           {subtitle && <p className="mt-0.5 text-[12.5px] text-ink-muted">{subtitle}</p>}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="sm:shrink-0">{action}</div>}
       </figcaption>
-      <div className="px-5 pb-4">{children}</div>
+      <div className="px-4 pb-4 sm:px-5">{children}</div>
       {table && (
         <details className="group border-t border-line">
-          <summary className="cursor-pointer list-none px-5 py-2.5 text-[12px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none px-4 py-3 sm:px-5 sm:py-2.5 text-[12px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
             <span className="group-open:hidden">View as table</span><span className="hidden group-open:inline">Hide table</span>
           </summary>
-          <div className="overflow-x-auto px-5 pb-4">{table}</div>
+          <div className="overflow-x-auto px-4 pb-4 sm:px-5">{table}</div>
         </details>
       )}
     </figure>
@@ -40,7 +40,7 @@ export function ChartFrame({ title, subtitle, children, table, action, className
 
 export function DataTable({ head, rows, align }: { head: string[]; rows: React.ReactNode[][]; align?: ("left" | "right")[] }) {
   return (
-    <table className="w-full min-w-[360px] text-left text-[12.5px]">
+    <table className="w-full text-left text-[12.5px] sm:min-w-[360px]">
       <thead><tr className="border-b border-line text-[11px] uppercase tracking-wide text-ink-faint">
         {head.map((h, i) => <th key={h} scope="col" className={cn("py-2 pr-3 font-medium", align?.[i] === "right" && "text-right")}>{h}</th>)}
       </tr></thead>
@@ -63,13 +63,13 @@ export function BarList({ rows, format = (n) => String(n), color = SERIES[0], em
   return (
     <ul className="space-y-2">
       {rows.map((r) => (
-        <li key={r.label} className="grid grid-cols-[minmax(84px,30%)_1fr_auto] items-center gap-3" title={`${r.label}: ${format(r.value)}`}>
+        <li key={r.label} className="grid grid-cols-[minmax(72px,30%)_1fr_auto] items-center gap-2 sm:grid-cols-[minmax(84px,30%)_1fr_auto] sm:gap-3" title={`${r.label}: ${format(r.value)}`}>
           <span className="truncate text-[12.5px] text-ink-muted">{r.label}</span>
           <span className="flex min-w-0 items-center gap-2">
             <span className="block h-[14px] min-w-[2px] rounded-r-[4px]" style={{ width: `${(r.value / max) * 100}%`, background: r.color ?? color }} />
             <span className="tabular shrink-0 text-[12.5px] font-medium text-ink">{format(r.value)}</span>
           </span>
-          <span className="tabular min-w-[64px] text-right text-[12px] text-ink-faint">{r.note}</span>
+          <span className="tabular whitespace-nowrap text-right text-[12px] text-ink-faint sm:min-w-[64px] sm:whitespace-normal">{r.note}</span>
         </li>
       ))}
     </ul>
@@ -88,7 +88,7 @@ export function Funnel({ stages }: { stages: { label: string; value: number; hin
         return (
           <li key={s.label}>
             <div className="mb-1 flex items-baseline justify-between gap-3 text-[12.5px]">
-              <span className="text-ink">{s.label}{s.hint && <span className="ml-1.5 text-ink-faint">{s.hint}</span>}</span>
+              <span className="min-w-0 text-ink">{s.label}{s.hint && <span className="ml-1.5 text-ink-faint">{s.hint}</span>}</span>
               <span className="tabular shrink-0 text-ink-muted">
                 <span className="font-semibold text-ink">{s.value}</span>
                 {step != null && <span> · {step}% of previous</span>}
@@ -119,7 +119,7 @@ export function Stat({ label, value, sub, alert }: { label: string; value: React
   return (
     <div className="min-w-0 rounded-lg bg-zinc-50/80 px-3.5 py-3 ring-1 ring-inset ring-line">
       <div className="text-[11.5px] font-medium text-ink-muted">{label}</div>
-      <div className={cn("mt-1 text-[20px] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
+      <div className={cn("mt-1 break-words text-[20px] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
       {sub && <div className="mt-0.5 text-[11.5px] text-ink-faint">{sub}</div>}
     </div>
   );

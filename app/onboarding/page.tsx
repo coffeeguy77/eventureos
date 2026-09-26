@@ -17,12 +17,12 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   if (memberships.length > 0 && !sp.new) redirect("/dashboard");
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-12">
+    <div className="pt-safe pb-safe flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 sm:py-12">
       <div className="w-full max-w-[460px]">
         <div className="mb-8">
           <Wordmark height={30} />
         </div>
-        <div className="rounded-2xl border border-line bg-white p-8 shadow-card">
+        <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-8">
           <h1 className="text-[20px] font-semibold tracking-tight">
             {memberships.length ? "Create another organisation" : `Welcome${profile.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
           </h1>

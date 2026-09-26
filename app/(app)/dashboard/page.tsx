@@ -239,15 +239,16 @@ export default async function DashboardPage() {
 
           <Card>
             <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[11.5px] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
-            <div className="grid grid-cols-7 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line">
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line sm:grid-cols-7">
               {days.map((d) => {
                 const items = cal.filter((c) => localDay(c.starts_at) === d);
                 return (
-                  <div key={d} className={cn("min-h-[120px] bg-white p-2", d === today && "bg-brand-50/40")}>
-                    <div className={cn("mb-1.5 text-[11px] font-medium", d === today ? "text-brand-700" : "text-ink-faint")}>
+                  <div key={d} className={cn("flex gap-3 bg-white px-4 py-2.5 sm:block sm:min-h-[120px] sm:p-2", d === today && "bg-brand-50/40")}>
+                    <div className={cn("w-24 shrink-0 pt-1 text-[12px] font-medium sm:mb-1.5 sm:w-auto sm:pt-0 sm:text-[11px]", d === today ? "text-brand-700" : "text-ink-faint")}>
                       {fmtDate(d, "weekday")}
                     </div>
-                    <div className="space-y-1">
+                    {items.length === 0 && <div className="pt-1 text-[12px] text-ink-faint sm:hidden">Nothing booked</div>}
+                    <div className="min-w-0 flex-1 space-y-1">
                       {items.map((c) => (
                         <Link key={c.id} href={c.event_id ? `/events/${c.event_id}` : "#"}
                           className={cn("block rounded-md border-l-[3px] bg-zinc-50 px-1.5 py-1 text-[11px] leading-tight hover:bg-zinc-100", conflicts.has(c.id) && "ring-1 ring-rose-300")}

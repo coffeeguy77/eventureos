@@ -10,19 +10,19 @@ export default async function SuspendedPage() {
   if (memberships.length > 0 || !suspended) redirect("/dashboard");
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 py-12">
+    <div className="pt-safe pb-safe flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 sm:py-12">
       <div className="w-full max-w-[460px]">
         <div className="mb-8">
           <Wordmark height={30} />
         </div>
-        <div className="rounded-2xl border border-line bg-white p-8 shadow-card">
+        <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-8">
           <h1 className="text-[20px] font-semibold tracking-tight">Your organisation’s account is paused</h1>
           <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
             Access has been paused by EventureOS. Your data is safe and nothing has been deleted.
             Please contact EventureOS support to restore access.
           </p>
           <form action={signOut} className="mt-6">
-            <button type="submit" className="rounded-lg border border-line px-3.5 py-2 text-[13px] font-medium hover:bg-canvas">
+            <button type="submit" className="h-11 w-full rounded-lg border border-line px-3.5 text-[13px] font-medium hover:bg-canvas sm:h-auto sm:w-auto sm:py-2">
               Sign out
             </button>
           </form>

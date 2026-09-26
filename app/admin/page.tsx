@@ -64,15 +64,15 @@ export default async function AdminOverview() {
         <Card>
           <CardHeader title="Integration health" subtitle="Connections across all organisations." />
           <div className="overflow-x-auto border-t border-line">
-            <table className="w-full min-w-[420px] text-[13px]">
+            <table className="w-full text-[13px] sm:min-w-[420px]">
               <tbody className="divide-y divide-line">
                 {Object.keys(byProvider).length === 0 && (
                   <tr><td className="px-5 py-6 text-center text-ink-muted">No integrations yet.</td></tr>
                 )}
                 {Object.entries(byProvider).sort().map(([provider, statuses]) => (
                   <tr key={provider}>
-                    <td className="px-5 py-3 font-medium text-ink">{PROVIDER_LABEL[provider] ?? provider}</td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-3 align-top font-medium text-ink sm:px-5 sm:align-middle">{PROVIDER_LABEL[provider] ?? provider}</td>
+                    <td className="px-4 py-3 sm:px-5">
                       <div className="flex flex-wrap justify-end gap-1.5">
                         {Object.entries(statuses).sort(([a], [b]) => a.localeCompare(b)).map(([status, n]) => (
                           <Badge key={status} tone={STATUS_TONE[status] ?? "neutral"} dot>
@@ -123,12 +123,12 @@ export default async function AdminOverview() {
 function HealthRow({ label, ok, warn, detail }: { label: string; ok: boolean; warn?: boolean; detail: string }) {
   const tone: Tone = ok ? "green" : warn ? "amber" : "red";
   return (
-    <li className="flex items-start justify-between gap-4 px-5 py-3">
+    <li className="flex items-start justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-5">
       <div className="min-w-0">
         <div className="font-medium text-ink">{label}</div>
-        <div className="mt-0.5 text-[12.5px] text-ink-muted">{detail}</div>
+        <div className="mt-0.5 break-words text-[12.5px] text-ink-muted">{detail}</div>
       </div>
-      <Badge tone={tone} dot>{ok ? "Healthy" : warn ? "Check" : "Problem"}</Badge>
+      <Badge tone={tone} dot className="shrink-0">{ok ? "Healthy" : warn ? "Check" : "Problem"}</Badge>
     </li>
   );
 }

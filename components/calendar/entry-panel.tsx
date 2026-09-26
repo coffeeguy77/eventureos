@@ -54,15 +54,15 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
     <Drawer onClose={onClose} accent={res?.colour ?? FALLBACK_COLOUR} title={
       <>
         <div className="flex items-center gap-2 text-[12px] text-ink-muted">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: res?.colour ?? FALLBACK_COLOUR }} />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: res?.colour ?? FALLBACK_COLOUR }} />
           {res?.name ?? "Unknown resource"}
           <span className="text-ink-faint">·</span>
           {KIND_LABEL[entry.kind]}
         </div>
-        <h2 className="mt-1 text-[16px] font-semibold leading-snug text-ink">{entry.title}</h2>
+        <h2 className="mt-1 break-words text-[16px] font-semibold leading-snug text-ink">{entry.title}</h2>
       </>
     }>
-      <div className="space-y-5 px-5 py-4">
+      <div className="space-y-5 px-4 py-4 sm:px-5">
         {others.length > 0 && (
           <div className="rounded-lg bg-rose-50 p-3 ring-1 ring-inset ring-rose-200">
             <p className="flex items-center gap-1.5 text-[13px] font-semibold text-rose-800">
@@ -72,7 +72,7 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
             <ul className="mt-1.5 space-y-1">
               {others.map((o) => (
                 <li key={o.id}>
-                  <button type="button" onClick={() => onOpen(o.id)} className="w-full rounded-md bg-white/70 px-2 py-1.5 text-left text-[12.5px] hover:bg-white">
+                  <button type="button" onClick={() => onOpen(o.id)} className="w-full rounded-md bg-white/70 px-2 py-2 text-left text-[12.5px] hover:bg-white sm:py-1.5">
                     <span className="block font-medium text-ink">{o.title}</span>
                     <span className="block text-ink-muted">{o.dateLabel} · {o.timeLabel}</span>
                   </button>
@@ -91,7 +91,7 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
           {entry.location && (
             <div className="flex gap-3">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
-              <div><dt className="sr-only">Location</dt><dd className="text-ink">{entry.location}</dd></div>
+              <div className="min-w-0"><dt className="sr-only">Location</dt><dd className="break-words text-ink">{entry.location}</dd></div>
             </div>
           )}
           <div className="flex gap-3">
@@ -121,12 +121,12 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
             <p className="text-[12.5px] font-medium text-ink">Calendar</p>
             <p className="text-[12px] text-ink-muted">The resource an entry sits on decides which Google calendar it syncs to.</p>
             <div className="flex gap-2">
-              <Select aria-label="Move to resource" value={target} onChange={(e) => setTarget(e.target.value)} className="h-9 py-0 text-[13px]">
+              <Select aria-label="Move to resource" value={target} onChange={(e) => setTarget(e.target.value)} className="h-10 min-w-0 py-0 text-[13px] sm:h-9">
                 {resources.map((r) => (
                   <option key={r.id} value={r.id}>{r.name}{r.provider === "google" ? (r.syncEnabled ? " · Google sync" : " · Google (sync off)") : " · local"}</option>
                 ))}
               </Select>
-              <Button size="md" onClick={move} disabled={pending || target === entry.resourceId}>Move</Button>
+              <Button size="md" className="h-10 shrink-0 sm:h-9" onClick={move} disabled={pending || target === entry.resourceId}>Move</Button>
             </div>
           </div>
         ) : (
@@ -137,15 +137,15 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
         {msg?.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{msg.ok}</p>}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
-          {entry.eventId ? <ButtonLink href={`/events/${entry.eventId}?tab=schedule`} size="sm">Open event schedule</ButtonLink> : <span />}
+          {entry.eventId ? <ButtonLink href={`/events/${entry.eventId}?tab=schedule`} size="sm" className="h-10 w-full sm:h-8 sm:w-auto">Open event schedule</ButtonLink> : <span />}
           {canManage && (confirming ? (
-            <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-2 py-1.5 ring-1 ring-inset ring-rose-100">
-              <span className="text-[12.5px] text-rose-800">Delete this entry?</span>
-              <Button size="sm" variant="danger" onClick={remove} disabled={pending}>{pending ? "Deleting…" : "Delete"}</Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={pending}>Keep</Button>
+            <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-2 py-1.5 ring-1 ring-inset ring-rose-100 sm:w-auto">
+              <span className="w-full px-1 text-[12.5px] text-rose-800 sm:w-auto sm:px-0">Delete this entry?</span>
+              <Button size="sm" variant="danger" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={remove} disabled={pending}>{pending ? "Deleting…" : "Delete"}</Button>
+              <Button size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setConfirming(false)} disabled={pending}>Keep</Button>
             </div>
           ) : (
-            <Button size="sm" variant="danger" onClick={() => setConfirming(true)}>Delete entry</Button>
+            <Button size="sm" variant="danger" className="h-10 w-full sm:h-8 sm:w-auto" onClick={() => setConfirming(true)}>Delete entry</Button>
           ))}
         </div>
       </div>

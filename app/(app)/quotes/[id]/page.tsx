@@ -118,20 +118,20 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
             {viewing ? <Link href={`/quotes/${q.id}`} className="tabular hover:text-ink">Q-{q.number}</Link> : <span className="tabular">Q-{q.number}</span>}
             {viewing && <><span>/</span><span>Version {viewing.version_number}</span></>}
           </div>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="text-[22px] font-semibold tracking-tight text-ink">{q.title}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+            <div className="min-w-0 flex-1 basis-72">
+              <h1 className="break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{q.title}</h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
                 <Badge tone={s.tone} dot>{s.label}</Badge>
                 <Link href={`/clients/${q.customer.id}`} className="font-medium text-ink hover:text-brand-700">{q.customer.name}</Link>
-                <Link href={`/events/${q.event.id}?tab=quote`} className="hover:text-brand-700">EV-{q.event.number} · {q.event.name}{q.event.event_date ? ` · ${fmtDate(q.event.event_date)}` : ""}</Link>
+                <Link href={`/events/${q.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{q.event.number} · {q.event.name}{q.event.event_date ? ` · ${fmtDate(q.event.event_date)}` : ""}</Link>
                 <span>Issued {fmtDate(q.issue_date)}</span>
                 <span>Expires {fmtDate(q.expiry_date)}</span>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">
               {viewing && !locked && (
-                <Link href={`/quotes/${q.id}`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-white px-3.5 text-[13px] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+                <Link href={`/quotes/${q.id}`} className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg sm:h-9 bg-white px-3.5 text-[13px] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
                   <ArrowLeft className="h-4 w-4" />Back to draft
                 </Link>
               )}
@@ -141,7 +141,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         </div>
 
         {locked && currentVersion && (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-5 py-3.5">
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3.5 sm:px-5">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
             <div className="text-[13px] text-emerald-900">
               <p className="font-semibold">Accepted{currentVersion.accepted_by_name ? ` by ${currentVersion.accepted_by_name}` : ""} on {fmtDateTime(currentVersion.responded_at, tz)} — this quote is locked.</p>
@@ -150,7 +150,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
           </div>
         )}
         {viewing && (
-          <div className="mb-4 rounded-xl border border-line bg-white px-5 py-3 text-[13px] text-ink-muted">
+          <div className="mb-4 rounded-xl border border-line bg-white px-4 py-3 text-[13px] text-ink-muted sm:px-5">
             You’re viewing <span className="font-medium text-ink">version {viewing.version_number}</span> exactly as it was sent on {fmtDateTime(viewing.published_at, tz)}.
             {viewing.id === q.current_version_id ? " This is the version the customer currently sees." : " A newer version has replaced it."}
           </div>

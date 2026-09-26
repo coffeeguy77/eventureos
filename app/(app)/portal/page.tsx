@@ -65,11 +65,11 @@ export default async function PortalAdminPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader title="Your portal link" subtitle="Share this with customers — in your quote emails, email signature or booking confirmations." />
-            <div className="flex flex-wrap items-center gap-2 px-5 pb-4">
-              <code className="min-w-0 flex-1 truncate rounded-lg bg-zinc-50 px-3 py-2 font-mono text-[12.5px] text-ink ring-1 ring-inset ring-line">{portalUrl}</code>
+            <div className="flex flex-wrap items-center gap-2 px-4 pb-4 sm:px-5">
+              <code className="min-w-0 max-w-full flex-1 basis-full truncate sm:basis-auto rounded-lg bg-zinc-50 px-3 py-2 font-mono text-[12.5px] text-ink ring-1 ring-inset ring-line">{portalUrl}</code>
               <CopyLink url={portalUrl} />
             </div>
-            <div className="border-t border-line px-5 py-4">
+            <div className="border-t border-line px-4 py-4 sm:px-5">
               <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-faint">How customers sign in</p>
               <ol className="mt-2 space-y-1.5 text-[13px] text-ink">
                 <li>1. They open the link and enter the email address their booking is under.</li>
@@ -87,7 +87,31 @@ export default async function PortalAdminPage() {
             {contacts.length === 0 ? (
               <EmptyState title="No one has signed in yet">Share your portal link — customers get access the first time they verify their email.</EmptyState>
             ) : (
-              <div className="overflow-x-auto border-t border-line">
+              <>
+              <ul className="divide-y divide-line border-t border-line md:hidden">
+                {contacts.map((c) => {
+                  const last = lastByCustomer.get(c.customer_id);
+                  const name = [c.first_name, c.last_name].filter(Boolean).join(" ");
+                  const body = (
+                    <>
+                      <Avatar name={name} size={30} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13.5px] font-medium text-ink">{name}</p>
+                        <p className="truncate text-[12.5px] text-ink-muted">{c.customer?.name ?? "—"}{c.email ? ` · ${c.email}` : ""}</p>
+                        <p className="truncate text-[12px] text-ink-faint">{last ? `${relative(last.at)} · ${last.summary}` : "No activity yet"}</p>
+                      </div>
+                    </>
+                  );
+                  return (
+                    <li key={c.id}>
+                      {c.customer
+                        ? <Link href={`/clients/${c.customer.id}`} className="flex min-h-[56px] items-center gap-3 px-4 py-3 active:bg-zinc-50">{body}</Link>
+                        : <div className="flex min-h-[56px] items-center gap-3 px-4 py-3">{body}</div>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="hidden overflow-x-auto border-t border-line md:block">
                 <table className="w-full min-w-[520px] text-[13px]">
                   <thead>
                     <tr className="text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -123,6 +147,7 @@ export default async function PortalAdminPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </Card>
 
@@ -134,11 +159,11 @@ export default async function PortalAdminPage() {
               <ul className="divide-y divide-line border-t border-line">
                 {messages.map((m) => (
                   <li key={m.id}>
-                    <Link href={m.event_id ? `/events/${m.event_id}?tab=communication` : `/clients/${m.customer_id}`} className="flex items-start gap-3 px-5 py-3 hover:bg-zinc-50">
+                    <Link href={m.event_id ? `/events/${m.event_id}?tab=communication` : `/clients/${m.customer_id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-50 active:bg-zinc-50 sm:px-5">
                       <Avatar name={m.customer?.name ?? "Customer"} size={26} />
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-2 text-[13px] text-ink">
-                          <span className="font-medium">{m.customer?.name ?? "Customer"}</span>
+                          <span className="min-w-0 truncate font-medium">{m.customer?.name ?? "Customer"}</span>
                           {!m.read_at && <Badge tone="red">New</Badge>}
                           <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint">{relative(m.created_at)}</span>
                         </p>
@@ -155,7 +180,7 @@ export default async function PortalAdminPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader title="Branding" subtitle="What customers see." action={<Link href="/settings/branding" className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Edit in Settings</Link>} />
-            <div className="px-5 pb-5">
+            <div className="px-4 pb-5 sm:px-5">
               <div className="overflow-hidden rounded-xl border border-line">
                 <div className="h-1" style={{ background: colour }} />
                 <div className="flex items-center gap-3 bg-white px-4 py-3">
@@ -165,17 +190,17 @@ export default async function PortalAdminPage() {
                   ) : (
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[12px] font-semibold text-white" style={{ background: colour }}>{initials(brand.name)}</span>
                   )}
-                  <span className="truncate text-[14px] font-semibold text-ink">{brand.name}</span>
+                  <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{brand.name}</span>
                 </div>
                 <div className="border-t border-line bg-zinc-50 px-4 py-3">
                   <span className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-medium text-white" style={{ background: colour }}>Accept quote</span>
                 </div>
               </div>
               <dl className="mt-4 space-y-2 text-[12.5px]">
-                <div className="flex items-center gap-2 text-ink-muted"><span className="h-3.5 w-3.5 rounded-full ring-1 ring-line" style={{ background: colour }} />Brand colour {colour}</div>
-                <div className="flex items-center gap-2 text-ink-muted"><Mail className="h-3.5 w-3.5" />{brand.contact_email ?? <span className="text-amber-700">No contact email set</span>}</div>
-                <div className="flex items-center gap-2 text-ink-muted"><Phone className="h-3.5 w-3.5" />{brand.contact_phone ?? <span className="text-ink-faint">No phone set</span>}</div>
-                <div className="flex items-center gap-2 text-ink-muted"><Globe className="h-3.5 w-3.5" />{brand.website ?? <span className="text-ink-faint">No website set</span>}</div>
+                <div className="flex items-center gap-2 text-ink-muted"><span className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-line" style={{ background: colour }} />Brand colour {colour}</div>
+                <div className="flex items-center gap-2 text-ink-muted"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{brand.contact_email ?? <span className="break-normal text-amber-700">No contact email set</span>}</span></div>
+                <div className="flex items-center gap-2 text-ink-muted"><Phone className="h-3.5 w-3.5 shrink-0" />{brand.contact_phone ?? <span className="text-ink-faint">No phone set</span>}</div>
+                <div className="flex items-center gap-2 text-ink-muted"><Globe className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{brand.website ?? <span className="break-normal text-ink-faint">No website set</span>}</span></div>
                 {!brand.logo_url && <p className="pt-1 text-ink-faint">No logo uploaded — customers see your initials instead.</p>}
               </dl>
             </div>
@@ -193,7 +218,7 @@ export default async function PortalAdminPage() {
             ) : (
               <ul className="divide-y divide-line border-t border-line">
                 {requests.map((d) => (
-                  <li key={d.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                  <li key={d.id} className="flex items-start justify-between gap-3 px-4 py-3 sm:px-5">
                     <div className="min-w-0">
                       <p className="truncate text-[13px] text-ink">{d.name}</p>
                       <p className="truncate text-[11.5px] text-ink-faint">
@@ -203,9 +228,9 @@ export default async function PortalAdminPage() {
                       </p>
                     </div>
                     {manager && (
-                      <form action={cancelDocumentRequest}>
+                      <form action={cancelDocumentRequest} className="shrink-0">
                         <input type="hidden" name="id" value={d.id} />
-                        <button className="text-[12px] text-ink-faint hover:text-rose-700">Cancel</button>
+                        <button className="-my-2 h-10 px-1 text-[12px] text-ink-faint hover:text-rose-700 sm:my-0 sm:h-auto sm:px-0">Cancel</button>
                       </form>
                     )}
                   </li>

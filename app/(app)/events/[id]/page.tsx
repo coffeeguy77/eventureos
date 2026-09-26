@@ -126,22 +126,22 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1 basis-72">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ink-faint">
             <Link href="/events" className="hover:text-ink">Events</Link><span>/</span><span>EV-{e.number}</span>
             {e.enquiry_id && <><span>·</span><Link href={`/enquiries/${e.enquiry_id}`} className="hover:text-ink">From enquiry</Link></>}
           </div>
-          <h1 className="text-[22px] font-semibold tracking-tight text-ink">{e.name}</h1>
+          <h1 className="break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{e.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
             <Badge tone={s.tone} dot>{s.label}</Badge>
             <Link href={`/clients/${e.customer.id}`} className="font-medium text-ink hover:text-brand-700">{e.customer.name}</Link>
             {e.event_date && <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-ink-faint" />{fmtDate(e.event_date, "weekday")}{e.start_time ? `, ${timeRange(e.start_time, e.finish_time)}` : ""} <span className="text-ink-faint">· {relativeDay(e.event_date, today)}</span></span>}
-            {e.venue && <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-ink-faint" />{e.venue}</span>}
+            {e.venue && <span className="flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="min-w-0 break-words">{e.venue}</span></span>}
             {e.guest_count != null && <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-ink-faint" />{e.guest_count} guests</span>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <EventStatusSelect id={e.id} status={e.status} />
         </div>
       </div>
@@ -152,8 +152,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       <div className="mt-6">
         {tab === "overview" && (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-            <div className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
+            <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
               <Card>
                 <CardHeader title="Event details" />
                 <EventDetailsEditor event={e} members={memberOpts} view={
@@ -192,7 +192,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 <ActivityFeed items={activity.slice(0, 6)} names={names} tz={tz} />
               </Card>
             </div>
-            <div className="space-y-6">
+            {/* On phones/tablets the customer + money summary sits first; the timeline goes last. */}
+            <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
               <Card>
                 <CardHeader title="Customer" action={<Link href={`/clients/${e.customer.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
                 <div className="px-5 pb-5">
@@ -204,13 +205,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     </div>
                   </div>
                   <ul className="mt-4 space-y-2 text-[13px] text-ink">
-                    {(e.contact?.email ?? e.customer.email) && <li className="flex items-center gap-2"><Mail className="h-4 w-4 text-ink-faint" />{e.contact?.email ?? e.customer.email}</li>}
-                    {(e.contact?.phone ?? e.customer.phone) && <li className="flex items-center gap-2"><Phone className="h-4 w-4 text-ink-faint" />{e.contact?.phone ?? e.customer.phone}</li>}
+                    {(e.contact?.email ?? e.customer.email) && <li className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`mailto:${e.contact?.email ?? e.customer.email}`} className="min-w-0 break-all hover:text-brand-700">{e.contact?.email ?? e.customer.email}</a></li>}
+                    {(e.contact?.phone ?? e.customer.phone) && <li className="flex min-w-0 items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${(e.contact?.phone ?? e.customer.phone ?? "").replace(/\s+/g, "")}`} className="min-w-0 break-words hover:text-brand-700">{e.contact?.phone ?? e.customer.phone}</a></li>}
                   </ul>
                 </div>
               </Card>
               <Card>
-                <CardHeader title="Money" action={<span className="text-[11.5px] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />
+                <CardHeader title="Money" action={<span className="text-right text-[11.5px] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />
                 <dl className="grid grid-cols-2 gap-4 px-5 pb-5">
                   <Field label="Quote">{currentVersion ? money(currentVersion.total, cur) : quote ? "Draft" : "—"}</Field>
                   <Field label="Invoiced">{money(invoiced, cur)}</Field>
@@ -218,6 +219,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   <Field label="Balance"><span className={cn(invoices.some((i) => i.status === "overdue") && "font-semibold text-rose-700")}>{money(invoiced - paid, cur)}</span></Field>
                 </dl>
               </Card>
+            </div>
+            <div className="space-y-6 xl:col-start-2 xl:row-start-2 xl:self-start">
               <Card>
                 <CardHeader title="Event timeline" subtitle="The whole journey, from first enquiry to final payment" />
                 <EventTimeline activity={activity} tz={tz} cancelled={e.status === "cancelled"} />
@@ -262,7 +265,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                         <li key={q.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
                           <div className="min-w-0 flex-1">
                             <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-ink">
-                              <span className="tabular">Q-{q.number}</span><span className="truncate font-normal text-ink-muted">{q.title}</span>
+                              <span className="tabular">Q-{q.number}</span><span className="min-w-0 truncate font-normal text-ink-muted">{q.title}</span>
                             </p>
                             <p className="mt-0.5 text-[12px] text-ink-muted">
                               {cv ? `Customer sees version ${cv.version_number} · sent ${fmtDateTime(cv.published_at, tz, "date")}` : "Not sent yet — customer can’t see it"}
@@ -272,7 +275,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                           </div>
                           <span className="tabular text-[13.5px] font-medium text-ink">{cv ? money(cv.total, cur) : <span className="font-normal text-ink-faint">Draft</span>}</span>
                           <Badge tone={QUOTE_STATUS[q.status].tone} dot>{QUOTE_STATUS[q.status].label}</Badge>
-                          <Link href={`/quotes/${q.id}`} className={cn("inline-flex h-8 items-center whitespace-nowrap rounded-lg px-3 text-[12.5px] font-medium",
+                          <Link href={`/quotes/${q.id}`} className={cn("inline-flex h-10 w-full items-center justify-center whitespace-nowrap rounded-lg px-3 text-[13px] font-medium sm:h-8 sm:w-auto sm:text-[12.5px]",
                             q.status === "accepted" ? "bg-white text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50" : "bg-brand-500 text-white shadow-sm hover:bg-brand-600")}>
                             {q.status === "accepted" ? "View quote" : "Open quote builder"}
                           </Link>
@@ -337,12 +340,12 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {tab === "schedule" && (
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader title="Calendar entries" action={<span className="text-[11.5px] text-ink-faint">{integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}</span>} />
+              <CardHeader title="Calendar entries" action={<span className="block max-w-[9rem] text-right text-[11.5px] text-ink-faint sm:max-w-none">{integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}</span>} />
               {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<Link href={`/calendar?add=${e.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Add to calendar</Link>}>Confirmed events are added to a calendar automatically when the quote is accepted.</EmptyState> : (
                 <ul className="divide-y divide-line border-t border-line">
                   {cal.map((c) => (
                     <li key={c.id} className="flex items-center gap-3 px-5 py-3">
-                      <span className="h-8 w-1 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
+                      <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-ink">{c.calendar?.name}</p>
                         <p className="text-[12px] text-ink-muted">{fmtDateTime(c.starts_at, tz)} – {fmtDateTime(c.ends_at, tz, "time")}</p>
@@ -364,7 +367,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 <ul className="divide-y divide-line border-t border-line">
                   {sameDay.map((o) => (
                     <li key={o.id} className={cn("flex items-center gap-3 px-5 py-3", conflicts.includes(o) && "bg-rose-50/50")}>
-                      <span className="h-2 w-2 rounded-full" style={{ background: o.calendar?.colour ?? "#999" }} />
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: o.calendar?.colour ?? "#999" }} />
                       <div className="min-w-0 flex-1">
                         {o.event_id ? <Link href={`/events/${o.event_id}?tab=schedule`} className="text-[13px] text-ink hover:text-brand-700">{o.title}</Link> : <span className="text-[13px] text-ink">{o.title}</span>}
                         <p className="text-[12px] text-ink-muted">{fmtDateTime(o.starts_at, tz, "time")}–{fmtDateTime(o.ends_at, tz, "time")} · {o.calendar?.name}</p>
@@ -396,8 +399,26 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <Card>
             <CardHeader title="Invoices" subtitle="Xero will be the accounting source of truth once connected"
               action={<span className="text-[11.5px] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected · demo invoices"}</span>} />
-            {invoices.length === 0 ? <EmptyState title="No invoices yet">When the quote is accepted, EventureOS can raise a deposit or full invoice automatically.</EmptyState> : (
-              <div className="overflow-x-auto">
+            {invoices.length === 0 ? <EmptyState title="No invoices yet">When the quote is accepted, EventureOS can raise a deposit or full invoice automatically.</EmptyState> : (<>
+              <ul className="divide-y divide-line border-t border-line md:hidden">
+                {invoices.map((i) => (
+                  <li key={i.id} className="relative px-5 py-3 active:bg-zinc-50">
+                    <div className="flex items-center justify-between gap-3">
+                      <Link href={`/invoices/${i.id}`} className="text-[13.5px] font-medium text-ink after:absolute after:inset-0">{i.number}</Link>
+                      <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-between gap-3 text-[12.5px]">
+                      <span className={cn("capitalize", i.status === "overdue" ? "font-medium text-rose-700" : "text-ink-muted")}>{i.kind} · due {fmtDate(i.due_date)}</span>
+                      <span className="tabular shrink-0 text-ink-muted">{money(i.total, cur)}</span>
+                    </div>
+                    <div className="mt-0.5 flex justify-between gap-3 text-[12.5px]">
+                      <span className="text-ink-faint">Paid {money(i.amount_paid, cur)}</span>
+                      <span className="tabular shrink-0 font-medium text-ink">Balance {money(i.balance, cur)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[760px] text-left text-[13px]">
                   <thead><tr className="border-y border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
                     {["Invoice", "Type", "Date", "Due", "Amount", "Paid", "Balance", "Status"].map((h) => <th key={h} className={cn("px-5 py-2.5 font-medium", ["Amount", "Paid", "Balance"].includes(h) && "text-right")}>{h}</th>)}
@@ -418,7 +439,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   </tbody>
                 </table>
               </div>
-            )}
+            </>)}
           </Card>
         )}
 
@@ -429,11 +450,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               <ul className="divide-y divide-line border-t border-line">
                 {payments.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[13px] font-medium text-ink">{p.invoice.number}</p>
                       <p className="text-[12px] text-ink-muted">{fmtDateTime(p.paid_at, tz, "date")} · {p.method ?? "Payment"}{p.reference ? ` · ref ${p.reference}` : ""}</p>
                     </div>
-                    <span className="tabular text-[13.5px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                    <span className="tabular shrink-0 text-[13.5px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
                   </li>
                 ))}
               </ul>
@@ -466,21 +487,25 @@ function QuoteSnapshot({ v, cur }: { v: VersionRow; cur: string }) {
             {s.title}{s.optional && <span className="font-medium normal-case tracking-normal text-brand-700">Optional extras</span>}
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-[13px]">
+            <table className="w-full text-[13px]">
               <tbody className="divide-y divide-line">
                 {s.items.map((it, idx) => (
                   <tr key={idx} className={cn(it.optional && "text-ink-faint")}>
-                    <td className="py-2 pr-3">
+                    <td className="break-words py-2 pr-3">
                       <span className={cn(it.optional ? "text-ink-muted" : "text-ink")}>{it.name}</span>
                       {it.package && <Badge tone="brand" className="ml-2">Package</Badge>}
                       {it.optional && !s.optional && <Badge className="ml-2">Optional</Badge>}
                       {it.description && <span className="block text-[12px] text-ink-muted">{it.description}</span>}
+                      <span className="tabular mt-0.5 block text-[12px] text-ink-muted sm:hidden">
+                        {Number(it.quantity)} {it.unit ?? ""} × {money(it.unit_price, cur)}
+                        {Number(it.discount_percent ?? 0) > 0 && <span className="text-emerald-700"> · {Number(it.discount_percent)}% off</span>}
+                      </span>
                     </td>
-                    <td className="tabular whitespace-nowrap py-2 pr-3 text-right text-ink-muted">
+                    <td className="tabular hidden whitespace-nowrap py-2 pr-3 text-right align-top text-ink-muted sm:table-cell">
                       {Number(it.quantity)} {it.unit ?? ""} × {money(it.unit_price, cur)}
                       {Number(it.discount_percent ?? 0) > 0 && <span className="block text-[11.5px] text-emerald-700">{Number(it.discount_percent)}% off</span>}
                     </td>
-                    <td className={cn("tabular whitespace-nowrap py-2 text-right", it.optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</td>
+                    <td className={cn("tabular whitespace-nowrap py-2 text-right align-top", it.optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -488,11 +513,11 @@ function QuoteSnapshot({ v, cur }: { v: VersionRow; cur: string }) {
           </div>
         </div>
       ))}
-      <dl className="ml-auto mt-2 w-full max-w-[280px] space-y-1 border-t border-line pt-3 text-[13px]">
+      <dl className="ml-auto mt-2 w-full space-y-1 sm:max-w-[280px] border-t border-line pt-3 text-[13px]">
         <div className="flex justify-between"><dt className="text-ink-muted">Subtotal</dt><dd className="tabular">{money(v.subtotal, cur)}</dd></div>
         <div className="flex justify-between"><dt className="text-ink-muted">GST</dt><dd className="tabular">{money(v.tax_total, cur)}</dd></div>
         <div className="flex justify-between text-[14px] font-semibold"><dt>Total</dt><dd className="tabular">{money(v.total, cur)}</dd></div>
-        {optionalTotal > 0 && <div className="flex justify-between text-[12px] text-ink-muted"><dt>Optional extras (not included)</dt><dd className="tabular">{money(optionalTotal, cur)}</dd></div>}
+        {optionalTotal > 0 && <div className="flex justify-between gap-3 text-[12px] text-ink-muted"><dt>Optional extras (not included)</dt><dd className="tabular">{money(optionalTotal, cur)}</dd></div>}
       </dl>
     </div>
   );

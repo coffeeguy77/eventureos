@@ -82,26 +82,3 @@ export function Wordmark({ height = 22, tone = "dark", className }: { height?: n
   );
 }
 
-/** Compact horizontal navigation for small screens. */
-export function MobileNav() {
-  const pathname = usePathname();
-  return (
-    <nav className="flex gap-1 overflow-x-auto border-b border-line bg-white px-3 py-2 lg:hidden">
-      {NAV.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(item.href + "/");
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "whitespace-nowrap rounded-lg px-3 py-1.5 text-[13px] font-medium",
-              active ? "bg-brand-50 text-brand-800" : "text-ink-muted"
-            )}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}

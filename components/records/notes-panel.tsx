@@ -24,7 +24,7 @@ export function NotesPanel({ notes, names, action }: {
         <textarea name="body" rows={2} required placeholder="Add an internal note — only your team can see this"
           className={cn(inputClass, "resize-y")} />
         <div className="mt-2 flex justify-end">
-          <Button size="sm" variant="secondary" disabled={pending}>{pending ? "Saving…" : "Add note"}</Button>
+          <Button size="sm" variant="secondary" className="h-10 w-full sm:h-8 sm:w-auto" disabled={pending}>{pending ? "Saving…" : "Add note"}</Button>
         </div>
       </form>
       {notes.length === 0 ? (
@@ -35,7 +35,7 @@ export function NotesPanel({ notes, names, action }: {
             <li key={n.id} className="flex gap-3">
               <Avatar name={names[n.created_by ?? ""] ?? "Team"} size={24} />
               <div className="min-w-0 flex-1 rounded-lg bg-amber-50/60 px-3 py-2 ring-1 ring-inset ring-amber-100">
-                <p className="whitespace-pre-line text-[13px] text-ink">{n.body}</p>
+                <p className="whitespace-pre-line break-words text-[13px] text-ink">{n.body}</p>
                 <p className="mt-1 text-[11.5px] text-ink-faint">{names[n.created_by ?? ""] ?? "Team member"} · {relative(n.created_at)}</p>
               </div>
             </li>

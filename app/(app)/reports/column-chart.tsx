@@ -33,6 +33,8 @@ export function ColumnChart({ groups, series, currency, height = 190 }: {
   const barW = groups.length > 8 ? 10 : groups.length > 4 ? 16 : 24;
   // Label every month when few; thin them when many so they never collide.
   const every = groups.length > 8 ? 2 : 1;
+  // Phones have roughly a third of the width, so thin labels further there.
+  const everySm = groups.length > 8 ? 3 : groups.length > 5 ? 2 : 1;
 
   if (max === 0) return <p className="py-10 text-center text-[12.5px] text-ink-muted">Nothing recorded in this period.</p>;
 
@@ -88,9 +90,15 @@ export function ColumnChart({ groups, series, currency, height = 190 }: {
           </div>
         </div>
         <div className="mt-1.5 flex" aria-hidden>
-          {groups.map((g, gi) => (
-            <span key={g.key} className="flex-1 truncate text-center text-[10.5px] text-ink-faint">{gi % every === 0 || gi === groups.length - 1 ? g.label : ""}</span>
-          ))}
+          {groups.map((g, gi) => {
+            const desk = gi % every === 0 || gi === groups.length - 1;
+            const phone = gi % everySm === 0;
+            return (
+              <span key={g.key} className={cn("relative h-[14px] min-w-0 flex-1 text-[10.5px] text-ink-faint", !phone && "max-sm:invisible", !desk && "sm:invisible")}>
+                <span className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap">{g.label}</span>
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -37,7 +37,29 @@ export default async function SupportAudit() {
         {rows.length === 0 ? (
           <EmptyState title="No support activity yet" />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((r) => {
+              const k = kind(r.action);
+              const until = typeof r.metadata?.until === "string" ? r.metadata.until : null;
+              return (
+                <li key={r.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 truncate text-[13.5px] font-medium text-ink">{r.organisation_name}</div>
+                    <Badge tone={k.tone} className="shrink-0">{k.label}</Badge>
+                  </div>
+                  <div className="mt-0.5 break-words text-[12.5px] text-ink">
+                    {r.summary}
+                    {until && <span className="text-ink-muted"> · until {fmtDateTime(until, TZ, "time")}</span>}
+                  </div>
+                  <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                    {fmtDateTime(r.created_at, TZ)} · {r.actor_name ?? r.actor_email ?? "—"}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[860px] text-[13px]">
               <thead>
                 <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -69,6 +91,7 @@ export default async function SupportAudit() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Card>
     </>

@@ -25,7 +25,7 @@ const FIELDS: [string, string][] = [
 
 function Code({ children }: { children: string }) {
   return (
-    <pre className="max-h-[420px] overflow-auto rounded-lg bg-zinc-950 p-4 font-mono text-[12px] leading-relaxed text-zinc-100">
+    <pre className="max-h-[420px] max-w-full overflow-auto rounded-lg bg-zinc-950 p-3 sm:p-4 font-mono text-[12px] leading-relaxed text-zinc-100">
       <code>{children}</code>
     </pre>
   );
@@ -96,7 +96,7 @@ export default async function WebsiteFormPage() {
           title="Website enquiry form"
           subtitle="Send enquiries from your own website straight into EventureOS. They appear under Enquiries with the source “Website”."
         />
-        <div className="space-y-5 border-t border-line px-5 py-5">
+        <div className="space-y-5 border-t border-line px-4 py-5 sm:px-5">
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <span className="text-[12.5px] font-medium text-ink">Form endpoint</span>
@@ -144,7 +144,7 @@ export default async function WebsiteFormPage() {
           subtitle="Works on any website builder that lets you add custom HTML. Style it to match your site."
           action={<CopyButton text={html} label="Copy HTML" />}
         />
-        <div className="border-t border-line px-5 py-5"><Code>{html}</Code></div>
+        <div className="border-t border-line px-4 py-5 sm:px-5"><Code>{html}</Code></div>
       </Card>
 
       <Card>
@@ -153,17 +153,17 @@ export default async function WebsiteFormPage() {
           subtitle="For custom sites and form tools. Send JSON or form-encoded fields."
           action={<CopyButton text={js} label="Copy code" />}
         />
-        <div className="border-t border-line px-5 py-5"><Code>{js}</Code></div>
+        <div className="border-t border-line px-4 py-5 sm:px-5"><Code>{js}</Code></div>
       </Card>
 
       <Card>
         <CardHeader title="Fields you can send" subtitle="All optional except name or email. Unknown fields are ignored." />
         <div className="overflow-x-auto border-t border-line">
-          <table className="w-full min-w-[420px] text-[13px]">
+          <table className="w-full text-[13px] sm:min-w-[420px]">
             <tbody className="divide-y divide-line">
-              <tr><td className="px-5 py-2 font-mono text-[12.5px] text-ink">key</td><td className="px-3 py-2 text-ink-muted">Your form key (required)</td></tr>
+              <tr><td className="px-4 py-2 font-mono text-[12.5px] text-ink sm:px-5">key</td><td className="px-3 py-2 text-ink-muted">Your form key (required)</td></tr>
               {FIELDS.map(([f, d]) => (
-                <tr key={f}><td className="px-5 py-2 font-mono text-[12.5px] text-ink">{f}</td><td className="px-3 py-2 text-ink-muted">{d}</td></tr>
+                <tr key={f}><td className="px-4 py-2 font-mono text-[12.5px] text-ink sm:px-5">{f}</td><td className="px-3 py-2 text-ink-muted">{d}</td></tr>
               ))}
             </tbody>
           </table>

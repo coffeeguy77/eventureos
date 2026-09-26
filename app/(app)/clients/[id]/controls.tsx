@@ -24,7 +24,7 @@ export function CustomerDetailsEditor({ customer, view }: { customer: CustomerEd
   if (!editing) {
     return (
       <div className="relative">
-        <button onClick={() => setEditing(true)} className="absolute -top-10 right-5 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[12.5px] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
         {view}
@@ -40,14 +40,14 @@ export function CustomerDetailsEditor({ customer, view }: { customer: CustomerEd
       </div>
       <div className="sm:col-span-3"><Label htmlFor="c-company">Company</Label><Input id="c-company" name="company" defaultValue={customer.company ?? ""} /></div>
       <div className="sm:col-span-3"><Label htmlFor="c-email">Email</Label><Input id="c-email" name="email" type="email" defaultValue={customer.email ?? ""} /></div>
-      <div className="sm:col-span-2"><Label htmlFor="c-phone">Phone</Label><Input id="c-phone" name="phone" defaultValue={customer.phone ?? ""} /></div>
+      <div className="sm:col-span-2"><Label htmlFor="c-phone">Phone</Label><Input id="c-phone" name="phone" type="tel" defaultValue={customer.phone ?? ""} /></div>
       <div className="sm:col-span-4"><Label htmlFor="c-address">Address</Label><Input id="c-address" name="address" defaultValue={customer.address ?? ""} /></div>
       <div className="sm:col-span-6"><Label htmlFor="c-tags" hint="Comma separated">Tags</Label><Input id="c-tags" name="tags" defaultValue={customer.tags.join(", ")} placeholder="e.g. VIP, Corporate, Repeat" /></div>
       <div className="sm:col-span-6"><Label htmlFor="c-notes" hint="Team only">Client notes</Label><Textarea id="c-notes" name="notes" rows={3} defaultValue={customer.notes ?? ""} /></div>
       <div className="sm:col-span-6"><FormError message={state?.error} /></div>
       <div className="flex justify-end gap-2 sm:col-span-6">
-        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
-        <Button size="sm" variant="primary" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setEditing(false)}>Cancel</Button>
+        <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
       </div>
     </form>
   );
@@ -86,22 +86,22 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
               </p>
               {ct.position && <p className="text-[12px] text-ink-muted">{ct.position}</p>}
               <div className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-ink-muted">
-                {ct.email && <a href={`mailto:${ct.email}`} className="inline-flex items-center gap-1 hover:text-brand-700"><Mail className="h-3 w-3" />{ct.email}</a>}
-                {ct.phone && <a href={`tel:${ct.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 hover:text-brand-700"><Phone className="h-3 w-3" />{ct.phone}</a>}
+                {ct.email && <a href={`mailto:${ct.email}`} className="inline-flex min-w-0 items-center gap-1 py-0.5 hover:text-brand-700"><Mail className="h-3 w-3 shrink-0" /><span className="min-w-0 break-all">{ct.email}</span></a>}
+                {ct.phone && <a href={`tel:${ct.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 py-0.5 hover:text-brand-700"><Phone className="h-3 w-3" />{ct.phone}</a>}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
               {!ct.is_primary && (
                 <button type="button" disabled={pending} title="Make primary contact" aria-label={`Make ${ct.first_name} the primary contact`}
                   onClick={() => run(() => setPrimaryContact(customerId, ct.id))}
-                  className="rounded-md p-1.5 text-ink-faint hover:bg-white hover:text-brand-700"><Star className="h-3.5 w-3.5" /></button>
+                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-brand-700"><Star className="h-3.5 w-3.5" /></button>
               )}
               <button type="button" title="Edit contact" aria-label={`Edit ${ct.first_name}`} onClick={() => { setError(undefined); setEditing(ct.id); }}
-                className="rounded-md p-1.5 text-ink-faint hover:bg-white hover:text-ink"><Pencil className="h-3.5 w-3.5" /></button>
+                className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-ink"><Pencil className="h-3.5 w-3.5" /></button>
               {canRemove && (
                 <button type="button" disabled={pending} title="Remove contact" aria-label={`Remove ${ct.first_name}`}
                   onClick={() => { if (confirm(`Remove ${ct.first_name} ${ct.last_name ?? ""} from this client?`)) run(() => removeContact(customerId, ct.id)); }}
-                  className="rounded-md p-1.5 text-ink-faint hover:bg-white hover:text-rose-700"><Trash2 className="h-3.5 w-3.5" /></button>
+                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-rose-700"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
           </li>
@@ -111,7 +111,7 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
       {editing === "new" ? (
         <div className="mt-2"><ContactForm customerId={customerId} onDone={() => setEditing(null)} firstContact={contacts.length === 0} /></div>
       ) : (
-        <button onClick={() => { setError(undefined); setEditing("new"); }} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => { setError(undefined); setEditing("new"); }} className="mt-2 inline-flex min-h-10 items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700 sm:min-h-0">
           <Plus className="h-3.5 w-3.5" /> Add contact
         </button>
       )}
@@ -131,7 +131,7 @@ function ContactForm({ customerId, contact, onDone, firstContact }: { customerId
       <div><Label htmlFor={`fn-${k}`}>First name</Label><Input id={`fn-${k}`} name="first_name" defaultValue={contact?.first_name ?? ""} required autoFocus /></div>
       <div><Label htmlFor={`ln-${k}`}>Last name</Label><Input id={`ln-${k}`} name="last_name" defaultValue={contact?.last_name ?? ""} /></div>
       <div><Label htmlFor={`em-${k}`}>Email</Label><Input id={`em-${k}`} name="email" type="email" defaultValue={contact?.email ?? ""} /></div>
-      <div><Label htmlFor={`ph-${k}`}>Phone</Label><Input id={`ph-${k}`} name="phone" defaultValue={contact?.phone ?? ""} /></div>
+      <div><Label htmlFor={`ph-${k}`}>Phone</Label><Input id={`ph-${k}`} name="phone" type="tel" defaultValue={contact?.phone ?? ""} /></div>
       <div className="sm:col-span-2"><Label htmlFor={`po-${k}`}>Position</Label><Input id={`po-${k}`} name="position" defaultValue={contact?.position ?? ""} placeholder="e.g. Events Manager, Bride" /></div>
       {!contact && !firstContact && (
         <label className="flex items-center gap-2 text-[12.5px] text-ink sm:col-span-2">
@@ -140,8 +140,8 @@ function ContactForm({ customerId, contact, onDone, firstContact }: { customerId
       )}
       {state?.error && <div className="sm:col-span-2"><FormError message={state.error} /></div>}
       <div className="flex justify-end gap-2 sm:col-span-2">
-        <Button type="button" size="sm" variant="ghost" onClick={onDone}>Cancel</Button>
-        <Button size="sm" variant="primary" disabled={pending}>{pending ? "Saving…" : contact ? "Save contact" : "Add contact"}</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={onDone}>Cancel</Button>
+        <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Saving…" : contact ? "Save contact" : "Add contact"}</Button>
       </div>
     </form>
   );

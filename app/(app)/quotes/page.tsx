@@ -89,7 +89,35 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
             </EmptyState>
           ) : <EmptyState title="No quotes match">Try a different status or search.</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((r) => {
+              const s = QUOTE_STATUS[r.status];
+              const draftTotal = r.version ? null : quoteTotals(
+                r.items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount_percent: Number(i.discount_percent), tax_rate: Number(i.tax_rate) })),
+                new Set(r.sections.filter((x) => x.is_optional).map((x) => x.id))
+              ).total;
+              return (
+                <li key={r.id}>
+                  <Link href={`/quotes/${r.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13.5px] font-medium text-ink"><span className="tabular text-ink-faint">Q-{r.number}</span> · {r.title}</div>
+                      <div className="truncate text-[12.5px] text-ink-muted">{r.customer?.name ?? "—"}{r.event ? ` · ${r.event.name}` : ""}</div>
+                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                        {r.event?.event_date ? `${fmtDate(r.event.event_date)} · ${relativeDay(r.event.event_date, today)}` : "No event date"}
+                        {r.has_unpublished_changes && r.version ? <span className="text-amber-700"> · Unpublished changes</span> : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={s.tone} dot>{s.label}</Badge>
+                      <span className={cn("tabular text-[12.5px]", r.version ? "text-ink" : "text-ink-muted")}>{money(r.version ? r.version.total : draftTotal, org.currency)}</span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1180px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -155,6 +183,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} quote{rows.length === 1 ? "" : "s"}{status || term ? ` of ${all.length}` : ""}</div>
       </Card>

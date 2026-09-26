@@ -1,6 +1,7 @@
 import { requireOrg, isSuperAdmin } from "@/lib/context";
 import { SupportBanner } from "@/components/shell/support-banner";
-import { Sidebar, MobileNav } from "@/components/shell/sidebar";
+import { Sidebar } from "@/components/shell/sidebar";
+import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -39,9 +40,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           notifications={notif.data ?? []}
           unread={unread.count ?? 0}
         />
-        <MobileNav />
-        <main className="mx-auto max-w-[1360px] px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto max-w-[1360px] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
+      <MobileTabBar
+        enquiries={openEnquiries.count ?? 0}
+        isSuperAdmin={admin}
+        orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
+        currentOrgId={org.id}
+        user={{ name: profile.full_name ?? profile.email, email: profile.email }}
+      />
     </div>
   );
 }

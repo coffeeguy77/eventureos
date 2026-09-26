@@ -28,7 +28,7 @@ export function SettingsNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors",
+              "flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2.5 text-[13px] lg:py-[7px] font-medium transition-colors",
               active ? "bg-white text-ink shadow-card ring-1 ring-line" : "text-ink-muted hover:bg-white/70 hover:text-ink"
             )}
           >

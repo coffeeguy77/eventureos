@@ -19,7 +19,7 @@ export default async function BrandingPage() {
         title="Branding & customer portal"
         subtitle={<>Customers see this at <span className="font-mono text-[12px]">/p/{o.slug}</span> and on every quote you send.</>}
       />
-      <div className="border-t border-line px-5 py-5">
+      <div className="border-t border-line px-4 py-5 sm:px-5">
         <BrandingEditor
           canEdit={role === "owner" || role === "admin"}
           org={{

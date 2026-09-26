@@ -42,7 +42,32 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             filters={[{ key: "kind", label: "Type", options: [{ value: "company", label: "Companies" }, { value: "individual", label: "Individuals" }] }]} />
         </div>
         {rows.length === 0 ? <EmptyState title="No clients found" /> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((c) => {
+              const owing = c.invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.balance), 0);
+              const overdue = c.invoices.some((i) => i.status !== "void" && Number(i.balance) > 0 && (i.status === "overdue" || (i.status !== "draft" && i.due_date != null && i.due_date < today)));
+              return (
+                <li key={c.id}>
+                  <Link href={`/clients/${c.id}`} className="flex min-h-[56px] items-center gap-3 px-4 py-3 active:bg-zinc-50">
+                    <Avatar name={c.name} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
+                      <div className="truncate text-[12.5px] text-ink-muted">{c.email ?? c.phone ?? "—"}</div>
+                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">{c.events.length} event{c.events.length === 1 ? "" : "s"}</div>
+                    </div>
+                    {owing > 0 && (
+                      <div className="shrink-0 text-right">
+                        <div className={`tabular text-[12.5px] ${overdue ? "font-medium text-rose-700" : "text-ink"}`}>{money(owing, org.currency)}</div>
+                        <div className="text-[11.5px] text-ink-faint">{overdue ? "overdue" : "owing"}</div>
+                      </div>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[860px] text-left text-[13px]">
               <thead><tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
                 {["Client", "Contact", "Events", "Lifetime value", "Outstanding", "Client since"].map((h) => (
@@ -77,6 +102,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} client{rows.length === 1 ? "" : "s"}</div>
       </Card>

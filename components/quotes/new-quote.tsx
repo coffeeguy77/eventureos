@@ -67,8 +67,8 @@ export function EventPicker({ events, today }: { events: PickerEvent[]; today: s
             return (
               <li key={e.id}>
                 <button type="button" disabled={!!pendingId} onClick={() => create(e.id)}
-                  className="group flex w-full items-center gap-4 px-5 py-3 text-left hover:bg-zinc-50 focus:bg-brand-50/50 focus:outline-none disabled:cursor-wait">
-                  <div className="w-24 shrink-0">
+                  className="group flex w-full items-center gap-3 px-4 py-3 text-left sm:gap-4 sm:px-5 hover:bg-zinc-50 focus:bg-brand-50/50 focus:outline-none disabled:cursor-wait">
+                  <div className="w-[5.5rem] shrink-0 sm:w-24">
                     <p className="whitespace-nowrap text-[13px] text-ink">{e.event_date ? fmtDate(e.event_date) : "No date"}</p>
                     {e.event_date && <p className="text-[11.5px] text-ink-faint">{relativeDay(e.event_date, today)}</p>}
                   </div>
@@ -113,14 +113,14 @@ export function AutoCreate({ eventId, eventName }: { eventId: string; eventName:
   }, []);
 
   return (
-    <Card className="mx-auto max-w-md px-6 py-10 text-center">
+    <Card className="mx-auto max-w-md px-5 py-10 text-center sm:px-6">
       {error ? (
         <>
           <p className="text-[14px] font-semibold text-ink">Couldn’t create the quote</p>
           <div className="mt-3 text-left"><FormError message={error} /></div>
-          <div className="mt-4 flex justify-center gap-2">
-            <Button variant="primary" onClick={go}>Try again</Button>
-            <ButtonLink href={`/events/${eventId}?tab=quote`}>Back to event</ButtonLink>
+          <div className="mt-4 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+            <Button variant="primary" onClick={go} className="h-10 sm:h-9">Try again</Button>
+            <ButtonLink href={`/events/${eventId}?tab=quote`} className="h-10 sm:h-9">Back to event</ButtonLink>
           </div>
         </>
       ) : (
@@ -152,14 +152,14 @@ export function ExistingQuotes({ eventId, eventName, quotes }: { eventId: string
               <span className="tabular text-[13px] font-medium text-ink">Q-{qq.number}</span>
               <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{qq.title}</span>
               <Badge tone={QUOTE_STATUS[qq.status].tone} dot>{QUOTE_STATUS[qq.status].label}</Badge>
-              <ArrowRight className="h-4 w-4 text-ink-faint" />
+              <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
             </Link>
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
-        <ButtonLink href={`/events/${eventId}?tab=quote`} variant="ghost">Back to event</ButtonLink>
-        <Button variant="primary" disabled={pending} onClick={() => {
+      <div className="flex flex-col-reverse gap-2 px-5 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <ButtonLink href={`/events/${eventId}?tab=quote`} variant="ghost" className="h-10 sm:h-9">Back to event</ButtonLink>
+        <Button variant="primary" disabled={pending} className="h-10 sm:h-9" onClick={() => {
           setPending(true); setError(null);
           start(async () => { const r = await run(eventId); if (r && !r.ok) { setError(r.error); setPending(false); } });
         }}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Create another quote</Button>

@@ -6,7 +6,7 @@ import { initials } from "@/lib/format";
 export function BrandMark({ name, logoUrl, size = 36 }: { name: string; logoUrl: string | null; size?: number }) {
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt={name} style={{ height: size, maxWidth: size * 4 }} className="w-auto object-contain" />;
+    return <img src={logoUrl} alt={name} style={{ height: size, maxWidth: size * 4 }} className="w-auto min-w-0 object-contain" />;
   }
   return (
     <span
@@ -43,9 +43,9 @@ export function Panel({ title, subtitle, action, children, className }: {
   return (
     <section className={cn("rounded-2xl border border-line bg-white shadow-card", className)}>
       {(title || action) && (
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
+        <div className="flex items-start justify-between gap-3 px-4 pb-3 pt-5 sm:px-6">
           <div className="min-w-0">
-            {title && <h2 className="text-[15px] font-semibold text-ink">{title}</h2>}
+            {title && <h2 className="break-words text-[15px] font-semibold text-ink">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-[13px] text-ink-muted">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
@@ -56,11 +56,11 @@ export function Panel({ title, subtitle, action, children, className }: {
   );
 }
 
-export function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+export function Detail({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div>
+    <div className={cn("min-w-0", className)}>
       <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">{label}</dt>
-      <dd className="mt-1 text-[14px] text-ink">{children}</dd>
+      <dd className="mt-1 break-words text-[14px] text-ink">{children}</dd>
     </div>
   );
 }

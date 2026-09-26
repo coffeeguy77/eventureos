@@ -25,10 +25,10 @@ export function NewClientForm() {
   const dupes = state?.duplicates ?? [];
   return (
     <form onSubmit={onSubmit}>
-      <Card className="p-5 sm:p-6">
-        <div className="mb-5 inline-flex rounded-lg bg-zinc-100 p-0.5" role="radiogroup" aria-label="Client type">
+      <Card className="p-4 sm:p-6">
+        <div className="mb-5 flex rounded-lg bg-zinc-100 p-0.5 sm:inline-flex" role="radiogroup" aria-label="Client type">
           {(["individual", "company"] as const).map((k) => (
-            <label key={k} className={cn("cursor-pointer rounded-md px-3 py-1.5 text-[12.5px] font-medium", kind === k ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+            <label key={k} className={cn("flex-1 cursor-pointer rounded-md px-3 py-2 text-center text-[13px] font-medium sm:flex-none sm:py-1.5 sm:text-[12.5px]", kind === k ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
               <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
               {k === "individual" ? "Individual" : "Company"}
             </label>
@@ -89,12 +89,12 @@ export function NewClientForm() {
         )}
 
         <div className="mt-6"><FormError message={state?.error} /></div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <ButtonLink href="/clients">Cancel</ButtonLink>
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <ButtonLink href="/clients" className="h-10 w-full sm:h-9 sm:w-auto">Cancel</ButtonLink>
           {dupes.length > 0 ? (
-            <Button variant="secondary" name="confirm_new" value="1" disabled={pending}>{pending ? "Creating…" : "Create a new client anyway"}</Button>
+            <Button variant="secondary" className="h-10 w-full sm:h-9 sm:w-auto" name="confirm_new" value="1" disabled={pending}>{pending ? "Creating…" : "Create a new client anyway"}</Button>
           ) : (
-            <Button variant="primary" disabled={pending}>{pending ? "Checking…" : "Create client"}</Button>
+            <Button variant="primary" className="h-10 w-full sm:h-9 sm:w-auto" disabled={pending}>{pending ? "Checking…" : "Create client"}</Button>
           )}
         </div>
       </Card>

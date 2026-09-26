@@ -70,8 +70,8 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
     <div className={cn("transition-opacity", pending && "opacity-90")}>
       {error && <div className="mb-3"><FormError message={error} /></div>}
       <p className="sr-only" aria-live="polite">{pending ? "Saving move…" : ""}</p>
-      <div className="-mx-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
-        <div className="flex gap-3" style={{ minWidth: columns.length * 268 }}>
+      <div className="-mx-4 snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain px-4 pb-3 sm:mx-0 sm:snap-none sm:px-0">
+        <div className="flex w-max gap-3 sm:w-auto" style={{ minWidth: columns.length * 268 }}>
           {columns.map((col) => {
             const list = byColumn.get(col.key) ?? [];
             const total = list.reduce((s, c) => s + (c.value ?? 0), 0);
@@ -83,7 +83,7 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                 onDragOver={(e) => { if (dragging) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(col.key); } }}
                 onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver((o) => (o === col.key ? null : o)); }}
                 onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("text/plain") || dragging; setOver(null); setDragging(null); if (id) move(id, col.key); }}
-                className={cn("flex w-[256px] shrink-0 flex-col rounded-xl border bg-zinc-50/70 transition-colors sm:w-[264px]",
+                className={cn("flex w-[85vw] max-w-[340px] shrink-0 snap-start flex-col rounded-xl border bg-zinc-50/70 transition-colors sm:w-[264px] sm:max-w-none sm:snap-align-none",
                   isOver ? "border-brand-300 bg-brand-50/60" : "border-line")}
               >
                 <header className="flex items-start justify-between gap-2 px-3 pb-2 pt-3">
@@ -108,7 +108,7 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                       <GripVertical className="absolute right-1.5 top-2.5 hidden h-3.5 w-3.5 text-ink-faint/60 sm:block" aria-hidden />
                       <div className="flex items-start gap-2 pr-3">
                         <div className="min-w-0 flex-1">
-                          <Link href={c.href} className="block truncate text-[13px] font-semibold text-ink hover:text-brand-700" draggable={false}>{c.customer}</Link>
+                          <Link href={c.href} className="block truncate text-[13px] font-semibold text-ink after:absolute after:inset-0 hover:text-brand-700 sm:after:hidden" draggable={false}>{c.customer}</Link>
                           <p className="truncate text-[12px] text-ink-muted" title={c.title}>{c.ref} · {c.title}</p>
                         </div>
                       </div>
@@ -130,14 +130,14 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                         c.urgency === "overdue" ? "font-medium text-rose-700" : c.urgency === "soon" ? "text-amber-800" : c.urgency === "done" ? "text-ink-faint" : "text-ink")}>
                         <span className="text-ink-faint">Next: </span>{c.nextAction}
                       </div>
-                      <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-faint">
+                      <label className="relative z-10 mt-2 flex items-center gap-1.5 text-[11px] text-ink-faint">
                         <span>Move to</span>
                         <select
                           aria-label={`Move ${c.ref} to another stage`}
                           value={c.column}
                           disabled={pending}
                           onChange={(e) => move(c.id, e.target.value)}
-                          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent py-0.5 text-[11.5px] text-ink-muted hover:border-line focus:border-brand-300 focus:outline-none"
+                          className="min-w-0 flex-1 rounded-md border border-line bg-transparent py-1.5 text-[11.5px] sm:border-transparent sm:py-0.5 text-ink-muted hover:border-line focus:border-brand-300 focus:outline-none"
                         >
                           {columns.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                         </select>

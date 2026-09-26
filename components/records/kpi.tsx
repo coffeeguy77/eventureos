@@ -7,7 +7,7 @@ export function Kpi({ label, value, sub, href, alert }: {
   const body = (
     <>
       <div className="text-[12px] font-medium text-ink-muted">{label}</div>
-      <div className={cn("mt-1.5 text-[24px] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
+      <div className={cn("mt-1.5 break-words text-[24px] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
       {sub && <div className="mt-0.5 truncate text-[12px] text-ink-faint group-hover:text-ink-muted">{sub}</div>}
     </>
   );

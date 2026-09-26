@@ -366,8 +366,8 @@ export function QuoteBuilder(p: BuilderProps) {
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[12px] text-ink-faint">
           <Link href="/quotes" className="hover:text-ink">Quotes</Link><span>/</span><span className="tabular">Q-{quote.number}</span>
         </div>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1 basis-72">
             <input
               value={title}
               onChange={(e) => { setTitle(e.target.value); if (e.target.value.trim()) queue("h", { title: e.target.value }, sendHeader, 900); }}
@@ -375,12 +375,12 @@ export function QuoteBuilder(p: BuilderProps) {
               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
               aria-label="Quote title"
               maxLength={200}
-              className="-ml-2 w-full max-w-3xl rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-[22px] font-semibold tracking-tight text-ink hover:border-line focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="-ml-2 w-full max-w-3xl rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-[22px] font-semibold tracking-tight text-ink hover:border-line focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 max-md:[&:not(#x)]:!text-[20px]"
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-ink-muted">
               <Badge tone={status.tone} dot>{status.label}</Badge>
               <Link href={`/clients/${p.customer.id}`} className="font-medium text-ink hover:text-brand-700">{p.customer.name}</Link>
-              <Link href={`/events/${p.event.id}?tab=quote`} className="hover:text-brand-700">EV-{p.event.number} · {p.event.name}{p.event.event_date ? ` · ${fmtDate(p.event.event_date)}` : ""}</Link>
+              <Link href={`/events/${p.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{p.event.number} · {p.event.name}{p.event.event_date ? ` · ${fmtDate(p.event.event_date)}` : ""}</Link>
               <span title="Set to the publish date each time you send">Issued {fmtDate(quote.issue_date)}</span>
               <label className="flex items-center gap-1.5">
                 <span>Expires</span>
@@ -390,18 +390,18 @@ export function QuoteBuilder(p: BuilderProps) {
                   min={p.today}
                   onChange={(e) => { setExpiry(e.target.value); queue("h", { expiry_date: e.target.value || null }, sendHeader, 0); }}
                   aria-label="Expiry date"
-                  className={cn("h-7 rounded-md border border-line bg-white px-1.5 text-[12.5px] text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100",
+                  className={cn("h-9 rounded-md border border-line bg-white px-1.5 text-[12.5px] text-ink sm:h-7 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100",
                     expiry && expiry < p.today && "border-rose-300 text-rose-700")}
                 />
               </label>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <SaveIndicator busy={busy > 0} state={saveState} />
-            <Button onClick={openPreview} disabled={previewLoading}>
+            <Button onClick={openPreview} disabled={previewLoading} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
               {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Preview as customer
             </Button>
-            <Button variant="primary" onClick={() => setPanel(panel === "publish" ? null : "publish")} aria-expanded={panel === "publish"}>
+            <Button variant="primary" onClick={() => setPanel(panel === "publish" ? null : "publish")} aria-expanded={panel === "publish"} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
               <Send className="h-4 w-4" />{cv ? "Publish & send update" : "Publish & send"}
             </Button>
           </div>
@@ -425,7 +425,7 @@ export function QuoteBuilder(p: BuilderProps) {
             </span>
           )}
           {canRespond && (
-            <button type="button" onClick={() => setPanel(panel === "respond" ? null : "respond")} className="rounded-full px-2.5 py-1 text-[12px] font-medium text-brand-700 hover:bg-brand-50" aria-expanded={panel === "respond"}>
+            <button type="button" onClick={() => setPanel(panel === "respond" ? null : "respond")} className="rounded-full px-2.5 py-2 text-[12px] font-medium text-brand-700 hover:bg-brand-50 sm:py-1" aria-expanded={panel === "respond"}>
               Record acceptance / decline
             </button>
           )}
@@ -539,11 +539,11 @@ export function QuoteBuilder(p: BuilderProps) {
         </PreviewModal>
       )}
       {toast && (
-        <div role="status" className={cn("fixed bottom-4 left-1/2 z-50 flex w-[calc(100%-32px)] max-w-md -translate-x-1/2 items-start gap-3 rounded-xl px-4 py-3 text-[13px] shadow-pop",
+        <div role="status" className={cn("fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 z-50 flex lg:bottom-4 w-[calc(100%-32px)] max-w-md -translate-x-1/2 items-start gap-3 rounded-xl px-4 py-3 text-[13px] shadow-pop",
           toast.tone === "error" ? "bg-rose-700 text-white" : "bg-ink text-white")}>
           {toast.tone === "error" ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}
           <span className="min-w-0 flex-1">{toast.message}</span>
-          {toast.undo && <button type="button" onClick={toast.undo} className="shrink-0 font-semibold text-brand-200 hover:text-white">Undo</button>}
+          {toast.undo && <button type="button" onClick={toast.undo} className="-my-2 shrink-0 px-1 py-2 font-semibold text-brand-200 hover:text-white">Undo</button>}
           <button type="button" onClick={() => setToast(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss"><X className="h-4 w-4" /></button>
         </div>
       )}
@@ -555,7 +555,7 @@ export function QuoteBuilder(p: BuilderProps) {
 
 function SaveIndicator({ busy, state }: { busy: boolean; state: "idle" | "saved" | "error" }) {
   return (
-    <span className="inline-flex w-[118px] items-center justify-end gap-1.5 text-[12px] text-ink-faint" aria-live="polite">
+    <span className="order-last inline-flex w-full items-center justify-start gap-1.5 text-[12px] text-ink-faint empty:hidden sm:order-none sm:w-[118px] sm:justify-end sm:empty:inline-flex" aria-live="polite">
       {busy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</>
         : state === "error" ? <span className="flex items-center gap-1.5 text-rose-700"><AlertCircle className="h-3.5 w-3.5" />Not saved</span>
           : state === "saved" ? <><Check className="h-3.5 w-3.5 text-emerald-600" />All changes saved</>
@@ -576,10 +576,10 @@ export function DuplicateButton({ quoteId, onError, variant = "chip" }: { quoteI
   return (
     <>
       {variant === "button" ? (
-        <Button onClick={click} disabled={pending}>{icon}Duplicate as new quote</Button>
+        <Button onClick={click} disabled={pending} className="h-10 sm:h-9">{icon}Duplicate as new quote</Button>
       ) : (
         <button type="button" disabled={pending} onClick={click}
-          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink disabled:opacity-60">
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-[12px] font-medium text-ink-muted hover:bg-zinc-100 sm:py-1 hover:text-ink disabled:opacity-60">
           {icon}Duplicate as new quote
         </button>
       )}
@@ -611,11 +611,11 @@ function PublishPanel({ quoteId, customerName, nextVersion, currentVersion, tota
   return (
     <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4 sm:p-5" role="region" aria-label="Publish quote">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[14px] font-semibold text-ink">Publish version {nextVersion} to {customerName}?</p>
           <p className="tabular mt-0.5 text-[13px] text-ink-muted">Total {money(total, currency)} inc GST</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1 text-ink-faint hover:bg-white hover:text-ink" aria-label="Close"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={onClose} className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-white hover:text-ink sm:m-0 sm:p-1" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
       <ul className="mt-3 space-y-1.5 text-[12.5px] text-ink-muted">
         <li>• Creates a locked, customer-facing copy of this draft. You can keep editing the draft afterwards without the customer seeing it.</li>
@@ -633,10 +633,10 @@ function PublishPanel({ quoteId, customerName, nextVersion, currentVersion, tota
       {nothingNew && <p className="mt-3 text-[12.5px] text-ink-muted">Nothing has changed since version {currentVersion!.version_number}, so there’s nothing new to send.</p>}
       {error && <div className="mt-3"><FormError message={error} /></div>}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={publish} disabled={pending || problems.length > 0 || nothingNew} autoFocus>
+        <Button variant="primary" onClick={publish} disabled={pending || problems.length > 0 || nothingNew} autoFocus className="h-10 w-full sm:h-9 sm:w-auto">
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{pending ? "Publishing…" : `Publish version ${nextVersion}`}
         </Button>
-        <Button variant="ghost" onClick={onClose} disabled={pending}>Cancel</Button>
+        <Button variant="ghost" onClick={onClose} disabled={pending} className="h-10 w-full sm:h-9 sm:w-auto">Cancel</Button>
       </div>
     </div>
   );
@@ -667,16 +667,16 @@ function RespondPanel({ quoteId, version, signerName, acceptanceNote, onClose, o
   return (
     <form onSubmit={submit} className="mt-4 rounded-xl border border-line bg-white p-4 shadow-card sm:p-5" aria-label="Record customer response">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[14px] font-semibold text-ink">Record the customer’s response to version {version.version_number}</p>
           <p className="mt-0.5 text-[12.5px] text-ink-muted">Use this when the customer replied by email, phone or in person.</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1 text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label="Close"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={onClose} className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-zinc-100 hover:text-ink sm:m-0 sm:p-1" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
-      <div className="mt-3 inline-flex rounded-lg bg-zinc-100 p-0.5" role="radiogroup" aria-label="Decision">
+      <div className="mt-3 flex rounded-lg bg-zinc-100 p-0.5 sm:inline-flex" role="radiogroup" aria-label="Decision">
         {(["accepted", "declined"] as const).map((d) => (
           <button key={d} type="button" role="radio" aria-checked={decision === d} onClick={() => setDecision(d)}
-            className={cn("rounded-md px-3 py-1.5 text-[12.5px] font-medium", decision === d ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+            className={cn("flex-1 rounded-md px-3 py-2 text-[13px] font-medium sm:flex-none sm:py-1.5 sm:text-[12.5px]", decision === d ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
             {d === "accepted" ? "Accepted" : "Declined"}
           </button>
         ))}
@@ -696,10 +696,10 @@ function RespondPanel({ quoteId, version, signerName, acceptanceNote, onClose, o
       {decision === "accepted" && <p className="mt-3 text-[12.5px] text-ink-muted">{acceptanceNote} The quote will be locked.</p>}
       {error && <div className="mt-3"><FormError message={error} /></div>}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="submit" variant={decision === "accepted" ? "primary" : "danger"} disabled={pending}>
+        <Button type="submit" variant={decision === "accepted" ? "primary" : "danger"} disabled={pending} className="h-10 w-full sm:h-9 sm:w-auto">
           {pending && <Loader2 className="h-4 w-4 animate-spin" />}{decision === "accepted" ? "Record acceptance" : "Record decline"}
         </Button>
-        <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>Cancel</Button>
+        <Button type="button" variant="ghost" onClick={onClose} disabled={pending} className="h-10 w-full sm:h-9 sm:w-auto">Cancel</Button>
       </div>
     </form>
   );
@@ -716,9 +716,9 @@ function PreviewModal({ children, onClose }: { children: React.ReactNode; onClos
   return (
     <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-ink/40 px-3 py-6 backdrop-blur-[1px] sm:px-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} role="dialog" aria-modal="true" aria-label="Customer preview">
       <div className="w-full max-w-3xl">
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-white/95 px-4 py-2.5 text-[12.5px] shadow-card">
-          <span className="text-ink-muted"><span className="font-semibold text-ink">Customer preview.</span> Exactly what the customer will see once you publish. Nothing has been sent.</span>
-          <button type="button" onClick={onClose} autoFocus className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-ink hover:bg-zinc-100"><X className="h-4 w-4" />Close</button>
+        <div className="sticky top-0 z-10 mb-3 flex items-center justify-between gap-3 rounded-xl bg-white/95 px-4 py-2.5 text-[12.5px] shadow-card sm:static">
+          <span className="min-w-0 text-ink-muted"><span className="font-semibold text-ink">Customer preview.</span> Exactly what the customer will see once you publish. Nothing has been sent.</span>
+          <button type="button" onClick={onClose} autoFocus className="inline-flex h-10 shrink-0 items-center gap-1 rounded-md px-2 font-medium text-ink hover:bg-zinc-100 sm:h-auto sm:py-1"><X className="h-4 w-4" />Close</button>
         </div>
         {children}
       </div>

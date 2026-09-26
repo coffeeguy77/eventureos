@@ -53,7 +53,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
       {sp.error && (
         <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl bg-rose-50 px-4 py-3 text-[13px] text-rose-800 ring-1 ring-inset ring-rose-100">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span>{sp.error}</span>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span className="min-w-0 break-words">{sp.error}</span>
         </div>
       )}
       {sp.connected && (
@@ -79,10 +79,10 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 const s = SYNC_STATUS[l.status] ?? { label: l.status, tone: "neutral" as Tone };
                 const prov = PROVIDERS.find((x) => x.id === l.integration?.provider);
                 return (
-                  <li key={l.id} className="flex items-start gap-3 px-5 py-3">
+                  <li key={l.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 sm:flex-nowrap sm:px-5">
                     <Badge tone={s.tone}>{prov?.name ?? "Sync"}</Badge>
-                    <p className="min-w-0 flex-1 text-[12.5px] text-ink-muted">{l.message ?? `${l.entity ?? "Sync"} ${l.status}`}</p>
-                    <span className="shrink-0 text-[11.5px] text-ink-faint" title={fmtDateTime(l.started_at, org.timezone)}>{relative(l.started_at)}</span>
+                    <p className="order-last min-w-0 basis-full break-words text-[12.5px] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{l.message ?? `${l.entity ?? "Sync"} ${l.status}`}</p>
+                    <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint sm:ml-0" title={fmtDateTime(l.started_at, org.timezone)}>{relative(l.started_at)}</span>
                   </li>
                 );
               })}
@@ -92,7 +92,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <Card>
           <CardHeader title="Automation & background sync" />
-          <ul className="space-y-3 px-5 pb-5 text-[12.5px]">
+          <ul className="space-y-3 px-4 pb-5 text-[12.5px] sm:px-5">
             <SetupLine ok={env.ai} title={env.ai ? `AI classification on (${env.aiModel ?? "claude-haiku-4-5-20251001"})` : "AI classification off — rules engine in use"}
               detail={env.ai ? "New emails are classified by Claude, with the rules engine as a fallback." : <>Add <Code>ANTHROPIC_API_KEY</Code> (optional <Code>AI_MODEL</Code>) to let Claude classify emails and extract event details. The built-in rules already handle website forms, replies, quotes, suppliers and spam.</>} />
             <SetupLine ok={env.serviceRole && env.cronSecret} title={env.serviceRole && env.cronSecret ? "Background sync every 15 minutes" : "Background sync is off"}
@@ -109,7 +109,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <div key={p.id} className="flex items-start gap-3 rounded-xl border border-dashed border-line-strong bg-white/60 px-4 py-3">
             <Mark p={p} small />
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[13px] font-medium text-ink">{p.name} <span className="text-[11px] font-normal text-ink-faint">{p.category}</span></p>
+              <p className="flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-ink">{p.name} <span className="text-[11px] font-normal text-ink-faint">{p.category}</span></p>
               <p className="mt-0.5 text-[12px] text-ink-muted">{p.description}</p>
             </div>
           </div>
@@ -123,7 +123,7 @@ function SetupLine({ ok, title, detail }: { ok: boolean; title: string; detail: 
   return (
     <li className="flex gap-2.5">
       {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />}
-      <div><p className="font-medium text-ink">{title}</p><p className="mt-0.5 text-ink-muted">{detail}</p></div>
+      <div className="min-w-0"><p className="font-medium text-ink">{title}</p><p className="mt-0.5 text-ink-muted">{detail}</p></div>
     </li>
   );
 }
@@ -134,7 +134,7 @@ function ProviderCard({ p, row, missing, manager, tz }: { p: ProviderDef; row: I
   const sync = row?.last_sync_status ? SYNC_STATUS[row.last_sync_status] : null;
   return (
     <Card className="flex flex-col">
-      <div className="flex items-start gap-3 px-5 pt-5">
+      <div className="flex items-start gap-3 px-4 pt-5 sm:px-5">
         <Mark p={p} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -144,38 +144,38 @@ function ProviderCard({ p, row, missing, manager, tz }: { p: ProviderDef; row: I
           <p className="text-[12px] text-ink-faint">{p.category}</p>
         </div>
       </div>
-      <p className="px-5 pt-3 text-[12.5px] leading-relaxed text-ink-muted">{p.description}</p>
-      <dl className="mx-5 mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-zinc-50/80 px-3 py-2.5 text-[12.5px]">
-        <dt className="text-ink-faint">Account</dt><dd className="truncate text-ink">{connected ? row!.account_label ?? "—" : "—"}</dd>
+      <p className="px-4 pt-3 text-[12.5px] leading-relaxed text-ink-muted sm:px-5">{p.description}</p>
+      <dl className="mx-4 mt-4 sm:mx-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-zinc-50/80 px-3 py-2.5 text-[12.5px]">
+        <dt className="text-ink-faint">Account</dt><dd className="min-w-0 truncate text-ink">{connected ? row!.account_label ?? "—" : "—"}</dd>
         <dt className="text-ink-faint">Last sync</dt><dd className="text-ink" title={row?.last_sync_at ? fmtDateTime(row.last_sync_at, tz) : undefined}>{connected && row!.last_sync_at ? relative(row!.last_sync_at) : connected ? "Not yet" : "—"}</dd>
         <dt className="text-ink-faint">Sync status</dt>
         <dd className="min-w-0">{connected ? (sync ? <Badge tone={sync.tone}>{sync.label}</Badge> : <span className="text-ink-muted">Waiting for first sync</span>) : <span className="text-ink-muted">—</span>}</dd>
       </dl>
       {connected && row!.last_error && (
-        <p className="mx-5 mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-800 ring-1 ring-inset ring-rose-100">{row!.last_error}</p>
+        <p className="mx-4 mt-2 break-words rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-800 sm:mx-5 ring-1 ring-inset ring-rose-100">{row!.last_error}</p>
       )}
-      <ul className="flex flex-wrap gap-1.5 px-5 pt-3">
+      <ul className="flex flex-wrap gap-1.5 px-4 pt-3 sm:px-5">
         {p.capabilities.map((c) => <li key={c} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-ink-muted">{c}</li>)}
       </ul>
-      <div className="mt-auto flex flex-wrap items-center gap-2 px-5 pb-5 pt-4">
+      <div className="mt-auto flex flex-wrap items-center gap-2 px-4 pb-5 pt-4 sm:px-5">
         {connected ? (
           <>
-            <ButtonLink href={`/settings/integrations/${p.id}`} size="sm" variant="secondary">Settings</ButtonLink>
+            <ButtonLink href={`/settings/integrations/${p.id}`} size="sm" variant="secondary" className="h-10 sm:h-8">Settings</ButtonLink>
             {manager && <SyncNowButton provider={p.id} />}
             {manager && <DisconnectButton provider={p.id} name={p.name} />}
             {row!.status === "error" && manager && !missing.length && (
-              <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("ghost", "sm")}>Reconnect</a>
+              <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("ghost", "sm", "h-10 sm:h-8")}>Reconnect</a>
             )}
           </>
         ) : missing.length ? (
           <div className="w-full">
-            <button disabled className={buttonClass("primary", "sm")}>Connect {p.name}</button>
+            <button disabled className={buttonClass("primary", "sm", "h-10 w-full sm:h-8 sm:w-auto")}>Connect {p.name}</button>
             <p className="mt-2 text-[12px] text-ink-muted">
               Not set up yet. Add {missing.map((m, i) => <span key={m}>{i > 0 && (i === missing.length - 1 ? " and " : ", ")}<Code>{m}</Code></span>)} to the environment variables (Vercel → Settings → Environment Variables), then redeploy.
             </p>
           </div>
         ) : manager ? (
-          <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("primary", "sm")}>Connect {p.name}</a>
+          <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("primary", "sm", "h-10 w-full sm:h-8 sm:w-auto")}>Connect {p.name}</a>
         ) : (
           <p className="text-[12px] text-ink-muted">Ask an owner, admin or manager to connect {p.name}.</p>
         )}

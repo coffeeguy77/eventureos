@@ -11,7 +11,7 @@ export function NewEnquiryForm({ members, me }: { members: { id: string; name: s
   const [state, action, pending] = useActionState(createEnquiry, undefined);
   return (
     <form action={action}>
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label htmlFor="title">What are they after?</Label>
@@ -48,9 +48,9 @@ export function NewEnquiryForm({ members, me }: { members: { id: string; name: s
           </div>
         </div>
         <div className="mt-6"><FormError message={state?.error} /></div>
-        <div className="mt-6 flex justify-end gap-2">
-          <ButtonLink href="/enquiries">Cancel</ButtonLink>
-          <Button variant="primary" disabled={pending}>{pending ? "Saving…" : "Create enquiry"}</Button>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <ButtonLink href="/enquiries" className="h-10 w-full sm:h-9 sm:w-auto">Cancel</ButtonLink>
+          <Button variant="primary" className="h-10 w-full sm:h-9 sm:w-auto" disabled={pending}>{pending ? "Saving…" : "Create enquiry"}</Button>
         </div>
       </Card>
     </form>

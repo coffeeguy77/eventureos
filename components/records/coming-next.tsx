@@ -7,7 +7,7 @@ export function ComingNext({ title, subtitle, items, phase = "the next build" }:
   return (
     <div>
       <PageHeader title={title} subtitle={subtitle} />
-      <Card className="max-w-2xl p-6">
+      <Card className="max-w-2xl p-4 sm:p-6">
         <p className="text-[11.5px] font-semibold uppercase tracking-wide text-brand-600">Arriving in {phase}</p>
         <ul className="mt-3 space-y-2">
           {items.map((i) => (

@@ -31,7 +31,7 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
           <Lock className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
           <span><span className="font-medium text-ink">Managed in Xero</span> — changes sync from Xero. Record payments, send or void this invoice in Xero.</span>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 opacity-60">
+        <div className="mt-3 flex flex-wrap gap-2 opacity-60 [&>*]:h-10 [&>*]:flex-1 sm:[&>*]:h-8 sm:[&>*]:flex-none">
           <Button size="sm" disabled title="Managed in Xero — changes sync from Xero">Record payment</Button>
           <Button size="sm" disabled title="Managed in Xero — changes sync from Xero">Mark as sent</Button>
           <Button size="sm" disabled title="Managed in Xero — changes sync from Xero">Void</Button>
@@ -45,7 +45,7 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
   const canPay = balance > 0;
   return (
     <div className="space-y-3 px-5 pb-5">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 [&>*]:h-10 [&>*]:flex-1 sm:[&>*]:h-8 sm:[&>*]:flex-none">
         {canPay && <Button size="sm" variant={mode === "pay" ? "secondary" : "primary"} onClick={() => setMode(mode === "pay" ? "none" : "pay")}>Record payment</Button>}
         {status === "draft" && (
           <Button size="sm" disabled={sending} onClick={() => startSend(async () => setSentState(await markInvoiceSent(id)))}>
@@ -72,8 +72,8 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
           <div><Label htmlFor="pay_ref" hint="Optional">Reference</Label><Input id="pay_ref" name="reference" maxLength={120} /></div>
           <div className="sm:col-span-2"><FormError message={payState?.error} /></div>
           <div className="flex justify-end gap-2 sm:col-span-2">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setMode("none")}>Cancel</Button>
-            <Button size="sm" variant="primary" disabled={paying}>{paying ? "Recording…" : "Record payment"}</Button>
+            <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setMode("none")}>Cancel</Button>
+            <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={paying}>{paying ? "Recording…" : "Record payment"}</Button>
           </div>
         </form>
       )}
@@ -84,8 +84,8 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
           <div><Label htmlFor="void_reason">Reason</Label><Textarea id="void_reason" name="reason" rows={2} required maxLength={500} placeholder="e.g. Raised in error — replaced by INV-1012" /></div>
           <FormError message={voidState?.error} />
           <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setMode("none")}>Keep invoice</Button>
-            <Button size="sm" variant="danger" disabled={voiding}>{voiding ? "Voiding…" : "Void invoice"}</Button>
+            <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setMode("none")}>Keep invoice</Button>
+            <Button size="sm" variant="danger" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={voiding}>{voiding ? "Voiding…" : "Void invoice"}</Button>
           </div>
         </form>
       )}

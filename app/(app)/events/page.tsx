@@ -55,14 +55,14 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
   return (
     <div>
       <PageHeader title="Events" subtitle="Every booking, from first enquiry to final payment." actions={<ButtonLink href="/events/new" variant="primary">New event</ButtonLink>} />
-      <div className="mb-4 flex flex-wrap gap-1">
+      <div className="no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
         {pills.map((p) => (
-          <Link key={p.key} href={p.href} className={cn("rounded-full px-3 py-1.5 text-[12.5px] font-medium",
+          <Link key={p.key} href={p.href} className={cn("shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
             view === p.key ? "bg-ink text-white" : "bg-white text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>{p.label}</Link>
         ))}
-        <span className="mx-2 w-px self-stretch bg-line" />
+        <span className="mx-2 w-px shrink-0 self-stretch bg-line" />
         {EVENT_STATUS_ORDER.map((s) => (
-          <Link key={s} href={`/events?status=${s}`} className={cn("rounded-full px-3 py-1.5 text-[12.5px] font-medium",
+          <Link key={s} href={`/events?status=${s}`} className={cn("shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
             sp.status === s ? "bg-ink text-white" : "text-ink-muted hover:bg-white hover:text-ink")}>{EVENT_STATUS[s].label}</Link>
         ))}
       </div>
@@ -72,7 +72,34 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
             filters={[{ key: "assignee", label: "Lead", options: members.map((m) => ({ value: m.id, label: m.full_name ?? m.email })) }]} />
         </div>
         {rows.length === 0 ? <EmptyState title="No events here" /> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {rows.map((e) => {
+              const s = EVENT_STATUS[e.status as EventStatus];
+              const balance = e.invoices.reduce((a, i) => a + (i.status === "void" ? 0 : Number(i.balance)), 0);
+              const overdue = e.invoices.some((i) => i.status === "overdue");
+              return (
+                <li key={e.id}>
+                  <Link href={`/events/${e.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13.5px] font-medium text-ink">{e.name}</div>
+                      <div className="truncate text-[12.5px] text-ink-muted">{e.customer?.name ?? "—"}{e.venue ? ` · ${e.venue}` : ""}</div>
+                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                        {fmtDate(e.event_date)} · {relativeDay(e.event_date, today)}{e.start_time ? ` · ${timeRange(e.start_time, e.finish_time)}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge tone={s.tone} dot>{s.label}</Badge>
+                      {e.invoices.length > 0 && (
+                        <span className={cn("tabular text-[12.5px]", overdue ? "font-medium text-rose-700" : "text-ink")}>{money(balance, org.currency)}</span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1080px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
@@ -122,6 +149,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
               </tbody>
             </table>
           </div>
+          </>
         )}
         <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} event{rows.length === 1 ? "" : "s"}</div>
       </Card>

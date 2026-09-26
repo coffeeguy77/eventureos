@@ -54,14 +54,14 @@ export function QuickAdd({ catalogue, currency, onPick, disabled }: {
         disabled={disabled || catalogue.length === 0}
         title={catalogue.length === 0 ? "Items you quote are remembered here for next time" : "Add an item you've quoted before"}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-ink-muted md:h-8 hover:bg-zinc-100 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
         aria-expanded={open}
         aria-haspopup="listbox"
       >
         <Zap className="h-3.5 w-3.5" /> Quick add
       </button>
       {open && (
-        <div className="absolute left-0 top-9 z-30 w-[340px] max-w-[calc(100vw-48px)] overflow-hidden rounded-xl border border-line bg-white shadow-pop">
+        <div className="absolute left-0 top-full z-30 mt-1 w-[340px] max-w-[calc(100vw-48px)] overflow-hidden rounded-xl border border-line bg-white shadow-pop">
           <div className="relative border-b border-line">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
             <input
@@ -89,7 +89,7 @@ export function QuickAdd({ catalogue, currency, onPick, disabled }: {
                 aria-selected={i === active}
                 onMouseEnter={() => setActive(i)}
                 onMouseDown={(e) => { e.preventDefault(); pick(c); }}
-                className={cn("flex cursor-pointer items-start justify-between gap-3 px-3 py-2", i === active && "bg-brand-50")}
+                className={cn("flex cursor-pointer items-start justify-between gap-3 px-3 py-3 md:py-2", i === active && "bg-brand-50")}
               >
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-ink">

@@ -69,14 +69,14 @@ export default async function ReviewPage() {
         subtitle="Emails that might be enquiries, possible duplicate customers from Gmail and Xero, and follow-ups that are slipping. Nothing merges or gets created until you choose."
       />
 
-      <nav className="no-scrollbar mb-6 flex gap-2 overflow-x-auto text-[12.5px]">
+      <nav className="no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 text-[12.5px] sm:mx-0 sm:px-0">
         {[
           ["#suggestions", "Suggestions", threads.length + reviewEnquiries.length],
           ["#follow-ups", "Follow-ups", followUps.length],
           ["#match-review", "Xero match review", xero.length],
           ["#import-review", "Gmail import review", gmailContacts.length + gmailEnquiries.length],
         ].map(([href, label, n]) => (
-          <a key={href as string} href={href as string} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-1.5 font-medium text-ink ring-1 ring-inset ring-line hover:bg-zinc-50">
+          <a key={href as string} href={href as string} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2 font-medium sm:py-1.5 text-ink ring-1 ring-inset ring-line hover:bg-zinc-50">
             {label} <span className={cn("rounded-full px-1.5 text-[10.5px] font-semibold", Number(n) ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint")}>{n}</span>
           </a>
         ))}
@@ -92,10 +92,10 @@ export default async function ReviewPage() {
           ) : (
             <ul className="divide-y divide-line border-t border-line">
               {reviewEnquiries.map((e) => (
-                <li key={e.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:px-5">
                   <Badge tone="amber">Needs review</Badge>
-                  <Link href={`/enquiries/${e.id}`} className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink hover:text-brand-700">ENQ-{e.number} · {e.title}</Link>
-                  <span className="text-[12px] text-ink-muted">{e.contact_name ?? e.contact_email}{e.classification_confidence != null ? ` · ${Math.round(e.classification_confidence * 100)}% sure` : ""}</span>
+                  <Link href={`/enquiries/${e.id}`} className="min-w-0 flex-1 basis-40 truncate text-[13px] font-medium text-ink hover:text-brand-700">ENQ-{e.number} · {e.title}</Link>
+                  <span className="min-w-0 break-words text-[12px] text-ink-muted">{e.contact_name ?? e.contact_email}{e.classification_confidence != null ? ` · ${Math.round(e.classification_confidence * 100)}% sure` : ""}</span>
                   <span className="text-[11.5px] text-ink-faint">{relative(e.received_at)}</span>
                   <Link href={`/enquiries/${e.id}`} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Open <ArrowRight className="h-3.5 w-3.5" /></Link>
                 </li>
@@ -110,19 +110,19 @@ export default async function ReviewPage() {
                 ].filter(Boolean) as string[];
                 const who = (x.name as string | null) ?? first?.from_name ?? (x.email as string | null) ?? first?.from_email ?? t.participants[0] ?? "Unknown sender";
                 return (
-                  <li key={t.id} className="px-5 py-4">
+                  <li key={t.id} className="px-4 py-4 sm:px-5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Mail className="h-4 w-4 text-ink-faint" />
-                      <span className="text-[13px] font-semibold text-ink">{t.subject ?? "(no subject)"}</span>
+                      <Mail className="h-4 w-4 shrink-0 text-ink-faint" />
+                      <span className="min-w-0 break-words text-[13px] font-semibold text-ink">{t.subject ?? "(no subject)"}</span>
                       <Badge tone={c.tone}>{c.label}{t.classification_confidence != null ? ` · ${Math.round(t.classification_confidence * 100)}%` : ""}</Badge>
                       <span className="text-[11.5px] text-ink-faint">{t.classified_by === "ai" ? "AI" : t.classified_by === "user" ? "You" : "Rules"}</span>
                       <span className="ml-auto text-[11.5px] text-ink-faint" title={t.last_inbound_at ? fmtDateTime(t.last_inbound_at, org.timezone) : undefined}>{relative(t.last_inbound_at)}</span>
                     </div>
-                    <p className="mt-1 text-[12.5px] text-ink-muted">From {who}{t.customer ? <> · existing customer <Link href={`/clients/${t.customer.id}`} className="text-brand-600 hover:text-brand-700">{t.customer.name}</Link></> : ""}</p>
-                    {first?.snippet && <p className="mt-1.5 line-clamp-2 text-[12.5px] text-ink">{first.snippet}</p>}
+                    <p className="mt-1 break-words text-[12.5px] text-ink-muted">From {who}{t.customer ? <> · existing customer <Link href={`/clients/${t.customer.id}`} className="text-brand-600 hover:text-brand-700">{t.customer.name}</Link></> : ""}</p>
+                    {first?.snippet && <p className="mt-1.5 line-clamp-2 break-words text-[12.5px] text-ink">{first.snippet}</p>}
                     {chips.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{chips.map((ch) => <span key={ch} className="rounded-full bg-brand-50 px-2 py-0.5 text-[11.5px] text-brand-700">{ch}</span>)}</div>}
                     {t.classification_reasons?.length > 0 && (
-                      <ul className="mt-2 list-disc pl-5 text-[12px] text-ink-faint">{t.classification_reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul>
+                      <ul className="mt-2 list-disc break-words pl-5 text-[12px] text-ink-faint">{t.classification_reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul>
                     )}
                     <div className="mt-3">
                       <SuggestionForm threadId={t.id} values={{
@@ -149,11 +149,11 @@ export default async function ReviewPage() {
             <ul className="divide-y divide-line border-t border-line">
               {followUps.map((f, i) => (
                 <li key={i}>
-                  <Link href={f.href} className="flex items-start gap-3 px-5 py-3 hover:bg-zinc-50/70">
+                  <Link href={f.href} className="flex min-h-[56px] items-start gap-3 px-4 py-3 hover:bg-zinc-50/70 active:bg-zinc-50 sm:px-5">
                     <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", f.urgency === "high" ? "bg-rose-500" : "bg-amber-400")} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-medium text-ink">{f.title}</p>
-                      <p className="text-[12px] text-ink-muted">{f.detail}</p>
+                      <p className="break-words text-[12px] text-ink-muted">{f.detail}</p>
                     </div>
                     <Badge tone={f.kind === "quote_no_reply" ? "brand" : f.kind === "email_no_reply" ? "blue" : "amber"}>
                       {f.kind === "quote_no_reply" ? "Quote" : f.kind === "email_no_reply" ? "Email" : "Payment"}
@@ -226,7 +226,7 @@ function CandidateItem({ c, existing, customers, manager, incoming, incomingLabe
   const band = score != null ? matchBand(score) : "none";
   const tone = band === "certain" ? "green" : band === "likely" ? "blue" : band === "possible" ? "amber" : "neutral";
   return (
-    <li className="px-5 py-4">
+    <li className="px-4 py-4 sm:px-5">
       {heading && <div className="mb-2 flex flex-wrap items-center gap-2">{heading}</div>}
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
         <Side label={incomingLabel} rows={incoming} />
@@ -248,7 +248,7 @@ function CandidateItem({ c, existing, customers, manager, incoming, incomingLabe
           <div className="flex items-center rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-[12.5px] text-ink-muted">No existing customer looks like this one.</div>
         )}
       </div>
-      {c.reasons?.length > 0 && <p className="mt-2 text-[12px] text-ink-faint">Why: {c.reasons.join(" · ")}</p>}
+      {c.reasons?.length > 0 && <p className="mt-2 break-words text-[12px] text-ink-faint">Why: {c.reasons.join(" · ")}</p>}
       <div className="mt-3">
         <CandidateActions id={c.id} suggestedId={c.suggested_customer_id} customers={customers} canResolve={manager} mergeLabel={mergeLabel} separateLabel={separateLabel} />
       </div>
@@ -262,7 +262,7 @@ function Side({ label, rows, href }: { label: string; rows: [string, string | nu
       <p className="mb-1.5 flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-ink-faint">
         {label}{href && <Link href={href} className="normal-case tracking-normal text-brand-600 hover:text-brand-700">Open</Link>}
       </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12.5px]">
         {rows.filter(([, v]) => v).map(([k, v]) => (<Fragment key={k}><dt className="text-ink-faint">{k}</dt><dd className="min-w-0 truncate text-ink">{v}</dd></Fragment>))}
       </dl>
     </div>

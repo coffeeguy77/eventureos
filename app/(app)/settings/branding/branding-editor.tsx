@@ -69,16 +69,16 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
                     type="color"
                     value={shown}
                     onChange={(e) => setColour(e.target.value.toUpperCase())}
-                    className="h-9 w-14 cursor-pointer rounded-lg border border-line-strong bg-white p-1"
+                    className="h-10 w-14 cursor-pointer rounded-lg border border-line-strong bg-white p-1 sm:h-9"
                   />
                 </div>
-                <div className="w-32">
+                <div className="min-w-0 flex-1 sm:w-32 sm:flex-none">
                   <Label htmlFor="brand_colour">Hex</Label>
                   <Input id="brand_colour" name="brand_colour" value={colour} maxLength={7}
                     onChange={(e) => setColour(e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`)}
                     className="font-mono uppercase" />
                 </div>
-                <SubmitButton pendingLabel="Saving…">Save colour</SubmitButton>
+                <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">Save colour</SubmitButton>
               </div>
               <ContrastCheck colour={shown} />
             </ActionForm>
@@ -183,11 +183,11 @@ function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) 
           <div className="flex gap-2">
             <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" id="logo-file"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
-            <Button type="button" size="sm" disabled={pending} onClick={() => input.current?.click()}>
+            <Button type="button" size="sm" disabled={pending} onClick={() => input.current?.click()} className="h-10 sm:h-8">
               <ImageUp className="h-3.5 w-3.5" /> {pending ? "Uploading…" : org.logoUrl ? "Replace logo" : "Upload logo"}
             </Button>
             {org.logoUrl && (
-              <Button type="button" size="sm" variant="ghost" disabled={pending}
+              <Button type="button" size="sm" variant="ghost" disabled={pending} className="h-10 sm:h-8"
                 onClick={() => {
                   if (!window.confirm("Remove your logo? Your business name will show instead.")) return;
                   setError(null);
@@ -217,7 +217,7 @@ function PortalPreview({ org, colour, onBrand }: { org: BrandingOrg; colour: str
             <LogoMark org={org} size={28} />
             {!org.logoUrl && <span className="truncate text-[13.5px] font-semibold text-ink">{org.name}</span>}
           </div>
-          <span className="text-[12px] text-ink-muted">emma@example.com</span>
+          <span className="shrink-0 text-[12px] text-ink-muted">emma@example.com</span>
         </div>
         <div className="px-4 py-4" style={{ background: colour, color: onBrand }}>
           <div className="text-[12px] opacity-80">Your booking with {org.name}</div>
@@ -239,13 +239,13 @@ function QuotePreview({ org, colour }: { org: BrandingOrg; colour: string }) {
   return (
     <div>
       <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Quote header preview</div>
-      <div className="rounded-xl border border-line bg-white px-5 py-4 shadow-card">
+      <div className="rounded-xl border border-line bg-white px-4 py-4 shadow-card sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <LogoMark org={org} size={36} />
             {!org.logoUrl && <div className="mt-1.5 text-[14px] font-semibold text-ink">{org.name}</div>}
           </div>
-          <div className="text-right text-[11.5px] leading-relaxed text-ink-muted">
+          <div className="min-w-0 break-words text-right text-[11.5px] leading-relaxed text-ink-muted">
             {org.logoUrl && <div className="font-medium text-ink">{org.name}</div>}
             {org.address && <div className="whitespace-pre-line">{org.address}</div>}
             {org.contactEmail && <div>{org.contactEmail}</div>}

@@ -88,7 +88,7 @@ export function QuoteAttachments({ quoteId, orgId, initial }: { quoteId: string;
         <Upload className="h-4 w-4 text-ink-faint" />
         <p className="text-[12.5px] text-ink-muted">
           Drop files here or{" "}
-          <button type="button" onClick={() => fileInput.current?.click()} className="font-medium text-brand-700 hover:underline">choose files</button>
+          <button type="button" onClick={() => fileInput.current?.click()} className="py-2 font-medium text-brand-700 hover:underline sm:py-0">choose files</button>
         </p>
         <p className="text-[11.5px] text-ink-faint">Menus, floor plans, photos — up to 25 MB each. Shared with the customer.</p>
         <input ref={fileInput} type="file" multiple className="sr-only" onChange={(e) => e.target.files && upload(e.target.files)} aria-label="Attach files" />
@@ -102,16 +102,16 @@ export function QuoteAttachments({ quoteId, orgId, initial }: { quoteId: string;
             </li>
           ))}
           {docs.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 px-3 py-2">
+            <li key={d.id} className="flex items-center gap-2 px-3 py-2 sm:gap-3">
               {d.mime_type?.startsWith("image/") ? <Paperclip className="h-4 w-4 shrink-0 text-ink-faint" /> : <FileText className="h-4 w-4 shrink-0 text-ink-faint" />}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] text-ink">{d.name}</p>
                 <p className="text-[11.5px] text-ink-faint">{[size(d.size_bytes), `added ${relative(d.created_at)}`].filter(Boolean).join(" · ")}</p>
               </div>
-              <button type="button" onClick={() => download(d)} disabled={busyId === d.id} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label={`Download ${d.name}`} title="Download">
+              <button type="button" onClick={() => download(d)} disabled={busyId === d.id} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-ink-faint hover:bg-zinc-100 hover:text-ink sm:h-7 sm:w-7" aria-label={`Download ${d.name}`} title="Download">
                 {busyId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               </button>
-              <button type="button" onClick={() => remove(d)} disabled={busyId === d.id} className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-faint hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove ${d.name}`} title="Remove">
+              <button type="button" onClick={() => remove(d)} disabled={busyId === d.id} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-ink-faint hover:bg-rose-50 hover:text-rose-700 sm:h-7 sm:w-7" aria-label={`Remove ${d.name}`} title="Remove">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </li>

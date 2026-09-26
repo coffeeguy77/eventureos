@@ -15,7 +15,7 @@ export function EventStatusSelect({ id, status }: { id: string; status: EventSta
   return (
     <select aria-label="Event status" disabled={pending} value={status}
       onChange={(e) => start(() => setEventStatus(id, e.target.value as EventStatus))}
-      className={cn(inputClass, "h-9 w-auto py-0 pr-8 text-[13px] font-medium")}>
+      className={cn(inputClass, "h-10 w-full py-0 pr-8 text-[13px] font-medium sm:h-9 sm:w-auto")}>
       {EVENT_STATUS_ORDER.map((s) => <option key={s} value={s}>{EVENT_STATUS[s].label}</option>)}
     </select>
   );
@@ -36,7 +36,7 @@ export function EventDetailsEditor({ event, members, view }: {
   if (!editing) {
     return (
       <div className="relative">
-        <button onClick={() => setEditing(true)} className="absolute -top-10 right-5 inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[12.5px] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
         {view}
@@ -71,8 +71,8 @@ export function EventDetailsEditor({ event, members, view }: {
       <div className="sm:col-span-2"><Label htmlFor="next_action_due">Due</Label><DateTimeField id="next_action_due" name="next_action_due" defaultISO={event.next_action_due} /></div>
       <div className="sm:col-span-6"><FormError message={state?.error} /></div>
       <div className="flex justify-end gap-2 sm:col-span-6">
-        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
-        <Button size="sm" variant="primary" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
+        <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setEditing(false)}>Cancel</Button>
+        <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Saving…" : "Save changes"}</Button>
       </div>
     </form>
   );

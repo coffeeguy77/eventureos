@@ -3,9 +3,9 @@ import { Wordmark } from "@/components/shell/sidebar";
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-[1fr_1.05fr]">
-      <div className="flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
+      <div className="pt-safe pb-safe flex flex-col justify-center px-5 py-10 sm:px-12 sm:py-12 lg:px-20">
         <div className="mx-auto w-full max-w-[380px]">
-          <div className="mb-10">
+          <div className="mb-8 sm:mb-10">
             <Wordmark height={30} />
           </div>
           {children}

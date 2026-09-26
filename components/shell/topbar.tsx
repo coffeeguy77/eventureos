@@ -7,6 +7,7 @@ import { Bell, Check, ChevronDown, Plus, Search, LogOut } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { relative } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
+import { Logo } from "@/components/shell/sidebar";
 import { globalSearch, markAllNotificationsRead, signOut, switchOrganisation, type SearchResult } from "@/app/(app)/shell-actions";
 
 export interface TopbarProps {
@@ -29,13 +30,16 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => 
 
 export function Topbar(props: TopbarProps) {
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-white/85 px-4 backdrop-blur lg:px-8">
-      <GlobalSearch />
-      <div className="ml-auto flex items-center gap-2">
-        <QuickCreate />
-        <Notifications items={props.notifications} unread={props.unread} />
-        <OrgSwitcher orgs={props.orgs} currentOrgId={props.currentOrgId} />
-        <UserMenu user={props.user} />
+    <header className="pt-safe sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur">
+      <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
+        <Link href="/dashboard" aria-label="EventureOS home" className="shrink-0 lg:hidden"><Logo size={30} /></Link>
+        <GlobalSearch />
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <QuickCreate />
+          <Notifications items={props.notifications} unread={props.unread} />
+          <div className="hidden lg:block"><OrgSwitcher orgs={props.orgs} currentOrgId={props.currentOrgId} /></div>
+          <div className="hidden lg:block"><UserMenu user={props.user} /></div>
+        </div>
       </div>
     </header>
   );
@@ -102,7 +106,7 @@ function GlobalSearch() {
   }
 
   return (
-    <div ref={box} className="relative w-full max-w-[520px]">
+    <div ref={box} className="relative min-w-0 flex-1 lg:max-w-[520px]">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
       <input
         ref={input}
@@ -115,12 +119,12 @@ function GlobalSearch() {
           if (e.key === "Enter" && flat[active]) go(flat[active]);
           if (e.key === "Escape") setOpen(false);
         }}
-        placeholder="Search customers, events, emails, quotes, invoices…"
+        placeholder="Search clients, events, quotes…"
         className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-14 text-[13px] text-ink placeholder:text-ink-faint focus:border-brand-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
       />
       <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-white px-1.5 text-[10.5px] font-medium text-ink-faint sm:block">⌘K</kbd>
       {open && q.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-11 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop">
+        <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop sm:absolute sm:inset-x-0 sm:top-11">
           {error && <p className="px-3 py-3 text-[12.5px] text-rose-700">{error}</p>}
           {!error && flat.length === 0 && (
             <p className="px-3 py-3 text-[12.5px] text-ink-muted">{pending ? "Searching…" : `No results for “${q}”`}</p>
@@ -160,7 +164,9 @@ function Menu({ trigger, children, align = "right", width = 240 }: {
     <div ref={ref} className="relative">
       <div onClick={() => setOpen((o) => !o)}>{trigger(open)}</div>
       {open && (
-        <div style={{ width }} className={cn("absolute top-11 z-40 rounded-xl border border-line bg-white p-1.5 shadow-pop", align === "right" ? "right-0" : "left-0")}>
+        <div style={{ "--menu-w": `${width}px` } as React.CSSProperties}
+          className={cn("fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[75vh] overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop sm:absolute sm:inset-x-auto sm:top-11 sm:w-[var(--menu-w)]",
+            align === "right" ? "sm:right-0" : "sm:left-0")}>
           {children(() => setOpen(false))}
         </div>
       )}

@@ -13,7 +13,7 @@ export function NewEventForm({ customers, members, me, defaultCustomer }: {
   const [state, action, pending] = useActionState(createEvent, undefined);
   return (
     <form action={action}>
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <Label htmlFor="customer_id">Customer</Label>
@@ -39,9 +39,9 @@ export function NewEventForm({ customers, members, me, defaultCustomer }: {
           </div>
         </div>
         <div className="mt-6"><FormError message={state?.error} /></div>
-        <div className="mt-6 flex justify-end gap-2">
-          <ButtonLink href="/events">Cancel</ButtonLink>
-          <Button variant="primary" disabled={pending}>{pending ? "Creating…" : "Create event"}</Button>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <ButtonLink href="/events" className="h-10 w-full sm:h-9 sm:w-auto">Cancel</ButtonLink>
+          <Button variant="primary" className="h-10 w-full sm:h-9 sm:w-auto" disabled={pending}>{pending ? "Creating…" : "Create event"}</Button>
         </div>
       </Card>
     </form>

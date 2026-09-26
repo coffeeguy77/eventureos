@@ -63,13 +63,13 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
 
   return (
     <Drawer onClose={onClose} title={<h2 className="text-[16px] font-semibold text-ink">Add to calendar</h2>}>
-      <form action={action} className="space-y-4 px-5 py-4">
+      <form action={action} className="space-y-4 px-4 pt-4 sm:px-5 sm:py-4">
         <div>
           <Label>Type</Label>
           <div className="flex flex-wrap gap-1.5" role="radiogroup">
             {KIND_ORDER.map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
-                className={cn("rounded-full px-3 py-1.5 text-[12.5px] font-medium ring-1 ring-inset",
+                className={cn("rounded-full px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset sm:py-1.5",
                   kind === k ? "bg-ink text-white ring-ink" : "bg-white text-ink-muted ring-line-strong hover:text-ink")}>
                 {k === "event" ? "Event booking" : KIND_LABEL[k]}
               </button>
@@ -105,7 +105,7 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
           <Input id="cal_title" name="title" placeholder={titlePlaceholder} required={!ev} maxLength={200} />
         </div>
 
-        <label className="flex items-center gap-2 text-[13px] text-ink">
+        <label className="flex min-h-10 items-center gap-2 text-[13px] text-ink sm:min-h-0">
           <input type="checkbox" name="all_day" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-4 w-4 rounded border-line-strong text-brand-500" />
           All day
         </label>
@@ -136,9 +136,9 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
         </div>
 
         <FormError message={state?.error} />
-        <div className="flex justify-end gap-2 border-t border-line pt-4">
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={pending || !resources.length}>{pending ? "Adding…" : "Add to calendar"}</Button>
+        <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-line bg-white px-4 py-3 sm:static sm:mx-0 sm:px-0 sm:pb-0 sm:pt-4">
+          <Button type="button" variant="ghost" className="h-10 flex-1 sm:h-9 sm:flex-none" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none" disabled={pending || !resources.length}>{pending ? "Adding…" : "Add to calendar"}</Button>
         </div>
       </form>
     </Drawer>

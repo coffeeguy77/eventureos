@@ -171,7 +171,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       <PageHeader title="CRM" subtitle="Your pipeline from first enquiry to confirmed booking. Drag a card to move it — every move is recorded."
         actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>} />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="no-scrollbar -mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <Segmented items={[
           { href: href({ view: "enquiries" }), label: "Enquiry pipeline", active: view === "enquiries" },
           { href: href({ view: "events" }), label: "Events by status", active: view === "events" },
@@ -203,10 +203,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
 function Segmented({ items }: { items: { href: string; label: string; active: boolean }[] }) {
   return (
-    <nav className="inline-flex rounded-lg bg-zinc-100 p-0.5">
+    <nav className="inline-flex shrink-0 rounded-lg bg-zinc-100 p-0.5">
       {items.map((i) => (
         <Link key={i.label} href={i.href} scroll={false} aria-current={i.active ? "page" : undefined}
-          className={cn("whitespace-nowrap rounded-md px-3 py-1.5 text-[12.5px] font-medium", i.active ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+          className={cn("whitespace-nowrap rounded-md px-3 py-2 text-[12.5px] font-medium sm:py-1.5", i.active ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
           {i.label}
         </Link>
       ))}

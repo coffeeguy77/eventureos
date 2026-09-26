@@ -25,7 +25,7 @@ export function SignupForm() {
         <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
       </div>
       <FormError message={state?.error} />
-      <Button variant="primary" className="w-full" disabled={pending}>{pending ? "Creating account…" : "Create account"}</Button>
+      <Button variant="primary" className="h-11 w-full sm:h-9" disabled={pending}>{pending ? "Creating account…" : "Create account"}</Button>
     </form>
   );
 }

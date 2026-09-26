@@ -220,22 +220,22 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
       {/* One filter row scopes everything below it */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <nav className="inline-flex rounded-lg bg-zinc-100 p-0.5" aria-label="Report period">
+        <nav className="no-scrollbar inline-flex max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-0.5" aria-label="Report period">
           {PRESETS.map((p) => (
             <Link key={p.key} href={p.key === "3m" ? "/reports" : `/reports?period=${p.key}`} scroll={false} aria-current={period === p.key ? "page" : undefined}
-              className={cn("whitespace-nowrap rounded-md px-3 py-1.5 text-[12.5px] font-medium", period === p.key ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+              className={cn("shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-[12.5px] font-medium sm:py-1.5", period === p.key ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
               {p.label}
             </Link>
           ))}
         </nav>
-        <form action="/reports" className={cn("flex flex-wrap items-center gap-2 rounded-lg px-1 py-0.5", period === "custom" && "bg-brand-50/60 ring-1 ring-inset ring-brand-100")}>
+        <form action="/reports" className={cn("flex w-full items-center gap-2 rounded-lg px-1 py-0.5 sm:w-auto sm:flex-wrap", period === "custom" && "bg-brand-50/60 ring-1 ring-inset ring-brand-100")}>
           <input type="hidden" name="period" value="custom" />
           <label className="sr-only" htmlFor="from">From</label>
-          <input id="from" name="from" type="date" defaultValue={from} max={today} className={cn(inputClass, "h-8 w-[140px] py-0 text-[12.5px]")} />
-          <span className="text-[12px] text-ink-faint">to</span>
+          <input id="from" name="from" type="date" defaultValue={from} max={today} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[12.5px] sm:h-8 sm:w-[140px] sm:flex-none")} />
+          <span className="shrink-0 text-[12px] text-ink-faint">to</span>
           <label className="sr-only" htmlFor="to">To</label>
-          <input id="to" name="to" type="date" defaultValue={to} className={cn(inputClass, "h-8 w-[140px] py-0 text-[12.5px]")} />
-          <Button size="sm" variant={period === "custom" ? "primary" : "secondary"}>Apply</Button>
+          <input id="to" name="to" type="date" defaultValue={to} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[12.5px] sm:h-8 sm:w-[140px] sm:flex-none")} />
+          <Button size="sm" variant={period === "custom" ? "primary" : "secondary"} className="h-10 shrink-0 sm:h-8">Apply</Button>
         </form>
         <span className="text-[12px] text-ink-faint">{rangeLabel}</span>
       </div>
@@ -330,7 +330,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </p>
           ) : (
             <>
-              <div className="mb-4 grid grid-cols-3 gap-3">
+              <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Stat label="Median" value={med == null ? "—" : hours(med)} />
                 <Stat label="Within 4 hours" value={pct(responseHours.filter((h) => h < 4).length, responseHours.length)} />
                 <Stat label="Still waiting" value={unanswered} alert={unanswered > 0} sub="New, no reply yet" />
