@@ -38,7 +38,8 @@ export interface GmailSettings extends EmailFilterSettings {
   import_last_run_at?: string;
 }
 
-const MAX_MESSAGES_PER_RUN = 150;
+const MAX_MESSAGES_PER_RUN = 200;
+const FETCH_CONCURRENCY = 6;
 const TIME_BUDGET_MS = 45_000;
 
 export interface GmailSyncResult { processed: number; skipped: number; filtered: number; enquiries: number; review: number; partial: boolean; message: string }
@@ -175,12 +176,17 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
 
     // 2. Fetch + parse (oldest first so threads build in order)
     const parsed: ParsedMessage[] = [];
+    // Download a few at a time (well inside Gmail's per-user quota) and leave half the time for processing
     let rateLimited = false;
-    for (const r of todo.slice(0, MAX_MESSAGES_PER_RUN)) {
-      if (Date.now() - started > TIME_BUDGET_MS) break;
-      try { parsed.push(parseMessage(await getMessage(ctx, r.id))); }
-      catch (e) {
-        if (e instanceof RateLimited) { rateLimited = true; break; } // keep what we have; the rest comes next sync
+    const batch = todo.slice(0, MAX_MESSAGES_PER_RUN);
+    const FETCH_BUDGET_MS = TIME_BUDGET_MS / 2;
+    for (let i = 0; i < batch.length && !rateLimited; i += FETCH_CONCURRENCY) {
+      if (Date.now() - started > FETCH_BUDGET_MS) break;
+      const got = await Promise.allSettled(batch.slice(i, i + FETCH_CONCURRENCY).map((r) => getMessage(ctx, r.id)));
+      for (const g of got) {
+        if (g.status === "fulfilled") { parsed.push(parseMessage(g.value)); continue; }
+        const e = g.reason;
+        if (e instanceof RateLimited) { rateLimited = true; continue; } // keep what we have; the rest comes next sync
         if (!(e instanceof ApiError && e.status === 404)) throw e; // 404 = deleted since listed
       }
     }
@@ -189,7 +195,10 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
 
     // 3. Process
     const cache = new Map<string, SenderMatch>();
+    let processedCount = 0;
     for (const pm of parsed) {
+      if (Date.now() - started > TIME_BUDGET_MS + 8_000) { result.partial = true; break; } // leave the rest for the next sync
+      processedCount++;
       const out = await ingestMessage(ctx, pm, cache);
       if (out.filtered) { result.filtered++; skippedIds.add(pm.gmailId); continue; }
       result.processed++;
@@ -207,7 +216,7 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
       (result.enquiries ? `, ${result.enquiries} enquir${result.enquiries === 1 ? "y" : "ies"} created` : "") +
       (result.review ? `, ${result.review} need review` : "") +
       (result.filtered ? `, ${result.filtered} skipped by your email filters` : "") +
-      (result.partial ? `. ${todo.length - parsed.length} more will be fetched on the next sync${rateLimited ? " (Gmail asked us to slow down)" : ""}.` : ".");
+      (result.partial ? `. ${todo.length - processedCount} more will be fetched on the next sync${rateLimited ? " (Gmail asked us to slow down)" : ""}.` : ".");
     await finishSyncLog(ctx, logId, result.partial ? "partial" : "success", result.processed, result.message);
     if (result.processed) {
       await logIntegration(ctx, { action: "email.synced", entityType: "integration", entityId: ctx.integration.id, summary: result.message });

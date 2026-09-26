@@ -14,7 +14,7 @@ import { errMessage, likeExact, saveIntegrationSettings } from "@/lib/integratio
 import { buildContext, runProviderSync } from "@/lib/integrations/sync-runner";
 import { importHistoryForContact, selectTenant } from "@/lib/integrations/xero-sync";
 
-export type ActionState = { error?: string; ok?: string } | undefined;
+export type ActionState = { error?: string; ok?: string; more?: boolean } | undefined;
 
 const BASE = "/settings/integrations";
 const str = (v: FormDataEntryValue | null) => String(v ?? "").trim() || null;
@@ -48,7 +48,7 @@ export async function syncNow(provider: string, _prev: ActionState, form?: FormD
     const ctx = await buildContext(supabase, "user", org.id, provider, user.id);
     const r = await runProviderSync(ctx, { full: form?.get("full") === "1" });
     revalidateAll(provider);
-    return r.ok ? { ok: r.message } : { error: r.message };
+    return r.ok ? { ok: r.message, more: /more will be fetched/i.test(r.message) && !/slow down/i.test(r.message) } : { error: r.message };
   } catch (e) {
     return { error: errMessage(e) };
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select, Textarea, inputClass } from "@/components/ui/form";
@@ -19,13 +19,24 @@ function Result({ state }: { state: ActionState }) {
 
 export function SyncNowButton({ provider, label = "Sync now", full = false, variant = "secondary" }: { provider: string; label?: string; full?: boolean; variant?: "secondary" | "primary" | "ghost" }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(syncNow.bind(null, provider), undefined);
+  const form = useRef<HTMLFormElement>(null);
+  const [runs, setRuns] = useState(0);
+  const MAX_AUTO_RUNS = 15;
+  // A big first sync is done in batches: keep going automatically until everything is fetched
+  useEffect(() => {
+    if (state?.more && !pending && runs < MAX_AUTO_RUNS) {
+      const t = setTimeout(() => { setRuns((n) => n + 1); form.current?.requestSubmit(); }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [state, pending, runs]);
+  const continuing = !!state?.more && runs > 0 && runs < MAX_AUTO_RUNS;
   return (
-    <form action={action} className="contents">
+    <form ref={form} action={action} className="contents" onSubmit={(e) => { if (!e.nativeEvent || (e.nativeEvent as SubmitEvent).submitter) setRuns(0); }}>
       {full && <input type="hidden" name="full" value="1" />}
       <Button size="sm" variant={variant} disabled={pending} className="h-10 sm:h-8">
-        <RefreshCw className={cn("h-3.5 w-3.5", pending && "animate-spin")} /> {pending ? "Syncing…" : label}
+        <RefreshCw className={cn("h-3.5 w-3.5", (pending || continuing) && "animate-spin")} /> {pending ? (runs ? `Syncing batch ${runs + 1}…` : "Syncing…") : label}
       </Button>
-      {state && <div className="basis-full"><Result state={state} /></div>}
+      {state && <div className="basis-full"><Result state={state.more && runs < MAX_AUTO_RUNS ? { ok: `${state.ok} Continuing automatically…` } : state} /></div>}
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { RateLimited } from "@/lib/integrations/runtime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncGmail } from "@/lib/integrations/gmail-sync";
 import { syncGoogleCalendar } from "@/lib/integrations/google-calendar";
@@ -30,6 +31,8 @@ export async function runProviderSync(ctx: SyncContext, opts: { full?: boolean }
     return { provider, ok: true, message: r.message };
   } catch (e) {
     const message = errMessage(e);
+    // Being asked to slow down isn't a failure: keep the connection healthy and carry on next time
+    if (e instanceof RateLimited) return { provider, ok: true, message };
     await ctx.db.from("integrations").update({
       status: "error", last_error: e instanceof ReconnectRequired ? `Reconnect needed: ${message}` : message.slice(0, 1000),
       last_sync_status: "error", last_sync_at: new Date().toISOString(),
