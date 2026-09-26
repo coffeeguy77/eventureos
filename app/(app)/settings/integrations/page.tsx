@@ -95,7 +95,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <ul className="space-y-3 px-4 pb-5 text-[12.5px] sm:px-5">
             <SetupLine ok={env.ai} title={env.ai ? `AI classification on (${env.aiModel ?? "claude-haiku-4-5-20251001"})` : "AI classification off — rules engine in use"}
               detail={env.ai ? "New emails are classified by Claude, with the rules engine as a fallback." : <>Add <Code>ANTHROPIC_API_KEY</Code> (optional <Code>AI_MODEL</Code>) to let Claude classify emails and extract event details. The built-in rules already handle website forms, replies, quotes, suppliers and spam.</>} />
-            <SetupLine ok={env.serviceRole && env.cronSecret} title={env.serviceRole && env.cronSecret ? "Background sync every 15 minutes" : "Background sync is off"}
+            <SetupLine ok={env.serviceRole && env.cronSecret} title={env.serviceRole && env.cronSecret ? "Background sync once a day, overnight" : "Background sync is off"}
               detail={env.serviceRole && env.cronSecret ? "Gmail, Google Calendar and Xero sync automatically." : <>Add {!env.cronSecret && <><Code>CRON_SECRET</Code>{!env.serviceRole && " and "}</>}{!env.serviceRole && <Code>SUPABASE_SERVICE_ROLE_KEY</Code>} to sync automatically. Until then use <strong>Sync now</strong>.</>} />
             <SetupLine ok={env.stateSecret} title={env.stateSecret ? "Secure connection signing ready" : "Connecting is disabled"}
               detail={env.stateSecret ? "OAuth sign-in responses are verified." : <>Add <Code>OAUTH_STATE_SECRET</Code> (or <Code>CRON_SECRET</Code>) — a long random string used to verify sign-in responses.</>} />

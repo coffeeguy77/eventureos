@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * Background sync for Gmail, Google Calendar and Xero — Vercel Cron (vercel.json, every 15 minutes).
+ * Background sync for Gmail, Google Calendar and Xero — Vercel Cron (vercel.json — daily at 17:00 UTC on the Hobby plan; more often on Pro).
  * Vercel sends `Authorization: Bearer ${CRON_SECRET}` when CRON_SECRET is set on the project.
  * Database-only automations (quote follow-ups, overdue invoices, expiry) already run in pg_cron — not here.
  */

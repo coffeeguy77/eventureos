@@ -136,23 +136,38 @@ export class ApiError extends Error {
   constructor(message: string, public status: number, public body: string) { super(message); }
 }
 
-/** fetch() with the integration's bearer token; refreshes once on 401. */
-export async function apiFetch(ctx: SyncContext, url: string, init: RequestInit & { headers?: Record<string, string> } = {}, label = "API"): Promise<Response> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const token = await getAccessToken(ctx, attempt > 0);
-    const res = await fetch(url, { ...init, cache: "no-store", headers: { accept: "application/json", ...(init.headers ?? {}), authorization: `Bearer ${token}` } });
-    if (res.status === 401 && attempt === 0) continue;
-    if (res.status === 429) {
-      const wait = Math.min(10, Number(res.headers.get("retry-after") ?? 2));
-      if (attempt === 0) { await new Promise((r) => setTimeout(r, wait * 1000)); continue; }
-    }
-    if (!res.ok) {
-      const body = await res.text();
-      throw new ApiError(`${label} ${res.status}: ${body.slice(0, 300)}`, res.status, body);
-    }
-    return res;
+/** The provider asked us to slow down and kept doing so after retries. Callers save progress and stop gracefully. */
+export class RateLimited extends Error {
+  constructor(public provider: string, public retryAfterSec: number) {
+    super(`${provider} asked EventureOS to slow down (rate limit). Progress is saved — it will continue on the next sync.`);
   }
-  throw new ApiError(`${label}: unauthorised after refreshing the token`, 401, "");
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Google/Xero signal "too many requests" as 429, and Google also as 403 with a rate-limit reason. */
+function isRateLimit(status: number, body: string) {
+  return status === 429 || (status === 403 && /rateLimitExceeded|userRateLimitExceeded|RESOURCE_EXHAUSTED|Quota exceeded/i.test(body));
+}
+
+/** fetch() with the integration's bearer token; refreshes once on 401 and backs off on rate limits. */
+export async function apiFetch(ctx: SyncContext, url: string, init: RequestInit & { headers?: Record<string, string> } = {}, label = "API"): Promise<Response> {
+  let refreshed = false;
+  const waits = [2, 5, 12]; // seconds between retries when rate limited (plus Retry-After when given)
+  for (let attempt = 0; ; attempt++) {
+    const token = await getAccessToken(ctx, refreshed && attempt > 0);
+    const res = await fetch(url, { ...init, cache: "no-store", headers: { accept: "application/json", ...(init.headers ?? {}), authorization: `Bearer ${token}` } });
+    if (res.status === 401 && !refreshed) { refreshed = true; continue; }
+    if (res.ok) return res;
+    const body = await res.text();
+    if (isRateLimit(res.status, body)) {
+      const retryAfter = Number(res.headers.get("retry-after")) || 0;
+      if (attempt < waits.length) { await sleep(Math.min(20, Math.max(retryAfter, waits[attempt])) * 1000); continue; }
+      throw new RateLimited(ctx.integration.provider === "xero" ? "Xero" : "Google", Math.max(retryAfter, 60));
+    }
+    if (res.status === 401) throw new ApiError(`${label}: unauthorised after refreshing the token`, 401, body);
+    throw new ApiError(`${label} ${res.status}: ${body.slice(0, 300)}`, res.status, body);
+  }
 }
 
 export async function apiJSON<T>(ctx: SyncContext, url: string, init: RequestInit & { headers?: Record<string, string> } = {}, label = "API"): Promise<T> {
@@ -180,7 +195,8 @@ export async function finishSyncLog(ctx: SyncContext, logId: string, status: "su
     status: status === "error" ? "error" : "connected",
     last_sync_at: new Date().toISOString(),
     last_sync_status: status,
-    last_error: status === "success" ? null : message.slice(0, 1000),
+    // "partial" just means more to fetch next time — not a problem to show in red
+    last_error: status === "error" ? message.slice(0, 1000) : null,
   };
   const { error } = await ctx.db.from("integrations").update(patch).eq("id", ctx.integration.id);
   if (error) throw new Error(`Could not update sync status: ${error.message}`);

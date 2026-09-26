@@ -6,7 +6,7 @@ import {
 import { evaluateFilter, gmailQueryFor, resolveFilter, type EmailFilterSettings } from "@/lib/integrations/email-filter";
 import { getMessage, gmailProfile, listHistory, listMessages, parseMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import {
-  ApiError, errMessage, finishSyncLog, likeExact, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
+  ApiError, RateLimited, errMessage, finishSyncLog, likeExact, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
 } from "@/lib/integrations/runtime";
 
 /**
@@ -32,6 +32,8 @@ export interface GmailSettings extends EmailFilterSettings {
   initial_days?: number;
   import_months?: number;
   import_page_token?: string | null;
+  /** The Gmail search the saved import position belongs to. */
+  import_query?: string;
   import_scanned?: number;
   import_last_run_at?: string;
 }
@@ -173,10 +175,14 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
 
     // 2. Fetch + parse (oldest first so threads build in order)
     const parsed: ParsedMessage[] = [];
+    let rateLimited = false;
     for (const r of todo.slice(0, MAX_MESSAGES_PER_RUN)) {
       if (Date.now() - started > TIME_BUDGET_MS) break;
       try { parsed.push(parseMessage(await getMessage(ctx, r.id))); }
-      catch (e) { if (!(e instanceof ApiError && e.status === 404)) throw e; } // deleted since listed
+      catch (e) {
+        if (e instanceof RateLimited) { rateLimited = true; break; } // keep what we have; the rest comes next sync
+        if (!(e instanceof ApiError && e.status === 404)) throw e; // 404 = deleted since listed
+      }
     }
     parsed.sort((a, b) => a.sentAt.localeCompare(b.sentAt));
     result.partial = parsed.length < todo.length;
@@ -201,7 +207,7 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
       (result.enquiries ? `, ${result.enquiries} enquir${result.enquiries === 1 ? "y" : "ies"} created` : "") +
       (result.review ? `, ${result.review} need review` : "") +
       (result.filtered ? `, ${result.filtered} skipped by your email filters` : "") +
-      (result.partial ? `. ${todo.length - parsed.length} more will be fetched on the next sync.` : ".");
+      (result.partial ? `. ${todo.length - parsed.length} more will be fetched on the next sync${rateLimited ? " (Gmail asked us to slow down)" : ""}.` : ".");
     await finishSyncLog(ctx, logId, result.partial ? "partial" : "success", result.processed, result.message);
     if (result.processed) {
       await logIntegration(ctx, { action: "email.synced", entityType: "integration", entityId: ctx.integration.id, summary: result.message });

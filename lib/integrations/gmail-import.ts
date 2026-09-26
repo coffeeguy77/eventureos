@@ -1,5 +1,14 @@
 import "server-only";
 import { evaluateFilter, gmailQueryFor, resolveFilter } from "@/lib/integrations/email-filter";
+import { RateLimited } from "@/lib/integrations/runtime";
+
+/** Space out Gmail reads so a scan stays well inside Google's per-minute quota. */
+let lastCall = 0;
+async function pace(minGapMs = 250) {
+  const wait = lastCall + minGapMs - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastCall = Date.now();
+}
 import { classifyEmail, stripQuoted } from "@/lib/ai/classify";
 import { getThread, listThreads, parseMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import { classifyContextBase, gmailSettings, ownAddresses } from "@/lib/integrations/gmail-sync";
@@ -56,17 +65,30 @@ export async function importGmailHistory(ctx: SyncContext, opts: { months?: numb
     const filter = resolveFilter(s);
     const narrow = gmailQueryFor(filter);
     const q = `newer_than:${months}m -in:chats -in:drafts -in:spam -category:promotions -category:social -category:forums${narrow ? " " + narrow : ""}`;
-    let pageToken: string | undefined = opts.restart ? undefined : s.import_page_token ?? undefined;
+    // A saved position only makes sense for the same Gmail search — if the filters changed, start again
+    const restart = !!opts.restart || (s.import_query ?? "") !== q;
+    let pageToken: string | undefined = restart ? undefined : s.import_page_token ?? undefined;
+    let rateLimited = false;
     const people = new Map<string, { name: string | null; email: string; phone: string | null; company: string | null; threads: number; first: string; last: string; subjects: string[] }>();
     let done = false;
 
-    while (scanned < THREADS_PER_RUN && Date.now() - started < TIME_BUDGET_MS) {
-      const page = await listThreads(ctx, q, pageToken, 20);
+    scan: while (scanned < THREADS_PER_RUN && Date.now() - started < TIME_BUDGET_MS) {
+      let page: Awaited<ReturnType<typeof listThreads>>;
+      try { page = await listThreads(ctx, q, pageToken, 20); }
+      catch (e) { if (e instanceof RateLimited) { rateLimited = true; break; } throw e; }
+      let pageComplete = true;
       for (const t of page.threads ?? []) {
-        if (scanned >= THREADS_PER_RUN || Date.now() - started > TIME_BUDGET_MS) break;
+        if (scanned >= THREADS_PER_RUN || Date.now() - started > TIME_BUDGET_MS) { pageComplete = false; break; }
+        if (trackedIds.has(t.id)) { scanned++; continue; }
+        let thread: Awaited<ReturnType<typeof getThread>>;
+        try {
+          await pace();
+          thread = await getThread(ctx, t.id, "full");
+        } catch (e) {
+          if (e instanceof RateLimited) { rateLimited = true; break scan; } // this page is re-read next time
+          throw e;
+        }
         scanned++;
-        if (trackedIds.has(t.id)) continue;
-        const thread = await getThread(ctx, t.id, "full");
         const msgs = (thread.messages ?? []).map(parseMessage).sort((a, b) => a.sentAt.localeCompare(b.sentAt));
         const firstIn = msgs.find((m) => !own.includes(m.from.email) && !m.labelIds.includes("SENT"));
         if (!firstIn) continue;
@@ -109,6 +131,7 @@ export async function importGmailHistory(ctx: SyncContext, opts: { months?: numb
           enquiries++;
         }
       }
+      if (!pageComplete) break; // finish this page next run rather than skipping the rest of it
       pageToken = page.nextPageToken;
       if (!pageToken) { done = true; break; }
     }
@@ -120,8 +143,9 @@ export async function importGmailHistory(ctx: SyncContext, opts: { months?: numb
       contacts++;
     }
 
-    await saveIntegrationSettings(ctx, { import_months: months, import_page_token: done ? null : pageToken ?? null, import_scanned: (opts.restart ? 0 : s.import_scanned ?? 0) + scanned, import_last_run_at: new Date().toISOString() });
-    const msg = `Scanned ${scanned} Gmail conversation${scanned === 1 ? "" : "s"} from the last ${months} months: ${contacts} people and ${enquiries} enquiry conversation${enquiries === 1 ? "" : "s"} to review.` + (done ? " Import complete." : " Run it again to continue.");
+    await saveIntegrationSettings(ctx, { import_months: months, import_query: q, import_page_token: done ? null : pageToken ?? null, import_scanned: (restart ? 0 : s.import_scanned ?? 0) + scanned, import_last_run_at: new Date().toISOString() });
+    const msg = `Scanned ${scanned} matching Gmail conversation${scanned === 1 ? "" : "s"} from the last ${months} months: ${contacts} people and ${enquiries} enquiry conversation${enquiries === 1 ? "" : "s"} to review.` +
+      (done ? " Import complete." : rateLimited ? " Gmail asked us to slow down — wait a minute, then press Continue import." : " Press Continue import for the next batch.");
     await finishSyncLog(ctx, logId, done ? "success" : "partial", scanned, msg);
     await logIntegration(ctx, { action: "import.gmail_scanned", entityType: "integration", entityId: ctx.integration.id, summary: msg });
     return { scanned, contacts, enquiries, done, message: msg };

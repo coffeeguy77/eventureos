@@ -118,7 +118,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
               <dt className="text-ink-faint">Last sync</dt><dd>{connected && row!.last_sync_at ? relative(row!.last_sync_at) : "—"}</dd>
               <dt className="text-ink-faint">Sync status</dt><dd>{sync ? <Badge tone={sync.tone}>{sync.label}</Badge> : "—"}</dd>
               {connected && row!.last_error && <><dt className="text-ink-faint">Problem</dt><dd className="break-words text-rose-700">{row!.last_error}</dd></>}
-              <dt className="text-ink-faint">Background</dt><dd>{env.serviceRole && env.cronSecret ? "Every 15 minutes" : <span className="text-ink-muted">Manual only (needs <Code>CRON_SECRET</Code> + <Code>SUPABASE_SERVICE_ROLE_KEY</Code>)</span>}</dd>
+              <dt className="text-ink-faint">Background</dt><dd>{env.serviceRole && env.cronSecret ? "Once a day, overnight (plus Sync now any time)" : <span className="text-ink-muted">Manual only (needs <Code>CRON_SECRET</Code> + <Code>SUPABASE_SERVICE_ROLE_KEY</Code>)</span>}</dd>
             </dl>
           </Card>
 
