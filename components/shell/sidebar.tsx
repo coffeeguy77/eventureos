@@ -68,7 +68,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false }: { orgName: st
 
 /** The EventureOS "E" mark (app icon). */
 export function Logo({ size = 26 }: { size?: number }) {
-  return <Image src="/brand/eventureos-mark.png" width={size} height={size} alt="" aria-hidden="true" className="shrink-0 rounded-[22%]" />;
+  return <Image src="/brand/eventureos-mark.png" width={size} height={size} alt="" aria-hidden="true" priority className="shrink-0 rounded-[22%]" />;
 }
 
 /** The EventureOS wordmark. `tone="light"` is for dark backgrounds. */

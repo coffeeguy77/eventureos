@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { Building2, CalendarRange, Code2, Palette, PlugZap, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -17,8 +18,15 @@ const ITEMS = [
 
 export function SettingsNav() {
   const pathname = usePathname();
+  const ref = useRef<HTMLElement>(null);
+  // On phones the menu is a sideways-scrolling row: keep the current section in view
+  useEffect(() => {
+    const nav = ref.current;
+    const el = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && el && nav.scrollWidth > nav.clientWidth) nav.scrollLeft += el.getBoundingClientRect().left - nav.getBoundingClientRect().left - 16;
+  }, [pathname]);
   return (
-    <nav aria-label="Settings" className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0">
+    <nav ref={ref} aria-label="Settings" className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0">
       {ITEMS.map((item) => {
         const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/");
         const Icon = item.icon;
