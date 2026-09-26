@@ -250,7 +250,7 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy }: {
         </fieldset>
         <label className="flex items-start gap-2 text-[13px]">
           <input type="checkbox" name="pull_busy" defaultChecked={pullBusy} className="mt-0.5" />
-          <span>Show busy time from these Google calendars in EventureOS (next 90 days) so double-bookings are visible.</span>
+          <span>Bring in entries from these Google calendars (past 2 years and next 12 months): busy time shows in EventureOS so double-bookings are visible, and bookings with a client’s email appear in their job history.</span>
         </label>
       </div>
       <div className="mt-4"><Result state={state} /></div>

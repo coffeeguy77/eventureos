@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
 import type { Tone } from "@/lib/status";
+import { localDate } from "@/lib/ai/classify";
 import { ActivityFeed } from "@/components/records/activity-feed";
 import { Conversation } from "@/components/records/conversation";
 import { DocumentsList, type DocRow } from "@/components/records/documents-list";
@@ -53,6 +54,7 @@ interface InvoiceRow {
   reference: string | null; line_items: HistLine[] | null;
 }
 interface HistLine { description: string | null; quantity: number | null; unit_amount: number | null; item_code: string | null; line_amount: number | null }
+interface BookingRow { id: string; title: string; starts_at: string; ends_at: string; all_day: boolean; location: string | null; html_link: string | null }
 interface XeroQuoteRow {
   id: string; number: string | null; reference: string | null; title: string | null; status: string; quote_date: string | null;
   expiry_date: string | null; total: number; line_items: HistLine[] | null;
@@ -91,7 +93,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   ].filter(Boolean).join(",");
   const docScope = [`customer_id.eq.${id}`, events.length ? `event_id.in.(${events.map((e) => e.id).join(",")})` : null].filter(Boolean).join(",");
 
-  const [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, integRes, members, xqRes] = await Promise.all([
+  const [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, integRes, members, xqRes, calRes] = await Promise.all([
     supabase.from("contacts").select("id, first_name, last_name, email, phone, position, is_primary, portal_user_id")
       .eq("organisation_id", org.id).eq("customer_id", id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("quotes")
@@ -109,14 +111,17 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     getMembers(org.id),
     supabase.from("xero_quotes").select("id, number, reference, title, status, quote_date, expiry_date, total, line_items")
       .eq("organisation_id", org.id).eq("customer_id", id).order("quote_date", { ascending: false }),
+    supabase.from("calendar_events").select("id, title, starts_at, ends_at, all_day, location, html_link")
+      .eq("organisation_id", org.id).eq("customer_id", id).order("starts_at", { ascending: false }).limit(500),
   ]);
-  for (const r of [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, xqRes]) {
+  for (const r of [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, xqRes, calRes]) {
     if (r.error) throw new Error(`Could not load client details: ${r.error.message}`);
   }
   const contacts = (contactsRes.data ?? []) as ContactRow[];
   const quotes = (quotesRes.data ?? []) as unknown as QuoteRow[];
   const invoices = (invoicesRes.data ?? []) as unknown as InvoiceRow[];
   const xeroQuotes = (xqRes.data ?? []) as XeroQuoteRow[];
+  const bookings = (calRes.data ?? []) as BookingRow[];
   const payments = (paymentsRes.data ?? []) as unknown as PaymentRow[];
   const threads = (threadsRes.data ?? []) as EmailThread[];
   const notes = (notesRes.data ?? []) as NoteRow[];
@@ -192,7 +197,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   const tabs = [
     { key: "overview", label: "Overview" },
-    { key: "history", label: "Job history", count: invoices.filter((i) => i.status !== "void").length + xeroQuotes.length },
+    { key: "history", label: "Job history", count: invoices.filter((i) => i.status !== "void").length + xeroQuotes.length + bookings.length },
     { key: "events", label: "Events", count: events.length },
     { key: "emails", label: "Emails", count: threads.length },
     { key: "quotes", label: "Quotes", count: quotes.length },
@@ -548,7 +553,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         )}
 
         {tab === "history" && (
-          <JobHistory invoices={invoices} xeroQuotes={xeroQuotes} cur={cur} />
+          <JobHistory invoices={invoices} xeroQuotes={xeroQuotes} bookings={bookings} cur={cur} tz={tz} />
         )}
 
         {tab === "invoices" && (
@@ -679,8 +684,8 @@ function lineSummary(lines: HistLine[] | null) {
 }
 
 /** Every job with this client, newest first: Xero quotes and invoices with what was sold. */
-function JobHistory({ invoices, xeroQuotes, cur }: { invoices: InvoiceRow[]; xeroQuotes: XeroQuoteRow[]; cur: string }) {
-  type Row = { key: string; date: string | null; kind: "Invoice" | "Quote"; number: string; ref: string | null; total: number; status: React.ReactNode; lines: string | null; href?: string };
+function JobHistory({ invoices, xeroQuotes, bookings, cur, tz }: { invoices: InvoiceRow[]; xeroQuotes: XeroQuoteRow[]; bookings: BookingRow[]; cur: string; tz: string }) {
+  type Row = { key: string; date: string | null; kind: "Invoice" | "Quote" | "Booking"; number: string; ref: string | null; total: number | null; status: React.ReactNode; lines: string | null; href?: string; external?: boolean };
   const rows: Row[] = [
     ...invoices.map((i) => ({
       key: i.id, date: i.issue_date, kind: "Invoice" as const, number: i.number, ref: i.reference ?? i.event?.name ?? null, total: Number(i.total),
@@ -690,13 +695,18 @@ function JobHistory({ invoices, xeroQuotes, cur }: { invoices: InvoiceRow[]; xer
       key: q.id, date: q.quote_date, kind: "Quote" as const, number: q.number ?? "Quote", ref: q.reference ?? q.title, total: Number(q.total),
       status: <Badge tone={XQ_TONE[q.status] ?? "neutral"}>{q.status.charAt(0) + q.status.slice(1).toLowerCase()} in Xero</Badge>, lines: lineSummary(q.line_items),
     })),
+    ...bookings.map((b) => ({
+      key: b.id, date: localDate(b.starts_at, tz), kind: "Booking" as const, number: "", ref: b.title, total: null,
+      status: <Badge tone="brand">{b.all_day ? "All day" : `${fmtDateTime(b.starts_at, tz, "time")}–${fmtDateTime(b.ends_at, tz, "time")}`}</Badge>,
+      lines: b.location, href: b.html_link ?? undefined, external: true,
+    })),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const paidTotal = invoices.filter((i) => i.status !== "void" && i.status !== "draft").reduce((s, i) => s + Number(i.total), 0);
   const years = new Set(rows.map((r) => r.date?.slice(0, 4)).filter(Boolean));
   return (
     <Card>
-      <CardHeader title="Job history" subtitle={rows.length ? `${invoices.filter((i) => i.status !== "void").length} invoices and ${xeroQuotes.length} Xero quotes${years.size ? ` since ${[...years].sort()[0]}` : ""} · ${money(paidTotal, cur)} invoiced` : undefined} />
-      {rows.length === 0 ? <EmptyState title="No history yet">Invoices and quotes from Xero appear here after a Xero sync.</EmptyState> : (
+      <CardHeader title="Job history" subtitle={rows.length ? `${invoices.filter((i) => i.status !== "void").length} invoices, ${xeroQuotes.length} Xero quotes and ${bookings.length} calendar bookings${years.size ? ` since ${[...years].sort()[0]}` : ""} · ${money(paidTotal, cur)} invoiced` : undefined} />
+      {rows.length === 0 ? <EmptyState title="No history yet">Invoices and quotes from Xero, and Google Calendar bookings with this client’s email, appear here after a sync.</EmptyState> : (
         <ul className="divide-y divide-line border-t border-line">
           {rows.map((r) => (
             <li key={r.key} className="px-5 py-3">
@@ -704,13 +714,17 @@ function JobHistory({ invoices, xeroQuotes, cur }: { invoices: InvoiceRow[]; xer
                 <div className="w-20 shrink-0 text-[12px] text-ink-muted">{r.date ? fmtDate(r.date) : "—"}</div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-medium text-ink">
-                    {r.href ? <Link href={r.href} className="hover:text-brand-700">{r.kind} {r.number}</Link> : <>{r.kind} {r.number}</>}
-                    {r.ref && <span className="font-normal text-ink-muted"> · {r.ref}</span>}
+                    {r.kind === "Booking" ? (
+                      r.href ? <a href={r.href} target="_blank" rel="noreferrer" className="hover:text-brand-700">Booking · {r.ref}</a> : <>Booking · {r.ref}</>
+                    ) : (<>
+                      {r.href ? <Link href={r.href} className="hover:text-brand-700">{r.kind} {r.number}</Link> : <>{r.kind} {r.number}</>}
+                      {r.ref && <span className="font-normal text-ink-muted"> · {r.ref}</span>}
+                    </>)}
                   </p>
                   {r.lines && <p className="mt-0.5 text-[12px] text-ink-muted">{r.lines}</p>}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="tabular text-[13.5px] font-semibold text-ink">{money(r.total, cur)}</p>
+                  {r.total != null && <p className="tabular text-[13.5px] font-semibold text-ink">{money(r.total, cur)}</p>}
                   {r.status}
                 </div>
               </div>

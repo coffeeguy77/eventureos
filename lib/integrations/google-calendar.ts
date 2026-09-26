@@ -22,7 +22,8 @@ const CAL = "https://www.googleapis.com/calendar/v3";
 
 export interface GoogleCalendar { id: string; summary: string; primary?: boolean; accessRole?: string; backgroundColor?: string; timeZone?: string }
 interface GEvent {
-  id: string; status?: string; summary?: string; location?: string; transparency?: string;
+  id: string; status?: string; summary?: string; location?: string; transparency?: string; description?: string; htmlLink?: string;
+  attendees?: { email?: string; self?: boolean; resource?: boolean }[]; organizer?: { email?: string; self?: boolean };
   start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string };
   extendedProperties?: { private?: Record<string, string> };
 }
@@ -61,7 +62,12 @@ export interface CalendarSettings {
   pull_busy?: boolean;
   calendars?: GoogleCalendar[];
   calendars_fetched_at?: string;
+  /** Months of past entries imported once (default 24); afterwards only the last 30 days are re-read. */
+  history_months?: number;
+  history_done_for?: string[];            // calendar connection ids whose history is in
+  pull_cursor?: { conn: string; page: string } | null;
 }
+const PULL_BUDGET_MS = 40_000;
 export const DEFAULT_SYNC_KINDS = ["event", "site_visit", "setup", "hold"];
 
 interface CalRow {
@@ -152,46 +158,72 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
       }
     }
 
-    // PULL (optional): busy time from Google, for conflict checks
+    // PULL (optional): entries from Google — busy time for conflict checks, and the client booking history
+    let pullMore = false;
     if (s.pull_busy) {
-      const now = new Date();
-      const max = new Date(now.getTime() + 90 * 86400000);
-      for (const conn of byId.values()) {
-        let page: string | undefined;
+      const started = Date.now();
+      const now = Date.now();
+      const done = new Set(s.history_done_for ?? []);
+      const max = new Date(now + 365 * 86400000).toISOString();
+      const own = new Set([ctx.integration.account_label?.toLowerCase()].filter(Boolean) as string[]);
+      conns: for (const conn of byId.values()) {
+        const backfill = !done.has(conn.id);
+        const min = new Date(now - (backfill ? (s.history_months ?? 24) * 30.5 : 30) * 86400000).toISOString();
+        let page: string | undefined = s.pull_cursor?.conn === conn.id ? s.pull_cursor.page : undefined;
         do {
+          if (Date.now() - started > PULL_BUDGET_MS) {
+            await saveIntegrationSettings(ctx, { pull_cursor: page ? { conn: conn.id, page } : null });
+            pullMore = true;
+            break conns;
+          }
           const u = new URL(`${CAL}/calendars/${encodeURIComponent(conn.external_calendar_id)}/events`);
-          u.searchParams.set("timeMin", now.toISOString());
-          u.searchParams.set("timeMax", max.toISOString());
+          u.searchParams.set("timeMin", min);
+          u.searchParams.set("timeMax", max);
           u.searchParams.set("singleEvents", "true");
           u.searchParams.set("showDeleted", "true");
-          u.searchParams.set("maxResults", "250");
+          u.searchParams.set("maxResults", "2500");
           if (page) u.searchParams.set("pageToken", page);
           const r = await apiJSON<{ items?: GEvent[]; nextPageToken?: string }>(ctx, u.toString(), {}, "Google events.list");
+          const gone: string[] = [];
+          const rows = [];
           for (const ge of r.items ?? []) {
             if (ge.extendedProperties?.private?.eventureos_id) continue; // ours
-            if (ge.status === "cancelled" || ge.transparency === "transparent") {
-              await ctx.db.from("calendar_events").delete().eq("calendar_connection_id", conn.id).eq("external_event_id", ge.id).is("event_id", null);
-              continue;
-            }
+            if (ge.status === "cancelled" || ge.transparency === "transparent") { gone.push(ge.id); continue; }
             const startIso = ge.start?.dateTime ?? (ge.start?.date ? ge.start.date + "T00:00:00Z" : null);
             const endIso = ge.end?.dateTime ?? (ge.end?.date ? ge.end.date + "T00:00:00Z" : null);
             if (!startIso || !endIso) continue;
             const allDay = !ge.start?.dateTime;
-            const { error: pErr } = await ctx.db.from("calendar_events").upsert({
+            const endMs = allDay ? Date.parse(endIso) - 1000 : Date.parse(endIso);
+            rows.push({
               organisation_id: ctx.org.id, calendar_connection_id: conn.id, title: ge.summary?.slice(0, 200) || "Busy (Google)",
               starts_at: new Date(startIso).toISOString(),
-              ends_at: new Date(allDay ? Date.parse(endIso) - 1000 : Date.parse(endIso)).toISOString(),
-              all_day: allDay, location: ge.location ?? null, kind: "other", external_event_id: ge.id,
+              ends_at: new Date(Math.max(endMs, Date.parse(startIso))).toISOString(),
+              all_day: allDay, location: ge.location?.slice(0, 500) ?? null, kind: "other", external_event_id: ge.id,
+              description: ge.description?.slice(0, 8000) ?? null, html_link: ge.htmlLink ?? null,
+              attendees: (ge.attendees ?? []).filter((a) => a.email && !a.self && !a.resource && !own.has(a.email.toLowerCase())).map((a) => a.email!.toLowerCase()),
               sync_status: "synced", last_synced_at: new Date(Date.now() + 10_000).toISOString(),
-            }, { onConflict: "calendar_connection_id,external_event_id" });
-            if (pErr) errors.push(`Busy import: ${pErr.message}`); else pulled++;
+            });
+          }
+          for (let i = 0; i < gone.length; i += 200) {
+            await ctx.db.from("calendar_events").delete().eq("calendar_connection_id", conn.id).in("external_event_id", gone.slice(i, i + 200)).is("event_id", null);
+          }
+          for (let i = 0; i < rows.length; i += 500) {
+            const { error: pErr } = await ctx.db.from("calendar_events").upsert(rows.slice(i, i + 500), { onConflict: "calendar_connection_id,external_event_id" });
+            if (pErr) { errors.push(`Calendar import: ${pErr.message}`); break; } else pulled += Math.min(500, rows.length - i);
           }
           page = r.nextPageToken;
         } while (page);
+        if (backfill) { done.add(conn.id); await saveIntegrationSettings(ctx, { history_done_for: [...done], pull_cursor: null }); }
+        else if (s.pull_cursor) await saveIntegrationSettings(ctx, { pull_cursor: null });
+      }
+      if (pulled) {
+        const { error: lErr } = await ctx.db.rpc("link_customer_emails", { p_org: ctx.org.id });
+        if (lErr) errors.push(`Linking clients: ${lErr.message}`);
       }
     }
 
-    const msg = `Pushed ${pushed} calendar entr${pushed === 1 ? "y" : "ies"} to Google` + (s.pull_busy ? `, imported ${pulled} busy time${pulled === 1 ? "" : "s"}` : "") +
+    const msg = `Pushed ${pushed} calendar entr${pushed === 1 ? "y" : "ies"} to Google` + (s.pull_busy ? `, imported ${pulled} entr${pulled === 1 ? "y" : "ies"} from Google` : "") +
+      (pullMore ? ". More will be fetched on the next sync" : "") +
       (failed ? `. ${failed} failed: ${errors.slice(0, 3).join("; ")}` : errors.length ? `. ${errors[0]}` : ".");
     await finishSyncLog(ctx, logId, failed ? "partial" : "success", pushed + pulled, msg);
     if (pushed || pulled) await logIntegration(ctx, { action: "calendar.synced", entityType: "integration", entityId: ctx.integration.id, summary: msg });

@@ -206,6 +206,7 @@ export async function saveCalendarSettings(_prev: ActionState, form: FormData): 
     const cals = new Set(((sctx.integration.settings.calendars ?? []) as { id: string }[]).map((c) => c.id));
     const { data: conns } = await supabase.from("calendar_connections").select("id, name, external_calendar_id, sync_enabled, provider").eq("organisation_id", org.id);
     const changes: string[] = [];
+    const historyReset: string[] = [];
     for (const c of conns ?? []) {
       const target = str(form.get(`cal_${c.id}`));
       if (target && !cals.has(target)) return { error: `Pick a calendar from the list for “${c.name}”.` };
@@ -221,9 +222,14 @@ export async function saveCalendarSettings(_prev: ActionState, form: FormData): 
           // busy times imported from the old Google calendar no longer apply
           await supabase.from("calendar_events").delete().eq("calendar_connection_id", c.id).eq("kind", "other").is("event_id", null).not("external_event_id", "is", null).is("created_by", null);
           await supabase.from("calendar_events").update({ sync_status: "pending", external_event_id: null }).eq("calendar_connection_id", c.id);
+          historyReset.push(c.id);
         }
         changes.push(`${c.name}: ${target ? `${enabled ? "syncs to" : "mapped (paused) to"} ${target}` : "not synced"}`);
       }
+    }
+    if (historyReset.length) {
+      const cs = (sctx.integration.settings ?? {}) as { history_done_for?: string[] };
+      await saveIntegrationSettings(sctx, { history_done_for: (cs.history_done_for ?? []).filter((x) => !historyReset.includes(x)), pull_cursor: null });
     }
     if (changes.length) {
       await logActivity(supabase, {
