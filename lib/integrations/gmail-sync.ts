@@ -412,7 +412,10 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
     } else {
       const x = c.extracted;
       const who = x.name ?? contactEmail ?? pm.from.email;
-      const title = preliminary.website_form && pm.subject
+      const formTitle = pm.subject?.match(/^(.{2,80}?)\s+message from\s+(.{2,80})$/i);
+      const title = preliminary.website_form && formTitle
+        ? `${formTitle[1].trim()} — ${formTitle[2].trim()}`
+        : preliminary.website_form && pm.subject
         ? pm.subject.replace(/^(new\s+)?(website\s+)?(enquiry|inquiry|form submission|submission)\s*[:\-–—]\s*/i, "").trim() || `${x.event_type ?? "Website"} enquiry`
         : x.event_type ? `${x.event_type} enquiry — ${who}` : pm.subject?.slice(0, 120) || `Enquiry from ${who}`;
       const { data: enq, error } = await db.from("enquiries").insert({

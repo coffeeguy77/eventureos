@@ -117,6 +117,21 @@ export function senderMatches(email: string, list: string[]): string | null {
   return null;
 }
 
+/** Google/Outlook calendar invitations and RSVP replies ("Accepted: Coffee Cart…") — the calendar handles these. */
+export function isCalendarNotice(subject: string | null, body: string | null): boolean {
+  const subj = (subject ?? "").trim();
+  if (/^(accepted|declined|tentative|tentatively accepted|invitation|updated invitation|new event|canceled event|cancelled event|event canceled|event cancelled|updated event)( with note)?\s*:/i.test(subj)) return true;
+  return /invitation from google calendar|invitation\.ics|reply for .{1,120}\s+to\s+.{1,120}invitation/i.test((body ?? "").slice(-3000));
+}
+
+/** Automated / mass-mail senders: noreply@…, newsletter@…, or bulk mail subdomains like email.brand.com. */
+export function isBulkSender(email: string): boolean {
+  const [local = "", domain = ""] = email.toLowerCase().split("@");
+  if (/^(no-?reply|do-?not-?reply|donotreply|newsletters?|news|marketing|mailer|mailer-daemon|notifications?|notify|updates?|promo(tions)?|offers|deals|digest|hello-noreply)([-_.+]|$)/.test(local)) return true;
+  const labels = domain.split(".");
+  return labels.length >= 3 && /^(email|emails|mail|mailer|e|em|news|newsletter|marketing|messaging|mkt|go|click|info)$/.test(labels[0]);
+}
+
 export function isNewsletter(input: Pick<FilterInput, "headers" | "body">): boolean {
   if (input.headers?.list_unsubscribe) return true;
   if (/bulk|list/i.test(input.headers?.precedence ?? "")) return true;
@@ -130,6 +145,7 @@ export function evaluateFilter(f: EmailFilter, m: FilterInput): FilterDecision {
   if (m.knownPerson) return { import: true, reason: "From an existing customer or contact" };
 
   if (senderMatches(m.from_email, PLATFORM_DOMAINS)) return { import: false, reason: "EventureOS system email" };
+  if (isCalendarNotice(m.subject, m.body)) return { import: false, reason: "Calendar invitation or reply — handled by the calendar, not enquiries" };
 
   const prefix = f.subjectPrefixes.find((p) => subjectStartsWith(m.subject, p));
   if (prefix) return { import: true, form: true, reason: `Subject starts with web-form subject “${prefix.trim()}”` };
@@ -142,7 +158,7 @@ export function evaluateFilter(f: EmailFilter, m: FilterInput): FilterDecision {
   const blocked = senderMatches(from, f.block);
   if (blocked) return { import: false, reason: `${from} is on your never-import list (${blocked})` };
 
-  if (isNewsletter(m)) return { import: false, reason: "Newsletter or marketing email" };
+  if (isNewsletter(m) || isBulkSender(from)) return { import: false, reason: "Newsletter, marketing or automated email" };
   if (f.mode === "all") return { import: true, reason: "Importing all emails" };
 
   const text = `${baseSubject(m.subject)}\n${(m.body ?? "").slice(0, 6000)}`;

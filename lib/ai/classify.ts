@@ -378,6 +378,14 @@ export function extractAll(email: EmailInput, ctx: ClassifyContext, form: boolea
     const last = pick(fields, ["last name", "surname"]);
     x.name = pick(fields, ["name", "full name", "your name", "contact name"]) ?? ([first, last].filter(Boolean).join(" ") || null);
     x.email = (pick(fields, ["email", "e mail", "email address", "your email"]) ?? "").toLowerCase().match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? null;
+    x.name ||= null; x.email ||= null;
+    // WordPress-style forms: "From: Jenny Wang <jenny@example.com>"
+    const fromField = pick(fields, ["from", "sender", "submitted by"]);
+    const fm = fromField?.match(/^\s*"?([^"<]*?)"?\s*<\s*([^<>\s]+@[^<>\s]+)\s*>/);
+    if (fm) { x.name ??= fm[1].trim() || null; x.email ??= fm[2].toLowerCase(); }
+    else if (fromField && fromField.includes("@")) x.email ??= fromField.toLowerCase().match(/[^\s<>]+@[^\s<>]+/)?.[0] ?? null;
+    // "Coffee Cart Hire Message From Jenny Wang" — the name is in the subject
+    x.name ??= subject.match(/\bmessage from\s+(.{2,80}?)\s*$/i)?.[1]?.replace(/["']/g, "").trim() || null;
     x.phone = pick(fields, ["phone", "mobile", "phone number", "contact number", "tel"]);
     x.company = pick(fields, ["company", "organisation", "organization", "business", "company name"]);
     const et = pick(fields, ["event type", "event", "type of event", "occasion"]);
