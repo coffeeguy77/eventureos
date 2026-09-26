@@ -1,4 +1,5 @@
 import "server-only";
+import { evaluateFilter, gmailQueryFor, resolveFilter } from "@/lib/integrations/email-filter";
 import { classifyEmail, stripQuoted } from "@/lib/ai/classify";
 import { getThread, listThreads, parseMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import { classifyContextBase, gmailSettings, ownAddresses } from "@/lib/integrations/gmail-sync";
@@ -52,7 +53,9 @@ export async function importGmailHistory(ctx: SyncContext, opts: { months?: numb
     const trackedIds = new Set((tracked ?? []).map((t) => t.gmail_thread_id as string));
 
     // Gmail search operators: https://support.google.com/mail/answer/7190
-    const q = `newer_than:${months}m -in:chats -in:drafts -in:spam -category:promotions -category:social -category:forums`;
+    const filter = resolveFilter(s);
+    const narrow = gmailQueryFor(filter);
+    const q = `newer_than:${months}m -in:chats -in:drafts -in:spam -category:promotions -category:social -category:forums${narrow ? " " + narrow : ""}`;
     let pageToken: string | undefined = opts.restart ? undefined : s.import_page_token ?? undefined;
     const people = new Map<string, { name: string | null; email: string; phone: string | null; company: string | null; threads: number; first: string; last: string; subjects: string[] }>();
     let done = false;
@@ -67,6 +70,8 @@ export async function importGmailHistory(ctx: SyncContext, opts: { months?: numb
         const msgs = (thread.messages ?? []).map(parseMessage).sort((a, b) => a.sentAt.localeCompare(b.sentAt));
         const firstIn = msgs.find((m) => !own.includes(m.from.email) && !m.labelIds.includes("SENT"));
         if (!firstIn) continue;
+        if (!evaluateFilter(filter, { subject: firstIn.subject, from_email: firstIn.from.email, body: firstIn.text, headers: firstIn.headers,
+          knownPerson: knownEmails.has(firstIn.from.email) || (!!firstIn.replyTo && knownEmails.has(firstIn.replyTo.email)) }).import) continue;
         const c = await classifyEmail(
           { subject: firstIn.subject, from_email: firstIn.from.email, from_name: firstIn.from.name, body: firstIn.text, received_at: firstIn.sentAt, headers: firstIn.headers },
           { ...classifyContextBase(ctx), known_customer: knownEmails.has(firstIn.from.email) },

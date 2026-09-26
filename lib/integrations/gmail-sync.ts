@@ -3,6 +3,7 @@ import {
   AUTO_ENQUIRY_THRESHOLD, classifyEmail, stripQuoted,
   type Classification, type ClassificationResult, type ClassifyContext,
 } from "@/lib/ai/classify";
+import { evaluateFilter, gmailQueryFor, resolveFilter, type EmailFilterSettings } from "@/lib/integrations/email-filter";
 import { getMessage, gmailProfile, listHistory, listMessages, parseMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import {
   ApiError, errMessage, finishSyncLog, likeExact, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
@@ -23,10 +24,10 @@ import {
  *       - anything uncertain        → thread flagged needs review / needs reply — never discarded
  */
 
-export interface GmailSettings {
+export interface GmailSettings extends EmailFilterSettings {
   history_id?: string;
-  website_subject_patterns?: string[];
-  website_form_senders?: string[];
+  /** Gmail ids the filter skipped during an unfinished first sync (so the next run doesn't re-fetch them). */
+  skipped_ids?: string[];
   ai_enabled?: boolean;
   initial_days?: number;
   import_months?: number;
@@ -38,7 +39,7 @@ export interface GmailSettings {
 const MAX_MESSAGES_PER_RUN = 150;
 const TIME_BUDGET_MS = 45_000;
 
-export interface GmailSyncResult { processed: number; skipped: number; enquiries: number; review: number; partial: boolean; message: string }
+export interface GmailSyncResult { processed: number; skipped: number; filtered: number; enquiries: number; review: number; partial: boolean; message: string }
 
 export function gmailSettings(ctx: SyncContext): GmailSettings {
   return (ctx.integration.settings ?? {}) as GmailSettings;
@@ -116,7 +117,9 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
   const logId = await startSyncLog(ctx, "email");
   const started = Date.now();
   const s = gmailSettings(ctx);
-  const result: GmailSyncResult = { processed: 0, skipped: 0, enquiries: 0, review: 0, partial: false, message: "" };
+  const result: GmailSyncResult = { processed: 0, skipped: 0, filtered: 0, enquiries: 0, review: 0, partial: false, message: "" };
+  const filter = resolveFilter(s);
+  const skippedIds = new Set(s.skipped_ids ?? []);
   try {
     // 1. Which messages are new?
     let refs: { id: string; threadId: string }[] = [];
@@ -148,7 +151,9 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
       const days = Math.max(1, Math.min(60, Number(s.initial_days ?? 14)));
       let page: string | undefined;
       do {
-        const r = await listMessages(ctx, `newer_than:${days}d -in:chats -in:drafts`, page, 100);
+        // Only list likely matches (the local filter still decides) — see email-filter.ts
+        const narrow = gmailQueryFor(filter);
+        const r = await listMessages(ctx, `newer_than:${days}d -in:chats -in:drafts -in:spam${narrow ? " " + narrow : ""}`, page, 100);
         refs.push(...(r.messages ?? []));
         page = r.nextPageToken;
       } while (page && refs.length < 1000);
@@ -163,7 +168,7 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
       const { data } = await ctx.db.from("email_messages").select("gmail_message_id").eq("organisation_id", ctx.org.id).in("gmail_message_id", ids);
       for (const d of data ?? []) existing.add(d.gmail_message_id as string);
     }
-    const todo = refs.filter((r) => !existing.has(r.id));
+    const todo = refs.filter((r) => !existing.has(r.id) && !skippedIds.has(r.id));
     result.skipped = refs.length - todo.length;
 
     // 2. Fetch + parse (oldest first so threads build in order)
@@ -180,6 +185,7 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
     const cache = new Map<string, SenderMatch>();
     for (const pm of parsed) {
       const out = await ingestMessage(ctx, pm, cache);
+      if (out.filtered) { result.filtered++; skippedIds.add(pm.gmailId); continue; }
       result.processed++;
       if (out.enquiryCreated) result.enquiries++;
       if (out.review) result.review++;
@@ -188,11 +194,13 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
     // 4. Only move the history pointer when everything listed was handled; otherwise the next run
     //    re-reads the same range (duplicates are skipped by gmail_message_id).
     //    (A first sync that is too big for one run simply continues from the same 14-day window next time.)
-    if (!result.partial && nextHistoryId) await saveIntegrationSettings(ctx, { history_id: nextHistoryId });
+    if (!result.partial && nextHistoryId) await saveIntegrationSettings(ctx, { history_id: nextHistoryId, skipped_ids: [] });
+    else if (result.filtered) await saveIntegrationSettings(ctx, { skipped_ids: [...skippedIds].slice(-3000) });
 
     result.message = `${mode === "incremental" ? "Checked new mail" : `First sync (${mode})`}: ${result.processed} new message${result.processed === 1 ? "" : "s"} saved` +
       (result.enquiries ? `, ${result.enquiries} enquir${result.enquiries === 1 ? "y" : "ies"} created` : "") +
       (result.review ? `, ${result.review} need review` : "") +
+      (result.filtered ? `, ${result.filtered} skipped by your email filters` : "") +
       (result.partial ? `. ${todo.length - parsed.length} more will be fetched on the next sync.` : ".");
     await finishSyncLog(ctx, logId, result.partial ? "partial" : "success", result.processed, result.message);
     if (result.processed) {
@@ -219,7 +227,7 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   const db = ctx.db;
   const own = ownAddresses(ctx);
   const outbound = pm.labelIds.includes("SENT") || own.includes(pm.from.email);
-  const res = { enquiryCreated: false, review: false, threadId: "" };
+  const res = { enquiryCreated: false, review: false, threadId: "", filtered: false, filterReason: "" };
 
   let { data: thread } = await db.from("email_threads")
     .select("id, subject, classification, state, participants, message_count, last_message_at, last_inbound_at, customer_id, event_id, enquiry_id, extracted")
@@ -239,6 +247,18 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
 
   const bodyClean = stripQuoted(pm.text) || pm.text;
   const externalParty = outbound ? pm.to.find((a) => !own.includes(a.email)) ?? pm.to[0] ?? null : pm.from;
+
+  // New conversation: only import it if it passes the organisation's email filters
+  if (!thread) {
+    const people = [externalParty?.email, !outbound && pm.replyTo && !own.includes(pm.replyTo.email) ? pm.replyTo.email : null]
+      .filter((x): x is string => !!x);
+    let knownPerson = false;
+    for (const p of people) if ((await matchSender(ctx, p, cache)).customerId) { knownPerson = true; break; }
+    const d = evaluateFilter(resolveFilter(gmailSettings(ctx)), {
+      subject: pm.subject, from_email: pm.from.email, body: pm.text, headers: pm.headers, knownPerson,
+    });
+    if (!d.import) return { ...res, filtered: true, filterReason: d.reason };
+  }
 
   if (!thread) {
     const created = outbound

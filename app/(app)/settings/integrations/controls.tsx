@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { EVENT_TYPES } from "@/lib/status";
 import {
   createEnquiryFromThread, disconnect, refileThread, resolveCandidate, runGmailImport, saveCalendarSettings,
-  saveGmailSettings, saveXeroSettings, syncNow, type ActionState,
+  emailCleanup, saveGmailSettings, saveXeroSettings, syncNow, type ActionState, type CleanupState,
 } from "./actions";
 
 function Result({ state }: { state: ActionState }) {
@@ -47,41 +47,124 @@ export function DisconnectButton({ provider, name }: { provider: string; name: s
   );
 }
 
-export function GmailSettingsForm({ values, aiConfigured }: {
-  values: { website_subject_patterns: string[]; website_form_senders: string[]; ai_enabled: boolean; initial_days: number }; aiConfigured: boolean;
-}) {
+export interface GmailFilterValues {
+  filter_mode: "matching" | "all";
+  filter_keywords: string[];
+  website_subject_patterns: string[];
+  website_form_senders: string[];
+  filter_allow_senders: string[];
+  filter_block_senders: string[];
+  ai_enabled: boolean;
+  initial_days: number;
+}
+
+export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilterValues; aiConfigured: boolean }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveGmailSettings, undefined);
+  const [mode, setMode] = useState(values.filter_mode);
   return (
-    <form action={action} className="grid gap-4 px-5 pb-5 sm:grid-cols-2">
-      <div>
-        <Label htmlFor="website_subject_patterns" hint="one per line">Website form subjects</Label>
-        <Textarea id="website_subject_patterns" name="website_subject_patterns" rows={4} defaultValue={values.website_subject_patterns.join("\n")}
-          placeholder={"Booking request\nNew quote request"} />
-        <p className="mt-1 text-[12px] text-ink-faint">Built in: “New website enquiry”, “New form submission”, “Contact form”, “Website enquiry”.</p>
+    <form action={action} className="grid gap-5 px-5 pb-5 sm:grid-cols-2">
+      <fieldset className="sm:col-span-2">
+        <legend className="mb-2 text-[13px] font-medium text-ink">Which emails come into EventureOS?</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {([
+            ["matching", "Only matching emails", "Recommended. Web-form emails, your keywords, and replies from customers you already have. Everything else stays in Gmail only."],
+            ["all", "Everything in the inbox", "Every email except newsletters and blocked senders. Busy, but nothing is missed."],
+          ] as const).map(([v, title, desc]) => (
+            <label key={v} className={cn("flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors",
+              mode === v ? "border-brand-300 bg-brand-50/60 ring-1 ring-inset ring-brand-200" : "border-line hover:border-line-strong")}>
+              <input type="radio" name="filter_mode" value={v} checked={mode === v} onChange={() => setMode(v)} className="mt-1 accent-brand-600" />
+              <span><span className="block text-[13.5px] font-medium">{title}</span><span className="mt-0.5 block text-[12.5px] leading-snug text-ink-muted">{desc}</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="sm:col-span-2">
+        <Label htmlFor="website_subject_patterns" hint="one per line — matches the start of the subject">Web-form subject lines</Label>
+        <Textarea id="website_subject_patterns" name="website_subject_patterns" rows={3} defaultValue={values.website_subject_patterns.join("\n")}
+          placeholder={"Coffee Cart Hire Message From\nCatering Enquiry From"} />
+        <p className="mt-1 text-[12px] leading-snug text-ink-faint">
+          Emails whose subject <strong className="font-medium text-ink-muted">starts with</strong> one of these are always imported as website enquiries, and the customer&apos;s details are read from the form.
+          Use <code className="rounded bg-zinc-100 px-1">*</code> for a part that changes, e.g. <code className="rounded bg-zinc-100 px-1">* Message From</code>.
+        </p>
       </div>
+
       <div>
-        <Label htmlFor="website_form_senders" hint="one per line">Website form senders</Label>
-        <Textarea id="website_form_senders" name="website_form_senders" rows={4} defaultValue={values.website_form_senders.join("\n")}
-          placeholder={"forms@yourdomain.com.au\nwordpress@yourdomain.com.au"} />
-        <p className="mt-1 text-[12px] text-ink-faint">Emails from these addresses are always treated as website enquiries — the customer is read from the form fields.</p>
+        <Label htmlFor="filter_keywords" hint="one per line">Keywords</Label>
+        <Textarea id="filter_keywords" name="filter_keywords" rows={6} defaultValue={values.filter_keywords.join("\n")}
+          placeholder={"coffee cart\ncoffee van\nhire\nevent\ncatering"} readOnly={mode === "all"} className={cn(mode === "all" && "opacity-50")} />
+        <p className="mt-1 text-[12px] leading-snug text-ink-faint">An email is imported if its subject or message mentions any of these. “hire” also matches hires, hired and hiring. Newsletters are skipped even if they mention a keyword.</p>
       </div>
-      <div>
-        <Label htmlFor="initial_days">First sync looks back</Label>
-        <Select id="initial_days" name="initial_days" defaultValue={String(values.initial_days)}>
-          {[7, 14, 30, 60].map((d) => <option key={d} value={d}>{d} days</option>)}
-        </Select>
+      <div className="grid content-start gap-4">
+        <div>
+          <Label htmlFor="filter_allow_senders" hint="email or @domain, one per line">Always import from</Label>
+          <Textarea id="filter_allow_senders" name="filter_allow_senders" rows={2} defaultValue={values.filter_allow_senders.join("\n")} placeholder={"@myvenuepartner.com.au"} />
+        </div>
+        <div>
+          <Label htmlFor="filter_block_senders" hint="email or @domain, one per line">Never import from</Label>
+          <Textarea id="filter_block_senders" name="filter_block_senders" rows={2} defaultValue={values.filter_block_senders.join("\n")} placeholder={"@paypal.com.au\nnoreply@shop.example"} />
+        </div>
       </div>
-      <div>
-        <Label>AI classification</Label>
-        <label className={cn("flex items-start gap-2 text-[13px]", !aiConfigured && "text-ink-faint")}>
-          <input type="checkbox" name="ai_enabled" defaultChecked={values.ai_enabled} disabled={!aiConfigured} className="mt-0.5" />
-          <span>Use Claude to classify new emails and extract event details.{" "}
-            {aiConfigured ? "Falls back to the rules engine on any error." : <>Needs <code className="rounded bg-zinc-100 px-1">ANTHROPIC_API_KEY</code> — the rules engine is used until then.</>}
-          </span>
-        </label>
-      </div>
+
+      <details className="rounded-xl border border-line px-4 py-3 sm:col-span-2">
+        <summary className="cursor-pointer text-[13px] font-medium">More settings</summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="website_form_senders" hint="one per line">Website form senders</Label>
+            <Textarea id="website_form_senders" name="website_form_senders" rows={3} defaultValue={values.website_form_senders.join("\n")}
+              placeholder={"forms@yourdomain.com.au\nwordpress@yourdomain.com.au"} />
+            <p className="mt-1 text-[12px] text-ink-faint">Every email from these addresses is a website enquiry.</p>
+          </div>
+          <div className="grid content-start gap-4">
+            <div>
+              <Label htmlFor="initial_days">First sync looks back</Label>
+              <Select id="initial_days" name="initial_days" defaultValue={String(values.initial_days)}>
+                {[7, 14, 30, 60].map((d) => <option key={d} value={d}>{d} days</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label>AI classification</Label>
+              <label className={cn("flex items-start gap-2 text-[13px]", !aiConfigured && "text-ink-faint")}>
+                <input type="checkbox" name="ai_enabled" defaultChecked={values.ai_enabled} disabled={!aiConfigured} className="mt-0.5" />
+                <span>Use Claude to classify new emails and extract event details.{" "}
+                  {aiConfigured ? "Falls back to the rules engine on any error." : <>Needs <code className="rounded bg-zinc-100 px-1">ANTHROPIC_API_KEY</code> — the rules engine is used until then.</>}
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <div className="sm:col-span-2"><Result state={state} /></div>
-      <div className="flex justify-end sm:col-span-2"><Button size="sm" variant="primary" disabled={pending}>{pending ? "Saving…" : "Save Gmail settings"}</Button></div>
+      <div className="flex justify-end sm:col-span-2"><Button size="md" variant="primary" disabled={pending} className="w-full sm:w-auto">{pending ? "Saving…" : "Save email filters"}</Button></div>
+    </form>
+  );
+}
+
+export function EmailCleanupPanel() {
+  const [state, action, pending] = useActionState<CleanupState, FormData>(emailCleanup, undefined);
+  return (
+    <form action={action} className="grid gap-3 px-5 pb-5">
+      {state?.preview ? (
+        <>
+          <div className="rounded-xl bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-100">
+            <strong className="font-semibold">{state.preview.threads} conversation{state.preview.threads === 1 ? "" : "s"}</strong> ({state.preview.messages} email{state.preview.messages === 1 ? "" : "s"}) don&apos;t match your filters
+            {state.preview.enquiries ? <>, including <strong className="font-semibold">{state.preview.enquiries} enquir{state.preview.enquiries === 1 ? "y" : "ies"}</strong> nobody has worked on yet</> : null}.
+            They&apos;ll be removed from EventureOS only — your Gmail isn&apos;t touched. Anything linked to a customer or event, or an enquiry someone has updated, is kept.
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="submit" name="step" value="preview" variant="secondary" size="md" disabled={pending}>Check again</Button>
+            <Button type="submit" name="step" value="run" variant="danger" size="md" disabled={pending}>{pending ? "Removing…" : `Remove ${state.preview.threads} conversation${state.preview.threads === 1 ? "" : "s"}`}</Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12.5px] text-ink-muted">Save your filters first, then check which already-imported emails no longer match.</p>
+          <Button type="submit" name="step" value="preview" variant="secondary" size="md" disabled={pending}>{pending ? "Checking…" : "Check imported email"}</Button>
+        </div>
+      )}
+      {state?.error && <FormError message={state.error} />}
+      {state?.ok && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>}
     </form>
   );
 }

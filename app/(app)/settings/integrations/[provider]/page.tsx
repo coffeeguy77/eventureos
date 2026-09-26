@@ -11,10 +11,11 @@ import { scopesFor } from "@/lib/integrations/oauth";
 import { DEFAULT_SYNC_KINDS, type GoogleCalendar } from "@/lib/integrations/google-calendar";
 import { listCreditNotes, xeroDate, type XeroCreditNote } from "@/lib/integrations/xero";
 import { buildContext } from "@/lib/integrations/sync-runner";
+import { DEFAULT_BLOCK, DEFAULT_KEYWORDS } from "@/lib/integrations/email-filter";
 import { INVOICE_STATUS } from "@/lib/status";
 import { fmtDate, fmtDateTime, money, relative } from "@/lib/format";
 import type { InvoiceStatus } from "@/lib/types";
-import { CalendarSettingsForm, CopyBlock, DisconnectButton, GmailSettingsForm, ImportForm, SyncNowButton, XeroSettingsForm } from "../controls";
+import { CalendarSettingsForm, CopyBlock, DisconnectButton, EmailCleanupPanel, GmailSettingsForm, ImportForm, SyncNowButton, XeroSettingsForm } from "../controls";
 import { Code, Mark, STATUS, SYNC_STATUS } from "../ui";
 import { headers } from "next/headers";
 
@@ -150,6 +151,27 @@ async function GmailSection({ orgId, settings, aiConfigured, manager }: { orgId:
   return (
     <>
       <Card>
+        <CardHeader title="Email filters" subtitle="Choose which emails EventureOS imports. Emails that don't match stay in Gmail and are never copied here." />
+        {manager ? (
+          <GmailSettingsForm aiConfigured={aiConfigured} values={{
+            filter_mode: settings.filter_mode === "all" ? "all" : "matching",
+            filter_keywords: (settings.filter_keywords as string[] | undefined) ?? DEFAULT_KEYWORDS,
+            website_subject_patterns: (settings.website_subject_patterns as string[] | undefined) ?? [],
+            website_form_senders: (settings.website_form_senders as string[] | undefined) ?? [],
+            filter_allow_senders: (settings.filter_allow_senders as string[] | undefined) ?? [],
+            filter_block_senders: (settings.filter_block_senders as string[] | undefined) ?? DEFAULT_BLOCK,
+            ai_enabled: settings.ai_enabled !== false,
+            initial_days: Number(settings.initial_days ?? 14),
+          }} />
+        ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change these settings.</p>}
+      </Card>
+      {manager && (
+        <Card>
+          <CardHeader title="Tidy up imported email" subtitle="Re-check everything already imported against your filters and remove what doesn't match." />
+          <EmailCleanupPanel />
+        </Card>
+      )}
+      <Card>
         <CardHeader title="Import historical event enquiries" subtitle="Scan past Gmail conversations for customers and enquiries. Everything found goes to Import review — nothing is created until you confirm." />
         {imported > 0 && (
           <p className="px-5 pb-3 text-[12.5px] text-ink-muted">
@@ -158,17 +180,6 @@ async function GmailSection({ orgId, settings, aiConfigured, manager }: { orgId:
           </p>
         )}
         {manager ? <ImportForm months={Number(settings.import_months ?? 12)} inProgress={!!settings.import_page_token} /> : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can run the import.</p>}
-      </Card>
-      <Card>
-        <CardHeader title="Enquiry capture & classification" subtitle="How incoming email is recognised. Uncertain messages always go to Needs review — nothing is discarded." />
-        {manager ? (
-          <GmailSettingsForm aiConfigured={aiConfigured} values={{
-            website_subject_patterns: (settings.website_subject_patterns as string[] | undefined) ?? [],
-            website_form_senders: (settings.website_form_senders as string[] | undefined) ?? [],
-            ai_enabled: settings.ai_enabled !== false,
-            initial_days: Number(settings.initial_days ?? 14),
-          }} />
-        ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change these settings.</p>}
       </Card>
       <Card>
         <CardHeader title="Website form (optional)" subtitle="Skip email parsing entirely: post your website's enquiry form straight into EventureOS." action={<ButtonLink href="/settings/website-form" size="sm" variant="secondary">Set up website form</ButtonLink>} />

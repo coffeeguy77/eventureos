@@ -5,6 +5,8 @@ import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { CLASSIFICATIONS, type Classification } from "@/lib/ai/classify";
 import { importGmailHistory } from "@/lib/integrations/gmail-import";
+import { gmailSettings } from "@/lib/integrations/gmail-sync";
+import { evaluateFilter, resolveFilter, type EmailFilterSettings } from "@/lib/integrations/email-filter";
 import { revokeGoogleToken } from "@/lib/integrations/oauth";
 import { getProvider, isLiveProvider, type LiveProviderId } from "@/lib/integrations/registry";
 import { XERO_CONNECTIONS } from "@/lib/integrations/xero";
@@ -94,22 +96,91 @@ async function withIntegration(provider: LiveProviderId) {
   return { ...c, sctx: ctx };
 }
 
+const SENDER_RE = /^(@?[a-z0-9.-]+\.[a-z]{2,}|[^\s@]+@[^\s@]+\.[^\s@]+)$/i;
+
 export async function saveGmailSettings(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
     const { sctx } = await withIntegration("gmail");
-    const lines = (k: string) => String(form.get(k) ?? "").split(/\n+/).map((s) => s.trim()).filter(Boolean).slice(0, 30);
+    const lines = (k: string, max = 60) => String(form.get(k) ?? "").split(/\n+/).map((s) => s.trim()).filter(Boolean).slice(0, max);
     const senders = lines("website_form_senders").map((s) => s.toLowerCase());
     const bad = senders.find((s) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
     if (bad) return { error: `“${bad}” isn't an email address.` };
+    const allow = lines("filter_allow_senders").map((s) => s.toLowerCase());
+    const block = lines("filter_block_senders").map((s) => s.toLowerCase());
+    const badList = [...allow, ...block].find((s) => !SENDER_RE.test(s));
+    if (badList) return { error: `“${badList}” isn't an email address or domain (e.g. jane@example.com or @example.com).` };
+    const keywords = lines("filter_keywords", 80);
+    const mode = form.get("filter_mode") === "all" ? "all" : "matching";
+    if (mode === "matching" && !keywords.length && !lines("website_subject_patterns").length) {
+      return { error: "Add at least one keyword or web-form subject line — otherwise no new emails would be imported." };
+    }
     const days = Math.max(1, Math.min(60, Number(form.get("initial_days") ?? 14) || 14));
     await saveIntegrationSettings(sctx, {
+      filter_mode: mode,
+      filter_keywords: keywords,
       website_subject_patterns: lines("website_subject_patterns"),
       website_form_senders: senders,
+      filter_allow_senders: allow,
+      filter_block_senders: block,
       ai_enabled: form.get("ai_enabled") === "on",
       initial_days: days,
     });
     revalidateAll("gmail");
-    return { ok: "Gmail settings saved." };
+    return { ok: "Email filters saved. They apply to every new email from now on — use “Check imported email” below to tidy up what's already here." };
+  } catch (e) {
+    return { error: errMessage(e) };
+  }
+}
+
+export type CleanupState = { error?: string; ok?: string; preview?: { threads: number; enquiries: number; messages: number }; } | undefined;
+
+/** Threads (not linked to an event or customer) whose first email fails the current filters. */
+async function threadsFailingFilter(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], orgId: string, settings: EmailFilterSettings) {
+  const filter = resolveFilter(settings);
+  const failing: string[] = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data: threads, error } = await supabase.from("email_threads").select("id")
+      .eq("organisation_id", orgId).is("event_id", null).is("customer_id", null).order("created_at").range(from, from + pageSize - 1);
+    if (error) throw new Error(`Could not read imported email: ${error.message}`);
+    if (!threads?.length) break;
+    const ids = threads.map((t) => t.id as string);
+    const { data: msgs, error: mErr } = await supabase.from("email_messages").select("thread_id, direction, from_email, subject, body_text, sent_at")
+      .eq("organisation_id", orgId).in("thread_id", ids).order("sent_at");
+    if (mErr) throw new Error(`Could not read imported email: ${mErr.message}`);
+    // judge each conversation by its first email from outside the business (or its first email at all)
+    type Msg = { thread_id: string; direction: string; from_email: string; subject: string | null; body_text: string | null };
+    const first = new Map<string, Msg>();
+    for (const m of (msgs ?? []) as Msg[]) {
+      const cur = first.get(m.thread_id);
+      if (!cur || (cur.direction !== "inbound" && m.direction === "inbound")) first.set(m.thread_id, m);
+    }
+    for (const id of ids) {
+      const m = first.get(id);
+      if (!m) { failing.push(id); continue; }
+      const d = evaluateFilter(filter, { subject: m.subject, from_email: m.from_email, body: m.body_text });
+      if (!d.import) failing.push(id);
+    }
+    if (threads.length < pageSize) break;
+  }
+  return failing;
+}
+
+export async function emailCleanup(_prev: CleanupState, form: FormData): Promise<CleanupState> {
+  try {
+    const { supabase, org, sctx } = await withIntegration("gmail");
+    const ids = await threadsFailingFilter(supabase, org.id, gmailSettings(sctx));
+    const run = form.get("step") === "run";
+    if (!ids.length) return { ok: "Everything already imported matches your filters — nothing to remove." };
+    const { data, error } = await supabase.rpc("cleanup_filtered_emails", { p_org: org.id, p_thread_ids: ids, p_dry_run: !run });
+    if (error) return { error: `Couldn't check imported email: ${error.message}` };
+    const r = data as { threads: number; enquiries: number; messages: number };
+    if (!run) {
+      if (!r.threads) return { ok: "Everything already imported matches your filters (or is linked to a customer or event) — nothing to remove." };
+      return { preview: r };
+    }
+    revalidatePath("/enquiries"); revalidatePath("/dashboard"); revalidateAll("gmail");
+    return { ok: `Removed ${r.threads} email conversation${r.threads === 1 ? "" : "s"} and ${r.enquiries} enquir${r.enquiries === 1 ? "y" : "ies"} that didn't match your filters. Nothing was deleted from Gmail.` };
   } catch (e) {
     return { error: errMessage(e) };
   }
