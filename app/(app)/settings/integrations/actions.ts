@@ -362,7 +362,7 @@ export async function resolveCandidate(id: string, decision: "merge" | "keep_sep
       try {
         const sctx = await buildContext(supabase, "user", org.id, "xero", user.id);
         const h = await importHistoryForContact(sctx, xeroId, customerId);
-        extra = `Imported ${h.invoices} invoice${h.invoices === 1 ? "" : "s"} from Xero.`;
+        extra = `Imported ${h.invoices} invoice${h.invoices === 1 ? "" : "s"} and ${h.quotes} quote${h.quotes === 1 ? "" : "s"} from Xero.`;
       } catch (e) {
         extra = `Invoice history will come in on the next Xero sync (${errMessage(e)}).`;
       }

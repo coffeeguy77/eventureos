@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
+import type { Tone } from "@/lib/status";
 import { ActivityFeed } from "@/components/records/activity-feed";
 import { Conversation } from "@/components/records/conversation";
 import { DocumentsList, type DocRow } from "@/components/records/documents-list";
@@ -22,7 +23,7 @@ import { cn } from "@/lib/cn";
 
 export const metadata = { title: "Client" };
 
-const TABS = ["overview", "events", "emails", "quotes", "invoices", "payments", "documents", "notes", "activity"] as const;
+const TABS = ["overview", "history", "events", "emails", "quotes", "invoices", "payments", "documents", "notes", "activity"] as const;
 type TabKey = (typeof TABS)[number];
 
 interface CustomerRow {
@@ -49,6 +50,12 @@ interface QuoteRow {
 interface InvoiceRow {
   id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; amount_paid: number;
   balance: number; status: InvoiceStatus; event_id: string | null; xero_invoice_id: string | null; event: { name: string } | null;
+  reference: string | null; line_items: HistLine[] | null;
+}
+interface HistLine { description: string | null; quantity: number | null; unit_amount: number | null; item_code: string | null; line_amount: number | null }
+interface XeroQuoteRow {
+  id: string; number: string | null; reference: string | null; title: string | null; status: string; quote_date: string | null;
+  expiry_date: string | null; total: number; line_items: HistLine[] | null;
 }
 interface PaymentRow { id: string; amount: number; paid_at: string; method: string | null; reference: string | null; xero_payment_id: string | null; invoice: { id: string; number: string; event_id: string | null } }
 
@@ -84,13 +91,13 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   ].filter(Boolean).join(",");
   const docScope = [`customer_id.eq.${id}`, events.length ? `event_id.in.(${events.map((e) => e.id).join(",")})` : null].filter(Boolean).join(",");
 
-  const [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, integRes, members] = await Promise.all([
+  const [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, integRes, members, xqRes] = await Promise.all([
     supabase.from("contacts").select("id, first_name, last_name, email, phone, position, is_primary, portal_user_id")
       .eq("organisation_id", org.id).eq("customer_id", id).order("is_primary", { ascending: false }).order("created_at"),
     supabase.from("quotes")
       .select("id, number, title, status, event_id, issue_date, expiry_date, current_version_id, has_unpublished_changes, created_at, event:events(name, event_date), versions:quote_versions!quote_versions_quote_id_organisation_id_fkey(id, version_number, status, total, published_at, viewed_at, responded_at, accepted_by_name)")
       .eq("organisation_id", org.id).eq("customer_id", id).order("created_at", { ascending: false }),
-    supabase.from("invoices").select("id, number, kind, issue_date, due_date, total, amount_paid, balance, status, event_id, xero_invoice_id, event:events(name)")
+    supabase.from("invoices").select("id, number, kind, issue_date, due_date, total, amount_paid, balance, status, event_id, xero_invoice_id, reference, line_items, event:events(name)")
       .eq("organisation_id", org.id).eq("customer_id", id).order("issue_date", { ascending: false }),
     supabase.from("payments").select("id, amount, paid_at, method, reference, xero_payment_id, invoice:invoices!inner(id, number, event_id, customer_id)")
       .eq("organisation_id", org.id).eq("invoice.customer_id", id).order("paid_at", { ascending: false }),
@@ -100,13 +107,16 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     supabase.from("activity_logs").select("*").eq("organisation_id", org.id).or(scope).order("created_at", { ascending: false }).limit(300),
     supabase.from("integrations").select("provider, status").eq("organisation_id", org.id),
     getMembers(org.id),
+    supabase.from("xero_quotes").select("id, number, reference, title, status, quote_date, expiry_date, total, line_items")
+      .eq("organisation_id", org.id).eq("customer_id", id).order("quote_date", { ascending: false }),
   ]);
-  for (const r of [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes]) {
+  for (const r of [contactsRes, quotesRes, invoicesRes, paymentsRes, threadsRes, notesRes, docsRes, activityRes, xqRes]) {
     if (r.error) throw new Error(`Could not load client details: ${r.error.message}`);
   }
   const contacts = (contactsRes.data ?? []) as ContactRow[];
   const quotes = (quotesRes.data ?? []) as unknown as QuoteRow[];
   const invoices = (invoicesRes.data ?? []) as unknown as InvoiceRow[];
+  const xeroQuotes = (xqRes.data ?? []) as XeroQuoteRow[];
   const payments = (paymentsRes.data ?? []) as unknown as PaymentRow[];
   const threads = (threadsRes.data ?? []) as EmailThread[];
   const notes = (notesRes.data ?? []) as NoteRow[];
@@ -182,6 +192,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   const tabs = [
     { key: "overview", label: "Overview" },
+    { key: "history", label: "Job history", count: invoices.filter((i) => i.status !== "void").length + xeroQuotes.length },
     { key: "events", label: "Events", count: events.length },
     { key: "emails", label: "Emails", count: threads.length },
     { key: "quotes", label: "Quotes", count: quotes.length },
@@ -536,6 +547,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </Card>
         )}
 
+        {tab === "history" && (
+          <JobHistory invoices={invoices} xeroQuotes={xeroQuotes} cur={cur} />
+        )}
+
         {tab === "invoices" && (
           <Card>
             <CardHeader title="Invoices" subtitle={`${money(live.reduce((s, i) => s + Number(i.total), 0), cur)} invoiced · ${money(outstanding, cur)} outstanding`}
@@ -651,3 +666,58 @@ function DateChip({ iso }: { iso: string | null }) {
   );
 }
 
+
+const XQ_TONE: Record<string, Tone> = { DRAFT: "neutral", SENT: "blue", ACCEPTED: "green", INVOICED: "green", DECLINED: "red" };
+
+function lineSummary(lines: HistLine[] | null) {
+  if (!lines?.length) return null;
+  return lines.filter((l) => l.description || l.item_code).map((l) => {
+    const d = (l.description ?? l.item_code ?? "").split("\n")[0].trim();
+    const short = d.length > 60 ? d.slice(0, 57) + "…" : d;
+    return l.quantity != null && l.quantity !== 1 ? `${short} × ${Number(l.quantity)}` : short;
+  }).join(" · ");
+}
+
+/** Every job with this client, newest first: Xero quotes and invoices with what was sold. */
+function JobHistory({ invoices, xeroQuotes, cur }: { invoices: InvoiceRow[]; xeroQuotes: XeroQuoteRow[]; cur: string }) {
+  type Row = { key: string; date: string | null; kind: "Invoice" | "Quote"; number: string; ref: string | null; total: number; status: React.ReactNode; lines: string | null; href?: string };
+  const rows: Row[] = [
+    ...invoices.map((i) => ({
+      key: i.id, date: i.issue_date, kind: "Invoice" as const, number: i.number, ref: i.reference ?? i.event?.name ?? null, total: Number(i.total),
+      status: <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>, lines: lineSummary(i.line_items), href: `/invoices/${i.id}`,
+    })),
+    ...xeroQuotes.map((q) => ({
+      key: q.id, date: q.quote_date, kind: "Quote" as const, number: q.number ?? "Quote", ref: q.reference ?? q.title, total: Number(q.total),
+      status: <Badge tone={XQ_TONE[q.status] ?? "neutral"}>{q.status.charAt(0) + q.status.slice(1).toLowerCase()} in Xero</Badge>, lines: lineSummary(q.line_items),
+    })),
+  ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const paidTotal = invoices.filter((i) => i.status !== "void" && i.status !== "draft").reduce((s, i) => s + Number(i.total), 0);
+  const years = new Set(rows.map((r) => r.date?.slice(0, 4)).filter(Boolean));
+  return (
+    <Card>
+      <CardHeader title="Job history" subtitle={rows.length ? `${invoices.filter((i) => i.status !== "void").length} invoices and ${xeroQuotes.length} Xero quotes${years.size ? ` since ${[...years].sort()[0]}` : ""} · ${money(paidTotal, cur)} invoiced` : undefined} />
+      {rows.length === 0 ? <EmptyState title="No history yet">Invoices and quotes from Xero appear here after a Xero sync.</EmptyState> : (
+        <ul className="divide-y divide-line border-t border-line">
+          {rows.map((r) => (
+            <li key={r.key} className="px-5 py-3">
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="w-20 shrink-0 text-[12px] text-ink-muted">{r.date ? fmtDate(r.date) : "—"}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-ink">
+                    {r.href ? <Link href={r.href} className="hover:text-brand-700">{r.kind} {r.number}</Link> : <>{r.kind} {r.number}</>}
+                    {r.ref && <span className="font-normal text-ink-muted"> · {r.ref}</span>}
+                  </p>
+                  {r.lines && <p className="mt-0.5 text-[12px] text-ink-muted">{r.lines}</p>}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="tabular text-[13.5px] font-semibold text-ink">{money(r.total, cur)}</p>
+                  {r.status}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}

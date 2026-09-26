@@ -65,7 +65,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
           <span className="min-w-0 break-words">{p.name} connected as <strong>{row!.account_label}</strong>.{" "}
             {provider === "gmail" && "Press Sync now to bring in the last 14 days, or import historical enquiries below."}
             {provider === "google_calendar" && "Now choose which EventureOS calendars sync to which Google calendar."}
-            {provider === "xero" && "Press Sync now to fetch contacts for match review — nothing merges until you confirm."}
+            {provider === "xero" && "Press Sync now to bring in your sales invoices and quotes as client history. Contacts with sales become clients (or are linked by exact email); possible duplicates wait in match review."}
           </span>
         </div>
       )}
@@ -256,7 +256,7 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
       </Card>
       <Card>
         <CardHeader title="Xero invoice history" subtitle="Synced from Xero — no need to open Xero." />
-        {(invoices ?? []).length === 0 ? <EmptyState title="No Xero invoices yet">Link customers in match review, then sync.</EmptyState> : (
+        {(invoices ?? []).length === 0 ? <EmptyState title="No Xero invoices yet">Press Sync now to import your invoice history.</EmptyState> : (
           <>
           <ul className="divide-y divide-line border-t border-line md:hidden">
             {((invoices ?? []) as unknown as Inv[]).map((i) => {

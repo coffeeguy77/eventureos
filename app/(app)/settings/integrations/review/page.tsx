@@ -167,7 +167,7 @@ export default async function ReviewPage() {
 
         {/* ---------------- Xero match review ---------------- */}
         <Card id="match-review">
-          <CardHeader title="Match review — Xero contacts" subtitle="Each Xero contact that isn't linked yet. Merge links it to the customer (filling only blank details) and imports its invoice history; Keep separate creates a new customer." />
+          <CardHeader title="Match review — Xero contacts" subtitle="Xero contacts that might be an existing client. Merge links it to the customer (filling only blank details) and imports its invoice history; Keep separate creates a new customer." />
           {xero.length === 0 ? <EmptyState title="No Xero contacts to review">Connect Xero and press Sync now to fetch contacts.</EmptyState> : (
             <ul className="divide-y divide-line border-t border-line">
               {xero.map((c) => (

@@ -13,6 +13,7 @@ import { apiJSON, type SyncContext } from "@/lib/integrations/runtime";
  *   GET /Invoices   (page, pageSize, where, ContactIDs, Statuses)        https://developer.xero.com/documentation/api/accounting/invoices
  *   PUT /Invoices   create                                                 (POST updates)
  *   GET /Payments   (page, where)                                          https://developer.xero.com/documentation/api/accounting/payments
+ *   GET /Quotes     (page, order, ContactID, Statuses; 100 per page)       https://developer.xero.com/documentation/api/accounting/quotes
  *   GET /CreditNotes (page, where)                                         https://developer.xero.com/documentation/api/accounting/creditnotes
  */
 export const XERO_API = "https://api.xero.com/api.xro/2.0";
@@ -30,12 +31,21 @@ export interface XeroPhone { PhoneType?: string; PhoneNumber?: string; PhoneArea
 export interface XeroContact {
   ContactID: string; ContactStatus?: string; Name: string; FirstName?: string; LastName?: string; EmailAddress?: string;
   Phones?: XeroPhone[]; IsCustomer?: boolean; IsSupplier?: boolean; UpdatedDateUTC?: string;
+  ContactPersons?: { FirstName?: string; LastName?: string; EmailAddress?: string; IncludeInEmails?: boolean }[];
+}
+export interface XeroLineItem {
+  Description?: string; Quantity?: number; UnitAmount?: number; ItemCode?: string; AccountCode?: string; LineAmount?: number; TaxAmount?: number; DiscountRate?: number;
+}
+export interface XeroQuote {
+  QuoteID: string; QuoteNumber?: string; Reference?: string; Title?: string; Summary?: string; Status: string;
+  Contact?: { ContactID: string; Name?: string }; Date?: string; DateString?: string; ExpiryDate?: string; ExpiryDateString?: string;
+  SubTotal?: number; TotalTax?: number; Total?: number; CurrencyCode?: string; UpdatedDateUTC?: string; LineItems?: XeroLineItem[];
 }
 export interface XeroInvoice {
   Type: "ACCREC" | "ACCPAY"; InvoiceID: string; InvoiceNumber?: string; Reference?: string;
   Contact?: { ContactID: string; Name?: string }; Date?: string; DateString?: string; DueDate?: string; DueDateString?: string;
   Status: string; LineAmountTypes?: string; SubTotal?: number; TotalTax?: number; Total?: number; AmountDue?: number; AmountPaid?: number;
-  AmountCredited?: number; CurrencyCode?: string; UpdatedDateUTC?: string;
+  AmountCredited?: number; CurrencyCode?: string; UpdatedDateUTC?: string; LineItems?: XeroLineItem[];
 }
 export interface XeroPayment { PaymentID: string; Date?: string; Amount?: number; Reference?: string; Status?: string; PaymentType?: string; Invoice?: { InvoiceID: string; InvoiceNumber?: string } }
 export interface XeroCreditNote { CreditNoteID: string; CreditNoteNumber?: string; Type?: string; Status?: string; Total?: number; RemainingCredit?: number; Date?: string; DateString?: string; Contact?: { ContactID: string; Name?: string } }
@@ -107,4 +117,12 @@ export function mapInvoiceStatus(inv: Pick<XeroInvoice, "Status" | "AmountPaid" 
 export async function listCreditNotes(ctx: SyncContext, page = 1) {
   const r = await xeroGet<{ CreditNotes?: XeroCreditNote[] }>(ctx, "/CreditNotes", { page: String(page), where: 'Type=="ACCRECCREDIT"', order: "Date DESC" });
   return r.CreditNotes ?? [];
+}
+
+/** Compact line items for history (what was sold, as written in Xero). */
+export function compactLines(lines?: XeroLineItem[] | null) {
+  return (lines ?? []).map((l) => ({
+    description: l.Description?.slice(0, 2000) ?? null, quantity: l.Quantity ?? null, unit_amount: l.UnitAmount ?? null,
+    item_code: l.ItemCode ?? null, account_code: l.AccountCode ?? null, line_amount: l.LineAmount ?? null,
+  }));
 }
