@@ -7,6 +7,7 @@ import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
+import { priceJob, type PackageRules } from "@/lib/pricing/engine";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -609,5 +610,75 @@ export async function removeQuoteDocument(documentId: string): Promise<ActionRes
     });
     refresh(q);
     return null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Price a job from a service package (Settings → Services & pricing)
+// ---------------------------------------------------------------------------
+
+export interface PriceJobInput {
+  packageId: string;
+  start: string;          // "HH:MM"
+  end: string;            // "HH:MM"
+  serves: number;
+  staff: number;
+  includeDelivery: boolean;
+  sectionTitle?: string;
+}
+
+const hhmm = (v: string, label: string) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(v ?? "").trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) fail(`${label} must be a time like 08:00.`);
+  return Number(m[1]) * 60 + Number(m[2]);
+};
+
+/** Prices the job on the server (from the saved price list, never client prices) and adds it as a new section. */
+export async function addPricedSection(quoteId: string, input: PriceJobInput): Promise<ActionResult<{ section: QSection; items: QItem[] }>> {
+  return run(async () => {
+    const { supabase, org, user, profile } = await requireOrg();
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    assertId(input.packageId, "package");
+    const [{ data: pkg, error: pErr }, { data: svc, error: sErr }] = await Promise.all([
+      supabase.from("service_packages").select("id, name, rules").eq("organisation_id", org.id).eq("id", input.packageId).eq("active", true).maybeSingle(),
+      supabase.from("services").select("id, code, name, description, unit, unit_price, tax_rate").eq("organisation_id", org.id).eq("active", true),
+    ]);
+    if (pErr || sErr) fail(`Couldn't load your price list: ${(pErr ?? sErr)!.message}`);
+    if (!pkg) fail("That package no longer exists or is switched off.");
+    const services = (svc ?? []).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) }));
+    const serves = checkNumber(input.serves, "Number of serves", 0, 100_000) as number;
+    const staff = checkNumber(input.staff, "Number of staff", 0, 20) as number;
+    const result = priceJob((pkg.rules ?? {}) as PackageRules, services, {
+      start_minutes: hhmm(input.start, "Start time"), end_minutes: hhmm(input.end, "Finish time"),
+      serves, staff_count: staff, include_delivery: !!input.includeDelivery,
+    });
+    if (!result.lines.length) fail("Nothing to add — check the times, serves and staff.");
+
+    const title = clean(input.sectionTitle, 120) ?? `${pkg.name} — ${input.start}–${input.end}`;
+    const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id)
+      .order("position", { ascending: false }).limit(1).maybeSingle();
+    const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({
+      organisation_id: org.id, quote_id: q.id, title, position: (last?.position ?? -1) + 1,
+    }).select(SECTION_COLS).single();
+    if (secErr) fail(`Couldn't add the section: ${secErr.message}`);
+    const { data: items, error: iErr } = await supabase.from("quote_items").insert(result.lines.map((l, i) => ({
+      organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: l.name, description: l.description,
+      quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i,
+    }))).select(ITEM_COLS);
+    if (iErr) {
+      await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id);
+      fail(`Couldn't add the lines: ${iErr.message}`);
+    }
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote.priced", entityType: "quote", entityId: q.id,
+      eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} priced ‘${pkg.name}’ on Quote Q-${q.number}: ${money(result.subtotal)} + tax`,
+      metadata: { package_id: pkg.id, ...input, subtotal: result.subtotal, total: result.total },
+    });
+    refresh(q);
+    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent) }))
+      .sort((a, b) => a.position - b.position);
+    return { section: sec as QSection, items: out };
   });
 }

@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { Building2, CalendarRange, Code2, Palette, PlugZap, Users, Zap } from "lucide-react";
+import { Building2, CalendarRange, Code2, Palette, PlugZap, Tags, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
   { href: "/settings", label: "Organisation", icon: Building2, exact: true },
   { href: "/settings/branding", label: "Branding & portal", icon: Palette },
   { href: "/settings/team", label: "Team", icon: Users },
+  { href: "/settings/pricing", label: "Services & pricing", icon: Tags },
   { href: "/settings/calendars", label: "Calendars & resources", icon: CalendarRange },
   { href: "/settings/automations", label: "Automations", icon: Zap },
   { href: "/settings/website-form", label: "Website enquiry form", icon: Code2 },

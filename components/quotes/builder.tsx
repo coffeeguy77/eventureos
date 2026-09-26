@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, Check, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Calculator, Check, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection,
@@ -18,6 +18,8 @@ import type { QuoteStatus } from "@/lib/types";
 import { parseNum, priceStr, numStr, quoteTotals } from "./calc";
 import { draftNums, fieldPatch, NUM_FIELDS, toDraft, type BoolField, type ItemDraft, type NumField } from "./draft";
 import { QuoteAttachments } from "./attachments";
+import { PriceJobPanel, type PricingPackage } from "./price-job";
+import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "./quote-document";
 import { SectionEditor, type Col, type SectionHandlers } from "./section-editor";
 import type {
@@ -46,6 +48,7 @@ export interface BuilderProps {
   gmailConnected: boolean;
   nextAction: React.ReactNode;
   history: React.ReactNode;
+  pricing: { packages: PricingPackage[]; services: PricedService[]; defaults: { start: string | null; end: string | null; guests: number | null } };
 }
 
 type Panel = null | "publish" | "respond";
@@ -339,6 +342,14 @@ export function QuoteBuilder(p: BuilderProps) {
     },
   };
 
+  const [pricing, setPricing] = useState(false);
+  function onPriced(section: QSection, added: QItem[]) {
+    setPricing(false);
+    setSections((all) => all.some((x) => x.id === section.id) ? all : [...all, section]);
+    setItems((all) => [...all, ...added.filter((a) => !all.some((i) => i.id === a.id)).map(toDraft)]);
+    showToast({ message: `Added ‘${section.title}’`, tone: "ok" });
+  }
+
   function onAddSection() {
     void structuralOp(() => addSection(quote.id)).then((r) => {
       if (r.ok) setSections((all) => all.some((s) => s.id === r.data.id) ? all : [...all, r.data]);
@@ -464,10 +475,20 @@ export function QuoteBuilder(p: BuilderProps) {
               currency={currency} catalogue={p.catalogue} adding={addingIn === s.id} h={h}
             />
           ))}
-          <button type="button" onClick={onAddSection}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong py-3 text-[13px] font-medium text-ink-muted hover:border-brand-300 hover:bg-white hover:text-brand-700">
-            <Plus className="h-4 w-4" />Add section
-          </button>
+          {pricing && (
+            <PriceJobPanel quoteId={quote.id} packages={p.pricing.packages} services={p.pricing.services} defaults={p.pricing.defaults}
+              currency={currency} onClose={() => setPricing(false)} onAdded={onPriced} />
+          )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={() => setPricing(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50">
+              <Calculator className="h-4 w-4" />Price a job
+            </button>
+            <button type="button" onClick={onAddSection}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong py-3 text-[13px] font-medium text-ink-muted hover:border-brand-300 hover:bg-white hover:text-brand-700">
+              <Plus className="h-4 w-4" />Add section
+            </button>
+          </div>
 
           <Card>
             <CardHeader title="Notes & terms" subtitle="Shown to the customer at the end of the quote" />
