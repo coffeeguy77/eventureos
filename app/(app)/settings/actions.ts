@@ -179,7 +179,7 @@ export async function saveBrandColour(_prev: ActionState, form: FormData): Promi
   const { supabase, org, role, user, profile } = await requireOrg();
   if (!isOwnerOrAdmin(role)) return { error: "Only owners and admins can change branding." };
   const colour = (str(form.get("brand_colour")) ?? "").toUpperCase();
-  if (!HEX_RE.test(colour)) return { error: "Use a hex colour like #6D4AFF." };
+  if (!HEX_RE.test(colour)) return { error: "Use a hex colour like #6028EC." };
   const { data: before } = await supabase.from("organisations").select("brand_colour").eq("id", org.id).single();
   if ((before?.brand_colour ?? "").toUpperCase() === colour) return { ok: "No changes to save." };
   const { error } = await supabase.from("organisations").update({ brand_colour: colour }).eq("id", org.id);
@@ -313,7 +313,7 @@ export async function addCalendar(_prev: ActionState, form: FormData): Promise<A
   const { supabase, org, role, user, profile } = await requireOrg();
   if (!canManage(role)) return { error: "Only owners, admins and managers can add calendars." };
   const name = str(form.get("name"));
-  const colour = (str(form.get("colour")) ?? "#6D4AFF").toUpperCase();
+  const colour = (str(form.get("colour")) ?? "#6028EC").toUpperCase();
   if (!name) return { error: "Give the calendar a name, e.g. \"Cart 2\"." };
   if (name.length > 80) return { error: "Keep the name under 80 characters." };
   if (!HEX_RE.test(colour)) return { error: "Choose a colour." };

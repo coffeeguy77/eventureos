@@ -342,7 +342,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 <ul className="divide-y divide-line border-t border-line">
                   {cal.map((c) => (
                     <li key={c.id} className="flex items-center gap-3 px-5 py-3">
-                      <span className="h-8 w-1 rounded-full" style={{ background: c.calendar?.colour ?? "#6D4AFF" }} />
+                      <span className="h-8 w-1 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-ink">{c.calendar?.name}</p>
                         <p className="text-[12px] text-ink-muted">{fmtDateTime(c.starts_at, tz)} – {fmtDateTime(c.ends_at, tz, "time")}</p>

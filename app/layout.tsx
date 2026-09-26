@@ -4,8 +4,15 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.APP_URL?.trim() || "https://www.eventureos.com.au"),
   title: { default: "EventureOS", template: "%s · EventureOS" },
   description: "The operating system for event businesses.",
+  openGraph: {
+    siteName: "EventureOS",
+    title: "EventureOS",
+    description: "The operating system for event businesses.",
+    images: [{ url: "/brand/og.png", width: 1200, height: 630, alt: "EventureOS — The operating system for event businesses." }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -251,7 +251,7 @@ export default async function DashboardPage() {
                       {items.map((c) => (
                         <Link key={c.id} href={c.event_id ? `/events/${c.event_id}` : "#"}
                           className={cn("block rounded-md border-l-[3px] bg-zinc-50 px-1.5 py-1 text-[11px] leading-tight hover:bg-zinc-100", conflicts.has(c.id) && "ring-1 ring-rose-300")}
-                          style={{ borderLeftColor: c.calendar?.colour ?? "#6D4AFF" }}>
+                          style={{ borderLeftColor: c.calendar?.colour ?? "#6028EC" }}>
                           <span className="block truncate font-medium text-ink">{c.title}</span>
                           <span className="block truncate text-ink-muted">{fmtDateTime(c.starts_at, tz, "time")} · {c.calendar?.name}</span>
                           {conflicts.has(c.id) && <span className="block font-medium text-rose-700">Conflict</span>}

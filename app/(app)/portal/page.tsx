@@ -36,7 +36,7 @@ export default async function PortalAdminPage() {
   for (const r of [brandRes, contactsRes, actRes, msgRes, evRes, reqRes]) if (r.error) throw new Error(`Could not load the portal settings: ${r.error.message}`);
 
   const brand = brandRes.data!;
-  const colour = /^#[0-9a-f]{6}$/i.test(brand.brand_colour ?? "") ? brand.brand_colour : "#6D4AFF";
+  const colour = /^#[0-9a-f]{6}$/i.test(brand.brand_colour ?? "") ? brand.brand_colour : "#6028EC";
   type One<T> = T | T[] | null;
   const one = <T,>(v: One<T>): T | null => (Array.isArray(v) ? v[0] ?? null : v);
 

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/context";
-import { Logo } from "@/components/shell/sidebar";
+import { Wordmark } from "@/components/shell/sidebar";
 import { OnboardingForm } from "./form";
 
 export const metadata = { title: "Set up your organisation" };
@@ -19,9 +19,8 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-[460px]">
-        <div className="mb-8 flex items-center gap-2.5">
-          <Logo size={30} />
-          <span className="text-[16px] font-semibold tracking-tight">EventureOS</span>
+        <div className="mb-8">
+          <Wordmark height={30} />
         </div>
         <div className="rounded-2xl border border-line bg-white p-8 shadow-card">
           <h1 className="text-[20px] font-semibold tracking-tight">

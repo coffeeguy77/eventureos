@@ -67,7 +67,7 @@ function thankYou(reference: string | null, error?: string) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${error ? "Something went wrong" : "Thanks — we've got your enquiry"}</title>
 <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#fafafa;color:#18181b;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}
-main{max-width:420px;background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:14px;color:#52525b;line-height:1.5;margin:0 0 12px}a{color:#6d4aff}</style></head>
+main{max-width:420px;background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:28px}h1{font-size:18px;margin:0 0 8px}p{font-size:14px;color:#52525b;line-height:1.5;margin:0 0 12px}a{color:#6028ec}</style></head>
 <body><main>${error
     ? `<h1>We couldn't send your enquiry</h1><p>${esc(error)}</p><p><a href="javascript:history.back()">Go back and try again</a></p>`
     : `<h1>Thanks — we've got your enquiry</h1><p>We'll be in touch shortly.${reference ? ` Your reference is <strong>${esc(reference)}</strong>.` : ""}</p><p><a href="javascript:history.back()">Back to the website</a></p>`}

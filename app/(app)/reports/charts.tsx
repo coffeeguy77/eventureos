@@ -1,15 +1,15 @@
 /**
  * Report chart primitives — plain HTML/CSS, no chart library.
- * Palette (validated with the dataviz validator against white): series 1 = brand violet #6D4AFF,
+ * Palette (validated with the dataviz validator against white): series 1 = brand violet #6028EC,
  * series 2 = orange #eb6834 (adjacent CVD ΔE 32, all ≥ 3:1). Ordinal ramp for ordered stages:
- * #9173FF → #5A35F0 → #2F1C80 (monotone lightness, light end 3.4:1).
+ * #8757F2 → #4F17DB → #2A0D73 (monotone lightness, light end 3.4:1).
  * Marks: bars ≤ 24px thick, 4px rounded data-end, square at the baseline; hairline solid grid.
  * Every chart has a table twin via <ChartFrame table>. Values are direct-labelled; text never wears the series colour.
  */
 import { cn } from "@/lib/cn";
 
-export const SERIES = ["#6D4AFF", "#eb6834"] as const;
-export const ORDINAL = ["#9173FF", "#5A35F0", "#2F1C80"] as const;
+export const SERIES = ["#6028EC", "#eb6834"] as const;
+export const ORDINAL = ["#8757F2", "#4F17DB", "#2A0D73"] as const;
 export const STATUS = { neutral: "#A1A1AA", warning: "#fab219", serious: "#ec835a", critical: "#d03b3b" } as const;
 
 /** A report card: title, optional caption, the chart, and a "View as table" disclosure. */

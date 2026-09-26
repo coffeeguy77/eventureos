@@ -216,7 +216,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                     <ul className="space-y-1.5">
                       {cal.map((c) => (
                         <li key={c.id} className="flex items-center gap-2 text-[12.5px]">
-                          <span className="h-2 w-2 rounded-full" style={{ background: c.calendar?.colour ?? "#6D4AFF" }} />
+                          <span className="h-2 w-2 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
                           <span className="flex-1 truncate text-ink">{c.title}</span>
                           <span className="text-ink-faint">{fmtDateTime(c.starts_at, tz, "time")}–{fmtDateTime(c.ends_at, tz, "time")} · {c.calendar?.name}</span>
                         </li>

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -28,10 +29,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false }: { orgName: st
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-white lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Logo />
-        <div className="min-w-0">
-          <div className="text-[14px] font-semibold tracking-tight text-ink">EventureOS</div>
-        </div>
+        <Link href="/dashboard" aria-label="EventureOS dashboard"><Wordmark height={21} /></Link>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {NAV.map((item) => {
@@ -68,13 +66,19 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false }: { orgName: st
   );
 }
 
+/** The EventureOS "E" mark (app icon). */
 export function Logo({ size = 26 }: { size?: number }) {
+  return <Image src="/brand/eventureos-mark.png" width={size} height={size} alt="" aria-hidden="true" className="shrink-0 rounded-[22%]" />;
+}
+
+/** The EventureOS wordmark. `tone="light"` is for dark backgrounds. */
+export function Wordmark({ height = 22, tone = "dark", className }: { height?: number; tone?: "dark" | "light"; className?: string }) {
+  const width = Math.round((height * 720) / 109);
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="8" fill="#6D4AFF" />
-      <path d="M9 10.5h12M9 16h9M9 21.5h12" stroke="white" strokeWidth="2.6" strokeLinecap="round" />
-      <circle cx="23.5" cy="16" r="2.2" fill="#D6CBFF" />
-    </svg>
+    <Image
+      src={tone === "light" ? "/brand/eventureos-wordmark-white.png" : "/brand/eventureos-wordmark.png"}
+      width={width} height={height} alt="EventureOS" priority className={cn("shrink-0", className)}
+    />
   );
 }
 

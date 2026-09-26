@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -75,7 +76,9 @@ export default async function PortalLayout({ children, params }: { children: Rea
               </a>
             )}
           </div>
-          <span className="text-[11.5px] text-ink-faint">Powered by EventureOS</span>
+          <a href="https://www.eventureos.com.au" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[11.5px] text-ink-faint hover:text-ink">
+            Powered by <Image src="/brand/eventureos-wordmark.png" width={73} height={11} alt="EventureOS" className="opacity-80" />
+          </a>
         </div>
       </footer>
     </div>

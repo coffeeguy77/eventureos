@@ -6,10 +6,10 @@ import type { Entry, Resource } from "./model";
 
 /** Resource colour with alpha, tolerant of non-hex values. */
 export function tint(hex: string | undefined, alpha: string) {
-  return hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex + alpha : `rgba(109, 74, 255, 0.12)`;
+  return hex && /^#[0-9a-f]{6}$/i.test(hex) ? hex + alpha : `rgba(96, 40, 236, 0.12)`;
 }
 
-export const FALLBACK_COLOUR = "#6D4AFF";
+export const FALLBACK_COLOUR = "#6028EC";
 
 /** Compact entry used in month cells. */
 export function EntryChip({ entry, resource, onOpen, showTime = true, timeText }: {

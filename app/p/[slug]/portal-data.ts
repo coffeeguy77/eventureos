@@ -11,7 +11,7 @@ import type { EventStatus, InvoiceStatus, QuoteStatus } from "@/lib/types";
 
 export const SLUG_RE = /^[a-z0-9-]{2,60}$/;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const DEFAULT_BRAND = "#6D4AFF";
+export const DEFAULT_BRAND = "#6028EC";
 
 export function isSlug(s: unknown): s is string {
   return typeof s === "string" && SLUG_RE.test(s);

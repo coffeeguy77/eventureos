@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isSuperAdmin } from "@/lib/context";
 import { createClient } from "@/lib/supabase/server";
-import { Logo } from "@/components/shell/sidebar";
+import { Wordmark } from "@/components/shell/sidebar";
 import { AdminNav } from "./admin-nav";
 
 export const metadata = { title: { default: "Platform admin", template: "%s · Platform admin" } };
@@ -18,8 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="bg-zinc-950 text-white">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 lg:px-8">
           <Link href="/admin" className="flex items-center gap-2.5">
-            <Logo size={24} />
-            <span className="text-[14px] font-semibold tracking-tight">EventureOS</span>
+            <Wordmark height={20} tone="light" />
             <span className="rounded bg-amber-400 px-1.5 py-px text-[10.5px] font-bold uppercase tracking-wide text-amber-950">Platform admin</span>
           </Link>
           <AdminNav />
