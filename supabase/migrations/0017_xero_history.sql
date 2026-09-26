@@ -72,6 +72,17 @@ begin
   where t.id = s.id;
   get diagnostics v_thr = row_count;
 
+  -- "Customer since" = their first invoice or quote, when that is earlier than the record
+  update public.customers c set customer_since = f.first_date
+  from (
+    select customer_id, min(d) first_date from (
+      select customer_id, issue_date d from public.invoices where organisation_id = p_org and status <> 'void'
+      union all
+      select customer_id, quote_date from public.xero_quotes where organisation_id = p_org and quote_date is not null
+    ) x group by customer_id
+  ) f
+  where c.organisation_id = p_org and c.id = f.customer_id and f.first_date < c.customer_since;
+
   return jsonb_build_object('enquiries', v_enq, 'threads', v_thr);
 end $$;
 revoke all on function public.link_customer_emails(uuid) from public, anon;
