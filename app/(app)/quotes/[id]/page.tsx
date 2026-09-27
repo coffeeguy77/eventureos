@@ -48,7 +48,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   const [sectionsRes, itemsRes, versionsRes, docsRes, catRes, members, gmailRes, ruleRes, contactRes, svcRes, pkgRes] = await Promise.all([
     supabase.from("quote_sections").select("id, title, description, position, is_optional").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
-    supabase.from("quote_items").select("id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
+    supabase.from("quote_items").select("id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position, service_id").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
     supabase.from("quote_versions").select(VERSION_COLS).eq("organisation_id", org.id).eq("quote_id", q.id).order("version_number", { ascending: false }),
     supabase.from("documents").select("id, name, storage_path, mime_type, size_bytes, created_at").eq("organisation_id", org.id).eq("quote_id", q.id).order("created_at", { ascending: false }),
     supabase.from("quote_items").select("name, description, unit, unit_price, tax_rate, is_package, image_url, updated_at").eq("organisation_id", org.id).neq("name", "").order("updated_at", { ascending: false }).limit(1000),
@@ -58,7 +58,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
     q.event.primary_contact_id
       ? supabase.from("contacts").select("first_name, last_name").eq("id", q.event.primary_contact_id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    supabase.from("services").select("id, code, name, description, unit, unit_price, tax_rate").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
+    supabase.from("services").select("id, code, name, description, unit, unit_price, tax_rate, category").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
     supabase.from("service_packages").select("id, name, summary, rules").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
   ]);
   for (const r of [sectionsRes, itemsRes, versionsRes, docsRes, catRes, svcRes, pkgRes]) {
@@ -75,10 +75,10 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const currentVersion = versions.find((v) => v.id === q.current_version_id) ?? null;
 
   // Reusable catalogue: the price list first, then distinct past item names (most recent price wins)
-  const services: PricedService[] = (svcRes.data ?? []).map((r) => ({ ...r, unit_price: Number(r.unit_price), tax_rate: Number(r.tax_rate) }));
+  const services: (PricedService & { category: string | null })[] = (svcRes.data ?? []).map((r) => ({ ...r, unit_price: Number(r.unit_price), tax_rate: Number(r.tax_rate) }));
   const packages = (pkgRes.data ?? []) as PricingPackage[];
   const seen = new Set<string>(services.map((r) => r.name.trim().toLowerCase()));
-  const priceList: CatalogueItem[] = services.map((r) => ({ name: r.name, description: r.description, unit: r.unit, unit_price: r.unit_price, tax_rate: r.tax_rate, is_package: false, image_url: null }));
+  const priceList: CatalogueItem[] = services.map((r) => ({ service_id: r.id, category: (r as { category?: string | null }).category ?? null, name: r.name, description: r.description, unit: r.unit, unit_price: r.unit_price, tax_rate: r.tax_rate, is_package: false, image_url: null }));
   const catalogue: CatalogueItem[] = [];
   for (const r of (catRes.data ?? []) as (CatalogueItem & { updated_at: string })[]) {
     const key = r.name.trim().toLowerCase();

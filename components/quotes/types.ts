@@ -24,10 +24,11 @@ export interface QItem {
   is_package: boolean;
   image_url: string | null;
   position: number;
+  service_id?: string | null;
 }
 
 export type ItemPatch = Partial<Pick<QItem,
-  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "is_optional" | "is_package" | "image_url">>;
+  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "is_optional" | "is_package" | "image_url" | "service_id">>;
 
 export type SectionPatch = Partial<Pick<QSection, "title" | "description" | "is_optional">>;
 
@@ -39,6 +40,8 @@ export interface HeaderPatch {
 }
 
 export interface CatalogueItem {
+  service_id?: string | null;
+  category?: string | null;
   name: string;
   description: string | null;
   unit: string | null;

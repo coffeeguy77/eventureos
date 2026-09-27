@@ -326,14 +326,15 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
   const errors: string[] = [];
   let pushed = 0;
   const { data: rows, error } = await ctx.db.from("invoices")
-    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, customer:customers(name, xero_contact_id), event:events(name)")
+    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, quote_id, customer:customers(name, xero_contact_id), event:events(name)")
     .eq("organisation_id", ctx.org.id).is("xero_invoice_id", null).neq("status", "void").limit(50);
   if (error) throw new Error(`Could not load invoices to push: ${error.message}`);
-  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; customer: { name: string; xero_contact_id: string | null } | null; event: { name: string } | null };
+  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; quote_id: string | null; customer: { name: string; xero_contact_id: string | null } | null; event: { name: string } | null };
   const list = (rows ?? []) as unknown as Row[];
   const ready = list.filter((r) => r.customer?.xero_contact_id);
   for (const inv of ready) {
     const kindLabel = inv.kind === "deposit" ? "Deposit" : inv.kind === "final" ? "Final balance" : "Services";
+    const itemised = inv.kind === "full" && inv.quote_id ? await quoteLines(ctx, inv.quote_id, Number(inv.total), s) : null;
     const body = {
       Invoices: [{
         Type: "ACCREC",
@@ -342,10 +343,10 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
         DueDate: inv.due_date ?? inv.issue_date,
         InvoiceNumber: inv.number,
         Reference: inv.event?.name?.slice(0, 255) ?? undefined,
-        LineAmountTypes: "Inclusive",
+        LineAmountTypes: itemised ? "Exclusive" : "Inclusive",
         Status: s.push_invoices === "authorised" ? "AUTHORISED" : "DRAFT",
         CurrencyCode: inv.currency,
-        LineItems: [{
+        LineItems: itemised ?? [{
           Description: `${kindLabel}${inv.event?.name ? ` — ${inv.event.name}` : ""}`,
           Quantity: 1, UnitAmount: Number(inv.total),
           AccountCode: s.sales_account_code || "200",
@@ -366,6 +367,33 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
     }
   }
   return { pushed, waiting: list.length - ready.length, errors };
+}
+
+/**
+ * The quote's lines as Xero line items (ex GST), each with the item code and account from the price list.
+ * Returns null — and the invoice goes as one line — if the quote has optional lines or the totals don't agree.
+ */
+async function quoteLines(ctx: SyncContext, quoteId: string, invoiceTotal: number, s: XeroSettings) {
+  const { data, error } = await ctx.db.from("quote_items")
+    .select("name, description, quantity, unit_price, tax_rate, discount_percent, is_optional, line_total, position, section:quote_sections(position, is_optional), service:services(code, xero_account_code)")
+    .eq("organisation_id", ctx.org.id).eq("quote_id", quoteId);
+  if (error || !data?.length) return null;
+  type L = { name: string; description: string | null; quantity: number; unit_price: number; tax_rate: number; discount_percent: number; is_optional: boolean; line_total: number; position: number;
+    section: { position: number; is_optional: boolean } | null; service: { code: string | null; xero_account_code: string | null } | null };
+  const lines = (data as unknown as L[]).filter((l) => l.name.trim());
+  if (lines.some((l) => l.is_optional || l.section?.is_optional)) return null;
+  const incl = lines.reduce((sum, l) => sum + Number(l.line_total) * (1 + Number(l.tax_rate) / 100), 0);
+  if (Math.abs(incl - invoiceTotal) > 0.05 * Math.max(1, lines.length)) return null;
+  return lines
+    .sort((a, b) => (a.section?.position ?? 0) - (b.section?.position ?? 0) || a.position - b.position)
+    .map((l) => ({
+      Description: [l.name, l.description].filter(Boolean).join("\n").slice(0, 4000),
+      Quantity: Number(l.quantity), UnitAmount: Number(l.unit_price),
+      ...(Number(l.discount_percent) ? { DiscountRate: Number(l.discount_percent) } : {}),
+      ...(l.service?.code ? { ItemCode: l.service.code } : {}),
+      AccountCode: l.service?.xero_account_code || s.sales_account_code || "200",
+      TaxType: Number(l.tax_rate) > 0 ? (s.tax_type || "OUTPUT") : "EXEMPTOUTPUT",
+    }));
 }
 
 /** After a person links a customer to a Xero contact in MATCH REVIEW, bring in that contact's history. */

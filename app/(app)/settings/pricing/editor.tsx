@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { FormError, Label, inputClass } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { money } from "@/lib/format";
 import type { PackageRules } from "@/lib/pricing/engine";
-import { deletePackage, deleteService, savePackage, saveService, type ServiceInput } from "./actions";
+import { deletePackage, deleteService, savePackage, saveService, syncFromXeroItems, type ServiceInput } from "./actions";
 
 interface Service extends ServiceInput { id: string; position: number }
 interface Pkg { id: string; name: string; summary: string | null; rules: PackageRules; active: boolean }
@@ -24,6 +24,7 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
 
   return (
     <div className="space-y-6">
+      {canEdit && <XeroItemsCard />}
       <Card>
         <CardHeader title="Price list"
           subtitle="Everything you charge for. Prices are excluding GST. These appear in Quick add on every quote."
@@ -31,8 +32,11 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
         {!canEdit && <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">Only owners, admins and managers can change prices.</p>}
         <ul className="divide-y divide-line border-t border-line">
           {editing === "new" && <li className="px-5 py-4"><ServiceForm initial={blankService} onDone={() => setEditing(null)} /></li>}
-          {services.map((s) => (
-            <li key={s.id} className="px-5 py-3">
+          {services.map((s, i) => (<Fragment key={s.id}>
+            {(i === 0 || services[i - 1].category !== s.category) && (
+              <li className="bg-zinc-50 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{s.category || "Other"}</li>
+            )}
+            <li className="px-5 py-3">
               {editing === s.id ? <ServiceForm initial={s} onDone={() => setEditing(null)} /> : (
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
@@ -52,7 +56,7 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
                 </div>
               )}
             </li>
-          ))}
+          </Fragment>))}
           {!services.length && editing !== "new" && <li className="px-5 py-6 text-center text-[13px] text-ink-muted">No services yet.</li>}
         </ul>
       </Card>
@@ -267,5 +271,37 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
         <Button type="submit" size="sm" variant="primary" disabled={pending}>{pending ? "Saving…" : "Save package"}</Button>
       </div>
     </form>
+  );
+}
+
+function XeroItemsCard() {
+  const router = useRouter();
+  const [accounts, setAccounts] = useState("210, 211, 212, 213, 214, 215");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ updated: string[]; added: string[]; seen: number } | null>(null);
+  async function run() {
+    setPending(true); setError(null); setResult(null);
+    const r = await syncFromXeroItems(accounts).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    setPending(false);
+    if (!r.ok) { setError(r.error); return; }
+    setResult(r.data); router.refresh();
+  }
+  return (
+    <Card>
+      <CardHeader title="Match your Xero items"
+        subtitle="Copies each Xero item's code and account onto the matching service here (matched by code, then exact name). Prices here are not changed. Sold Xero items on these accounts that aren't here yet are added." />
+      <div className="flex flex-wrap items-end gap-3 px-5 pb-4">
+        <div className="min-w-[14rem] flex-1"><Label htmlFor="xi-acc" hint="revenue account codes">Add new items from accounts</Label>
+          <input id="xi-acc" value={accounts} onChange={(e) => setAccounts(e.target.value)} className={inputClass} /></div>
+        <Button onClick={run} disabled={pending}><RefreshCw className={cn("h-3.5 w-3.5", pending && "animate-spin")} />{pending ? "Checking Xero…" : "Match Xero items"}</Button>
+      </div>
+      {error && <div className="px-5 pb-4"><FormError message={error} /></div>}
+      {result && (
+        <div className="mx-5 mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-900 ring-1 ring-inset ring-emerald-100">
+          Checked {result.seen} Xero items. {result.updated.length ? `Updated: ${result.updated.join("; ")}.` : "Nothing to update."} {result.added.length ? `Added: ${result.added.join(", ")}.` : ""}
+        </div>
+      )}
+    </Card>
   );
 }

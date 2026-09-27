@@ -114,3 +114,23 @@ export async function deletePackage(id: string): Promise<Result> {
     return null;
   });
 }
+
+/** Bring Xero item codes/accounts across; add sold Xero items on the given accounts. */
+export async function syncFromXeroItems(accountsCsv: string): Promise<Result<{ updated: string[]; added: string[]; seen: number }>> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await manager();
+    const accounts = accountsCsv.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[\w-]{1,10}$/.test(x)).slice(0, 30);
+    const { buildContext } = await import("@/lib/integrations/sync-runner");
+    const { importXeroItems } = await import("@/lib/integrations/xero-items");
+    let ctx;
+    try { ctx = await buildContext(supabase, "user", org.id, "xero", user.id); }
+    catch { throw new Error("Xero isn't connected. Connect it in Settings → Integrations first."); }
+    const r = await importXeroItems(ctx, accounts);
+    if (r.updated.length || r.added.length) {
+      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "pricing.xero_items", entityType: "organisation", entityId: org.id,
+        summary: `${actorName(profile)} updated the price list from Xero items: ${r.updated.length} updated, ${r.added.length} added` });
+    }
+    revalidatePath("/settings/pricing");
+    return r;
+  });
+}

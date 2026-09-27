@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, Calculator, Check, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection,
@@ -19,6 +19,7 @@ import { parseNum, priceStr, numStr, quoteTotals } from "./calc";
 import { draftNums, fieldPatch, NUM_FIELDS, toDraft, type BoolField, type ItemDraft, type NumField } from "./draft";
 import { QuoteAttachments } from "./attachments";
 import { PriceJobPanel, type PricingPackage } from "./price-job";
+import { MenuPicker } from "./menu-picker";
 import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "./quote-document";
 import { SectionEditor, type Col, type SectionHandlers } from "./section-editor";
@@ -48,7 +49,7 @@ export interface BuilderProps {
   gmailConnected: boolean;
   nextAction: React.ReactNode;
   history: React.ReactNode;
-  pricing: { packages: PricingPackage[]; services: PricedService[]; defaults: { start: string | null; end: string | null; guests: number | null } };
+  pricing: { packages: PricingPackage[]; services: (PricedService & { category: string | null })[]; defaults: { start: string | null; end: string | null; guests: number | null } };
 }
 
 type Panel = null | "publish" | "respond";
@@ -294,7 +295,7 @@ export function QuoteBuilder(p: BuilderProps) {
       setAddingIn(sectionId);
       void structuralOp(() => addItem(quote.id, sectionId, {
         name: c.name, description: c.description, unit: c.unit, unit_price: c.unit_price, tax_rate: c.tax_rate,
-        is_package: c.is_package, image_url: c.image_url, quantity: 1,
+        is_package: c.is_package, image_url: c.image_url, quantity: 1, service_id: c.service_id ?? null,
       })).then((r) => {
         setAddingIn(null);
         if (r.ok) { focusNext.current = { id: r.data.id, col: "quantity" }; setItems((all) => all.some((i) => i.id === r.data.id) ? all : [...all, toDraft(r.data)]); }
@@ -343,8 +344,9 @@ export function QuoteBuilder(p: BuilderProps) {
   };
 
   const [pricing, setPricing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   function onPriced(section: QSection, added: QItem[]) {
-    setPricing(false);
+    setPricing(false); setMenuOpen(false);
     setSections((all) => all.some((x) => x.id === section.id) ? all : [...all, section]);
     setItems((all) => [...all, ...added.filter((a) => !all.some((i) => i.id === a.id)).map(toDraft)]);
     showToast({ message: `Added ‘${section.title}’`, tone: "ok" });
@@ -479,8 +481,16 @@ export function QuoteBuilder(p: BuilderProps) {
             <PriceJobPanel quoteId={quote.id} packages={p.pricing.packages} services={p.pricing.services} defaults={p.pricing.defaults}
               currency={currency} onClose={() => setPricing(false)} onAdded={onPriced} />
           )}
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button type="button" onClick={() => setPricing(true)}
+          {menuOpen && (
+            <MenuPicker quoteId={quote.id} services={p.pricing.services} guests={p.pricing.defaults.guests}
+              currency={currency} onClose={() => setMenuOpen(false)} onAdded={onPriced} />
+          )}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <button type="button" onClick={() => { setMenuOpen(true); setPricing(false); }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50">
+              <UtensilsCrossed className="h-4 w-4" />Add from menu
+            </button>
+            <button type="button" onClick={() => { setPricing(true); setMenuOpen(false); }}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50">
               <Calculator className="h-4 w-4" />Price a job
             </button>

@@ -17,7 +17,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position";
+const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position, service_id";
 const SECTION_COLS = "id, title, description, position, is_optional";
 
 class UserError extends Error {}
@@ -352,6 +352,7 @@ function validateItemPatch(patch: ItemPatch) {
   if ("is_optional" in patch) next.is_optional = !!patch.is_optional;
   if ("is_package" in patch) next.is_package = !!patch.is_package;
   if ("image_url" in patch) next.image_url = checkImageUrl(patch.image_url);
+  if ("service_id" in patch) next.service_id = patch.service_id && UUID.test(patch.service_id) ? patch.service_id : null;
   return next;
 }
 
@@ -664,7 +665,7 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     if (secErr) fail(`Couldn't add the section: ${secErr.message}`);
     const { data: items, error: iErr } = await supabase.from("quote_items").insert(result.lines.map((l, i) => ({
       organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: l.name, description: l.description,
-      quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i,
+      quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i, service_id: l.service_id,
     }))).select(ITEM_COLS);
     if (iErr) {
       await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id);
@@ -675,6 +676,51 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       eventId: q.event_id, customerId: q.customer_id,
       summary: `${actorName(profile)} priced ‘${pkg.name}’ on Quote Q-${q.number}: ${money(result.subtotal)} + tax`,
       metadata: { package_id: pkg.id, ...input, subtotal: result.subtotal, total: result.total },
+    });
+    refresh(q);
+    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent) }))
+      .sort((a, b) => a.position - b.position);
+    return { section: sec as QSection, items: out };
+  });
+}
+
+/** Add chosen price-list items (e.g. from the catering menu) as a new section. Prices come from the saved list. */
+export async function addMenuItems(quoteId: string, sectionTitle: string, picks: { serviceId: string; quantity: number }[]): Promise<ActionResult<{ section: QSection; items: QItem[] }>> {
+  return run(async () => {
+    const { supabase, org, user, profile } = await requireOrg();
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    const valid = picks.filter((p) => UUID.test(p.serviceId)).map((p) => ({ ...p, quantity: checkNumber(p.quantity, "Quantity", 0.01, 1_000_000) as number }));
+    if (!valid.length) fail("Choose at least one item and a quantity.");
+    if (valid.length > 100) fail("That's a lot of items at once — add them in smaller groups.");
+    const { data: svc, error } = await supabase.from("services").select("id, name, description, unit, unit_price, tax_rate, position")
+      .eq("organisation_id", org.id).eq("active", true).in("id", valid.map((p) => p.serviceId));
+    if (error) fail(`Couldn't load your price list: ${error.message}`);
+    const byId = new Map((svc ?? []).map((s) => [s.id as string, s]));
+    const rows = valid.filter((p) => byId.has(p.serviceId));
+    if (rows.length !== valid.length) fail("Some of those items are no longer on your price list. Refresh and try again.");
+    const title = clean(sectionTitle, 120) ?? "Catering";
+    const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id)
+      .order("position", { ascending: false }).limit(1).maybeSingle();
+    const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({
+      organisation_id: org.id, quote_id: q.id, title, position: (last?.position ?? -1) + 1,
+    }).select(SECTION_COLS).single();
+    if (secErr) fail(`Couldn't add the section: ${secErr.message}`);
+    const { data: items, error: iErr } = await supabase.from("quote_items").insert(rows.map((p, i) => {
+      const s = byId.get(p.serviceId)!;
+      return {
+        organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: s.name, description: s.description,
+        quantity: p.quantity, unit: s.unit, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate), position: i, service_id: s.id,
+      };
+    })).select(ITEM_COLS);
+    if (iErr) {
+      await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id);
+      fail(`Couldn't add the items: ${iErr.message}`);
+    }
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote.menu_added", entityType: "quote", entityId: q.id,
+      eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} added ${rows.length} item${rows.length === 1 ? "" : "s"} from the menu to Quote Q-${q.number} (‘${title}’)`,
     });
     refresh(q);
     const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent) }))
