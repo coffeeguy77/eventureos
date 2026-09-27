@@ -66,6 +66,8 @@ export interface CalendarSettings {
   history_months?: number;
   history_done_for?: string[];            // calendar connection ids whose history is in
   pull_cursor?: { conn: string; page: string } | null;
+  /** Add the client's people on the job as guests (default on). Rostered staff are always added. */
+  invite_clients?: boolean;
 }
 const PULL_BUDGET_MS = 40_000;
 export const DEFAULT_SYNC_KINDS = ["event", "site_visit", "setup", "hold"];
@@ -73,7 +75,7 @@ export const DEFAULT_SYNC_KINDS = ["event", "site_visit", "setup", "hold"];
 interface CalRow {
   id: string; calendar_connection_id: string; event_id: string | null; title: string; starts_at: string; ends_at: string;
   all_day: boolean; location: string | null; kind: string; external_event_id: string | null; sync_status: string;
-  last_synced_at: string | null; updated_at: string;
+  last_synced_at: string | null; updated_at: string; attendees: string[] | null;
 }
 
 function eventBody(ctx: SyncContext, ce: CalRow) {
@@ -97,6 +99,34 @@ function eventBody(ctx: SyncContext, ce: CalRow) {
 const needsPush = (ce: CalRow) =>
   ce.sync_status !== "synced" || !ce.last_synced_at || !ce.external_event_id ||
   Date.parse(ce.updated_at) - Date.parse(ce.last_synced_at) > 5000;
+
+/**
+ * Guests for each event's calendar invite: everyone rostered on it (incl. "add to every event" people),
+ * plus — unless switched off — the client's people linked to the job. Lower-case, de-duplicated, sorted.
+ */
+async function guestLists(ctx: SyncContext, eventIds: string[], includeClients: boolean) {
+  const out = new Map<string, string[]>();
+  if (!eventIds.length) return out;
+  const ids = [...new Set(eventIds)];
+  const own = (ctx.integration.account_label ?? "").toLowerCase();
+  const add = (ev: string, email: string | null | undefined) => {
+    const e = email?.trim().toLowerCase();
+    if (!e || e === own || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return;
+    const list = out.get(ev) ?? [];
+    if (!list.includes(e)) list.push(e);
+    out.set(ev, list);
+  };
+  const { data: staff } = await ctx.db.from("event_staff").select("event_id, user:users!event_staff_user_id_fkey(email)").eq("organisation_id", ctx.org.id).in("event_id", ids);
+  for (const r of (staff ?? []) as unknown as { event_id: string; user: { email: string } | null }[]) add(r.event_id, r.user?.email);
+  if (includeClients) {
+    const { data: people } = await ctx.db.from("event_contacts").select("event_id, contact:contacts(email)").eq("organisation_id", ctx.org.id).in("event_id", ids);
+    for (const r of (people ?? []) as unknown as { event_id: string; contact: { email: string | null } | null }[]) add(r.event_id, r.contact?.email);
+    const { data: evs } = await ctx.db.from("events").select("id, contact:contacts!events_primary_contact_id_organisation_id_fkey(email)").eq("organisation_id", ctx.org.id).in("id", ids);
+    for (const r of (evs ?? []) as unknown as { id: string; contact: { email: string | null } | null }[]) add(r.id, r.contact?.email);
+  }
+  for (const [k, v] of out) out.set(k, v.sort());
+  return out;
+}
 
 export async function syncGoogleCalendar(ctx: SyncContext) {
   const logId = await startSyncLog(ctx, "calendar", "outbound");
@@ -124,18 +154,25 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
     // PUSH: EventureOS → Google
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
     const { data: rows, error: rErr } = await ctx.db.from("calendar_events")
-      .select("id, calendar_connection_id, event_id, title, starts_at, ends_at, all_day, location, kind, external_event_id, sync_status, last_synced_at, updated_at")
+      .select("id, calendar_connection_id, event_id, title, starts_at, ends_at, all_day, location, kind, external_event_id, sync_status, last_synced_at, updated_at, attendees")
       .eq("organisation_id", ctx.org.id).in("calendar_connection_id", [...byId.keys()]).in("kind", kinds).gte("ends_at", since)
       .order("starts_at").limit(1000);
     if (rErr) throw new Error(`Could not load calendar entries: ${rErr.message}`);
-    for (const ce of ((rows ?? []) as CalRow[]).filter(needsPush)) {
+    const toPush = ((rows ?? []) as CalRow[]).filter(needsPush);
+    const guests = await guestLists(ctx, toPush.map((c) => c.event_id).filter((x): x is string => !!x), s.invite_clients !== false);
+    for (const ce of toPush) {
       const calId = byId.get(ce.calendar_connection_id)!.external_calendar_id;
       try {
-        const body = eventBody(ctx, ce);
+        const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : [];
+        const had = [...(ce.attendees ?? [])].sort();
+        const changed = want.join(",") !== had.join(",");
+        const body = { ...eventBody(ctx, ce), ...(want.length || had.length ? { attendees: want.map((email) => ({ email })) } : {}) };
+        // Google only emails guests when the guest list changes — not on every time/venue tweak
+        const notify = changed && want.length ? "all" : "none";
         let g: GEvent | null = null;
         if (ce.external_event_id) {
           try {
-            g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(ce.external_event_id)}`,
+            g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(ce.external_event_id)}?sendUpdates=${notify}`,
               { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch");
             if (g.status === "cancelled") g = null; // deleted in Google → recreate
           } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
@@ -143,12 +180,12 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
         if (!g) {
           const found = await findByEventureId(ctx, calId, ce.id);
           g = found
-            ? await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(found.id)}`,
+            ? await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(found.id)}?sendUpdates=${notify}`,
                 { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch")
-            : await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events`,
+            : await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events?sendUpdates=${notify}`,
                 { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.insert");
         }
-        const { error: uErr } = await ctx.db.from("calendar_events").update({ external_event_id: g.id, sync_status: "synced", last_synced_at: new Date().toISOString() }).eq("id", ce.id);
+        const { error: uErr } = await ctx.db.from("calendar_events").update({ external_event_id: g.id, sync_status: "synced", last_synced_at: new Date().toISOString(), attendees: want }).eq("id", ce.id);
         if (uErr) throw new Error(uErr.message);
         pushed++;
       } catch (e) {

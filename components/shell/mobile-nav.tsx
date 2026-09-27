@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
-  BarChart3, CalendarCheck2, CalendarDays, Check, CreditCard, FileText, Globe, Inbox, LayoutDashboard, LogOut,
+  BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, FileText, Globe, Inbox, LayoutDashboard, LogOut,
   MoreHorizontal, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
+import { canOpen } from "@/lib/access";
+import type { OrgRole } from "@/lib/types";
 
 const TABS = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
@@ -40,7 +42,8 @@ const CREATE = [
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 /** App-style bottom tab bar for phones and tablets (hidden on desktop, where the sidebar shows). */
-export function MobileTabBar({ enquiries, isSuperAdmin, orgs, currentOrgId, user }: {
+export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user }: {
+  role: OrgRole;
   enquiries: number;
   isSuperAdmin: boolean;
   orgs: { id: string; name: string; role: string }[];
@@ -60,14 +63,17 @@ export function MobileTabBar({ enquiries, isSuperAdmin, orgs, currentOrgId, user
     return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  const moreActive = !open && MORE.some((m) => isActive(pathname, m.href));
+  const tabs = role === "staff" ? [{ href: "/my-jobs", label: "My jobs", icon: Briefcase, badge: false }] : TABS.filter((t) => canOpen(role, t.href));
+  const more = MORE.filter((m) => canOpen(role, m.href));
+  const create = role === "staff" ? [] : CREATE.filter((c) => canOpen(role, c.href));
+  const moreActive = !open && more.some((m) => isActive(pathname, m.href));
   const current = orgs.find((o) => o.id === currentOrgId);
 
   return (
     <>
       <nav aria-label="Main" className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur lg:hidden">
-        <div className="mx-auto grid h-16 max-w-xl grid-cols-5">
-          {TABS.map((t) => {
+        <div className={cn("mx-auto grid h-16 max-w-xl", tabs.length === 4 ? "grid-cols-5" : "grid-cols-2")}>
+          {tabs.map((t) => {
             const active = !open && isActive(pathname, t.href);
             const Icon = t.icon;
             return (
@@ -103,7 +109,7 @@ export function MobileTabBar({ enquiries, isSuperAdmin, orgs, currentOrgId, user
             </div>
 
             <div className="grid grid-cols-4 gap-2 px-4 pb-4 sm:grid-cols-8">
-              {MORE.map((m) => {
+              {more.map((m) => {
                 const Icon = m.icon;
                 const active = isActive(pathname, m.href);
                 return (
@@ -122,16 +128,16 @@ export function MobileTabBar({ enquiries, isSuperAdmin, orgs, currentOrgId, user
               )}
             </div>
 
-            <div className="border-t border-line px-5 py-4">
+            {create.length > 0 && <div className="border-t border-line px-5 py-4">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Create</div>
               <div className="flex flex-wrap gap-2">
-                {CREATE.map((c) => (
+                {create.map((c) => (
                   <Link key={c.href} href={c.href} className="inline-flex items-center gap-1 rounded-full border border-line px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-zinc-50">
                     <Plus className="h-3.5 w-3.5 text-brand-600" /> {c.label}
                   </Link>
                 ))}
               </div>
-            </div>
+            </div>}
 
             <div className="border-t border-line px-5 py-4">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Organisation</div>

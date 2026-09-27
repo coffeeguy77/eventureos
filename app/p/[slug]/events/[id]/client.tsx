@@ -6,7 +6,7 @@ import { Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { recordPortalUpload, respondToQuote, sendPortalMessage, type ActionResult } from "../../actions";
+import { portalAddPerson, recordPortalUpload, respondToQuote, sendPortalMessage, type ActionResult } from "../../actions";
 import { portalButton } from "../../ui";
 
 /* ------------------------------------------------------------------ */
@@ -186,5 +186,43 @@ export function UploadButton({ slug, eventId, orgId, customerId, requestId, requ
       </button>
       {error && <p role="alert" className={cn("max-w-xs text-right text-[12px] text-rose-700", fullOnMobile && "max-w-none text-left sm:max-w-xs sm:text-right")}>{error}</p>}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Add someone to the booking                                          */
+/* ------------------------------------------------------------------ */
+
+export function AddPersonForm({ slug, eventId, businessName }: { slug: string; eventId: string; businessName: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState<ActionResult | undefined, FormData>(portalAddPerson, undefined);
+  const ref = useRef<HTMLFormElement>(null);
+  useEffect(() => { if (state?.ok) { ref.current?.reset(); setOpen(false); } }, [state]);
+  if (!open) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] text-ink-muted">{state?.ok ? `Added — ${businessName} has been told, and they can sign in here with their own email.` : "Someone else looking after this booking, or taking it over?"}</p>
+        <button type="button" onClick={() => setOpen(true)} className={portalButton("secondary", "h-12 w-full sm:h-10 sm:w-auto")}>Add a person</button>
+      </div>
+    );
+  }
+  return (
+    <form ref={ref} action={action} className="space-y-3">
+      <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="event_id" value={eventId} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label htmlFor="ap-first">First name</Label><Input id="ap-first" name="first_name" required maxLength={100} autoComplete="off" /></div>
+        <div><Label htmlFor="ap-last">Last name</Label><Input id="ap-last" name="last_name" maxLength={100} autoComplete="off" /></div>
+        <div><Label htmlFor="ap-email">Email</Label><Input id="ap-email" name="email" type="email" required maxLength={254} autoComplete="off" /></div>
+        <div><Label htmlFor="ap-phone">Mobile</Label><Input id="ap-phone" name="phone" type="tel" maxLength={40} autoComplete="off" /></div>
+        <div className="sm:col-span-2"><Label htmlFor="ap-role">Their role (optional)</Label><Input id="ap-role" name="role" maxLength={60} placeholder="e.g. On-site contact, Taking over from me" /></div>
+      </div>
+      <FormError message={state?.error} />
+      <p className="text-[12px] text-ink-faint">They'll be able to sign in to this portal with their email, and they'll be included on the calendar invite.</p>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={() => setOpen(false)} className={portalButton("secondary", "h-12 w-full sm:h-10 sm:w-auto")}>Cancel</button>
+        <button className={portalButton("primary", "h-12 w-full sm:h-10 sm:w-auto")} disabled={pending}>{pending ? "Adding…" : "Add person"}</button>
+      </div>
+    </form>
   );
 }

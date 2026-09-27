@@ -269,14 +269,15 @@ export async function inviteMember(_prev: ActionState, form: FormData): Promise<
   const email = (str(form.get("email")) ?? "").toLowerCase();
   const inviteRole = str(form.get("role"));
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address." };
-  if (!inviteRole || !["admin", "manager", "staff"].includes(inviteRole)) return { error: "Choose Admin, Manager or Staff." };
+  if (!inviteRole || !["admin", "manager", "sales", "staff"].includes(inviteRole)) return { error: "Choose Admin, Manager, Sales or Staff." };
 
   const members = await getMembers(org.id);
   if (members.some((m) => m.email.toLowerCase() === email)) return { error: `${email} is already on the team.` };
 
   const { data, error } = await supabase
     .from("organisation_invitations")
-    .insert({ organisation_id: org.id, email, role: inviteRole, invited_by: user.id })
+    .insert({ organisation_id: org.id, email, role: inviteRole, invited_by: user.id,
+      auto_add_to_events: form.get("auto_add") === "on", sees_job_details: form.get("sees_details") === "on" })
     .select("id")
     .single();
   if (error) {
@@ -289,6 +290,21 @@ export async function inviteMember(_prev: ActionState, form: FormData): Promise<
   });
   revalidatePath("/settings/team");
   return { ok: `Invitation saved. ${email} gets access as soon as they sign up or sign in with that email.` };
+}
+
+/** Roster defaults for a team member or a pending invitation (owners/admins). */
+export async function setRosterDefault(kind: "member" | "invite", id: string, field: "auto_add_to_events" | "sees_job_details", value: boolean) {
+  const { supabase, org, user, profile } = await ownerOrAdmin();
+  if (!["auto_add_to_events", "sees_job_details"].includes(field)) throw new Error("Unknown setting.");
+  const table = kind === "member" ? "organisation_users" : "organisation_invitations";
+  const { data, error } = await supabase.from(table).update({ [field]: !!value }).eq("id", id).eq("organisation_id", org.id).select("id").maybeSingle();
+  if (error) throw new Error(`Couldn't save: ${error.message}`);
+  if (!data) throw new Error("That person is no longer on the team.");
+  await logActivity(supabase, {
+    orgId: org.id, actorId: user.id, action: "team.roster_default", entityType: kind === "member" ? "user" : "invitation", entityId: id,
+    summary: `${actorName(profile)} ${value ? "turned on" : "turned off"} “${field === "auto_add_to_events" ? "add to every event" : "can see what's included"}” for a team ${kind === "member" ? "member" : "invitation"}`,
+  });
+  revalidatePath("/settings/team");
 }
 
 export async function revokeInvitation(id: string) {

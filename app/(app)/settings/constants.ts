@@ -18,26 +18,27 @@ export const PLAN_LABEL: Record<string, string> = {
 };
 
 export const ROLE_LABEL: Record<Exclude<OrgRole, "customer">, string> = {
-  owner: "Owner", admin: "Admin", manager: "Manager", staff: "Staff",
+  owner: "Owner", admin: "Admin", manager: "Manager", sales: "Sales", staff: "Staff",
 };
 
 export const ROLE_HINT: Record<Exclude<OrgRole, "customer">, string> = {
   owner: "Full control, including billing and owners",
   admin: "Everything except managing owners",
   manager: "Runs the business day to day",
-  staff: "Operational access to their work",
+  sales: "Enquiries, clients and quotes",
+  staff: "Only the jobs they're rostered on",
 };
 
 /** Permission matrix from the product spec (what each role can do in EventureOS). */
-export const PERMISSIONS: { label: string; owner: boolean; admin: boolean; manager: boolean; staff: boolean | "limited" }[] = [
-  { label: "Customers & enquiries", owner: true, admin: true, manager: true, staff: "limited" },
-  { label: "Quotes", owner: true, admin: true, manager: true, staff: "limited" },
-  { label: "Events & calendar", owner: true, admin: true, manager: true, staff: "limited" },
-  { label: "Invoices & payments", owner: true, admin: true, manager: true, staff: false },
-  { label: "Calendars, automations & integrations", owner: true, admin: true, manager: true, staff: false },
-  { label: "Organisation details & branding", owner: true, admin: true, manager: false, staff: false },
-  { label: "Invite & manage team", owner: true, admin: true, manager: false, staff: false },
-  { label: "Grant or remove owners", owner: true, admin: false, manager: false, staff: false },
+export const PERMISSIONS: { label: string; owner: boolean; admin: boolean; manager: boolean; sales: boolean | "limited"; staff: boolean | "limited" }[] = [
+  { label: "Customers & enquiries", owner: true, admin: true, manager: true, sales: true, staff: false },
+  { label: "Quotes (including prices)", owner: true, admin: true, manager: true, sales: true, staff: false },
+  { label: "Events & calendar", owner: true, admin: true, manager: true, sales: true, staff: "limited" },
+  { label: "Invoices & payments", owner: true, admin: true, manager: true, sales: false, staff: false },
+  { label: "Calendars, automations & integrations", owner: true, admin: true, manager: true, sales: false, staff: false },
+  { label: "Organisation details & branding", owner: true, admin: true, manager: false, sales: false, staff: false },
+  { label: "Invite & manage team", owner: true, admin: true, manager: false, sales: false, staff: false },
+  { label: "Grant or remove owners", owner: true, admin: false, manager: false, sales: false, staff: false },
 ];
 
 export type TriggerType = "enquiry.created" | "quote.no_reply" | "quote.accepted" | "invoice.paid";

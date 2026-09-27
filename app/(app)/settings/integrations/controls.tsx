@@ -201,8 +201,8 @@ export function ImportForm({ months, inProgress }: { months: number; inProgress:
 
 export interface CalendarRow { id: string; name: string; colour: string; external_calendar_id: string | null; sync_enabled: boolean; entries: number }
 
-export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy }: {
-  rows: CalendarRow[]; calendars: { id: string; summary: string; primary?: boolean }[]; kinds: string[]; pullBusy: boolean;
+export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteClients }: {
+  rows: CalendarRow[]; calendars: { id: string; summary: string; primary?: boolean }[]; kinds: string[]; pullBusy: boolean; inviteClients: boolean;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveCalendarSettings, undefined);
   const KINDS: [string, string][] = [["event", "Events"], ["site_visit", "Site visits"], ["setup", "Setups"], ["hold", "Holds"]];
@@ -251,6 +251,10 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy }: {
         <label className="flex items-start gap-2 text-[13px]">
           <input type="checkbox" name="pull_busy" defaultChecked={pullBusy} className="mt-0.5" />
           <span>Bring in entries from these Google calendars (past 2 years and next 12 months): busy time shows in EventureOS so double-bookings are visible, and bookings with a client’s email appear in their job history.</span>
+        </label>
+        <label className="flex items-start gap-2 text-[13px]">
+          <input type="checkbox" name="invite_clients" defaultChecked={inviteClients} className="mt-0.5" />
+          <span>Invite the client’s people on the job to the calendar event. Rostered staff (and anyone set to “add to every event”) are always invited. Google emails guests only when the guest list changes.</span>
         </label>
       </div>
       <div className="mt-4"><Result state={state} /></div>

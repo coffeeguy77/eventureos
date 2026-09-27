@@ -5,9 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Globe, BarChart3, Settings, ShieldCheck,
+  CreditCard, Globe, BarChart3, Settings, ShieldCheck, Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { canOpen } from "@/lib/access";
+import type { OrgRole } from "@/lib/types";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,17 +24,19 @@ const NAV = [
   { href: "/portal", label: "Customer Portal", icon: Globe },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false }: { orgName: string; counts: { enquiries: number }; isSuperAdmin?: boolean }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgName: string; counts: { enquiries: number }; isSuperAdmin?: boolean; role: OrgRole }) {
   const pathname = usePathname();
+  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff"));
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-white lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Link href="/dashboard" aria-label="EventureOS dashboard"><Wordmark height={21} /></Link>
+        <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home"><Wordmark height={21} /></Link>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
           const count = item.countKey ? counts[item.countKey] : 0;

@@ -1,4 +1,4 @@
-export type OrgRole = "owner" | "admin" | "manager" | "staff" | "customer";
+export type OrgRole = "owner" | "admin" | "manager" | "sales" | "staff" | "customer";
 
 export type EnquiryStatus =
   | "new" | "needs_review" | "contacted" | "qualified" | "quote_required"

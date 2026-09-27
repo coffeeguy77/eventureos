@@ -5,7 +5,10 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/p", "/api/public", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // The app layout uses the path to keep each role to the parts of the app it may use
+  const forwarded = new Headers(request.headers);
+  forwarded.set("x-pathname", request.nextUrl.pathname);
+  let response = NextResponse.next({ request: { headers: forwarded } });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
@@ -22,7 +25,8 @@ export async function updateSession(request: NextRequest) {
       },
       setAll(cookiesToSet, headers) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        forwarded.set("cookie", request.headers.get("cookie") ?? "");
+        response = NextResponse.next({ request: { headers: forwarded } });
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         Object.entries(headers ?? {}).forEach(([k, v]) => response.headers.set(k, v));
       },

@@ -9,12 +9,14 @@ import type { OrgRole } from "@/lib/types";
 import { ActionButton, ActionForm, SubmitButton } from "../forms";
 import { changeMemberRole, inviteMember, removeMember, revokeInvitation } from "../actions";
 import { PERMISSIONS, ROLE_HINT, ROLE_LABEL } from "../constants";
+import { RosterToggle } from "./roster-toggle";
 
 export const metadata = { title: "Team" };
 
 type StaffRole = keyof typeof ROLE_LABEL;
 type Row = {
   id: string; user_id: string; role: OrgRole; title: string | null; created_at: string; expires_at: string | null;
+  auto_add_to_events: boolean; sees_job_details: boolean;
   user: { full_name: string | null; email: string } | null;
 };
 
@@ -25,7 +27,7 @@ export default async function TeamPage() {
   const [membersRes, invitesRes] = await Promise.all([
     supabase
       .from("organisation_users")
-      .select("id, user_id, role, title, created_at, expires_at, user:users!organisation_users_user_id_fkey(full_name, email)")
+      .select("id, user_id, role, title, created_at, expires_at, auto_add_to_events, sees_job_details, user:users!organisation_users_user_id_fkey(full_name, email)")
       .eq("organisation_id", org.id)
       .eq("status", "active")
       .neq("role", "customer")
@@ -33,7 +35,7 @@ export default async function TeamPage() {
     canAdmin
       ? supabase
           .from("organisation_invitations")
-          .select("id, email, role, created_at, inviter:users!organisation_invitations_invited_by_fkey(full_name, email)")
+          .select("id, email, role, created_at, auto_add_to_events, sees_job_details, inviter:users!organisation_invitations_invited_by_fkey(full_name, email)")
           .eq("organisation_id", org.id)
           .is("accepted_at", null)
           .order("created_at", { ascending: false })
@@ -47,10 +49,16 @@ export default async function TeamPage() {
   const members = all.filter((m) => !m.expires_at);
   const support = all.filter((m) => m.expires_at && Date.parse(m.expires_at) > now);
   const invites = (invitesRes.data ?? []) as unknown as {
-    id: string; email: string; role: StaffRole; created_at: string; inviter: { full_name: string | null; email: string } | null;
+    id: string; email: string; role: StaffRole; created_at: string; auto_add_to_events: boolean; sees_job_details: boolean; inviter: { full_name: string | null; email: string } | null;
   }[];
   const ownerCount = members.filter((m) => m.role === "owner").length;
-  const roleOrder: StaffRole[] = ["owner", "admin", "manager", "staff"];
+  const roleOrder: StaffRole[] = ["owner", "admin", "manager", "sales", "staff"];
+  const toggles = (kind: "member" | "invite", id: string, auto: boolean, sees: boolean) => (
+    <div className="space-y-1">
+      <RosterToggle kind={kind} id={id} field="auto_add_to_events" value={auto} label="Add to every event" disabled={!canAdmin} />
+      <RosterToggle kind={kind} id={id} field="sees_job_details" value={sees} label="Can see what's included" disabled={!canAdmin} />
+    </div>
+  );
 
   return (
     <>
@@ -91,6 +99,7 @@ export default async function TeamPage() {
                     </span>
                   )}
                 </div>
+                <div className="mt-2 pl-[44px]">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</div>
                 {(editable || (canAdmin && !isMe && m.role !== "owner")) && (
                   <div className="mt-2.5 flex items-start gap-2 pl-[44px]">
                     {editable && (
@@ -126,7 +135,7 @@ export default async function TeamPage() {
               <tr className="text-left text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Role</th>
-                <th className="px-3 py-2.5 font-medium">Title</th>
+                <th className="px-3 py-2.5 font-medium">Rostering</th>
                 <th className="px-3 py-2.5 font-medium">Joined</th>
                 <th className="px-5 py-2.5" />
               </tr>
@@ -160,7 +169,7 @@ export default async function TeamPage() {
                         <ActionForm action={changeMemberRole} showOk={false}>
                           <input type="hidden" name="member_id" value={m.id} />
                           <div className="flex items-center gap-1.5">
-                            <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-8 w-[118px] py-1 text-[12.5px]">
+                            <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-8 w-[112px] py-1 text-[12.5px]">
                               {options.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                             </Select>
                             <SubmitButton size="sm" variant="secondary" pendingLabel="…">Save</SubmitButton>
@@ -172,7 +181,7 @@ export default async function TeamPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-ink-muted">{m.title ?? "—"}</td>
+                    <td className="px-3 py-3">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</td>
                     <td className="px-3 py-3 text-ink-muted" title={fmtDateTime(m.created_at, org.timezone)}>{fmtDateTime(m.created_at, org.timezone, "date")}</td>
                     <td className="px-5 py-3 text-right">
                       {canAdmin && !isMe && m.role !== "owner" && (
@@ -223,10 +232,14 @@ export default async function TeamPage() {
                 <div>
                   <Label htmlFor="invite_role">Role</Label>
                   <Select id="invite_role" name="role" defaultValue="staff">
-                    {(["admin", "manager", "staff"] as StaffRole[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                    {(["admin", "manager", "sales", "staff"] as StaffRole[]).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]} — {ROLE_HINT[r]}</option>)}
                   </Select>
                 </div>
                 <SubmitButton pendingLabel="Inviting…" className="w-full sm:w-auto">Invite</SubmitButton>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px] text-ink">
+                <label className="flex items-center gap-2"><input type="checkbox" name="auto_add" className="h-4 w-4 rounded" />Add to every event (e.g. whoever does the rosters)</label>
+                <label className="flex items-center gap-2"><input type="checkbox" name="sees_details" className="h-4 w-4 rounded" />Can see what's included on their jobs (hours, coffees, catering — never prices)</label>
               </div>
             </ActionForm>
           </div>
@@ -244,6 +257,7 @@ export default async function TeamPage() {
                         {ROLE_LABEL[i.role]} · invited {relative(i.created_at)}{i.inviter ? ` by ${i.inviter.full_name ?? i.inviter.email}` : ""}
                       </div>
                     </div>
+                    <div className="ml-auto mr-2 hidden sm:block">{toggles("invite", i.id, i.auto_add_to_events, i.sees_job_details)}</div>
                     <ActionButton action={revokeInvitation.bind(null, i.id)} variant="ghost" className="h-10 sm:h-8" confirm={`Revoke the invitation for ${i.email}?`}>
                       Revoke
                     </ActionButton>

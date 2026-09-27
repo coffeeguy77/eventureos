@@ -16,6 +16,7 @@ export interface TopbarProps {
   currentOrgId: string;
   notifications: { id: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null; type: string }[];
   unread: number;
+  role: string;
 }
 
 function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => void) {
@@ -29,13 +30,14 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => 
 }
 
 export function Topbar(props: TopbarProps) {
+  const staff = props.role === "staff";
   return (
     <header className="pt-safe sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur">
       <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
-        <Link href="/dashboard" aria-label="EventureOS home" className="shrink-0 lg:hidden"><Logo size={30} /></Link>
-        <GlobalSearch />
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="shrink-0 lg:hidden"><Logo size={30} /></Link>
+        {!staff && <GlobalSearch />}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          <QuickCreate />
+          {!staff && <QuickCreate canInvoice={props.role !== "sales"} />}
           <Notifications items={props.notifications} unread={props.unread} />
           <div className="hidden lg:block"><OrgSwitcher orgs={props.orgs} currentOrgId={props.currentOrgId} /></div>
           <div className="hidden lg:block"><UserMenu user={props.user} /></div>
@@ -174,14 +176,15 @@ function Menu({ trigger, children, align = "right", width = 240 }: {
   );
 }
 
-function QuickCreate() {
-  const items = [
+function QuickCreate({ canInvoice }: { canInvoice: boolean }) {
+  const all = [
     { href: "/enquiries/new", label: "New enquiry", hint: "Log a call, DM or walk-in" },
     { href: "/events/new", label: "New event", hint: "For an existing customer" },
     { href: "/quotes/new", label: "New quote", hint: "Build a proposal for an event" },
     { href: "/clients/new", label: "New client", hint: "Checks for duplicates first" },
     { href: "/invoices/new", label: "New invoice", hint: "Deposit, final or full" },
   ];
+  const items = canInvoice ? all : all.filter((i) => !i.href.startsWith("/invoices"));
   return (
     <Menu
       width={250}

@@ -13,7 +13,7 @@ import {
   type QuoteSnapshot,
 } from "../../portal-data";
 import { Detail, Panel, PortalLink, portalButton } from "../../ui";
-import { MessageForm, PortalTabsNav, QuoteResponse, UploadButton } from "./client";
+import { AddPersonForm, MessageForm, PortalTabsNav, QuoteResponse, UploadButton } from "./client";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -48,7 +48,7 @@ export default async function PortalEventPage({ params, searchParams }: {
   if (!evData) notFound();
   const e = evData as unknown as PortalEvent;
 
-  const [qRes, invRes, docRes, msgRes] = await Promise.all([
+  const [qRes, invRes, docRes, msgRes, peopleRes] = await Promise.all([
     supabase.from("portal_quotes").select(QUOTE_COLUMNS).eq("organisation_id", org.id).eq("event_id", e.id).eq("customer_id", e.customer_id)
       .neq("status", "draft").order("created_at", { ascending: false }),
     supabase.from("invoices").select(INVOICE_COLUMNS).eq("organisation_id", org.id).eq("event_id", e.id).eq("customer_id", e.customer_id)
@@ -58,7 +58,9 @@ export default async function PortalEventPage({ params, searchParams }: {
       .or(`event_id.eq.${e.id},event_id.is.null`).order("created_at", { ascending: false }),
     supabase.from("portal_messages").select("id, author_type, author_id, body, created_at")
       .eq("organisation_id", org.id).eq("customer_id", e.customer_id).eq("event_id", e.id).order("created_at"),
+    supabase.rpc("portal_event_people", { p_event_id: e.id }),
   ]);
+  const people = (peopleRes.data ?? []) as { name: string; email: string | null; role: string | null; primary: boolean }[];
   for (const r of [qRes, invRes, docRes, msgRes]) if (r.error) throw new Error(`Could not load your booking: ${r.error.message}`);
 
   const quotes = (qRes.data ?? []) as unknown as PortalQuote[];
@@ -150,6 +152,23 @@ export default async function PortalEventPage({ params, searchParams }: {
 
       <div className="mt-5 space-y-4 sm:mt-6 sm:space-y-6">
         {tab === "overview" && <Overview e={e} today={today} quote={quote} current={current} cur={cur} base={base} next={next} />}
+        {tab === "overview" && (
+          <Panel title="People on this booking" subtitle="Everyone here can sign in to this portal and is included on the calendar invite.">
+            <div className="space-y-4 px-4 pb-6 sm:px-6">
+              {people.length > 0 && (
+                <ul className="divide-y divide-line rounded-lg ring-1 ring-line">
+                  {people.map((p, i) => (
+                    <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13.5px]">
+                      <span className="min-w-0"><span className="font-medium text-ink">{p.name}</span>{p.role && <span className="text-ink-muted"> · {p.role}</span>}{p.email && <span className="block break-all text-[12.5px] text-ink-muted">{p.email}</span>}</span>
+                      {p.primary && <Badge tone="brand">Main contact</Badge>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <AddPersonForm slug={slug} eventId={e.id} businessName={branding.name} />
+            </div>
+          </Panel>
+        )}
 
         {tab === "quote" && (
           <QuoteTab

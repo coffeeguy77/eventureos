@@ -227,3 +227,25 @@ export async function recordPortalUpload(input: {
     return { error: e instanceof Error ? e.message : "Something went wrong — please try again." };
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Add a colleague to the booking (they can then sign in themselves)   */
+/* ------------------------------------------------------------------ */
+
+export async function portalAddPerson(_prev: ActionResult | undefined, form: FormData): Promise<ActionResult> {
+  try {
+    const slug = String(form.get("slug") ?? "");
+    const eventId = String(form.get("event_id") ?? "");
+    const { supabase, ev } = await portalEvent(slug, eventId);
+    const { error } = await supabase.rpc("portal_add_person", {
+      p_event_id: ev.id,
+      p_first: String(form.get("first_name") ?? ""), p_last: String(form.get("last_name") ?? ""),
+      p_email: String(form.get("email") ?? ""), p_phone: String(form.get("phone") ?? ""), p_role: String(form.get("role") ?? ""),
+    });
+    if (error) return { error: error.message };
+    revalidatePath(`/p/${slug}/events/${ev.id}`);
+    return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Something went wrong — please try again." };
+  }
+}

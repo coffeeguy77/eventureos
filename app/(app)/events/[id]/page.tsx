@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Mail, Phone, MapPin, Clock, Users } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
+import { StaffCard, type StaffRow } from "./staff-card";
+import { PeopleCard, type PersonRow } from "./people-card";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -44,7 +46,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tab: TabKey = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as TabKey) : "overview";
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, role } = await requireOrg();
   const tz = org.timezone;
   const cur = org.currency;
 
@@ -58,6 +60,24 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     customer: { id: string; name: string; company: string | null; email: string | null; phone: string | null; kind: string; customer_since: string };
     contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null; position: string | null } | null;
   };
+
+  const [{ data: staffRows }, { data: teamRows }, { data: peopleRows }, { data: clientContacts }] = await Promise.all([
+    supabase.from("event_staff").select("id, user_id, role, sees_details, auto_added, created_at").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
+    supabase.from("organisation_users").select("user_id, role, sees_job_details, user:users!organisation_users_user_id_fkey(full_name, email)")
+      .eq("organisation_id", org.id).eq("status", "active").neq("role", "customer").is("expires_at", null),
+    supabase.from("event_contacts").select("id, contact_id, role, created_at, contact:contacts(first_name, last_name, email, phone)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
+    supabase.from("contacts").select("id, first_name, last_name, email").eq("organisation_id", org.id).eq("customer_id", e.customer_id).order("first_name"),
+  ]);
+  const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
+    .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id }))
+    .sort((a, b) => Number(b.primary) - Number(a.primary));
+  const contactOptions = ((clientContacts ?? []) as { id: string; first_name: string; last_name: string | null; email: string | null }[]).map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name ?? ""}`.trim(), email: c.email }));
+  const teamList = ((teamRows ?? []) as unknown as { user_id: string; role: string; sees_job_details: boolean; user: { full_name: string | null; email: string } | null }[])
+    .map((t) => ({ id: t.user_id, name: t.user?.full_name ?? t.user?.email ?? "Team member", role: t.role, details: t.sees_job_details }));
+  const staffList: StaffRow[] = ((staffRows ?? []) as { id: string; user_id: string; role: string | null; sees_details: boolean | null; auto_added: boolean }[]).map((r) => {
+    const t = teamList.find((x) => x.id === r.user_id);
+    return { id: r.id, user_id: r.user_id, name: t?.name ?? "Former team member", team_role: t?.role ?? "", role: r.role, sees_details: r.sees_details, default_details: t?.details ?? false, auto_added: r.auto_added };
+  });
 
   const threadFilter = [`event_id.eq.${e.id}`, e.enquiry_id ? `enquiry_id.eq.${e.enquiry_id}` : null].filter(Boolean).join(",");
   const noteFilter = threadFilter;
@@ -168,8 +188,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                       <Field label="Budget">{e.budget ? money(e.budget, cur, { cents: false }) : "—"}</Field>
                       <Field label="Lead">{e.assigned_to ? names[e.assigned_to] : "Unassigned"}</Field>
                       <Field label="Staff">
-                        {e.assigned_staff.length ? (
-                          <span className="flex -space-x-1.5">{e.assigned_staff.map((u) => <Avatar key={u} name={names[u]} size={24} className="ring-2 ring-white" />)}</span>
+                        {staffList.length ? (
+                          <span className="flex -space-x-1.5">{staffList.map((u) => <Avatar key={u.id} name={u.name} size={24} className="ring-2 ring-white" />)}</span>
                         ) : "—"}
                       </Field>
                     </dl>
@@ -209,6 +229,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     {(e.contact?.phone ?? e.customer.phone) && <li className="flex min-w-0 items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${(e.contact?.phone ?? e.customer.phone ?? "").replace(/\s+/g, "")}`} className="min-w-0 break-words hover:text-brand-700">{e.contact?.phone ?? e.customer.phone}</a></li>}
                   </ul>
                 </div>
+              </Card>
+              <Card>
+                <CardHeader title="Client's people on this job" subtitle="Hand-overs and extra contacts. They're invited to the calendar event." />
+                <PeopleCard eventId={e.id} rows={people} others={contactOptions} canEdit={role !== "staff"} />
+              </Card>
+              <Card>
+                <CardHeader title="Team on this job" subtitle={`${staffList.length} rostered`} />
+                <StaffCard eventId={e.id} rows={staffList} team={teamList.map((t) => ({ id: t.id, name: t.name, role: t.role }))} canEdit={role !== "staff"} />
               </Card>
               <Card>
                 <CardHeader title="Money" action={<span className="text-right text-[11.5px] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />

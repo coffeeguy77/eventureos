@@ -213,7 +213,7 @@ async function CalendarSection({ orgId, settings, manager }: { orgId: string; se
       {errors > 0 && <p className="mx-4 mb-3 sm:mx-5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
       {calendars.length === 0 && <p className="mx-4 mb-3 sm:mx-5 text-[12.5px] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
       {manager
-        ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} />
+        ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} inviteClients={settings.invite_clients !== false} />
         : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change calendar sync.</p>}
     </Card>
   );

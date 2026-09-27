@@ -1,11 +1,16 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { requireOrg, isSuperAdmin } from "@/lib/context";
+import { canOpen, homeFor } from "@/lib/access";
 import { SupportBanner } from "@/components/shell/support-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, org, profile, memberships, isSupportSession, current } = await requireOrg();
+  const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
+  const path = (await headers()).get("x-pathname") ?? "";
+  if (path && !canOpen(role, path)) redirect(homeFor(role));
   const admin = await isSuperAdmin();
 
   const [notif, unread, openEnquiries] = await Promise.all([
@@ -31,9 +36,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen">
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
-      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} isSuperAdmin={admin} />
+      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} isSuperAdmin={admin} role={role} />
       <div className="lg:pl-[232px]">
         <Topbar
+          role={role}
           user={{ name: profile.full_name ?? profile.email, email: profile.email }}
           orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
           currentOrgId={org.id}
@@ -43,6 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="mx-auto max-w-[1360px] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
       <MobileTabBar
+        role={role}
         enquiries={openEnquiries.count ?? 0}
         isSuperAdmin={admin}
         orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
