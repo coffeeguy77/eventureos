@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[stripe/webhook] ${org}: ${msg}`);
     // 400 for bad signatures (Stripe shows it in the dashboard); 500 makes Stripe retry for anything else
-    const bad = /signature|Missing Stripe|Malformed|not connected|Unknown organisation/i.test(msg);
+    const bad = /signature|Missing Stripe|Malformed|isn't connected|Unknown organisation/i.test(msg);
     return NextResponse.json({ received: false, error: msg }, { status: bad ? 400 : 500 });
   }
 }
