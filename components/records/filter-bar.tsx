@@ -19,6 +19,7 @@ export function FilterBar({ filters, searchPlaceholder = "Search…" }: {
   function set(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value); else next.delete(key);
+    next.delete("page"); // a new search or filter starts from the first page
     start(() => router.replace(`${pathname}?${next.toString()}`, { scroll: false }));
   }
 
