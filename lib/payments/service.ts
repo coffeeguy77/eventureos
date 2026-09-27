@@ -126,9 +126,10 @@ export async function handleStripeWebhook(orgId: string, rawBody: string, signat
 export async function retryStripePaymentsToXero(db: SupabaseClient, orgId: string): Promise<number> {
   const cfg = await loadStripe(db, orgId).catch(() => null);
   const account = cfg?.settings.xero_account?.trim();
-  if (!cfg || !account) return 0;
+  if (!cfg || !account || cfg.settings.mode === "test") return 0;
   const { data } = await db.from("payments").select("id, amount, paid_at, stripe_payment_intent, invoice:invoices!inner(xero_invoice_id)")
-    .eq("organisation_id", orgId).not("stripe_payment_intent", "is", null).is("xero_payment_id", null).not("invoice.xero_invoice_id", "is", null).limit(20);
+    .eq("organisation_id", orgId).not("stripe_payment_intent", "is", null).is("xero_payment_id", null).not("invoice.xero_invoice_id", "is", null)
+    .or("xero_push_error.is.null,xero_push_error.not.ilike.Stripe is in test mode%").limit(20);
   const { data: org } = await db.from("organisations").select("timezone").eq("id", orgId).single();
   let n = 0;
   for (const p of (data ?? []) as unknown as { id: string; amount: number; paid_at: string; stripe_payment_intent: string; invoice: { xero_invoice_id: string } }[]) {
