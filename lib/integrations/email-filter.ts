@@ -180,6 +180,8 @@ export function gmailQueryFor(f: EmailFilter): string | null {
     ...f.keywords.map(q),
     ...f.subjectPrefixes.map((p) => `subject:${q(p.split("*")[0])}`),
     ...[...f.formSenders, ...f.allow].map((s) => `from:${s.replace(/^@/, "")}`),
+    // Quotes accepted in Xero — always fetched so the team is alerted (see xero-quote-accept.ts)
+    'subject:"has accepted quote"',
   ].filter((t) => t.length > 2 && t !== '""' && t !== 'subject:""');
   if (!terms.length) return null;
   let out = "";

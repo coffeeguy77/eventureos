@@ -307,6 +307,16 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   const outbound = pm.labelIds.includes("SENT") || own.includes(pm.from.email);
   const res = { enquiryCreated: false, review: false, threadId: "", filtered: false, filterReason: "" };
 
+  // A quote accepted in Xero's online quote page: alert owners/admins now (it bypasses booking approval)
+  if (!outbound) {
+    const { parseXeroAcceptance, alertXeroAcceptance } = await import("@/lib/integrations/xero-quote-accept");
+    const xa = parseXeroAcceptance(pm.from.email, pm.subject, pm.text);
+    if (xa) {
+      const what = await alertXeroAcceptance(ctx, pm.sentAt, xa);
+      return { ...res, filtered: true, filterReason: `Xero quote acceptance ${xa.quoteNumber} — ${what}` };
+    }
+  }
+
   // Blocked senders and your own team are never imported (not even into Spam)
   if (!outbound) {
     const why = await gateCheck(ctx, [pm.from.email, pm.replyTo && !own.includes(pm.replyTo.email) ? pm.replyTo.email : null]);

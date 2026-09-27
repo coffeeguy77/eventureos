@@ -59,3 +59,16 @@ export function bookingApprovalEmail(o: { businessName: string; eventName: strin
   const text = `${paragraphs.join("\n\n")}\n\nReview and approve: ${o.url}`;
   return { subject, html, text };
 }
+
+export function xeroQuoteAcceptedEmail(o: { businessName: string; customer: string; quoteNumber: string; amount: string; acceptedAt: string; upcoming: string[]; url: string }) {
+  const subject = `${o.customer} accepted ${o.quoteNumber} in Xero — confirm the booking`;
+  const paragraphs = [
+    `${o.customer} accepted quote ${o.quoteNumber} (${o.amount}) in Xero at ${o.acceptedAt}.`,
+    "Quotes accepted in Xero skip EventureOS's booking approval, so nothing has been confirmed with them. Check the date, make sure you have staff and equipment, and reply so they know where they stand.",
+    o.upcoming.length ? `Upcoming bookings on your calendar for them: ${o.upcoming.join("; ")}.` : "There's nothing on your calendar for them yet — if the event is soon, contact them now.",
+  ];
+  const html = layout({ brand: "#D97706", businessName: o.businessName, heading: `Quote accepted in Xero: ${o.customer}`, paragraphs,
+    button: { label: "Open the client", url: o.url }, footer: `Sent by EventureOS to ${o.businessName}'s owners and admins when a quote is accepted in Xero.` });
+  const text = `${paragraphs.join("\n\n")}\n\nOpen the client: ${o.url}`;
+  return { subject, html, text };
+}

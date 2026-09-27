@@ -13,15 +13,20 @@ export const maxDuration = 300;
  * Database-only automations (quote follow-ups, overdue invoices, expiry) already run in pg_cron — not here.
  */
 function authorised(req: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false;
+  // CRON_SECRET: Vercel Cron (daily). SYNC_TRIGGER_SECRET: Supabase pg_cron, every few minutes (see migration 0029).
   const given = Buffer.from(req.headers.get("authorization") ?? "");
-  const expected = Buffer.from(`Bearer ${secret}`);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+  for (const secret of [process.env.CRON_SECRET?.trim(), process.env.SYNC_TRIGGER_SECRET?.trim()]) {
+    if (!secret) continue;
+    const expected = Buffer.from(`Bearer ${secret}`);
+    if (given.length === expected.length && timingSafeEqual(given, expected)) return true;
+  }
+  return false;
 }
 
+const PROVIDERS: LiveProviderId[] = ["gmail", "google_calendar", "xero"];
+
 export async function GET(req: NextRequest) {
-  if (!process.env.CRON_SECRET?.trim()) {
+  if (!process.env.CRON_SECRET?.trim() && !process.env.SYNC_TRIGGER_SECRET?.trim()) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET is not set — background sync is disabled." }, { status: 503 });
   }
   if (!authorised(req)) return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
@@ -33,11 +38,23 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const db = createServiceClient();
+  // ?providers=gmail,google_calendar limits a run (the frequent email sync); no parameter = everything
+  const only = (req.nextUrl.searchParams.get("providers") ?? "").split(",").map((x) => x.trim()).filter((x): x is LiveProviderId => PROVIDERS.includes(x as LiveProviderId));
+  const providers = only.length ? only : PROVIDERS;
+
+  let db;
+  try { db = createServiceClient(); } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[cron/sync] service client:", msg);
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+  }
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
-    .in("provider", ["gmail", "google_calendar", "xero"]).in("status", ["connected", "error"])
+    .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[cron/sync] loading integrations:", error.message);
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
 
   const started = Date.now();
   const results: (SyncOutcome & { organisation_id: string })[] = [];
@@ -50,5 +67,6 @@ export async function GET(req: NextRequest) {
       results.push({ organisation_id: row.organisation_id, provider: row.provider as LiveProviderId, ok: false, message: e instanceof Error ? e.message : String(e) });
     }
   }
+  for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
   return NextResponse.json({ ok: true, ran: results.length, results });
 }
