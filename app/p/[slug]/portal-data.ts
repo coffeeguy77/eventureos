@@ -145,13 +145,17 @@ export const requirePortal = cache(async (slug: string): Promise<PortalContext> 
 
 /** Read from the column-restricted view public.portal_events (never public.events). */
 export const EVENT_COLUMNS =
-  "id, number, name, customer_id, event_type, event_date, start_time, finish_time, venue, address, guest_count, status, customer_notes, services, created_at";
+  "id, number, name, customer_id, event_type, event_date, start_time, finish_time, venue, address, guest_count, status, customer_notes, services, created_at, approval_status, approval_on_accept";
 
 export interface PortalEvent {
   id: string; number: number | null; name: string; customer_id: string; event_type: string | null;
   event_date: string | null; start_time: string | null; finish_time: string | null; venue: string | null;
   address: string | null; guest_count: number | null; status: EventStatus; customer_notes: string | null;
   services: string[]; created_at: string;
+  /** "pending" while the business still has to approve a booking the customer accepted. */
+  approval_status: "pending" | null;
+  /** Accepting the quote now would need the business to approve it (short notice or every booking). */
+  approval_on_accept: boolean | null;
 }
 
 /** Read from the column-restricted view public.portal_quotes (no draft text). */
@@ -205,6 +209,13 @@ export const CUSTOMER_EVENT_STATUS: Record<EventStatus, { label: string; tone: "
   completed: { label: "Completed", tone: "slate" },
   cancelled: { label: "Cancelled", tone: "red" },
 };
+
+/** The event status as the customer should see it — a held booking is not confirmed yet. */
+export function customerEventStatus(e: Pick<PortalEvent, "status" | "approval_status">) {
+  if (e.approval_status === "pending" && !["confirmed", "completed", "cancelled"].includes(e.status))
+    return { label: "Waiting for us to confirm", tone: "amber" as const };
+  return CUSTOMER_EVENT_STATUS[e.status];
+}
 
 export const CUSTOMER_QUOTE_STATUS: Record<QuoteStatus, { label: string; tone: "neutral" | "blue" | "brand" | "amber" | "green" | "slate" | "red" }> = {
   draft: { label: "Being prepared", tone: "neutral" },
@@ -275,6 +286,8 @@ export function customerNextAction(args: {
   if (version && (version.status === "sent" || version.status === "viewed") && quoteExpired(version, tz))
     return { label: "Your quote has expired", detail: "Send us a message and we'll refresh it for you.", tab: "messages", urgent: false };
   if (version?.status === "declined") return { label: "Quote declined", detail: "We'll be in touch — or send us a message.", tab: "messages", urgent: false };
+  if (event.approval_status === "pending" && !["confirmed", "completed"].includes(event.status))
+    return { label: "We're confirming your booking", detail: "You've accepted — thank you. We're checking staff and equipment for this date. It isn't booked until we confirm.", tab: "overview", urgent: false };
   if (requestedDocs > 0) return { label: requestedDocs === 1 ? "Upload the requested document" : `Upload ${requestedDocs} requested documents`, tab: "documents", urgent: true };
   const open = invoices.filter(isOpenInvoice).sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
   if (open.length) {

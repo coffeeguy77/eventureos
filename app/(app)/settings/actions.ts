@@ -515,6 +515,11 @@ export async function saveAutomationSettings(_prev: ActionState, form: FormData)
   const deposit = Number(str(form.get("deposit_percent")));
   const terms = Number(str(form.get("default_payment_terms_days")));
   const followUp = Number(str(form.get("quote_follow_up_days")));
+  const payBefore = form.get("pay_before_event") === "on";
+  const approval = str(form.get("booking_approval")) ?? "off";
+  const approvalDays = Number(str(form.get("booking_approval_days")) ?? "2");
+  if (!["off", "short_notice", "all"].includes(approval)) return { error: "Choose a booking approval option." };
+  if (!Number.isInteger(approvalDays) || approvalDays < 0 || approvalDays > 60) return { error: "Short notice must be 0–60 days." };
   if (!action || !(action in QUOTE_ACCEPTANCE_ACTIONS)) return { error: "Choose what happens when a quote is accepted." };
   if (!Number.isFinite(deposit) || deposit < 1 || deposit > 100) return { error: "Deposit must be between 1% and 100%." };
   if (!Number.isInteger(terms) || terms < 0 || terms > 120) return { error: "Payment terms must be 0–120 days." };
@@ -528,6 +533,9 @@ export async function saveAutomationSettings(_prev: ActionState, form: FormData)
     deposit_percent: Math.round(deposit * 100) / 100,
     default_payment_terms_days: terms,
     quote_follow_up_days: followUp,
+    pay_before_event: payBefore,
+    booking_approval: approval,
+    booking_approval_days: approvalDays,
   };
   const changes = diff(before, patch);
   if (!Object.keys(changes).length) return { ok: "No changes to save." };
@@ -538,6 +546,8 @@ export async function saveAutomationSettings(_prev: ActionState, form: FormData)
   if (changes.quote_acceptance_action) parts.push(`on acceptance: ${QUOTE_ACCEPTANCE_ACTIONS[action].label.toLowerCase()}`);
   if (changes.deposit_percent) parts.push(`deposit ${before.deposit_percent ?? "—"}% → ${patch.deposit_percent}%`);
   if (changes.default_payment_terms_days) parts.push(`payment terms ${before.default_payment_terms_days ?? "—"} → ${terms} days`);
+  if (changes.pay_before_event) parts.push(`payment required before the event ${payBefore ? "on" : "off"}`);
+  if (changes.booking_approval || changes.booking_approval_days) parts.push(`booking approval: ${approval === "all" ? "every booking" : approval === "short_notice" ? `events within ${approvalDays} days` : "off"}`);
   if (changes.quote_follow_up_days) parts.push(`quote follow-up ${before.quote_follow_up_days ?? "—"} → ${followUp} days`);
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "automation.settings_updated", entityType: "organisation", entityId: org.id,

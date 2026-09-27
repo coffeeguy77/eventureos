@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { fmtDate, fmtDateTime, money, relative, relativeDay, timeRange, todayISO } from "@/lib/format";
 import {
-  CUSTOMER_EVENT_STATUS, CUSTOMER_INVOICE_STATUS, CUSTOMER_QUOTE_STATUS, EVENT_COLUMNS, INVOICE_COLUMNS, INVOICE_KIND,
+  CUSTOMER_EVENT_STATUS, customerEventStatus, CUSTOMER_INVOICE_STATUS, CUSTOMER_QUOTE_STATUS, EVENT_COLUMNS, INVOICE_COLUMNS, INVOICE_KIND,
   QUOTE_COLUMNS, VERSION_COLUMNS, awaitingResponse, customerNextAction, isOpenInvoice, isUuid, quoteExpired, requirePortal,
   type PortalDocument, type PortalEvent, type PortalInvoice, type PortalPayment, type PortalQuote, type PortalVersion,
   type QuoteSnapshot,
@@ -94,7 +94,7 @@ export default async function PortalEventPage({ params, searchParams }: {
 
   const requested = docs.filter((d) => d.requested_from_customer && d.event_id === e.id);
   const next = customerNextAction({ event: e, version: current, invoices, requestedDocs: requested.length, tz });
-  const st = CUSTOMER_EVENT_STATUS[e.status];
+  const st = customerEventStatus(e);
   const base = `/p/${slug}/events/${e.id}`;
   const counts: Partial<Record<TabKey, number>> = {
     documents: requested.length,
@@ -337,6 +337,7 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
         <QuoteResponse
           slug={slug} eventId={e.id} versionId={current.id} versionNumber={current.version_number}
           total={money(current.total, cur)} defaultName={defaultName} businessName={businessName}
+          needsApproval={e.approval_on_accept === true}
         />
       )}
 

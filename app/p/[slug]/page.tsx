@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { firstName, fmtDate, money, relativeDay, timeRange, todayISO } from "@/lib/format";
 import {
-  CUSTOMER_EVENT_STATUS, CUSTOMER_QUOTE_STATUS, EVENT_COLUMNS, INVOICE_COLUMNS, QUOTE_COLUMNS, VERSION_COLUMNS,
+  CUSTOMER_EVENT_STATUS, customerEventStatus, CUSTOMER_QUOTE_STATUS, EVENT_COLUMNS, INVOICE_COLUMNS, QUOTE_COLUMNS, VERSION_COLUMNS,
   customerNextAction, paymentSummary, requirePortal,
   type PortalEvent, type PortalInvoice, type PortalQuote, type PortalVersion,
 } from "./portal-data";
@@ -90,7 +90,7 @@ function EventCard({ slug, card, today, currency, compact }: {
   card: { e: PortalEvent; q: PortalQuote | null; v: PortalVersion | null; inv: PortalInvoice[]; next: ReturnType<typeof customerNextAction>; pay: ReturnType<typeof paymentSummary> };
 }) {
   const { e, q, v, next, pay } = card;
-  const st = CUSTOMER_EVENT_STATUS[e.status];
+  const st = customerEventStatus(e);
   const href = `/p/${slug}/events/${e.id}`;
   const actionHref = next.tab === "overview" ? href : `${href}?tab=${next.tab}`;
   return (

@@ -46,3 +46,16 @@ export function portalInviteEmail(o: { businessName: string; inviterName: string
   const text = `${paragraphs.join("\n\n")}\n\nOpen the booking: ${o.url}`;
   return { subject, html, text };
 }
+
+export function bookingApprovalEmail(o: { businessName: string; eventName: string; customer: string | null; when: string; dateText: string | null; venue: string | null; url: string }) {
+  const subject = `Approve booking: ${o.eventName} — ${o.when}`;
+  const paragraphs = [
+    `${o.customer ?? "A customer"} just accepted the quote for ${o.eventName}${o.dateText ? ` on ${o.dateText}` : ""}${o.venue ? ` at ${o.venue}` : ""} — ${o.when}.`,
+    "It is NOT confirmed yet: it isn't on the calendar and no invoice has been raised. Their portal tells them you still need to confirm.",
+    "Check you have the staff and equipment, then approve it on the event page. If you can't do it, call the customer and cancel the event.",
+  ];
+  const html = layout({ brand: "#D97706", businessName: o.businessName, heading: `Short-notice booking: ${o.when}`, paragraphs,
+    button: { label: "Review and approve", url: o.url }, footer: `Sent by EventureOS to ${o.businessName}'s owners and admins. Change this in Settings → Automations → Booking approval.` });
+  const text = `${paragraphs.join("\n\n")}\n\nReview and approve: ${o.url}`;
+  return { subject, html, text };
+}

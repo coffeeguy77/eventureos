@@ -554,7 +554,11 @@ export async function recordQuoteResponse(
       p_version_id: versionId, p_decision: decision, p_name: who ?? "", p_reason: clean(reason, 2000) ?? "",
     });
     if (error) fail(`Couldn't record the response: ${error.message}`);
-    // staff_record_quote_response writes the audit entry and runs the acceptance automation.
+    // staff_record_quote_response writes the audit entry and runs the acceptance automation (or holds it for approval).
+    if (decision === "accepted" && q.event_id) {
+      const { alertBookingApproval } = await import("@/lib/email/booking-approval");
+      await alertBookingApproval(supabase, q.event_id);
+    }
     refresh(q);
     revalidatePath("/invoices");
     revalidatePath("/calendar");

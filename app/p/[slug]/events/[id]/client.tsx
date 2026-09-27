@@ -31,8 +31,8 @@ export function PortalTabsNav({ className, label, children }: { className?: stri
 /* Accept / decline a quote                                            */
 /* ------------------------------------------------------------------ */
 
-export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, defaultName, businessName }: {
-  slug: string; eventId: string; versionId: string; versionNumber: number; total: string; defaultName: string; businessName: string;
+export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, defaultName, businessName, needsApproval }: {
+  slug: string; eventId: string; versionId: string; versionNumber: number; total: string; defaultName: string; businessName: string; needsApproval?: boolean;
 }) {
   const [mode, setMode] = useState<"accept" | "decline">("accept");
   const [state, action, pending] = useActionState<ActionResult | undefined, FormData>(respondToQuote, undefined);
@@ -71,6 +71,12 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
               You&apos;re accepting version {versionNumber} for <strong className="text-ink">{total}</strong>. We&apos;ll record your name,
               the date and time, and your connection details as a record of your acceptance.
             </p>
+            {needsApproval && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+                <strong>Your booking isn&apos;t confirmed until {businessName} confirms it.</strong> Because this event is so soon, we need to check we have the staff and
+                equipment available first. We&apos;ll confirm as soon as we can — if it&apos;s urgent, please call us as well.
+              </p>
+            )}
             <div>
               <Label htmlFor="accept-name">Your full name</Label>
               <Input id="accept-name" name="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={120} required className="bg-surface" />

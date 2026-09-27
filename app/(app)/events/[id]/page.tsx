@@ -4,6 +4,7 @@ import { Mail, Phone, MapPin, Clock, Users } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
 import { StaffCard, type StaffRow } from "./staff-card";
 import { PeopleCard, type PersonRow } from "./people-card";
+import { ApprovalBanner } from "./approval-banner";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -130,6 +131,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const paid = invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.amount_paid), 0);
   const conflicts = sameDay.filter((o) => cal.some((c) => c.calendar_connection_id === o.calendar_connection_id && c.starts_at < o.ends_at && o.starts_at < c.ends_at));
   const s = EVENT_STATUS[e.status];
+  const ap = e as unknown as { approval_status: string | null; approval_requested_at: string | null };
+  const oset = (org.settings ?? {}) as { quote_acceptance_action?: string; deposit_percent?: number; default_payment_terms_days?: number; pay_before_event?: boolean };
+  const approval = {
+    pending: ap.approval_status === "pending" && !["confirmed", "completed", "cancelled"].includes(e.status),
+    requestedAt: ap.approval_requested_at,
+    invoiceNote: oset.quote_acceptance_action === "manual" ? "leaves invoicing to you"
+      : `raises the ${oset.quote_acceptance_action === "full_invoice" ? "full" : `${oset.deposit_percent ?? 30}% deposit`} invoice${oset.pay_before_event ? " (due now if the event is sooner than your terms)" : ""}`,
+  };
   const openTasks = tasks.filter((t) => t.status !== "done").length;
 
   const tabs = [
@@ -166,6 +175,10 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         </div>
       </div>
 
+      {approval.pending && (
+        <ApprovalBanner eventId={e.id} when={e.event_date ? `${relativeDay(e.event_date, today).toLowerCase()} (${fmtDate(e.event_date, "weekday")})` : "undated"}
+          requestedAt={approval.requestedAt ? relative(approval.requestedAt) : null} canApprove={role === "owner" || role === "admin"} invoiceNote={approval.invoiceNote} />
+      )}
       <NextActionBanner action={na} />
 
       <div className="mt-6"><Tabs tabs={tabs} active={tab} baseHref={`/events/${e.id}`} /></div>

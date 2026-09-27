@@ -12,13 +12,15 @@ import { QUOTE_ACCEPTANCE_ACTIONS, STANDARD_RULES, TRIGGER_ORDER, type QuoteAcce
 export const metadata = { title: "Automations" };
 
 type RuleAction = { type: string; params?: Record<string, unknown> };
-type Settings = { action: QuoteAcceptanceAction; deposit: number; terms: number; followUp: number };
+type Settings = { action: QuoteAcceptanceAction; deposit: number; terms: number; followUp: number; payBefore: boolean; approval: "off" | "short_notice" | "all"; approvalDays: number };
 
 function whenText(trigger: string, s: Settings) {
   switch (trigger) {
     case "enquiry.created": return "a new event enquiry arrives from your website form";
     case "quote.no_reply": return `a quote hasn’t been replied to after ${s.followUp} ${s.followUp === 1 ? "day" : "days"}`;
-    case "quote.accepted": return "a customer accepts a quote";
+    case "quote.accepted": return s.approval === "all" ? "a customer accepts a quote and an owner or admin approves the booking"
+      : s.approval === "short_notice" ? `a customer accepts a quote (bookings within ${s.approvalDays} ${s.approvalDays === 1 ? "day" : "days"} of the event wait for an owner or admin to approve first)`
+      : "a customer accepts a quote";
     case "invoice.paid": return "an invoice becomes paid in Xero";
     default: return trigger.replace(/[._]/g, " ");
   }
@@ -33,8 +35,8 @@ function actionText(a: RuleAction, s: Settings) {
     case "set_event_status": return `mark the event ${String(a.params?.status ?? "confirmed")}`;
     case "create_calendar_event": return "add it to the default calendar";
     case "create_invoice":
-      return s.action === "deposit_invoice" ? `create a ${s.deposit}% deposit invoice (due in ${s.terms} days)`
-        : s.action === "full_invoice" ? `create an invoice for the full amount (due in ${s.terms} days)`
+      return s.action === "deposit_invoice" ? `create a ${s.deposit}% deposit invoice (due in ${s.terms} days${s.payBefore ? ", or now if the event is sooner" : ""})`
+        : s.action === "full_invoice" ? `create an invoice for the full amount (due in ${s.terms} days${s.payBefore ? ", or now if the event is sooner" : ""})`
         : "skip invoicing — you raise invoices manually";
     case "notify_assigned": return "notify the assigned team member";
     case "mark_deposit_paid": return "record the payment and mark the deposit paid";
@@ -78,6 +80,9 @@ export default async function AutomationsPage() {
     deposit: Number(raw.deposit_percent ?? 30),
     terms: Number(raw.default_payment_terms_days ?? 14),
     followUp: Number(raw.quote_follow_up_days ?? 3),
+    payBefore: raw.pay_before_event === true,
+    approval: raw.booking_approval === "all" || raw.booking_approval === "short_notice" ? raw.booking_approval : "off",
+    approvalDays: Number.isInteger(Number(raw.booking_approval_days)) ? Number(raw.booking_approval_days) : 2,
   };
   const connected = new Set((intRes.data ?? []).filter((i) => i.status === "connected" || i.status === "syncing").map((i) => i.provider));
   const xero = connected.has("xero");
@@ -216,6 +221,44 @@ export default async function AutomationsPage() {
                   <Input id="quote_follow_up_days" name="quote_follow_up_days" type="number" min={1} max={60} defaultValue={s.followUp} required />
                 </div>
               </div>
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3 has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50/60">
+                <input type="checkbox" name="pay_before_event" defaultChecked={s.payBefore} className="mt-0.5 h-4 w-4 rounded border-line-strong text-brand-600" />
+                <span>
+                  <span className="block text-[0.8125rem] font-medium text-ink">Payment required before the event</span>
+                  <span className="block text-[0.75rem] text-ink-muted">
+                    If the event is sooner than the payment terms, the invoice is due immediately — to lock in the date and secure the equipment and staff.
+                    E.g. 7-day terms and an event in 2 days: due today. Also the default on the New invoice screen.
+                  </span>
+                </span>
+              </label>
+
+              <fieldset className="mt-6">
+                <legend className="mb-1 text-[0.7812rem] font-medium text-ink">Booking approval</legend>
+                <p className="mb-2 text-[0.75rem] text-ink-muted">
+                  A held booking isn’t confirmed: no calendar entry, no invoice, and the customer sees “waiting for us to confirm”.
+                  Owners and admins get a notification and an email, and approve it on the event page.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {([
+                    ["off", "No approval", "Accepting a quote confirms the booking straight away."],
+                    ["short_notice", "Short-notice bookings", "Hold bookings for events within the days below."],
+                    ["all", "Every booking", "No booking is confirmed until an owner or admin approves it."],
+                  ] as const).map(([k, label, hint]) => (
+                    <label key={k} className="flex cursor-pointer gap-2.5 rounded-lg border border-line p-3 has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50/60">
+                      <input type="radio" name="booking_approval" value={k} defaultChecked={s.approval === k} className="mt-0.5 accent-brand-500" />
+                      <span>
+                        <span className="block text-[0.8125rem] font-medium text-ink">{label}</span>
+                        <span className="block text-[0.75rem] text-ink-muted">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <div className="mt-3 max-w-[16rem]">
+                  <Label htmlFor="booking_approval_days" hint="days">Short notice means the event is within</Label>
+                  <Input id="booking_approval_days" name="booking_approval_days" type="number" min={0} max={60} defaultValue={s.approvalDays} required />
+                  <p className="mt-1 text-[0.7188rem] text-ink-faint">0 = same day only · 1 = today or tomorrow · 2 = up to the day after tomorrow</p>
+                </div>
+              </fieldset>
               <div className="mt-6 flex justify-end">
                 <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">Save settings</SubmitButton>
               </div>
@@ -223,7 +266,8 @@ export default async function AutomationsPage() {
           ) : (
             <div className="space-y-1.5 text-[0.8125rem] text-ink">
               <p><span className="text-ink-muted">On acceptance:</span> {QUOTE_ACCEPTANCE_ACTIONS[s.action].label}</p>
-              <p><span className="text-ink-muted">Deposit:</span> {s.deposit}% · <span className="text-ink-muted">Payment terms:</span> {s.terms} days · <span className="text-ink-muted">Follow-up after:</span> {s.followUp} days</p>
+              <p><span className="text-ink-muted">Deposit:</span> {s.deposit}% · <span className="text-ink-muted">Payment terms:</span> {s.terms} days{s.payBefore ? " (or now if the event is sooner)" : ""} · <span className="text-ink-muted">Follow-up after:</span> {s.followUp} days</p>
+              <p><span className="text-ink-muted">Booking approval:</span> {s.approval === "all" ? "every booking" : s.approval === "short_notice" ? `events within ${s.approvalDays} days` : "off"}</p>
               <p className="pt-1 text-[0.75rem] text-ink-faint">Only owners and admins can change these.</p>
             </div>
           )}

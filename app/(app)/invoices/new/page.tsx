@@ -19,7 +19,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   }
   const tz = org.timezone;
   const today = todayISO(tz);
-  const settings = org.settings as { deposit_percent?: number; default_payment_terms_days?: number };
+  const settings = org.settings as { deposit_percent?: number; default_payment_terms_days?: number; pay_before_event?: boolean };
   const depositPct = Number(settings.deposit_percent ?? 30) || 30;
   const terms = Number.isFinite(Number(settings.default_payment_terms_days)) ? Number(settings.default_payment_terms_days) : 14;
 
@@ -46,12 +46,13 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
         subtitle={xeroRes.data?.status === "connected" ? "Created here, then sent to Xero on the next sync." : "Xero isn’t connected — this invoice will be managed in EventureOS."} />
       <NewInvoiceForm
         customers={(custRes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
-        events={(evRes.data ?? []).map((e) => ({ id: e.id, label: `EV-${e.number} · ${e.name}${e.event_date ? ` · ${fmtDate(e.event_date)}` : ""}`, customerId: e.customer_id }))}
+        events={(evRes.data ?? []).map((e) => ({ id: e.id, label: `EV-${e.number} · ${e.name}${e.event_date ? ` · ${fmtDate(e.event_date)}` : ""}`, customerId: e.customer_id, date: (e.event_date as string | null) ?? null }))}
         quotes={quotes}
         depositPct={depositPct}
         terms={terms}
         today={today}
         defaultDue={addDaysISO(today, terms)}
+        payBeforeEvent={settings.pay_before_event === true}
         currency={org.currency}
         initial={{ customer: sp.customer, event: sp.event, quote: sp.quote }}
       />

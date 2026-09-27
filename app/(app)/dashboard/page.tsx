@@ -87,6 +87,9 @@ export default async function DashboardPage() {
   const messages = must<Row[]>(messagesRes, "messages");
   const overdueEvents = must<Row[]>(overdueEventsRes, "events");
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
+  const { data: held } = await supabase.from("events").select("id, name, event_date, approval_requested_at, customer:customers(name)")
+    .eq("organisation_id", org.id).eq("approval_status", "pending").not("status", "in", "(confirmed,completed,cancelled)").order("event_date");
+  const heldBookings = (held ?? []) as unknown as { id: string; name: string; event_date: string | null; approval_requested_at: string | null; customer: { name: string } | null }[];
   const { data: integ } = await supabase.from("integrations").select("provider, status, last_sync_at").eq("organisation_id", org.id);
   const conn = (p: string) => (integ ?? []).find((i) => i.provider === p);
   const connLabel = (p: string, name: string) => {
@@ -185,6 +188,24 @@ export default async function DashboardPage() {
         </h1>
         <p className="mt-1 text-[0.8438rem] text-ink-muted">Here’s what’s happening with your event business today.</p>
       </div>
+
+      {heldBookings.length > 0 && (
+        <div className="mb-6 rounded-xl bg-amber-50 p-4 ring-1 ring-inset ring-amber-200 sm:p-5" role="alert">
+          <p className="text-[0.9375rem] font-semibold text-amber-900">
+            {heldBookings.length === 1 ? "1 booking is" : `${heldBookings.length} bookings are`} waiting for approval — not confirmed until approved
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {heldBookings.map((b) => (
+              <li key={b.id} className="text-[0.8125rem] text-amber-900">
+                <Link href={`/events/${b.id}`} className="font-medium underline underline-offset-2">{b.name}</Link>
+                {b.customer?.name ? ` · ${b.customer.name}` : ""}
+                {b.event_date ? ` · ${relativeDay(b.event_date, today)} (${fmtDate(b.event_date, "weekday")})` : ""}
+                {b.approval_requested_at ? <span className="text-amber-800"> · accepted {relative(b.approval_requested_at)}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="New enquiries" value={newEnquiries.length} href="/enquiries?status=new"

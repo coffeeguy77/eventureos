@@ -89,12 +89,14 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   catalogue.sort((a, b) => a.name.localeCompare(b.name));
   catalogue.unshift(...priceList);
 
-  const settings = (org.settings ?? {}) as { quote_acceptance_action?: string; deposit_percent?: number; quote_follow_up_days?: number };
+  const settings = (org.settings ?? {}) as { quote_acceptance_action?: string; deposit_percent?: number; quote_follow_up_days?: number; booking_approval?: string; booking_approval_days?: number };
   const ruleOn = (ruleRes.data ?? []).length > 0;
   const action = settings.quote_acceptance_action ?? "deposit_invoice";
   const acceptanceNote = ruleOn
     ? `Recording acceptance runs your “Quote accepted” automation: the event is confirmed and added to the calendar${action === "deposit_invoice" ? `, and a ${settings.deposit_percent ?? 30}% deposit invoice is raised` : action === "full_invoice" ? ", and the full invoice is raised" : ""}.`
     : "Your “Quote accepted” automation is switched off, so the event won’t be confirmed or invoiced automatically.";
+  const approvalNote = settings.booking_approval === "all" ? " Every booking waits for an owner or admin to approve it first."
+    : settings.booking_approval === "short_notice" ? ` If the event is within ${settings.booking_approval_days ?? 2} days, it waits for an owner or admin to approve it first.` : "";
   const contact = contactRes.data as { first_name: string; last_name: string | null } | null;
   const signerName = contact ? `${contact.first_name} ${contact.last_name ?? ""}`.trim() : "";
 
@@ -208,7 +210,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       customer={{ id: q.customer.id, name: q.customer.name }}
       event={{ id: q.event.id, number: q.event.number, name: q.event.name, event_date: q.event.event_date }}
       signerName={signerName}
-      acceptanceNote={acceptanceNote}
+      acceptanceNote={acceptanceNote + approvalNote}
       gmailConnected={gmailRes.data?.status === "connected"}
       nextAction={<NextActionBanner action={na} />}
       history={history}

@@ -149,6 +149,10 @@ export async function respondToQuote(_prev: ActionResult | undefined, form: Form
       p_user_agent: ua,
     });
     if (error) return { error: error.message };
+    if (decision === "accepted") {
+      const { alertBookingApproval } = await import("@/lib/email/booking-approval");
+      await alertBookingApproval(supabase, ev.id);
+    }
     revalidatePath(`/p/${slug}`, "layout");
     return { ok: true };
   } catch (e) {

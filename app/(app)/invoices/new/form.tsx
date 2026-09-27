@@ -5,7 +5,7 @@ import { createInvoice, type InvoiceFormState } from "../actions";
 import { Card } from "@/components/ui/card";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { FormError, Input, Label, Select } from "@/components/ui/form";
-import { addDaysISO, money } from "@/lib/format";
+import { addDaysISO, fmtDate, money } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 export interface QuoteOption { id: string; label: string; customerId: string; eventId: string | null; total: number; invoiced: number }
@@ -19,9 +19,9 @@ const KINDS: { key: Kind; label: string; hint: string }[] = [
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, today, defaultDue, currency, initial }: {
-  customers: { id: string; name: string }[]; events: { id: string; label: string; customerId: string }[]; quotes: QuoteOption[];
-  depositPct: number; terms: number; today: string; defaultDue: string; currency: string;
+export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, today, defaultDue, payBeforeEvent, currency, initial }: {
+  customers: { id: string; name: string }[]; events: { id: string; label: string; customerId: string; date: string | null }[]; quotes: QuoteOption[];
+  depositPct: number; terms: number; today: string; defaultDue: string; payBeforeEvent: boolean; currency: string;
   initial: { customer?: string; event?: string; quote?: string };
 }) {
   const initQuote = quotes.find((q) => q.id === initial.quote) ?? null;
@@ -32,8 +32,18 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
   const [kind, setKind] = useState<Kind>(initQuote && initQuote.invoiced > 0 ? "final" : "deposit");
   const [amount, setAmount] = useState(initQuote ? suggest(initQuote, initQuote.invoiced > 0 ? "final" : "deposit") : "");
   const [issueDate, setIssueDate] = useState(today);
-  const [dueDate, setDueDate] = useState(defaultDue);
+  const [payBefore, setPayBefore] = useState(payBeforeEvent);
+  const [dueDate, setDueDate] = useState(() => autoDue(today, initQuote?.eventId ?? initEvent?.id ?? "", payBeforeEvent) ?? defaultDue);
   const [state, action, pending] = useActionState<InvoiceFormState, FormData>(createInvoice, undefined);
+
+  /** Normal terms from the invoice date — or the invoice date itself when payment is required before the event and the event comes first. */
+  function autoDue(issue: string, evId: string, before: boolean) {
+    if (!issue) return null;
+    const normal = addDaysISO(issue, terms);
+    const evDate = events.find((e) => e.id === evId)?.date ?? null;
+    return before && evDate && evDate <= normal ? issue : normal;
+  }
+  function chooseEvent(id: string) { setEventId(id); const d = autoDue(issueDate, id, payBefore); if (d) setDueDate(d); }
 
   function suggest(q: QuoteOption | null, k: Kind) {
     if (!q) return "";
@@ -55,7 +65,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
   function chooseQuote(id: string) {
     setQuoteId(id);
     const q = quotes.find((x) => x.id === id) ?? null;
-    if (q?.eventId) setEventId(q.eventId);
+    if (q?.eventId) chooseEvent(q.eventId);
     const k = q && q.invoiced > 0 && kind === "deposit" ? "final" : kind;
     setKind(k);
     if (q) setAmount(suggest(q, k));
@@ -79,7 +89,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
           </div>
           <div>
             <Label htmlFor="event_id" hint="Optional">Event</Label>
-            <Select id="event_id" name="event_id" value={eventId} onChange={(e) => setEventId(e.target.value)} disabled={!customerId}>
+            <Select id="event_id" name="event_id" value={eventId} onChange={(e) => chooseEvent(e.target.value)} disabled={!customerId}>
               <option value="">No event</option>
               {custEvents.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
             </Select>
@@ -119,8 +129,23 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
           </div>
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
             <div><Label htmlFor="issue_date">Date</Label><Input id="issue_date" name="issue_date" type="date" value={issueDate} required
-              onChange={(e) => { setIssueDate(e.target.value); if (e.target.value) setDueDate(addDaysISO(e.target.value, terms)); }} /></div>
+              onChange={(e) => { setIssueDate(e.target.value); const d = autoDue(e.target.value, eventId, payBefore); if (d) setDueDate(d); }} /></div>
             <div><Label htmlFor="due_date" hint={`${terms}-day terms`}>Due</Label><Input id="due_date" name="due_date" type="date" value={dueDate} min={issueDate} required onChange={(e) => setDueDate(e.target.value)} /></div>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="flex cursor-pointer items-start gap-2.5 text-[0.8125rem] text-ink">
+              <input type="checkbox" checked={payBefore} className="mt-0.5 h-4 w-4 rounded border-line-strong text-brand-600"
+                onChange={(e) => { setPayBefore(e.target.checked); const d = autoDue(issueDate, eventId, e.target.checked); if (d) setDueDate(d); }} />
+              <span>
+                <span className="font-medium">Payment required before the event</span>
+                <span className="block text-[0.75rem] text-ink-muted">If the event is sooner than the {terms}-day terms, the invoice is due immediately — to lock in the date, equipment and staff.</span>
+              </span>
+            </label>
+            {payBefore && eventId && dueDate === issueDate && terms > 0 && (
+              <p className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-800 ring-1 ring-inset ring-amber-100">
+                The event is on {fmtDate(events.find((e) => e.id === eventId)?.date ?? null)} — before the normal due date — so this invoice is due now.
+              </p>
+            )}
           </div>
         </div>
         <p className="mt-5 text-[0.75rem] text-ink-muted">The invoice number is assigned automatically.</p>
