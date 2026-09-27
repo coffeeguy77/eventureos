@@ -59,7 +59,7 @@ export default async function StripePage() {
                 <div><Label htmlFor="secret_key">Secret key</Label><Input id="secret_key" name="secret_key" type="password" autoComplete="off" placeholder="sk_live_…" required /></div>
                 <div><Label htmlFor="webhook_secret">Webhook signing secret</Label><Input id="webhook_secret" name="webhook_secret" type="password" autoComplete="off" placeholder="whsec_…" required /></div>
               </div>
-              <p className="mt-2 text-[0.75rem] text-ink-faint">Keys are stored encrypted on the server and never shown again. Use test keys (sk_test_) first if you want to try it.</p>
+              <p className="mt-2 text-[0.75rem] text-ink-faint">Keys are kept server-side where no screen or user can read them back. Use test keys (sk_test_) first if you want to try it.</p>
               <div className="mt-4 flex justify-end"><SubmitButton pendingLabel="Checking with Stripe…">{connected ? "Replace keys" : "Connect Stripe"}</SubmitButton></div>
             </ActionForm>
           ) : <p className="text-ink-faint">Only owners, admins and managers can connect Stripe.</p>}
