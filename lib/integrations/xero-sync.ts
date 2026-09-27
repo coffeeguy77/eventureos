@@ -216,6 +216,13 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     rateLimited = true;
   }
 
+  // 4b. Card payments that couldn't be sent to Xero when they came in
+  let stripeRetried = 0;
+  if (done) {
+    try { const { retryStripePaymentsToXero } = await import("@/lib/payments/service"); stripeRetried = await retryStripePaymentsToXero(ctx.db, ctx.org.id); }
+    catch (e) { notes.push(`Stripe payments to Xero: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+
   // 5. Link emails and enquiries to customers by exact address
   let linkedMail = { enquiries: 0, threads: 0 };
   if (R && (R.created || R.linkedByEmail || done)) {
@@ -232,6 +239,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     R?.review ? `${pl(R.review, "contact")} to check in Match review` : null,
     linkedMail.threads || linkedMail.enquiries ? `${pl(linkedMail.threads, "email conversation")} and ${pl(linkedMail.enquiries, "enquiry")} linked to customers` : null,
     s.push_invoices && s.push_invoices !== "off" && done ? `${pl(counts.pushed, "invoice")} pushed to Xero` : null,
+    stripeRetried ? `${pl(stripeRetried, "card payment")} added to Xero` : null,
     counts.waiting ? `${pl(counts.waiting, "invoice")} waiting for its customer to be matched to a Xero contact` : null,
   ].filter(Boolean);
   const msg = parts.join(", ") +
@@ -303,6 +311,13 @@ async function upsertPayments(ctx: SyncContext, list: XeroPayment[]) {
     const { data } = await ctx.db.from("invoices").select("id, xero_invoice_id").eq("organisation_id", ctx.org.id).in("xero_invoice_id", invIds.slice(i, i + 100));
     for (const d of data ?? []) map.set(d.xero_invoice_id as string, d.id as string);
   }
+  // Card payments EventureOS sent to Xero keep their "Stripe" label when Xero sends them back
+  const fromStripe = new Set<string>();
+  const payIds = list.map((p) => p.PaymentID);
+  for (let i = 0; i < payIds.length; i += 100) {
+    const { data } = await ctx.db.from("payments").select("xero_payment_id").eq("organisation_id", ctx.org.id).in("xero_payment_id", payIds.slice(i, i + 100)).not("stripe_payment_intent", "is", null);
+    for (const d of data ?? []) fromStripe.add(d.xero_payment_id as string);
+  }
   let written = 0;
   for (const p of list) {
     const invoiceId = p.Invoice ? map.get(p.Invoice.InvoiceID) : undefined;
@@ -314,7 +329,7 @@ async function upsertPayments(ctx: SyncContext, list: XeroPayment[]) {
     }
     const { error } = await ctx.db.from("payments").upsert({
       organisation_id: ctx.org.id, invoice_id: invoiceId, amount: p.Amount,
-      paid_at: xeroTimestamp(p.Date) ?? new Date().toISOString(), method: "Xero", reference: p.Reference ?? null, xero_payment_id: p.PaymentID,
+      paid_at: xeroTimestamp(p.Date) ?? new Date().toISOString(), method: fromStripe.has(p.PaymentID) ? "Stripe" : "Xero", reference: p.Reference ?? null, xero_payment_id: p.PaymentID,
     }, { onConflict: "organisation_id,xero_payment_id" });
     if (error) throw new Error(`Could not save Xero payment: ${error.message}`);
     written++;

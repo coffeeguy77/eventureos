@@ -1,8 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// /p/* is the customer portal (it handles its own sign-in); /api/public and /api/cron authenticate by key/secret
-const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/p", "/api/public", "/api/cron"];
+// /p/* is the customer portal (it handles its own sign-in); /pay/<token> is a card-payment page reached by an unguessable link;
+// /api/public, /api/cron and /api/stripe (webhook) authenticate by key/secret/signature
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/p", "/pay", "/api/public", "/api/cron", "/api/stripe"];
 
 export async function updateSession(request: NextRequest) {
   // The app layout uses the path to keep each role to the parts of the app it may use

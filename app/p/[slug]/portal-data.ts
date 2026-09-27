@@ -182,11 +182,11 @@ export interface PortalVersion {
   accepted_by_name: string | null; decline_reason: string | null;
 }
 
-export const INVOICE_COLUMNS = "id, number, kind, event_id, customer_id, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency";
+export const INVOICE_COLUMNS = "id, number, kind, event_id, customer_id, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, pay_token";
 export interface PortalInvoice {
   id: string; number: string | null; kind: string; event_id: string | null; customer_id: string; issue_date: string;
   due_date: string | null; subtotal: number; tax_total: number; total: number; amount_paid: number; balance: number;
-  status: InvoiceStatus; currency: string;
+  status: InvoiceStatus; currency: string; pay_token: string;
 }
 
 export interface PortalPayment { id: string; invoice_id: string; amount: number; paid_at: string; method: string | null; reference: string | null }

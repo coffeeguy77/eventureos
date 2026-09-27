@@ -82,6 +82,8 @@ export default async function PortalEventPage({ params, searchParams }: {
   if (pRes.error) throw new Error(`Could not load your payments: ${pRes.error.message}`);
   const versions = (vRes.data ?? []) as unknown as PortalVersion[];
   const payments = (pRes.data ?? []) as unknown as PortalPayment[];
+  const { data: cardData } = await supabase.rpc("org_card_payments", { p_org: org.id });
+  const cardPayments = cardData === true;
 
   const quote = quotes.find((q) => q.current_version_id) ?? null;
   let current = quote ? versions.find((v) => v.id === quote.current_version_id) ?? null : null;
@@ -183,7 +185,7 @@ export default async function PortalEventPage({ params, searchParams }: {
           <Documents slug={slug} e={e} orgId={org.id} docs={docs} supabase={supabase} tz={tz} />
         )}
 
-        {tab === "payments" && <Payments invoices={invoices} payments={payments} cur={cur} tz={tz} />}
+        {tab === "payments" && <Payments invoices={invoices} payments={payments} cur={cur} tz={tz} cardPayments={cardPayments} />}
 
         {tab === "messages" && <Messages slug={slug} e={e} messages={messages} businessName={branding.name} tz={tz} />}
       </div>
@@ -590,7 +592,7 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
 /* Payments                                                            */
 /* ================================================================== */
 
-function Payments({ invoices, payments, cur, tz }: { invoices: PortalInvoice[]; payments: PortalPayment[]; cur: string; tz: string }) {
+function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: PortalInvoice[]; payments: PortalPayment[]; cur: string; tz: string; cardPayments: boolean }) {
   const live = invoices.filter((i) => i.status !== "void");
   const outstanding = live.reduce((s, i) => s + (isOpenInvoice(i) ? Number(i.balance) : 0), 0);
   const paid = live.reduce((s, i) => s + Number(i.amount_paid), 0);
@@ -633,12 +635,18 @@ function Payments({ invoices, payments, cur, tz }: { invoices: PortalInvoice[]; 
                   </dl>
                   {open && (
                     <div className="mt-4 flex flex-col gap-3 rounded-xl bg-zinc-50 p-3 sm:flex-row sm:flex-wrap sm:items-center">
-                      <button type="button" disabled className={portalButton("primary", "h-11 w-full text-[0.8438rem] sm:h-9 sm:w-auto sm:text-[0.8125rem]")} title="Online payment coming soon">
-                        Pay now
-                      </button>
-                      <p className="text-[0.7812rem] text-ink-muted">
-                        Online payment coming soon — pay by bank transfer using invoice number <strong className="text-ink">{i.number}</strong> as the reference.
-                      </p>
+                      {cardPayments ? (
+                        <>
+                          <a href={`/pay/${i.pay_token}`} className={portalButton("primary", "h-11 w-full text-[0.8438rem] sm:h-9 sm:w-auto sm:text-[0.8125rem]")}>
+                            Pay {money(i.balance, i.currency || cur)} by card
+                          </a>
+                          <p className="text-[0.7812rem] text-ink-muted">Or pay by bank transfer using invoice number <strong className="text-ink">{i.number}</strong> as the reference.</p>
+                        </>
+                      ) : (
+                        <p className="text-[0.7812rem] text-ink-muted">
+                          Pay by bank transfer using invoice number <strong className="text-ink">{i.number}</strong> as the reference.
+                        </p>
+                      )}
                     </div>
                   )}
                 </li>

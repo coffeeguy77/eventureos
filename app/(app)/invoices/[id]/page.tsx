@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { appBaseUrl } from "@/lib/integrations/registry";
+import { CopyField } from "@/app/(app)/settings/integrations/stripe/copy-field";
 import { notFound } from "next/navigation";
 import { ArrowUpRight, Mail, Phone } from "lucide-react";
 import { canManage, getMembers, requireOrg } from "@/lib/context";
@@ -38,13 +40,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const today = todayISO(tz);
 
   const { data, error } = await supabase.from("invoices")
-    .select("id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, created_at, updated_at, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)")
+    .select("id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, pay_token, created_at, updated_at, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (error) throw new Error(`Could not load invoice: ${error.message}`);
   if (!data) notFound();
   const inv = data as unknown as Inv;
   const cur = inv.currency || org.currency;
 
+  const { data: stripeInt } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
+  const stripeOn = stripeInt?.status === "connected";
+  const payLink = `${appBaseUrl()}/pay/${(inv as unknown as { pay_token: string }).pay_token}`;
   const [payRes, actRes, verRes, members] = await Promise.all([
     supabase.from("payments").select("id, amount, paid_at, method, reference, xero_payment_id, created_by").eq("organisation_id", org.id).eq("invoice_id", inv.id).order("paid_at", { ascending: false }),
     supabase.from("activity_logs").select("*").eq("organisation_id", org.id).eq("entity_id", inv.id).order("created_at", { ascending: false }).limit(100),
@@ -188,6 +193,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             <InvoiceActions id={inv.id} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
               today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>
+
+          {open && Number(inv.balance) > 0 && (
+            <Card>
+              <CardHeader title="Card payment link" subtitle={stripeOn ? `The customer pays ${money(inv.balance, cur)} by card — no login needed.` : undefined} />
+              <div className="px-5 pb-5 text-[0.8125rem]">
+                {stripeOn ? <CopyField value={payLink} label="Copy link" />
+                  : <p className="text-ink-muted">Connect Stripe to send customers a link to pay by card. <Link href="/settings/integrations/stripe" className="font-medium text-brand-700 underline">Set up card payments</Link></p>}
+              </div>
+            </Card>
+          )}
 
           <Card>
             <CardHeader title="Customer" action={inv.customer && <Link href={`/clients/${inv.customer.id}`} className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
