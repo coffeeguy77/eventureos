@@ -104,7 +104,9 @@ export async function handleStripeWebhook(orgId: string, rawBody: string, signat
   const { data: org } = await db.from("organisations").select("timezone").eq("id", orgId).single();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: (org?.timezone as string) || "Australia/Sydney" }).format(new Date(s.created * 1000));
   let xeroId: string | null = null, xeroErr: string | null = null;
-  if (inv.xero_invoice_id) {
+  if (inv.xero_invoice_id && cfg.settings.mode === "test") {
+    xeroErr = "Stripe is in test mode, so this test payment was not sent to Xero";
+  } else if (inv.xero_invoice_id) {
     const account = cfg.settings.xero_account?.trim();
     if (!account) xeroErr = "no Xero account chosen for Stripe payments";
     else {
