@@ -8,7 +8,7 @@ export function NextActionBanner({ action, children }: { action: NextAction; chi
     overdue: "border-rose-200 bg-rose-50/70",
     soon: "border-amber-200 bg-amber-50/70",
     normal: "border-brand-200 bg-brand-50/60",
-    done: "border-line bg-white",
+    done: "border-line bg-surface",
   }[action.urgency];
   const label = { overdue: "Overdue", soon: "Next action · soon", normal: "Next action", done: "Status" }[action.urgency];
   return (
@@ -18,10 +18,10 @@ export function NextActionBanner({ action, children }: { action: NextAction; chi
         <ArrowRight className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1 basis-48">
-        <div className={cn("text-[11px] font-semibold uppercase tracking-wide", action.urgency === "overdue" ? "text-rose-700" : "text-ink-faint")}>{label}</div>
-        <div className="break-words text-[14.5px] font-semibold text-ink">{action.label}</div>
+        <div className={cn("text-[0.6875rem] font-semibold uppercase tracking-wide", action.urgency === "overdue" ? "text-rose-700" : "text-ink-faint")}>{label}</div>
+        <div className="break-words text-[0.9062rem] font-semibold text-ink">{action.label}</div>
         {(action.detail || action.due) && (
-          <div className="text-[12.5px] text-ink-muted">
+          <div className="text-[0.7812rem] text-ink-muted">
             {action.detail}{action.detail && action.due ? " · " : ""}{action.due ? `Due ${relative(action.due)}` : ""}
           </div>
         )}

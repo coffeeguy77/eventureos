@@ -86,18 +86,18 @@ export function QuoteAttachments({ quoteId, orgId, initial }: { quoteId: string;
           drag ? "border-brand-400 bg-brand-50/60" : "border-line-strong")}
       >
         <Upload className="h-4 w-4 text-ink-faint" />
-        <p className="text-[12.5px] text-ink-muted">
+        <p className="text-[0.7812rem] text-ink-muted">
           Drop files here or{" "}
           <button type="button" onClick={() => fileInput.current?.click()} className="py-2 font-medium text-brand-700 hover:underline sm:py-0">choose files</button>
         </p>
-        <p className="text-[11.5px] text-ink-faint">Menus, floor plans, photos — up to 25 MB each. Shared with the customer.</p>
+        <p className="text-[0.7188rem] text-ink-faint">Menus, floor plans, photos — up to 25 MB each. Shared with the customer.</p>
         <input ref={fileInput} type="file" multiple className="sr-only" onChange={(e) => e.target.files && upload(e.target.files)} aria-label="Attach files" />
       </div>
       {error && <div className="mt-3"><FormError message={error} /></div>}
       {(docs.length > 0 || uploading.length > 0) && (
         <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
           {uploading.map((n, i) => (
-            <li key={`u-${i}`} className="flex items-center gap-3 px-3 py-2 text-[13px] text-ink-muted">
+            <li key={`u-${i}`} className="flex items-center gap-3 px-3 py-2 text-[0.8125rem] text-ink-muted">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" /><span className="truncate">Uploading {n}…</span>
             </li>
           ))}
@@ -105,8 +105,8 @@ export function QuoteAttachments({ quoteId, orgId, initial }: { quoteId: string;
             <li key={d.id} className="flex items-center gap-2 px-3 py-2 sm:gap-3">
               {d.mime_type?.startsWith("image/") ? <Paperclip className="h-4 w-4 shrink-0 text-ink-faint" /> : <FileText className="h-4 w-4 shrink-0 text-ink-faint" />}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] text-ink">{d.name}</p>
-                <p className="text-[11.5px] text-ink-faint">{[size(d.size_bytes), `added ${relative(d.created_at)}`].filter(Boolean).join(" · ")}</p>
+                <p className="truncate text-[0.8125rem] text-ink">{d.name}</p>
+                <p className="text-[0.7188rem] text-ink-faint">{[size(d.size_bytes), `added ${relative(d.created_at)}`].filter(Boolean).join(" · ")}</p>
               </div>
               <button type="button" onClick={() => download(d)} disabled={busyId === d.id} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-ink-faint hover:bg-zinc-100 hover:text-ink sm:h-7 sm:w-7" aria-label={`Download ${d.name}`} title="Download">
                 {busyId === d.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}

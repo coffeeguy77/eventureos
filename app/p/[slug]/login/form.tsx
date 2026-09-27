@@ -12,7 +12,7 @@ export function PortalSignInForm({ slug, email = "", next = "" }: { slug: string
     return (
       <div className="space-y-4">
         {state.message && (
-          <p className="rounded-lg bg-[var(--portal-brand-soft)] px-3 py-2.5 text-[13px] text-ink ring-1 ring-inset ring-[var(--portal-brand-line)]">
+          <p className="rounded-lg bg-[var(--portal-brand-soft)] px-3 py-2.5 text-[0.8125rem] text-ink ring-1 ring-inset ring-[var(--portal-brand-line)]">
             {state.message} It can take a minute to arrive — check your spam folder too.
           </p>
         )}
@@ -33,7 +33,7 @@ export function PortalSignInForm({ slug, email = "", next = "" }: { slug: string
               placeholder="123456"
               required
               autoFocus
-              className="h-12 text-center font-mono text-[20px] tracking-[0.4em]"
+              className="h-12 text-center font-mono text-[1.25rem] tracking-[0.4em]"
             />
           </div>
           <FormError message={state.error} />
@@ -41,7 +41,7 @@ export function PortalSignInForm({ slug, email = "", next = "" }: { slug: string
             {pending ? "Checking…" : "Sign in"}
           </button>
         </form>
-        <div className="flex items-center justify-between text-[12.5px]">
+        <div className="flex items-center justify-between text-[0.7812rem]">
           <form action={action}>
             <input type="hidden" name="slug" value={slug} />
       <input type="hidden" name="next" value={next} />

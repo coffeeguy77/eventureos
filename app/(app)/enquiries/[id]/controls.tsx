@@ -18,7 +18,7 @@ export function StatusSelect({ id, status }: { id: string; status: EnquiryStatus
       disabled={pending}
       value={status}
       onChange={(e) => start(() => setEnquiryStatus(id, e.target.value as EnquiryStatus))}
-      className={cn(inputClass, "h-10 w-full min-w-0 py-0 pr-8 text-[13px] font-medium sm:h-9 sm:w-auto")}
+      className={cn(inputClass, "h-10 w-full min-w-0 py-0 pr-8 text-[0.8125rem] font-medium sm:h-9 sm:w-auto")}
     >
       {ENQUIRY_STATUS_ORDER.map((s) => <option key={s} value={s}>{ENQUIRY_STATUS[s].label}</option>)}
     </select>
@@ -33,7 +33,7 @@ export function AssignSelect({ id, assignee, members }: { id: string; assignee: 
       disabled={pending}
       value={assignee ?? ""}
       onChange={(e) => start(() => assignEnquiry(id, e.target.value || null))}
-      className={cn(inputClass, "h-10 w-full min-w-0 py-0 pr-8 text-[13px] sm:h-9 sm:w-auto")}
+      className={cn(inputClass, "h-10 w-full min-w-0 py-0 pr-8 text-[0.8125rem] sm:h-9 sm:w-auto")}
     >
       <option value="">Unassigned</option>
       {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -75,7 +75,7 @@ export function DetailsEditor({ id, values, view }: { id: string; values: Detail
   if (!editing) {
     return (
       <div className="relative">
-        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[12.5px] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[0.7812rem] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
         {view}

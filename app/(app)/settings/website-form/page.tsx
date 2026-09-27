@@ -25,7 +25,7 @@ const FIELDS: [string, string][] = [
 
 function Code({ children }: { children: string }) {
   return (
-    <pre className="max-h-[420px] max-w-full overflow-auto rounded-lg bg-zinc-950 p-3 sm:p-4 font-mono text-[12px] leading-relaxed text-zinc-100">
+    <pre className="max-h-[420px] max-w-full overflow-auto rounded-lg bg-[#0E0E12] p-3 sm:p-4 font-mono text-[0.75rem] leading-relaxed text-[#F4F4F5]">
       <code>{children}</code>
     </pre>
   );
@@ -99,16 +99,16 @@ export default async function WebsiteFormPage() {
         <div className="space-y-5 border-t border-line px-4 py-5 sm:px-5">
           <div>
             <div className="mb-1.5 flex items-center justify-between gap-3">
-              <span className="text-[12.5px] font-medium text-ink">Form endpoint</span>
+              <span className="text-[0.7812rem] font-medium text-ink">Form endpoint</span>
               <CopyButton text={endpoint} />
             </div>
-            <div className="overflow-x-auto rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[12.5px] text-ink">
+            <div className="overflow-x-auto rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[0.7812rem] text-ink">
               <span className="mr-2 font-semibold text-brand-700">POST</span>{endpoint}
             </div>
           </div>
           <div>
             <div className="mb-1.5 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[12.5px] font-medium text-ink">Form key</span>
+              <span className="text-[0.7812rem] font-medium text-ink">Form key</span>
               <div className="flex items-center gap-2">
                 <CopyButton text={key} />
                 {canRegenerate && (
@@ -122,13 +122,13 @@ export default async function WebsiteFormPage() {
                 )}
               </div>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[12.5px] text-ink">{key}</div>
-            <p className="mt-1.5 text-[12px] text-ink-muted">
+            <div className="overflow-x-auto rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[0.7812rem] text-ink">{key}</div>
+            <p className="mt-1.5 text-[0.75rem] text-ink-muted">
               The key sits in your website’s HTML, so it isn’t a secret — it just stops random sites posting into your account.
               If you start getting spam, regenerate it and update your website.{!canRegenerate && " Only owners and admins can regenerate it."}
             </p>
           </div>
-          <div className="rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+          <div className="rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
             {lastRes.data ? (
               <>Last website enquiry: <Link href={`/enquiries/${lastRes.data.id}`} className="font-medium text-brand-600 hover:text-brand-700">ENQ-{lastRes.data.number}{lastRes.data.contact_name ? ` from ${lastRes.data.contact_name}` : ""}</Link>, {relative(lastRes.data.received_at)} · {weekRes.count ?? 0} in the last 30 days.</>
             ) : (
@@ -159,16 +159,16 @@ export default async function WebsiteFormPage() {
       <Card>
         <CardHeader title="Fields you can send" subtitle="All optional except name or email. Unknown fields are ignored." />
         <div className="overflow-x-auto border-t border-line">
-          <table className="w-full text-[13px] sm:min-w-[420px]">
+          <table className="w-full text-[0.8125rem] sm:min-w-[420px]">
             <tbody className="divide-y divide-line">
-              <tr><td className="px-4 py-2 font-mono text-[12.5px] text-ink sm:px-5">key</td><td className="px-3 py-2 text-ink-muted">Your form key (required)</td></tr>
+              <tr><td className="px-4 py-2 font-mono text-[0.7812rem] text-ink sm:px-5">key</td><td className="px-3 py-2 text-ink-muted">Your form key (required)</td></tr>
               {FIELDS.map(([f, d]) => (
-                <tr key={f}><td className="px-4 py-2 font-mono text-[12.5px] text-ink sm:px-5">{f}</td><td className="px-3 py-2 text-ink-muted">{d}</td></tr>
+                <tr key={f}><td className="px-4 py-2 font-mono text-[0.7812rem] text-ink sm:px-5">{f}</td><td className="px-3 py-2 text-ink-muted">{d}</td></tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="border-t border-line px-5 py-3 text-[12px] text-ink-muted">
+        <p className="border-t border-line px-5 py-3 text-[0.75rem] text-ink-muted">
           Enquiries are matched to existing customers by email. The <Link href="/settings/automations" className="font-medium text-brand-600 hover:text-brand-700">“New enquiry” automation</Link> can assign them to a team member automatically.
           To stop flooding, each business accepts up to 20 website enquiries every 10 minutes.
         </p>

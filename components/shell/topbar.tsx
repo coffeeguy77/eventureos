@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Bell, Check, ChevronDown, Plus, Search, LogOut } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Personalise } from "./personalise";
 import { relative } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Logo } from "@/components/shell/sidebar";
@@ -32,12 +33,13 @@ function useClickOutside(ref: React.RefObject<HTMLElement | null>, onOut: () => 
 export function Topbar(props: TopbarProps) {
   const staff = props.role === "staff";
   return (
-    <header className="pt-safe sticky top-0 z-20 border-b border-line bg-white/90 backdrop-blur">
+    <header className="pt-safe sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
       <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
         <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="shrink-0 lg:hidden"><Logo size={30} /></Link>
         {!staff && <GlobalSearch />}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {!staff && <QuickCreate canInvoice={props.role !== "sales"} />}
+          <Personalise />
           <Notifications items={props.notifications} unread={props.unread} />
           <div className="hidden lg:block"><OrgSwitcher orgs={props.orgs} currentOrgId={props.currentOrgId} /></div>
           <div className="hidden lg:block"><UserMenu user={props.user} /></div>
@@ -122,18 +124,18 @@ function GlobalSearch() {
           if (e.key === "Escape") setOpen(false);
         }}
         placeholder="Search clients, events, quotes…"
-        className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-14 text-[13px] text-ink placeholder:text-ink-faint focus:border-brand-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
+        className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-14 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-300 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
       />
-      <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-white px-1.5 text-[10.5px] font-medium text-ink-faint sm:block">⌘K</kbd>
+      <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-surface px-1.5 text-[0.6562rem] font-medium text-ink-faint sm:block">⌘K</kbd>
       {open && q.trim().length >= 2 && (
-        <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop sm:absolute sm:inset-x-0 sm:top-11">
-          {error && <p className="px-3 py-3 text-[12.5px] text-rose-700">{error}</p>}
+        <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop sm:absolute sm:inset-x-0 sm:top-11">
+          {error && <p className="px-3 py-3 text-[0.7812rem] text-rose-700">{error}</p>}
           {!error && flat.length === 0 && (
-            <p className="px-3 py-3 text-[12.5px] text-ink-muted">{pending ? "Searching…" : `No results for “${q}”`}</p>
+            <p className="px-3 py-3 text-[0.7812rem] text-ink-muted">{pending ? "Searching…" : `No results for “${q}”`}</p>
           )}
           {Object.entries(grouped).map(([kind, rows]) => (
             <div key={kind} className="py-1">
-              <div className="px-3 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint">{KIND_LABEL[kind] ?? kind}</div>
+              <div className="px-3 pb-1 pt-1.5 text-[0.6562rem] font-semibold uppercase tracking-wider text-ink-faint">{KIND_LABEL[kind] ?? kind}</div>
               {rows.map((r) => {
                 const idx = flat.indexOf(r);
                 return (
@@ -143,8 +145,8 @@ function GlobalSearch() {
                     onClick={() => go(r)}
                     className={cn("flex w-full flex-col items-start rounded-lg px-3 py-2 text-left", idx === active ? "bg-brand-50" : "hover:bg-zinc-50")}
                   >
-                    <span className="text-[13px] font-medium text-ink">{r.title}</span>
-                    {r.subtitle && <span className="truncate text-[12px] text-ink-muted">{r.subtitle}</span>}
+                    <span className="text-[0.8125rem] font-medium text-ink">{r.title}</span>
+                    {r.subtitle && <span className="truncate text-[0.75rem] text-ink-muted">{r.subtitle}</span>}
                   </button>
                 );
               })}
@@ -167,7 +169,7 @@ function Menu({ trigger, children, align = "right", width = 240 }: {
       <div onClick={() => setOpen((o) => !o)}>{trigger(open)}</div>
       {open && (
         <div style={{ "--menu-w": `${width}px` } as React.CSSProperties}
-          className={cn("fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[75vh] overflow-y-auto rounded-xl border border-line bg-white p-1.5 shadow-pop sm:absolute sm:inset-x-auto sm:top-11 sm:w-[var(--menu-w)]",
+          className={cn("fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[75vh] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop sm:absolute sm:inset-x-auto sm:top-11 sm:w-[var(--menu-w)]",
             align === "right" ? "sm:right-0" : "sm:left-0")}>
           {children(() => setOpen(false))}
         </div>
@@ -189,7 +191,7 @@ function QuickCreate({ canInvoice }: { canInvoice: boolean }) {
     <Menu
       width={250}
       trigger={() => (
-        <button className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-[13px] font-medium text-white shadow-sm hover:bg-brand-600">
+        <button className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-[0.8125rem] font-medium text-on-brand shadow-sm hover:bg-brand-600">
           <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create</span>
         </button>
       )}
@@ -198,8 +200,8 @@ function QuickCreate({ canInvoice }: { canInvoice: boolean }) {
         <>
           {items.map((i) => (
             <Link key={i.href} href={i.href} onClick={close} className="block rounded-lg px-3 py-2 hover:bg-zinc-50">
-              <div className="text-[13px] font-medium text-ink">{i.label}</div>
-              <div className="text-[12px] text-ink-muted">{i.hint}</div>
+              <div className="text-[0.8125rem] font-medium text-ink">{i.label}</div>
+              <div className="text-[0.75rem] text-ink-muted">{i.hint}</div>
             </Link>
           ))}
         </>
@@ -217,7 +219,7 @@ function Notifications({ items, unread }: { items: TopbarProps["notifications"];
         <button aria-label="Notifications" className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-zinc-100 hover:text-ink">
           <Bell className="h-[18px] w-[18px]" strokeWidth={1.8} />
           {unread > 0 && (
-            <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-semibold leading-4 text-white">{unread}</span>
+            <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[0.625rem] font-semibold leading-4 text-white">{unread}</span>
           )}
         </button>
       )}
@@ -225,26 +227,26 @@ function Notifications({ items, unread }: { items: TopbarProps["notifications"];
       {(close) => (
         <div>
           <div className="flex items-center justify-between px-3 pb-2 pt-1.5">
-            <span className="text-[13px] font-semibold text-ink">Notifications</span>
+            <span className="text-[0.8125rem] font-semibold text-ink">Notifications</span>
             {unread > 0 && (
               <button
                 disabled={pending}
                 onClick={() => start(() => markAllNotificationsRead())}
-                className="inline-flex items-center gap-1 text-[12px] font-medium text-brand-600 hover:text-brand-700"
+                className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-600 hover:text-brand-700"
               >
                 <Check className="h-3.5 w-3.5" /> Mark all read
               </button>
             )}
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
-            {items.length === 0 && <p className="px-3 py-6 text-center text-[12.5px] text-ink-muted">You’re all caught up.</p>}
+            {items.length === 0 && <p className="px-3 py-6 text-center text-[0.7812rem] text-ink-muted">You’re all caught up.</p>}
             {items.map((n) => (
               <Link key={n.id} href={n.link ?? "/dashboard"} onClick={close} className="flex gap-3 rounded-lg px-3 py-2.5 hover:bg-zinc-50">
                 <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.read_at ? "bg-transparent" : "bg-brand-500")} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-medium text-ink">{n.title}</span>
-                  {n.body && <span className="block truncate text-[12px] text-ink-muted">{n.body}</span>}
-                  <span className="text-[11.5px] text-ink-faint">{relative(n.created_at)}</span>
+                  <span className="block text-[0.8125rem] font-medium text-ink">{n.title}</span>
+                  {n.body && <span className="block truncate text-[0.75rem] text-ink-muted">{n.body}</span>}
+                  <span className="text-[0.7188rem] text-ink-faint">{relative(n.created_at)}</span>
                 </span>
               </Link>
             ))}
@@ -262,7 +264,7 @@ function OrgSwitcher({ orgs, currentOrgId }: { orgs: TopbarProps["orgs"]; curren
     <Menu
       width={260}
       trigger={() => (
-        <button className="inline-flex h-9 max-w-[220px] items-center gap-2 rounded-lg border border-line bg-white px-2.5 text-[13px] font-medium text-ink hover:bg-zinc-50">
+        <button className="inline-flex h-9 max-w-[220px] items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-[0.8125rem] font-medium text-ink hover:bg-zinc-50">
           <Avatar name={current?.name} size={20} className="rounded-md" />
           <span className="hidden truncate md:inline">{current?.name}</span>
           <ChevronDown className="h-3.5 w-3.5 text-ink-faint" />
@@ -271,7 +273,7 @@ function OrgSwitcher({ orgs, currentOrgId }: { orgs: TopbarProps["orgs"]; curren
     >
       {(close) => (
         <div>
-          <div className="px-3 pb-1.5 pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-ink-faint">Organisations</div>
+          <div className="px-3 pb-1.5 pt-1 text-[0.6562rem] font-semibold uppercase tracking-wider text-ink-faint">Organisations</div>
           {orgs.map((o) => (
             <button
               key={o.id}
@@ -281,13 +283,13 @@ function OrgSwitcher({ orgs, currentOrgId }: { orgs: TopbarProps["orgs"]; curren
             >
               <Avatar name={o.name} size={24} className="rounded-md" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium text-ink">{o.name}</span>
-                <span className="block text-[11.5px] capitalize text-ink-muted">{o.role}</span>
+                <span className="block truncate text-[0.8125rem] font-medium text-ink">{o.name}</span>
+                <span className="block text-[0.7188rem] capitalize text-ink-muted">{o.role}</span>
               </span>
               {o.id === currentOrgId && <Check className="h-4 w-4 text-brand-600" />}
             </button>
           ))}
-          <Link href="/onboarding?new=1" onClick={close} className="mt-1 block rounded-lg border-t border-line px-3 py-2 text-[12.5px] font-medium text-brand-600 hover:bg-zinc-50">
+          <Link href="/onboarding?new=1" onClick={close} className="mt-1 block rounded-lg border-t border-line px-3 py-2 text-[0.7812rem] font-medium text-brand-600 hover:bg-zinc-50">
             + Create another organisation
           </Link>
         </div>
@@ -309,11 +311,11 @@ function UserMenu({ user }: { user: TopbarProps["user"] }) {
       {() => (
         <div>
           <div className="px-3 py-2">
-            <div className="text-[13px] font-medium text-ink">{user.name}</div>
-            <div className="truncate text-[12px] text-ink-muted">{user.email}</div>
+            <div className="text-[0.8125rem] font-medium text-ink">{user.name}</div>
+            <div className="truncate text-[0.75rem] text-ink-muted">{user.email}</div>
           </div>
           <form action={signOut}>
-            <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-ink-muted hover:bg-zinc-50 hover:text-ink">
+            <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[0.8125rem] text-ink-muted hover:bg-zinc-50 hover:text-ink">
               <LogOut className="h-4 w-4" /> Sign out
             </button>
           </form>

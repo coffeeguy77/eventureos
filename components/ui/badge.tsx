@@ -20,7 +20,7 @@ export function Badge({ tone = "neutral", children, dot = false, className }: {
   tone?: Tone; children: React.ReactNode; dot?: boolean; className?: string;
 }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-medium ring-1 ring-inset", tones[tone], className)}>
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[0.7188rem] font-medium ring-1 ring-inset", tones[tone], className)}>
       {dot && <span className={cn("h-1.5 w-1.5 rounded-full", dots[tone])} />}
       {children}
     </span>

@@ -91,11 +91,11 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1 basis-72">
-          <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
+          <div className="mb-1 flex items-center gap-2 text-[0.75rem] text-ink-faint">
             <Link href="/enquiries" className="hover:text-ink">Enquiries</Link><span>/</span><span>ENQ-{e.number}</span>
           </div>
-          <h1 className="break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{e.title}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-muted">
+          <h1 className="break-words text-[1.25rem] font-semibold tracking-tight text-ink sm:text-[1.375rem]">{e.title}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] text-ink-muted">
             <Badge tone={s.tone} dot>{s.label}</Badge>
             <span className="min-w-0 break-all">{displayName}</span><span className="text-ink-faint">·</span>
             <span>{ENQUIRY_SOURCE[e.source]}</span><span className="text-ink-faint">·</span>
@@ -126,7 +126,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           {e.message && (
             <Card>
               <CardHeader title="Original enquiry" subtitle={`${ENQUIRY_SOURCE[e.source]} · ${fmtDateTime(e.received_at, tz)}`} />
-              <p className="whitespace-pre-line break-words px-5 pb-5 text-[13.5px] leading-relaxed text-ink">{e.message}</p>
+              <p className="whitespace-pre-line break-words px-5 pb-5 text-[0.8438rem] leading-relaxed text-ink">{e.message}</p>
             </Card>
           )}
           <Card>
@@ -146,18 +146,18 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
         {/* Side column — on phones/tablets the summary cards come first, before the conversation. */}
         <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
-            <CardHeader title="Customer" action={e.customer && <Link href={`/clients/${e.customer.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
+            <CardHeader title="Customer" action={e.customer && <Link href={`/clients/${e.customer.id}`} className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
             <div className="px-5 pb-5">
               <div className="flex items-center gap-3">
                 <Avatar name={displayName} size={40} />
                 <div className="min-w-0">
-                  <p className="truncate text-[14px] font-semibold text-ink">{displayName}</p>
-                  <p className="truncate text-[12.5px] text-ink-muted">
+                  <p className="truncate text-[0.875rem] font-semibold text-ink">{displayName}</p>
+                  <p className="truncate text-[0.7812rem] text-ink-muted">
                     {e.customer ? (e.customer.kind === "company" ? `${e.contact?.first_name ?? ""} ${e.contact?.last_name ?? ""}`.trim() || "Company" : "Individual") : "Not yet a customer — created on conversion"}
                   </p>
                 </div>
               </div>
-              <ul className="mt-4 space-y-2 text-[13px]">
+              <ul className="mt-4 space-y-2 text-[0.8125rem]">
                 {(e.contact?.email ?? e.customer?.email ?? e.contact_email) && (
                   <li className="flex min-w-0 items-center gap-2 text-ink"><Mail className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`mailto:${e.contact?.email ?? e.customer?.email ?? e.contact_email}`} className="min-w-0 break-all hover:text-brand-700">{e.contact?.email ?? e.customer?.email ?? e.contact_email}</a></li>
                 )}
@@ -169,14 +169,14 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                 )}
               </ul>
               {e.customer && (
-                <p className="mt-3 text-[12px] text-ink-faint">Customer since {fmtDate(e.customer.customer_since)}</p>
+                <p className="mt-3 text-[0.75rem] text-ink-faint">Customer since {fmtDate(e.customer.customer_since)}</p>
               )}
               {history.length > 0 && (
                 <div className="mt-4 border-t border-line pt-3">
-                  <p className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Previous events</p>
+                  <p className="mb-1.5 text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Previous events</p>
                   <ul className="space-y-1">
                     {history.map((h) => (
-                      <li key={h.id}><Link href={`/events/${h.id}`} className="flex justify-between gap-2 text-[12.5px] text-ink hover:text-brand-700">
+                      <li key={h.id}><Link href={`/events/${h.id}`} className="flex justify-between gap-2 text-[0.7812rem] text-ink hover:text-brand-700">
                         <span className="truncate">{h.name}</span><span className="shrink-0 text-ink-faint">{fmtDate(h.event_date, "short")}</span>
                       </Link></li>
                     ))}
@@ -210,22 +210,22 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             {e.event_date && (
               <div className="px-5 pb-5">
                 {cal.length === 0 && sameDay.length === 0 ? (
-                  <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800 ring-1 ring-inset ring-emerald-100">Free — nothing booked that day.</p>
+                  <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.8125rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">Free — nothing booked that day.</p>
                 ) : (
                   <>
-                    <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900 ring-1 ring-inset ring-amber-100">
+                    <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-100">
                       {cal.length + sameDay.filter((x) => !cal.some((c) => c.event_id === x.id)).length} booking(s) already on this day — check resources.
                     </p>
                     <ul className="space-y-1.5">
                       {cal.map((c) => (
-                        <li key={c.id} className="flex flex-wrap items-center gap-x-2 text-[12.5px] sm:flex-nowrap">
+                        <li key={c.id} className="flex flex-wrap items-center gap-x-2 text-[0.7812rem] sm:flex-nowrap">
                           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.calendar?.colour ?? "#6028EC" }} />
                           <span className="min-w-0 flex-1 truncate text-ink">{c.title}</span>
                           <span className="w-full pl-4 text-ink-faint sm:w-auto sm:pl-0">{fmtDateTime(c.starts_at, tz, "time")}–{fmtDateTime(c.ends_at, tz, "time")} · {c.calendar?.name}</span>
                         </li>
                       ))}
                       {sameDay.filter((x) => !cal.some((c) => c.event_id === x.id)).map((x) => (
-                        <li key={x.id} className="flex flex-wrap items-center gap-x-2 text-[12.5px] sm:flex-nowrap">
+                        <li key={x.id} className="flex flex-wrap items-center gap-x-2 text-[0.7812rem] sm:flex-nowrap">
                           <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-300" />
                           <Link href={`/events/${x.id}`} className="min-w-0 flex-1 truncate text-ink hover:text-brand-700">{x.name}</Link>
                           <span className="w-full pl-4 text-ink-faint sm:w-auto sm:pl-0">{timeRange(x.start_time, x.finish_time)} · {EVENT_STATUS[x.status].label}</span>
@@ -243,14 +243,14 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             <div className="px-5 pb-5">
               {quotes.length ? quotes.map((q) => (
                 <Link key={q.id} href={`/quotes/${q.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-2 hover:bg-zinc-50 sm:py-1.5">
-                  <span className="min-w-0 break-words text-[13px] text-ink">Q-{q.number} · {q.title}</span>
+                  <span className="min-w-0 break-words text-[0.8125rem] text-ink">Q-{q.number} · {q.title}</span>
                   <span className="flex shrink-0 items-center gap-2">
-                    {q.version && <span className="tabular text-[13px] text-ink">{money(q.version.total, org.currency)}</span>}
+                    {q.version && <span className="tabular text-[0.8125rem] text-ink">{money(q.version.total, org.currency)}</span>}
                     <Badge tone={QUOTE_STATUS[q.status].tone}>{QUOTE_STATUS[q.status].label}</Badge>
                   </span>
                 </Link>
               )) : (
-                <p className="text-[12.5px] text-ink-muted">
+                <p className="text-[0.7812rem] text-ink-muted">
                   {e.event_id ? <Link href={`/quotes/new?event=${e.event_id}`} className="font-medium text-brand-600 hover:text-brand-700">Create a quote for this event</Link> : "Quotes belong to events. Convert this enquiry to start a quote."}
                 </p>
               )}

@@ -18,7 +18,7 @@ export function AdminNav() {
         const active = i.exact ? pathname === i.href : pathname.startsWith(i.href);
         return (
           <Link key={i.href} href={i.href}
-            className={cn("shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-medium sm:py-1.5",
+            className={cn("shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[0.8125rem] font-medium sm:py-1.5",
               active ? "bg-white/15 text-white" : "text-zinc-300 hover:bg-white/10 hover:text-white")}>
             {i.label}
           </Link>

@@ -54,7 +54,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   return (
     <div>
       <PageHeader title="Payments" subtitle="Every payment received, by customer, invoice and event."
-        actions={<span className={cn("text-[12px]", xeroConnected ? "text-emerald-700" : "text-ink-faint")}>
+        actions={<span className={cn("text-[0.75rem]", xeroConnected ? "text-emerald-700" : "text-ink-faint")}>
           {xeroConnected ? `Synced with Xero${xeroRes.data?.last_sync_at ? ` · ${relative(xeroRes.data.last_sync_at)}` : ""}` : "Xero not connected · manual payments only"}
         </span>} />
 
@@ -72,16 +72,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               <Link href={month === thisMonth ? "/payments" : `/payments?month=${shiftMonth(month, 1)}`} aria-label="Next month" className={buttonClass("ghost", "sm", "h-10 w-10 px-2 sm:h-8 sm:w-auto")}><ChevronRight className="h-4 w-4" /></Link>
             </div>
           )}
-          <h2 className="text-[14px] font-semibold text-ink">{period}</h2>
+          <h2 className="text-[0.875rem] font-semibold text-ink">{period}</h2>
           <div className="no-scrollbar flex w-full max-w-full gap-1 overflow-x-auto sm:ml-auto sm:w-auto">
             {months.map((m) => (
               <Link key={m} href={m === thisMonth ? "/payments" : `/payments?month=${m}`}
-                className={cn("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium",
-                  !all && m === month ? "bg-ink text-white" : "text-ink-muted hover:bg-zinc-100 hover:text-ink")}>
+                className={cn("shrink-0 rounded-full px-2.5 py-1 text-[0.75rem] font-medium",
+                  !all && m === month ? "bg-ink text-surface" : "text-ink-muted hover:bg-zinc-100 hover:text-ink")}>
                 {new Intl.DateTimeFormat("en-AU", { month: "short", timeZone: "UTC" }).format(new Date(m + "-01T00:00:00Z"))}
               </Link>
             ))}
-            <Link href="/payments?month=all" className={cn("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium", all ? "bg-ink text-white" : "text-ink-muted hover:bg-zinc-100 hover:text-ink")}>All</Link>
+            <Link href="/payments?month=all" className={cn("shrink-0 rounded-full px-2.5 py-1 text-[0.75rem] font-medium", all ? "bg-ink text-surface" : "text-ink-muted hover:bg-zinc-100 hover:text-ink")}>All</Link>
           </div>
         </div>
         {rows.length === 0 ? (
@@ -93,16 +93,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               const body = (
                 <>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-medium text-ink">{p.invoice?.customer?.name ?? "—"}</div>
-                    <div className="truncate text-[12.5px] text-ink-muted">
+                    <div className="truncate text-[0.8438rem] font-medium text-ink">{p.invoice?.customer?.name ?? "—"}</div>
+                    <div className="truncate text-[0.7812rem] text-ink-muted">
                       {p.invoice?.number ?? "No invoice"}{p.invoice?.event ? ` · ${p.invoice.event.name}` : ""}
                     </div>
-                    <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                    <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
                       {fmtDateTime(p.paid_at, tz, "date")}{p.method ? ` · ${p.method}` : ""}{p.reference ? ` · ${p.reference}` : ""}
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="tabular text-[13px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                    <span className="tabular text-[0.8125rem] font-medium text-emerald-700">{money(p.amount, cur)}</span>
                     {p.xero_payment_id ? <Badge tone="blue">Xero</Badge> : <Badge>Manual</Badge>}
                   </div>
                 </>
@@ -115,14 +115,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               );
             })}
           </ul>
-          <div className="flex items-center justify-between gap-3 border-t-2 border-line bg-zinc-50/70 px-4 py-3 text-[13px] font-semibold text-ink md:hidden">
+          <div className="flex items-center justify-between gap-3 border-t-2 border-line bg-zinc-50/70 px-4 py-3 text-[0.8125rem] font-semibold text-ink md:hidden">
             <span className="min-w-0 truncate">Total <span className="font-normal text-ink-muted">· {rows.length} payment{rows.length === 1 ? "" : "s"}</span></span>
             <span className="tabular shrink-0">{money(total, cur)}</span>
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[900px] text-left text-[13px]">
+            <table className="w-full min-w-[900px] text-left text-[0.8125rem]">
               <thead>
-                <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="border-b border-line text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   {["Date", "Customer", "Invoice", "Event", "Method", "Reference", "Amount", "Source"].map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", h === "Amount" && "text-right")}>{h}</th>
                   ))}

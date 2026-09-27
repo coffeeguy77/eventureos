@@ -69,10 +69,10 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     const on = status === key;
     return (
       <Link key={key ?? "all"} href={`/invoices${qs.size ? `?${qs}` : ""}`}
-        className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
-          on ? "bg-ink text-white" : "bg-white text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
+        className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
+          on ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
         {label}
-        <span className={cn("rounded-full px-1.5 text-[10.5px] font-semibold",
+        <span className={cn("rounded-full px-1.5 text-[0.6562rem] font-semibold",
           on ? "bg-white/20 text-white" : key === "overdue" && count > 0 ? "bg-rose-100 text-rose-700" : "bg-zinc-100 text-ink-faint")}>{count}</span>
       </Link>
     );
@@ -83,8 +83,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
       <PageHeader title="Invoices" subtitle="What’s been billed, what’s been paid and what’s still owed."
         actions={canManage(role) ? <ButtonLink href="/invoices/new" variant="primary">New invoice</ButtonLink> : undefined} />
 
-      <div className={cn("mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-[12.5px]",
-        xeroConnected ? "border-emerald-200 bg-emerald-50/60" : xero?.status === "error" ? "border-rose-200 bg-rose-50/60" : "border-line bg-white")}>
+      <div className={cn("mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-[0.7812rem]",
+        xeroConnected ? "border-emerald-200 bg-emerald-50/60" : xero?.status === "error" ? "border-rose-200 bg-rose-50/60" : "border-line bg-surface")}>
         <RefreshCw className={cn("h-4 w-4 shrink-0", xeroConnected ? "text-emerald-600" : "text-ink-faint")} />
         {xeroConnected ? (
           <>
@@ -138,16 +138,16 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                 <li key={i.id} className={cn(late && "bg-rose-50/40")}>
                   <Link href={`/invoices/${i.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
                     <div className="min-w-0 flex-1">
-                      <div className={cn("truncate text-[13.5px] font-medium", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>
+                      <div className={cn("truncate text-[0.8438rem] font-medium", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>
                         {i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span>
                       </div>
-                      {i.event && <div className="truncate text-[12.5px] text-ink-muted">{i.event.name}</div>}
-                      <div className={cn("mt-0.5 truncate text-[12px]", late ? "font-medium text-rose-700" : "text-ink-faint")}>
+                      {i.event && <div className="truncate text-[0.7812rem] text-ink-muted">{i.event.name}</div>}
+                      <div className={cn("mt-0.5 truncate text-[0.75rem]", late ? "font-medium text-rose-700" : "text-ink-faint")}>
                         Due {fmtDate(i.due_date)}{late && lateDays > 0 ? ` · ${lateDays}d overdue` : ""}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className={cn("tabular text-[13px] font-medium", late ? "text-rose-700" : i.status === "void" ? "text-ink-faint" : "text-ink")}>{money(i.balance, cur)}</span>
+                      <span className={cn("tabular text-[0.8125rem] font-medium", late ? "text-rose-700" : i.status === "void" ? "text-ink-faint" : "text-ink")}>{money(i.balance, cur)}</span>
                       <Badge tone={s.tone} dot>{s.label}</Badge>
                     </div>
                   </Link>
@@ -155,14 +155,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
               );
             })}
           </ul>
-          <div className="flex items-center justify-between gap-3 border-t-2 border-line bg-zinc-50/70 px-4 py-3 text-[13px] font-semibold text-ink md:hidden">
+          <div className="flex items-center justify-between gap-3 border-t-2 border-line bg-zinc-50/70 px-4 py-3 text-[0.8125rem] font-semibold text-ink md:hidden">
             <span className="min-w-0">Balance <span className="font-normal text-ink-muted">· {counted.length} invoice{counted.length === 1 ? "" : "s"}</span></span>
             <span className="tabular shrink-0">{money(totals.balance, cur)}</span>
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[980px] text-left text-[13px]">
+            <table className="w-full min-w-[980px] text-left text-[0.8125rem]">
               <thead>
-                <tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="border-b border-line text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   {["Invoice #", "Customer", "Event", "Date", "Due", "Amount", "Paid", "Balance", "Status"].map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", ["Amount", "Paid", "Balance"].includes(h) && "text-right")}>{h}</th>
                   ))}
@@ -177,7 +177,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     <tr key={i.id} className={cn("relative hover:bg-zinc-50/70", late && "bg-rose-50/40 hover:bg-rose-50/70", i.status === "void" && "text-ink-faint")}>
                       <td className="whitespace-nowrap px-4 py-3">
                         <Link href={`/invoices/${i.id}`} className={cn("font-medium after:absolute after:inset-0", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>{i.number}</Link>
-                        <span className={cn("block text-[11.5px]", i.xero_invoice_id ? "text-emerald-700" : "text-ink-faint")}>
+                        <span className={cn("block text-[0.7188rem]", i.xero_invoice_id ? "text-emerald-700" : "text-ink-faint")}>
                           {i.xero_invoice_id ? `Synced with Xero · ${i.xero_synced_at ? relative(i.xero_synced_at) : "not yet"}` : "Not in Xero"}
                         </span>
                       </td>
@@ -186,7 +186,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{fmtDate(i.issue_date)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <span className={cn(late ? "font-medium text-rose-700" : "text-ink-muted")}>{fmtDate(i.due_date)}</span>
-                        {late && lateDays > 0 && <span className="block text-[11.5px] text-rose-700">{lateDays}d overdue</span>}
+                        {late && lateDays > 0 && <span className="block text-[0.7188rem] text-rose-700">{lateDays}d overdue</span>}
                       </td>
                       <td className="tabular whitespace-nowrap px-4 py-3 text-right text-ink">{money(i.total, cur)}</td>
                       <td className="tabular whitespace-nowrap px-4 py-3 text-right text-ink-muted">{money(i.amount_paid, cur)}</td>
@@ -197,7 +197,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-line bg-zinc-50/70 text-[13px] font-semibold text-ink">
+                <tr className="border-t-2 border-line bg-zinc-50/70 text-[0.8125rem] font-semibold text-ink">
                   <td className="px-4 py-3" colSpan={5}>
                     Total <span className="font-normal text-ink-muted">· {counted.length} invoice{counted.length === 1 ? "" : "s"}{rows.length !== counted.length ? " (void excluded)" : ""}</span>
                   </td>

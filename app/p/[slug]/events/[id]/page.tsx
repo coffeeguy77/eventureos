@@ -103,25 +103,25 @@ export default async function PortalEventPage({ params, searchParams }: {
 
   return (
     <div>
-      <Link href={`/p/${slug}`} className="-my-2 inline-flex items-center gap-1.5 py-2 text-[13px] text-ink-muted hover:text-ink">
+      <Link href={`/p/${slug}`} className="-my-2 inline-flex items-center gap-1.5 py-2 text-[0.8125rem] text-ink-muted hover:text-ink">
         <ArrowLeft className="h-3.5 w-3.5" />My events
       </Link>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0 flex-1 basis-60">
-          <h1 className="break-words text-[22px] font-semibold tracking-tight text-ink sm:text-[24px]">{e.name}</h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13.5px] text-ink-muted">
+          <h1 className="break-words text-[1.375rem] font-semibold tracking-tight text-ink sm:text-[1.5rem]">{e.name}</h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8438rem] text-ink-muted">
             <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4 shrink-0" />{e.event_date ? fmtDate(e.event_date, "long") : "Date to be confirmed"}</span>
             {(e.venue || e.address) && <span className="flex min-w-0 items-center gap-1.5"><MapPin className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{e.venue ?? e.address}</span></span>}
           </div>
         </div>
-        <Badge tone={st.tone} dot className="text-[12.5px]">{st.label}</Badge>
+        <Badge tone={st.tone} dot className="text-[0.7812rem]">{st.label}</Badge>
       </div>
 
       {next.urgent && tab !== next.tab && (
         <Link
           href={next.tab === "overview" ? base : `${base}?tab=${next.tab}`}
-          className="mt-5 flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-[var(--portal-brand-line)] bg-[var(--portal-brand-soft)] px-4 py-3 text-[14px] font-medium text-[color:var(--portal-brand-ink)] sm:min-h-0 sm:text-[13.5px]"
+          className="mt-5 flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-[var(--portal-brand-line)] bg-[var(--portal-brand-soft)] px-4 py-3 text-[0.875rem] font-medium text-[color:var(--portal-brand-ink)] sm:min-h-0 sm:text-[0.8438rem]"
         >
           <span className="min-w-0">{next.label}{next.detail && <span className="block font-normal opacity-80 sm:ml-2 sm:inline">{next.detail}</span>}</span>
           <ArrowRight className="h-4 w-4 shrink-0" />
@@ -139,12 +139,12 @@ export default async function PortalEventPage({ params, searchParams }: {
               scroll={false}
               aria-current={on ? "page" : undefined}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-3 pt-2 text-[14px] font-medium transition-colors sm:pb-2.5 sm:pt-1 sm:text-[13.5px]",
+                "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-3 pt-2 text-[0.875rem] font-medium transition-colors sm:pb-2.5 sm:pt-1 sm:text-[0.8438rem]",
                 on ? "border-[var(--portal-brand)] text-ink" : "border-transparent text-ink-muted hover:text-ink"
               )}
             >
               {t.label}
-              {!!n && <span className="rounded-full bg-[var(--portal-brand)] px-1.5 text-[11px] text-[color:var(--portal-brand-fg)]">{n}</span>}
+              {!!n && <span className="rounded-full bg-[var(--portal-brand)] px-1.5 text-[0.6875rem] text-[color:var(--portal-brand-fg)]">{n}</span>}
             </Link>
           );
         })}
@@ -158,8 +158,8 @@ export default async function PortalEventPage({ params, searchParams }: {
               {people.length > 0 && (
                 <ul className="divide-y divide-line rounded-lg ring-1 ring-line">
                   {people.map((p, i) => (
-                    <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[13.5px]">
-                      <span className="min-w-0"><span className="font-medium text-ink">{p.name}</span>{p.role && <span className="text-ink-muted"> · {p.role}</span>}{p.email && <span className="block break-all text-[12.5px] text-ink-muted">{p.email}</span>}</span>
+                    <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-[0.8438rem]">
+                      <span className="min-w-0"><span className="font-medium text-ink">{p.name}</span>{p.role && <span className="text-ink-muted"> · {p.role}</span>}{p.email && <span className="block break-all text-[0.7812rem] text-ink-muted">{p.email}</span>}</span>
                       {p.primary && <Badge tone="brand">Main contact</Badge>}
                     </li>
                   ))}
@@ -213,7 +213,7 @@ function Overview({ e, today, quote, current, cur, base, next }: {
             {e.venue || e.address ? (
               <>
                 {e.venue && <span className="block">{e.venue}</span>}
-                {e.address && <span className="block text-[13px] text-ink-muted">{e.address}</span>}
+                {e.address && <span className="block text-[0.8125rem] text-ink-muted">{e.address}</span>}
               </>
             ) : "To be confirmed"}
           </Detail>
@@ -224,10 +224,10 @@ function Overview({ e, today, quote, current, cur, base, next }: {
           <Detail label="Reference">{e.number ? `#${e.number}` : "—"}</Detail>
           {e.services.length > 0 && (
             <div className="col-span-2">
-              <dt className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Services</dt>
+              <dt className="text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Services</dt>
               <dd className="mt-2 flex flex-wrap gap-1.5">
                 {e.services.map((s) => (
-                  <span key={s} className="rounded-full bg-[var(--portal-brand-soft)] px-2.5 py-1 text-[12.5px] text-ink ring-1 ring-inset ring-[var(--portal-brand-line)]">{s}</span>
+                  <span key={s} className="rounded-full bg-[var(--portal-brand-soft)] px-2.5 py-1 text-[0.7812rem] text-ink ring-1 ring-inset ring-[var(--portal-brand-line)]">{s}</span>
                 ))}
               </dd>
             </div>
@@ -237,17 +237,17 @@ function Overview({ e, today, quote, current, cur, base, next }: {
 
       {e.customer_notes && (
         <Panel title="Notes for you">
-          <p className="whitespace-pre-wrap break-words px-4 pb-6 text-[14px] leading-relaxed text-ink sm:px-6">{e.customer_notes}</p>
+          <p className="whitespace-pre-wrap break-words px-4 pb-6 text-[0.875rem] leading-relaxed text-ink sm:px-6">{e.customer_notes}</p>
         </Panel>
       )}
 
       <Panel title="What's next">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-6 sm:px-6">
           <div className="min-w-0">
-            <p className="text-[14px] font-medium text-ink">{next.label}</p>
-            {next.detail && <p className="mt-0.5 text-[13px] text-ink-muted">{next.detail}</p>}
+            <p className="text-[0.875rem] font-medium text-ink">{next.label}</p>
+            {next.detail && <p className="mt-0.5 text-[0.8125rem] text-ink-muted">{next.detail}</p>}
             {quote && current && (
-              <p className="mt-2 text-[13px] text-ink-muted">
+              <p className="mt-2 text-[0.8125rem] text-ink-muted">
                 Current quote Q-{quote.number} · version {current.version_number} · <span className="tabular">{money(current.total, cur)}</span>
               </p>
             )}
@@ -275,8 +275,8 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
     return (
       <Panel>
         <div className="px-5 py-12 text-center sm:px-6">
-          <p className="text-[14px] font-medium text-ink">Your quote is being prepared</p>
-          <p className="mt-1 text-[13px] text-ink-muted">We&apos;ll let you know when it&apos;s ready. Questions in the meantime? <PortalLink href={`${base}?tab=messages`}>Send us a message</PortalLink>.</p>
+          <p className="text-[0.875rem] font-medium text-ink">Your quote is being prepared</p>
+          <p className="mt-1 text-[0.8125rem] text-ink-muted">We&apos;ll let you know when it&apos;s ready. Questions in the meantime? <PortalLink href={`${base}?tab=messages`}>Send us a message</PortalLink>.</p>
         </div>
       </Panel>
     );
@@ -291,7 +291,7 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
       {current.status === "accepted" && (
         <div className="flex gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 sm:p-5">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-          <div className="min-w-0 break-words text-[13.5px]">
+          <div className="min-w-0 break-words text-[0.8438rem]">
             <p className="font-semibold">Quote accepted — thank you!</p>
             <p className="mt-1">
               Accepted by <strong>{current.accepted_by_name ?? "you"}</strong> on {fmtDateTime(current.responded_at, tz, "date")} at {fmtDateTime(current.responded_at, tz, "time")} ({tz.replace("_", " ")}).
@@ -303,7 +303,7 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
       {current.status === "declined" && (
         <div className="flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-900 sm:p-5">
           <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
-          <div className="min-w-0 break-words text-[13.5px]">
+          <div className="min-w-0 break-words text-[0.8438rem]">
             <p className="font-semibold">You declined this quote on {fmtDateTime(current.responded_at, tz, "date")}.</p>
             {current.decline_reason && <p className="mt-1">Reason: {current.decline_reason}</p>}
             <p className="mt-1">Changed your mind or want something different? <PortalLink href={`${base}?tab=messages`}>Send us a message</PortalLink>.</p>
@@ -311,7 +311,7 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
         </div>
       )}
       {(current.status === "sent" || current.status === "viewed") && expired && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[13.5px] text-amber-900 sm:p-5">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-[0.8438rem] text-amber-900 sm:p-5">
           This quote expired on {fmtDate(current.snapshot.expiry_date)}. <PortalLink href={`${base}?tab=messages`}>Send us a message</PortalLink> and we&apos;ll refresh it for you.
         </div>
       )}
@@ -319,16 +319,16 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-5 sm:px-6">
           <div className="min-w-0 flex-1 basis-52">
-            <p className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Quote Q-{quote.number} · Version {current.version_number}</p>
-            <h2 className="mt-1 break-words text-[18px] font-semibold tracking-tight text-ink">{current.snapshot.title ?? `Quote Q-${quote.number}`}</h2>
-            <p className="mt-1 text-[13px] text-ink-muted">
+            <p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Quote Q-{quote.number} · Version {current.version_number}</p>
+            <h2 className="mt-1 break-words text-[1.125rem] font-semibold tracking-tight text-ink">{current.snapshot.title ?? `Quote Q-${quote.number}`}</h2>
+            <p className="mt-1 text-[0.8125rem] text-ink-muted">
               Issued {fmtDate(current.snapshot.issue_date ?? current.published_at)}
               {current.snapshot.expiry_date && ` · Valid until ${fmtDate(current.snapshot.expiry_date)}`}
             </p>
           </div>
           {expired && !open && (current.status === "sent" || current.status === "viewed")
-            ? <Badge tone="slate" className="text-[12.5px]">Expired</Badge>
-            : <Badge tone={qs.tone} className="text-[12.5px]">{qs.label}</Badge>}
+            ? <Badge tone="slate" className="text-[0.7812rem]">Expired</Badge>
+            : <Badge tone={qs.tone} className="text-[0.7812rem]">{qs.label}</Badge>}
         </div>
         <QuoteDocument snap={current.snapshot} version={current} cur={cur} />
       </Panel>
@@ -340,7 +340,7 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
         />
       )}
 
-      <p className="text-center text-[13px] text-ink-muted">
+      <p className="text-center text-[0.8125rem] text-ink-muted">
         Have a question about this quote? <PortalLink href={`${base}?tab=messages`}>Ask us</PortalLink>
       </p>
 
@@ -351,12 +351,12 @@ function QuoteTab({ slug, e, quote, current, versions, tz, cur, defaultName, bus
               <li key={v.id}>
                 <details className="group">
                   <summary className="flex min-h-[52px] cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 hover:bg-zinc-50 sm:min-h-0 sm:px-6">
-                    <span className="min-w-0 text-[13.5px] text-ink">
+                    <span className="min-w-0 text-[0.8438rem] text-ink">
                       Version {v.version_number}
-                      <span className="ml-2 text-[12.5px] text-ink-muted">sent {fmtDate(v.published_at.slice(0, 10))}</span>
+                      <span className="ml-2 text-[0.7812rem] text-ink-muted">sent {fmtDate(v.published_at.slice(0, 10))}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-3">
-                      <span className="tabular text-[13px] text-ink">{money(v.total, cur)}</span>
+                      <span className="tabular text-[0.8125rem] text-ink">{money(v.total, cur)}</span>
                       <Badge tone={CUSTOMER_QUOTE_STATUS[v.status].tone}>{v.status === "superseded" ? "Replaced" : CUSTOMER_QUOTE_STATUS[v.status].label}</Badge>
                     </span>
                   </summary>
@@ -382,10 +382,10 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
         return (
           <div key={si} className="border-b border-line px-4 py-5 last:border-b-0 sm:px-6">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="min-w-0 break-words text-[14.5px] font-semibold text-ink">{s.title}</h3>
+              <h3 className="min-w-0 break-words text-[0.9062rem] font-semibold text-ink">{s.title}</h3>
               {sectionOptional && <Badge tone="amber">Optional extra</Badge>}
             </div>
-            {s.description && <p className="-mt-1 mb-3 whitespace-pre-wrap break-words text-[13px] text-ink-muted">{s.description}</p>}
+            {s.description && <p className="-mt-1 mb-3 whitespace-pre-wrap break-words text-[0.8125rem] text-ink-muted">{s.description}</p>}
             <ul className="space-y-3">
               {(s.items ?? []).map((it, ii) => {
                 const optional = !!it.optional || sectionOptional;
@@ -397,18 +397,18 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
                       <img src={it.image_url} alt="" className="h-12 w-12 shrink-0 rounded-lg sm:h-14 sm:w-14 object-cover ring-1 ring-line" />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-[13.5px] font-medium text-ink">
+                      <p className="break-words text-[0.8438rem] font-medium text-ink">
                         {it.name}
                         {optional && !sectionOptional && <span className="ml-2 align-middle"><Badge tone="amber">Optional</Badge></span>}
                         {it.package && <span className="ml-2 align-middle"><Badge tone="brand">Package</Badge></span>}
                       </p>
-                      {it.description && <p className="mt-0.5 whitespace-pre-wrap break-words text-[12.5px] text-ink-muted">{it.description}</p>}
-                      <p className="tabular mt-1 text-[12.5px] text-ink-faint">
+                      {it.description && <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.7812rem] text-ink-muted">{it.description}</p>}
+                      <p className="tabular mt-1 text-[0.7812rem] text-ink-faint">
                         {qty % 1 === 0 ? qty : qty.toFixed(2)}{it.unit ? ` ${it.unit}${qty === 1 ? "" : "s"}` : ""} × {money(it.unit_price, cur)}
                         {Number(it.discount_percent ?? 0) > 0 && ` · ${Number(it.discount_percent)}% off`}
                       </p>
                     </div>
-                    <p className={cn("tabular shrink-0 text-[13.5px] font-medium", optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</p>
+                    <p className={cn("tabular shrink-0 text-[0.8438rem] font-medium", optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</p>
                   </li>
                 );
               })}
@@ -418,12 +418,12 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
       })}
 
       <div className="flex justify-end border-t border-line bg-zinc-50/60 px-4 py-5 sm:px-6">
-        <dl className="tabular w-full space-y-1.5 text-[14px] sm:max-w-xs sm:text-[13.5px]">
+        <dl className="tabular w-full space-y-1.5 text-[0.875rem] sm:max-w-xs sm:text-[0.8438rem]">
           <div className="flex justify-between text-ink-muted"><dt>Subtotal</dt><dd>{money(version.subtotal, cur)}</dd></div>
           <div className="flex justify-between text-ink-muted"><dt>GST</dt><dd>{money(version.tax_total, cur)}</dd></div>
-          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2 font-semibold text-ink"><dt className="text-[16px]">Total <span className="text-[12px] font-normal text-ink-faint">inc GST</span></dt><dd className="text-[24px] tracking-tight sm:text-[18px]">{money(version.total, cur)}</dd></div>
+          <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2 font-semibold text-ink"><dt className="text-[1rem]">Total <span className="text-[0.75rem] font-normal text-ink-faint">inc GST</span></dt><dd className="text-[1.5rem] tracking-tight sm:text-[1.125rem]">{money(version.total, cur)}</dd></div>
           {sections.some((s) => s.optional || s.items?.some((i) => i.optional)) && (
-            <p className="pt-1 text-right text-[11.5px] text-ink-faint">Optional extras are not included in the total.</p>
+            <p className="pt-1 text-right text-[0.7188rem] text-ink-faint">Optional extras are not included in the total.</p>
           )}
         </dl>
       </div>
@@ -432,14 +432,14 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
         <div className="space-y-5 border-t border-line px-4 py-5 sm:px-6">
           {snap.notes && (
             <div>
-              <h4 className="text-[12px] font-semibold uppercase tracking-wide text-ink-faint">Notes</h4>
-              <p className="mt-1.5 whitespace-pre-wrap break-words text-[13.5px] leading-relaxed text-ink">{snap.notes}</p>
+              <h4 className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">Notes</h4>
+              <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.8438rem] leading-relaxed text-ink">{snap.notes}</p>
             </div>
           )}
           {snap.terms && (
             <div>
-              <h4 className="text-[12px] font-semibold uppercase tracking-wide text-ink-faint">Terms &amp; conditions</h4>
-              <p className="mt-1.5 whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-ink-muted">{snap.terms}</p>
+              <h4 className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">Terms &amp; conditions</h4>
+              <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.7812rem] leading-relaxed text-ink-muted">{snap.terms}</p>
             </div>
           )}
         </div>
@@ -489,13 +489,13 @@ function Timeline({ e, versions, quotes, invoices, payments, tz, cur, today }: {
       <ol className="relative mx-5 mb-6 border-l border-line pl-5 sm:mx-6 sm:pl-6">
         {items.map((it, i) => (
           <li key={i} className="relative pb-5 last:pb-0">
-            <span className="absolute -left-[27px] top-0.5 flex h-4 w-4 sm:-left-[31px] items-center justify-center bg-white">
+            <span className="absolute -left-[27px] top-0.5 flex h-4 w-4 sm:-left-[31px] items-center justify-center bg-surface">
               {it.future ? <Circle className="h-3.5 w-3.5 text-ink-faint" /> : (
                 <span className={cn("h-2.5 w-2.5 rounded-full", it.tone === "green" ? "bg-emerald-500" : it.tone === "red" ? "bg-rose-500" : "bg-[var(--portal-brand)]")} />
               )}
             </span>
-            <p className={cn("break-words text-[13.5px] font-medium", it.future ? "text-ink-muted" : "text-ink")}>{it.title}</p>
-            <p className="text-[12.5px] text-ink-faint">
+            <p className={cn("break-words text-[0.8438rem] font-medium", it.future ? "text-ink-muted" : "text-ink")}>{it.title}</p>
+            <p className="text-[0.7812rem] text-ink-faint">
               {it.dateOnly ? fmtDate(it.at.slice(0, 10)) : fmtDateTime(it.at, tz, "date")}
               {it.detail && <span className="text-ink-muted"> · {it.detail}</span>}
               {it.future && " · upcoming"}
@@ -535,8 +535,8 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
                 <div className="flex min-w-0 flex-1 basis-52 items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-100"><FileText className="h-4 w-4" /></span>
                   <div className="min-w-0">
-                    <p className="truncate text-[13.5px] font-medium text-ink">{d.name}</p>
-                    <p className="text-[12px] text-ink-faint">Requested {relative(d.created_at)}</p>
+                    <p className="truncate text-[0.8438rem] font-medium text-ink">{d.name}</p>
+                    <p className="text-[0.75rem] text-ink-faint">Requested {relative(d.created_at)}</p>
                   </div>
                 </div>
                 <UploadButton slug={slug} eventId={e.id} orgId={orgId} customerId={e.customer_id} requestId={d.id} requestName={d.name} label="Upload file" fullOnMobile />
@@ -552,7 +552,7 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
         action={<UploadButton slug={slug} eventId={e.id} orgId={orgId} customerId={e.customer_id} requestId={null} label="Send a file" />}
       >
         {files.length === 0 ? (
-          <p className="border-t border-line px-4 py-8 text-center text-[13px] text-ink-muted sm:px-6">No documents yet.</p>
+          <p className="border-t border-line px-4 py-8 text-center text-[0.8125rem] text-ink-muted sm:px-6">No documents yet.</p>
         ) : (
           <ul className="divide-y divide-line border-t border-line">
             {files.map((d) => {
@@ -562,8 +562,8 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-50 ring-1 ring-inset ring-line sm:h-auto sm:w-auto sm:bg-transparent sm:ring-0"><FileText className="h-4 w-4 text-ink-faint" /></span>
                     <div className="min-w-0">
-                      <p className="truncate text-[13.5px] text-ink">{d.name}</p>
-                      <p className="text-[12px] text-ink-faint">
+                      <p className="truncate text-[0.8438rem] text-ink">{d.name}</p>
+                      <p className="text-[0.75rem] text-ink-faint">
                         {d.size_bytes ? `${d.size_bytes >= 1048576 ? (d.size_bytes / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(d.size_bytes / 1024)) + " KB"} · ` : ""}
                         {fmtDateTime(d.updated_at ?? d.created_at, tz, "date")}
                         {!d.event_id && " · for all your bookings"}
@@ -571,9 +571,9 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
                     </div>
                   </div>
                   {href ? (
-                    <a href={href} aria-label={`Download ${d.name}`} className={portalButton("secondary", "h-10 w-10 shrink-0 px-0 text-[13px] after:absolute after:inset-0 sm:h-9 sm:w-auto sm:px-4 sm:after:hidden")}><Download className="h-4 w-4" /><span className="hidden sm:inline">Download</span></a>
+                    <a href={href} aria-label={`Download ${d.name}`} className={portalButton("secondary", "h-10 w-10 shrink-0 px-0 text-[0.8125rem] after:absolute after:inset-0 sm:h-9 sm:w-auto sm:px-4 sm:after:hidden")}><Download className="h-4 w-4" /><span className="hidden sm:inline">Download</span></a>
                   ) : (
-                    <span className="shrink-0 text-[12px] text-ink-faint">Not available</span>
+                    <span className="shrink-0 text-[0.75rem] text-ink-faint">Not available</span>
                   )}
                 </li>
               );
@@ -596,19 +596,19 @@ function Payments({ invoices, payments, cur, tz }: { invoices: PortalInvoice[]; 
   return (
     <>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <div className="rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5">
-          <p className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Outstanding</p>
-          <p className="tabular mt-1 break-words text-[20px] font-semibold text-ink sm:text-[22px]">{money(outstanding, cur)}</p>
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5">
+          <p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Outstanding</p>
+          <p className="tabular mt-1 break-words text-[1.25rem] font-semibold text-ink sm:text-[1.375rem]">{money(outstanding, cur)}</p>
         </div>
-        <div className="rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5">
-          <p className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Paid so far</p>
-          <p className="tabular mt-1 break-words text-[20px] font-semibold text-ink sm:text-[22px]">{money(paid, cur)}</p>
+        <div className="rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5">
+          <p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Paid so far</p>
+          <p className="tabular mt-1 break-words text-[1.25rem] font-semibold text-ink sm:text-[1.375rem]">{money(paid, cur)}</p>
         </div>
       </div>
 
       <Panel title="Invoices">
         {invoices.length === 0 ? (
-          <p className="border-t border-line px-4 py-8 text-center text-[13px] text-ink-muted sm:px-6">No invoices yet. Once your quote is accepted, your invoice will appear here.</p>
+          <p className="border-t border-line px-4 py-8 text-center text-[0.8125rem] text-ink-muted sm:px-6">No invoices yet. Once your quote is accepted, your invoice will appear here.</p>
         ) : (
           <ul className="divide-y divide-line border-t border-line">
             {invoices.map((i) => {
@@ -618,24 +618,24 @@ function Payments({ invoices, payments, cur, tz }: { invoices: PortalInvoice[]; 
                 <li key={i.id} className="px-4 py-4 sm:px-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[14px] font-medium text-ink">{INVOICE_KIND[i.kind] ?? "Invoice"} {i.number}</p>
-                      <p className="mt-0.5 text-[12.5px] text-ink-muted">
+                      <p className="text-[0.875rem] font-medium text-ink">{INVOICE_KIND[i.kind] ?? "Invoice"} {i.number}</p>
+                      <p className="mt-0.5 text-[0.7812rem] text-ink-muted">
                         Issued {fmtDate(i.issue_date)}{i.due_date && ` · Due ${fmtDate(i.due_date)}`}
                       </p>
                     </div>
                     <Badge tone={s.tone}>{s.label}</Badge>
                   </div>
-                  <dl className="tabular mt-3 grid grid-cols-3 gap-3 text-[13px]">
-                    <div><dt className="text-[11.5px] text-ink-faint">Total (incl. GST)</dt><dd className="text-ink">{money(i.total, i.currency || cur)}</dd></div>
-                    <div><dt className="text-[11.5px] text-ink-faint">Paid</dt><dd className="text-ink">{money(i.amount_paid, i.currency || cur)}</dd></div>
-                    <div><dt className="text-[11.5px] text-ink-faint">Balance</dt><dd className="font-semibold text-ink">{money(i.balance, i.currency || cur)}</dd></div>
+                  <dl className="tabular mt-3 grid grid-cols-3 gap-3 text-[0.8125rem]">
+                    <div><dt className="text-[0.7188rem] text-ink-faint">Total (incl. GST)</dt><dd className="text-ink">{money(i.total, i.currency || cur)}</dd></div>
+                    <div><dt className="text-[0.7188rem] text-ink-faint">Paid</dt><dd className="text-ink">{money(i.amount_paid, i.currency || cur)}</dd></div>
+                    <div><dt className="text-[0.7188rem] text-ink-faint">Balance</dt><dd className="font-semibold text-ink">{money(i.balance, i.currency || cur)}</dd></div>
                   </dl>
                   {open && (
                     <div className="mt-4 flex flex-col gap-3 rounded-xl bg-zinc-50 p-3 sm:flex-row sm:flex-wrap sm:items-center">
-                      <button type="button" disabled className={portalButton("primary", "h-11 w-full text-[13.5px] sm:h-9 sm:w-auto sm:text-[13px]")} title="Online payment coming soon">
+                      <button type="button" disabled className={portalButton("primary", "h-11 w-full text-[0.8438rem] sm:h-9 sm:w-auto sm:text-[0.8125rem]")} title="Online payment coming soon">
                         Pay now
                       </button>
-                      <p className="text-[12.5px] text-ink-muted">
+                      <p className="text-[0.7812rem] text-ink-muted">
                         Online payment coming soon — pay by bank transfer using invoice number <strong className="text-ink">{i.number}</strong> as the reference.
                       </p>
                     </div>
@@ -649,27 +649,27 @@ function Payments({ invoices, payments, cur, tz }: { invoices: PortalInvoice[]; 
 
       <Panel title="Payments received">
         {payments.length === 0 ? (
-          <p className="border-t border-line px-4 py-8 text-center text-[13px] text-ink-muted sm:px-6">No payments recorded yet.</p>
+          <p className="border-t border-line px-4 py-8 text-center text-[0.8125rem] text-ink-muted sm:px-6">No payments recorded yet.</p>
         ) : (
           <>
           <ul className="divide-y divide-line border-t border-line sm:hidden">
             {payments.map((p) => (
               <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-[13.5px] text-ink">{fmtDateTime(p.paid_at, tz, "date")}</p>
-                  <p className="break-words text-[12.5px] capitalize text-ink-muted">
+                  <p className="text-[0.8438rem] text-ink">{fmtDateTime(p.paid_at, tz, "date")}</p>
+                  <p className="break-words text-[0.7812rem] capitalize text-ink-muted">
                     {invoices.find((i) => i.id === p.invoice_id)?.number ?? "—"}{p.method ? ` · ${p.method.replace(/_/g, " ")}` : ""}
                     {p.reference && <span className="normal-case text-ink-faint"> · {p.reference}</span>}
                   </p>
                 </div>
-                <span className="tabular shrink-0 text-[14px] font-semibold text-ink">{money(p.amount, cur)}</span>
+                <span className="tabular shrink-0 text-[0.875rem] font-semibold text-ink">{money(p.amount, cur)}</span>
               </li>
             ))}
           </ul>
           <div className="hidden overflow-x-auto border-t border-line sm:block">
-            <table className="w-full min-w-[480px] text-[13px]">
+            <table className="w-full min-w-[480px] text-[0.8125rem]">
               <thead>
-                <tr className="text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-2.5 font-medium sm:px-6">Date</th>
                   <th className="px-3 py-2.5 font-medium">Invoice</th>
                   <th className="px-3 py-2.5 font-medium">Method</th>
@@ -703,7 +703,7 @@ function Messages({ slug, e, messages, businessName, tz }: { slug: string; e: Po
   return (
     <Panel title="Messages" subtitle={`Your conversation with ${businessName} about this booking.`}>
       <div className="space-y-3 border-t border-line px-4 py-5 sm:px-6">
-        {messages.length === 0 && <p className="py-4 text-center text-[13px] text-ink-muted">No messages yet. Ask us anything about your booking.</p>}
+        {messages.length === 0 && <p className="py-4 text-center text-[0.8125rem] text-ink-muted">No messages yet. Ask us anything about your booking.</p>}
         {messages.map((m) => {
           const mine = m.author_type === "customer";
           return (
@@ -712,8 +712,8 @@ function Messages({ slug, e, messages, businessName, tz }: { slug: string; e: Po
                 "min-w-0 max-w-[85%] rounded-2xl px-4 py-2.5",
                 mine ? "rounded-br-md bg-[var(--portal-brand)] text-[color:var(--portal-brand-fg)]" : "rounded-bl-md bg-zinc-100 text-ink"
               )}>
-                <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed sm:text-[13.5px]">{m.body}</p>
-                <p className={cn("mt-1 text-[11px]", mine ? "opacity-75" : "text-ink-faint")}>
+                <p className="whitespace-pre-wrap break-words text-[0.875rem] leading-relaxed sm:text-[0.8438rem]">{m.body}</p>
+                <p className={cn("mt-1 text-[0.6875rem]", mine ? "opacity-75" : "text-ink-faint")}>
                   {mine ? "You" : businessName} · {fmtDateTime(m.created_at, tz)}
                 </p>
               </div>

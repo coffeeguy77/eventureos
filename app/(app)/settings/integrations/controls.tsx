@@ -13,7 +13,7 @@ import {
 
 function Result({ state }: { state: ActionState }) {
   if (state?.error) return <FormError message={state.error} />;
-  if (state?.ok) return <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>;
+  if (state?.ok) return <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>;
   return null;
 }
 
@@ -75,7 +75,7 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
   return (
     <form action={action} className="grid gap-5 px-5 pb-5 sm:grid-cols-2">
       <fieldset className="sm:col-span-2">
-        <legend className="mb-2 text-[13px] font-medium text-ink">Which emails come into EventureOS?</legend>
+        <legend className="mb-2 text-[0.8125rem] font-medium text-ink">Which emails come into EventureOS?</legend>
         <div className="grid gap-2 sm:grid-cols-2">
           {([
             ["matching", "Only matching emails", "Recommended. Web-form emails, your keywords, and replies from customers you already have. Everything else stays in Gmail only."],
@@ -84,7 +84,7 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
             <label key={v} className={cn("flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors",
               mode === v ? "border-brand-300 bg-brand-50/60 ring-1 ring-inset ring-brand-200" : "border-line hover:border-line-strong")}>
               <input type="radio" name="filter_mode" value={v} checked={mode === v} onChange={() => setMode(v)} className="mt-1 accent-brand-600" />
-              <span><span className="block text-[13.5px] font-medium">{title}</span><span className="mt-0.5 block text-[12.5px] leading-snug text-ink-muted">{desc}</span></span>
+              <span><span className="block text-[0.8438rem] font-medium">{title}</span><span className="mt-0.5 block text-[0.7812rem] leading-snug text-ink-muted">{desc}</span></span>
             </label>
           ))}
         </div>
@@ -94,7 +94,7 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
         <Label htmlFor="website_subject_patterns" hint="one per line — matches the start of the subject">Web-form subject lines</Label>
         <Textarea id="website_subject_patterns" name="website_subject_patterns" rows={3} defaultValue={values.website_subject_patterns.join("\n")}
           placeholder={"Coffee Cart Hire Message From\nCatering Enquiry From"} />
-        <p className="mt-1 text-[12px] leading-snug text-ink-faint">
+        <p className="mt-1 text-[0.75rem] leading-snug text-ink-faint">
           Emails whose subject <strong className="font-medium text-ink-muted">starts with</strong> one of these are always imported as website enquiries, and the customer&apos;s details are read from the form.
           Use <code className="rounded bg-zinc-100 px-1">*</code> for a part that changes, e.g. <code className="rounded bg-zinc-100 px-1">* Message From</code>.
         </p>
@@ -104,7 +104,7 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
         <Label htmlFor="filter_keywords" hint="one per line">Keywords</Label>
         <Textarea id="filter_keywords" name="filter_keywords" rows={6} defaultValue={values.filter_keywords.join("\n")}
           placeholder={"coffee cart\ncoffee van\nhire\nevent\ncatering"} readOnly={mode === "all"} className={cn(mode === "all" && "opacity-50")} />
-        <p className="mt-1 text-[12px] leading-snug text-ink-faint">An email is imported if its subject or message mentions any of these. “hire” also matches hires, hired and hiring. Newsletters are skipped even if they mention a keyword.</p>
+        <p className="mt-1 text-[0.75rem] leading-snug text-ink-faint">An email is imported if its subject or message mentions any of these. “hire” also matches hires, hired and hiring. Newsletters are skipped even if they mention a keyword.</p>
       </div>
       <div className="grid content-start gap-4">
         <div>
@@ -118,13 +118,13 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
       </div>
 
       <details className="rounded-xl border border-line px-4 py-3 sm:col-span-2">
-        <summary className="cursor-pointer text-[13px] font-medium">More settings</summary>
+        <summary className="cursor-pointer text-[0.8125rem] font-medium">More settings</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="website_form_senders" hint="one per line">Website form senders</Label>
             <Textarea id="website_form_senders" name="website_form_senders" rows={3} defaultValue={values.website_form_senders.join("\n")}
               placeholder={"forms@yourdomain.com.au\nwordpress@yourdomain.com.au"} />
-            <p className="mt-1 text-[12px] text-ink-faint">Every email from these addresses is a website enquiry.</p>
+            <p className="mt-1 text-[0.75rem] text-ink-faint">Every email from these addresses is a website enquiry.</p>
           </div>
           <div className="grid content-start gap-4">
             <div>
@@ -135,7 +135,7 @@ export function GmailSettingsForm({ values, aiConfigured }: { values: GmailFilte
             </div>
             <div>
               <Label>AI classification</Label>
-              <label className={cn("flex items-start gap-2 text-[13px]", !aiConfigured && "text-ink-faint")}>
+              <label className={cn("flex items-start gap-2 text-[0.8125rem]", !aiConfigured && "text-ink-faint")}>
                 <input type="checkbox" name="ai_enabled" defaultChecked={values.ai_enabled} disabled={!aiConfigured} className="mt-0.5" />
                 <span>Use Claude to classify new emails and extract event details.{" "}
                   {aiConfigured ? "Falls back to the rules engine on any error." : <>Needs <code className="rounded bg-zinc-100 px-1">ANTHROPIC_API_KEY</code> — the rules engine is used until then.</>}
@@ -158,7 +158,7 @@ export function EmailCleanupPanel() {
     <form action={action} className="grid gap-3 px-5 pb-5">
       {state?.preview ? (
         <>
-          <div className="rounded-xl bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-100">
+          <div className="rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-100">
             <strong className="font-semibold">{state.preview.threads} conversation{state.preview.threads === 1 ? "" : "s"}</strong> ({state.preview.messages} email{state.preview.messages === 1 ? "" : "s"}) don&apos;t match your filters
             {state.preview.enquiries ? <>, including <strong className="font-semibold">{state.preview.enquiries} enquir{state.preview.enquiries === 1 ? "y" : "ies"}</strong> nobody has worked on yet</> : null}.
             They&apos;ll be removed from EventureOS only — your Gmail isn&apos;t touched. Anything linked to a customer or event, or an enquiry someone has updated, is kept.
@@ -170,12 +170,12 @@ export function EmailCleanupPanel() {
         </>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12.5px] text-ink-muted">Save your filters first, then check which already-imported emails no longer match.</p>
+          <p className="text-[0.7812rem] text-ink-muted">Save your filters first, then check which already-imported emails no longer match.</p>
           <Button type="submit" name="step" value="preview" variant="secondary" size="md" disabled={pending}>{pending ? "Checking…" : "Check imported email"}</Button>
         </div>
       )}
       {state?.error && <FormError message={state.error} />}
-      {state?.ok && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>}
+      {state?.ok && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>}
     </form>
   );
 }
@@ -191,7 +191,7 @@ export function ImportForm({ months, inProgress }: { months: number; inProgress:
         </Select>
       </div>
       {inProgress && (
-        <label className="flex items-center gap-2 pb-2 text-[12.5px] text-ink-muted"><input type="checkbox" name="restart" value="1" /> Start again from the newest mail</label>
+        <label className="flex items-center gap-2 pb-2 text-[0.7812rem] text-ink-muted"><input type="checkbox" name="restart" value="1" /> Start again from the newest mail</label>
       )}
       <Button variant="primary" size="md" disabled={pending} className="h-10 w-full sm:h-9 sm:w-auto">{pending ? "Scanning Gmail…" : inProgress ? "Continue import" : "Import historical event enquiries"}</Button>
       <div className="basis-full"><Result state={state} /></div>
@@ -209,11 +209,11 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteC
   return (
     <form action={action} className="px-4 pb-5 sm:px-5">
       {rows.length === 0 ? (
-        <p className="mb-4 text-[13px] text-ink-muted">You don&apos;t have any EventureOS calendars (resources) yet. Add one on the Calendar page, then map it here.</p>
+        <p className="mb-4 text-[0.8125rem] text-ink-muted">You don&apos;t have any EventureOS calendars (resources) yet. Add one on the Calendar page, then map it here.</p>
       ) : (
         <div className="-mx-4 mb-4 sm:-mx-5 md:overflow-x-auto">
-          <table className="block w-full text-[13px] md:table md:min-w-[560px]">
-            <thead className="hidden md:table-header-group"><tr className="border-y border-line bg-zinc-50/60 text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+          <table className="block w-full text-[0.8125rem] md:table md:min-w-[560px]">
+            <thead className="hidden md:table-header-group"><tr className="border-y border-line bg-zinc-50/60 text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
               <th className="px-5 py-2 font-medium">EventureOS calendar</th><th className="px-3 py-2 font-medium">Google calendar</th><th className="px-3 py-2 font-medium">Sync</th><th className="px-5 py-2 text-right font-medium">Entries</th>
             </tr></thead>
             <tbody className="block divide-y divide-line border-y border-line md:table-row-group md:border-y-0">
@@ -221,18 +221,18 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteC
                 <tr key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5 md:table-row md:p-0">
                   <td className="col-start-1 row-start-1 min-w-0 truncate md:table-cell md:px-5 md:py-2.5"><span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: r.colour }} />{r.name}</td>
                   <td className="col-start-1 row-start-2 min-w-0 md:table-cell md:px-3 md:py-2.5">
-                    <select name={`cal_${r.id}`} defaultValue={r.external_calendar_id ?? ""} aria-label={`Google calendar for ${r.name}`} className={cn(inputClass, "h-10 py-0 text-[12.5px] md:h-8")}>
+                    <select name={`cal_${r.id}`} defaultValue={r.external_calendar_id ?? ""} aria-label={`Google calendar for ${r.name}`} className={cn(inputClass, "h-10 py-0 text-[0.7812rem] md:h-8")}>
                       <option value="">Don&apos;t sync</option>
                       {calendars.map((c) => <option key={c.id} value={c.id}>{c.summary}{c.primary ? " (primary)" : ""}</option>)}
                     </select>
                   </td>
                   <td className="col-start-2 row-start-2 md:table-cell md:px-3 md:py-2.5">
-                    <label className="flex h-10 items-center gap-2 text-[12.5px] text-ink-muted md:h-auto">
+                    <label className="flex h-10 items-center gap-2 text-[0.7812rem] text-ink-muted md:h-auto">
                       <input type="checkbox" name={`sync_${r.id}`} defaultChecked={r.sync_enabled} aria-label={`Sync ${r.name}`} />
                       <span className="md:hidden">Sync</span>
                     </label>
                   </td>
-                  <td className="tabular col-start-2 row-start-1 text-right text-ink-muted max-md:text-[12px] md:table-cell md:px-5 md:py-2.5">{r.entries}<span className="md:hidden"> entries</span></td>
+                  <td className="tabular col-start-2 row-start-1 text-right text-ink-muted max-md:text-[0.75rem] md:table-cell md:px-5 md:py-2.5">{r.entries}<span className="md:hidden"> entries</span></td>
                 </tr>
               ))}
             </tbody>
@@ -241,18 +241,18 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteC
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <fieldset>
-          <legend className="mb-1.5 text-[12.5px] font-medium text-ink">Which entries sync</legend>
+          <legend className="mb-1.5 text-[0.7812rem] font-medium text-ink">Which entries sync</legend>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {KINDS.map(([k, label]) => (
-              <label key={k} className="flex items-center gap-1.5 text-[13px]"><input type="checkbox" name={`kind_${k}`} defaultChecked={kinds.includes(k)} /> {label}</label>
+              <label key={k} className="flex items-center gap-1.5 text-[0.8125rem]"><input type="checkbox" name={`kind_${k}`} defaultChecked={kinds.includes(k)} /> {label}</label>
             ))}
           </div>
         </fieldset>
-        <label className="flex items-start gap-2 text-[13px]">
+        <label className="flex items-start gap-2 text-[0.8125rem]">
           <input type="checkbox" name="pull_busy" defaultChecked={pullBusy} className="mt-0.5" />
           <span>Bring in entries from these Google calendars (past 2 years and next 12 months): busy time shows in EventureOS so double-bookings are visible, and bookings with a client’s email appear in their job history.</span>
         </label>
-        <label className="flex items-start gap-2 text-[13px]">
+        <label className="flex items-start gap-2 text-[0.8125rem]">
           <input type="checkbox" name="invite_clients" defaultChecked={inviteClients} className="mt-0.5" />
           <span>Invite the client’s people on the job to the calendar event. Rostered staff (and anyone set to “add to every event”) are always invited. Google emails guests only when the guest list changes.</span>
         </label>
@@ -297,12 +297,12 @@ export function XeroSettingsForm({ values, tenants }: {
           <option value="draft">As drafts (approve in Xero)</option>
           <option value="authorised">As approved invoices</option>
         </Select>
-        <p className="mt-1 text-[12px] text-ink-faint">Only for customers matched to a Xero contact. After that, Xero decides the amounts and payment status.</p>
+        <p className="mt-1 text-[0.75rem] text-ink-faint">Only for customers matched to a Xero contact. After that, Xero decides the amounts and payment status.</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div><Label htmlFor="sales_account_code">Sales account</Label><Input id="sales_account_code" name="sales_account_code" defaultValue={values.sales_account_code} /></div>
         <div><Label htmlFor="tax_type">Tax type</Label><Input id="tax_type" name="tax_type" defaultValue={values.tax_type} /></div>
-        <p className="col-span-2 -mt-1 text-[12px] text-ink-faint">Defaults: 200 (Sales) and OUTPUT (GST on income). Amounts are sent GST-inclusive.</p>
+        <p className="col-span-2 -mt-1 text-[0.75rem] text-ink-faint">Defaults: 200 (Sales) and OUTPUT (GST on income). Amounts are sent GST-inclusive.</p>
       </div>
       <div className="sm:col-span-2"><Result state={state} /></div>
       <div className="flex justify-end sm:col-span-2"><Button size="sm" variant="primary" disabled={pending} className="h-10 w-full sm:h-8 sm:w-auto">{pending ? "Saving…" : "Save Xero settings"}</Button></div>
@@ -319,12 +319,12 @@ export function CandidateActions({ id, suggestedId, customers, canResolve, merge
   const state = mState ?? kState ?? iState;
   const busy = mPending || kPending || iPending;
   if (state?.ok) return <Result state={state} />;
-  if (!canResolve) return <p className="text-[12px] text-ink-faint">Ask an owner, admin or manager to resolve this.</p>;
+  if (!canResolve) return <p className="text-[0.75rem] text-ink-faint">Ask an owner, admin or manager to resolve this.</p>;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <form action={merge} className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <select name="customer_id" defaultValue={suggestedId ?? ""} aria-label="Customer to merge with" className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[12.5px] sm:h-8 sm:w-56 sm:flex-none")}>
+          <select name="customer_id" defaultValue={suggestedId ?? ""} aria-label="Customer to merge with" className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[0.7812rem] sm:h-8 sm:w-56 sm:flex-none")}>
             <option value="">Choose customer…</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -351,7 +351,7 @@ export function SuggestionForm({ threadId, values }: {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" onClick={() => setOpen(true)} className="h-10 w-full sm:h-8 sm:w-auto">Create enquiry from email</Button>
-        <select aria-label="File as" disabled={refiling} defaultValue="" className={cn(inputClass, "h-10 w-full py-0 text-[12.5px] sm:h-8 sm:w-auto")}
+        <select aria-label="File as" disabled={refiling} defaultValue="" className={cn(inputClass, "h-10 w-full py-0 text-[0.7812rem] sm:h-8 sm:w-auto")}
           onChange={(e) => { const v = e.target.value; if (v) start(async () => setRefiled(await refileThread(threadId, v))); }}>
           <option value="">Not an enquiry…</option>
           <option value="general_email">File as general email</option>
@@ -396,10 +396,10 @@ export function CopyBlock({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative">
-      <pre className="max-h-64 max-w-full overflow-auto rounded-lg bg-zinc-950 p-3 pr-20 text-[11.5px] leading-relaxed text-zinc-100"><code>{text}</code></pre>
+      <pre className="max-h-64 max-w-full overflow-auto rounded-lg bg-[#0E0E12] p-3 pr-20 text-[0.7188rem] leading-relaxed text-[#F4F4F5]"><code>{text}</code></pre>
       <button type="button" aria-label={label}
         onClick={async () => { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } }}
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-[11.5px] text-white hover:bg-white/20">
+        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-[0.7188rem] text-white hover:bg-white/20">
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
       </button>
     </div>

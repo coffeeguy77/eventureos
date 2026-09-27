@@ -45,14 +45,14 @@ export default async function SupportAudit() {
               return (
                 <li key={r.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 truncate text-[13.5px] font-medium text-ink">{r.organisation_name}</div>
+                    <div className="min-w-0 truncate text-[0.8438rem] font-medium text-ink">{r.organisation_name}</div>
                     <Badge tone={k.tone} className="shrink-0">{k.label}</Badge>
                   </div>
-                  <div className="mt-0.5 break-words text-[12.5px] text-ink">
+                  <div className="mt-0.5 break-words text-[0.7812rem] text-ink">
                     {r.summary}
                     {until && <span className="text-ink-muted"> · until {fmtDateTime(until, TZ, "time")}</span>}
                   </div>
-                  <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                  <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
                     {fmtDateTime(r.created_at, TZ)} · {r.actor_name ?? r.actor_email ?? "—"}
                   </div>
                 </li>
@@ -60,9 +60,9 @@ export default async function SupportAudit() {
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[860px] text-[13px]">
+            <table className="w-full min-w-[860px] text-[0.8125rem]">
               <thead>
-                <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="border-b border-line text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-2.5 font-medium">When (Sydney)</th>
                   <th className="px-3 py-2.5 font-medium">Organisation</th>
                   <th className="px-3 py-2.5 font-medium">Who</th>
@@ -83,7 +83,7 @@ export default async function SupportAudit() {
                       <td className="px-5 py-2.5 text-ink">
                         {r.summary}
                         {until && <span className="text-ink-muted"> · until {fmtDateTime(until, TZ, "time")}</span>}
-                        <div className="font-mono text-[11px] text-ink-faint">{r.action}</div>
+                        <div className="font-mono text-[0.6875rem] text-ink-faint">{r.action}</div>
                       </td>
                     </tr>
                   );

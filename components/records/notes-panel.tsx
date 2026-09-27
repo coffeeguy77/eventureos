@@ -28,15 +28,15 @@ export function NotesPanel({ notes, names, action }: {
         </div>
       </form>
       {notes.length === 0 ? (
-        <p className="text-[12.5px] text-ink-muted">No notes yet.</p>
+        <p className="text-[0.7812rem] text-ink-muted">No notes yet.</p>
       ) : (
         <ul className="space-y-3">
           {notes.map((n) => (
             <li key={n.id} className="flex gap-3">
               <Avatar name={names[n.created_by ?? ""] ?? "Team"} size={24} />
               <div className="min-w-0 flex-1 rounded-lg bg-amber-50/60 px-3 py-2 ring-1 ring-inset ring-amber-100">
-                <p className="whitespace-pre-line break-words text-[13px] text-ink">{n.body}</p>
-                <p className="mt-1 text-[11.5px] text-ink-faint">{names[n.created_by ?? ""] ?? "Team member"} · {relative(n.created_at)}</p>
+                <p className="whitespace-pre-line break-words text-[0.8125rem] text-ink">{n.body}</p>
+                <p className="mt-1 text-[0.7188rem] text-ink-faint">{names[n.created_by ?? ""] ?? "Team member"} · {relative(n.created_at)}</p>
               </div>
             </li>
           ))}

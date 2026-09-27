@@ -44,8 +44,8 @@ export default async function CalendarsPage() {
           title="Calendars & resources"
           subtitle="One calendar per thing that can be double-booked — a cart, a bar, a van, a team. New confirmed events go on the default calendar."
         />
-        <div className={googleConnected ? "mx-5 mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100"
-          : "mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100"}>
+        <div className={googleConnected ? "mx-5 mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100"
+          : "mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-100"}>
           {googleConnected ? (
             <>Google Calendar is connected{google?.account_label ? ` (${google.account_label})` : ""}
               {google?.last_sync_at ? ` · last sync ${relative(google.last_sync_at)}` : " · not synced yet"}. Calendars with sync on are pushed to Google.</>
@@ -55,7 +55,7 @@ export default async function CalendarsPage() {
           )}
         </div>
         {!canEdit && (
-          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
             Only owners, admins and managers can change calendars.
           </p>
         )}
@@ -71,7 +71,7 @@ export default async function CalendarsPage() {
                       <input type="hidden" name="id" value={c.id} />
                       <div className="flex flex-wrap items-center gap-2">
                         <input type="color" name="colour" defaultValue={c.colour} aria-label={`Colour for ${c.name}`}
-                          className="h-10 w-11 shrink-0 cursor-pointer rounded-md border border-line-strong bg-white p-0.5 sm:h-8 sm:w-10" />
+                          className="h-10 w-11 shrink-0 cursor-pointer rounded-md border border-line-strong bg-surface p-0.5 sm:h-8 sm:w-10" />
                         <Input name="name" defaultValue={c.name} aria-label="Calendar name" maxLength={80} required className="h-10 min-w-0 flex-1 py-1 sm:h-8 sm:w-full sm:max-w-[240px] sm:flex-none" />
                         <SubmitButton size="sm" variant="secondary" pendingLabel="Saving…" className="h-10 sm:h-8">Save</SubmitButton>
                       </div>
@@ -79,18 +79,18 @@ export default async function CalendarsPage() {
                   ) : (
                     <div className="flex items-center gap-2.5">
                       <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: c.colour }} />
-                      <span className="min-w-0 truncate text-[13.5px] font-medium text-ink">{c.name}</span>
+                      <span className="min-w-0 truncate text-[0.8438rem] font-medium text-ink">{c.name}</span>
                     </div>
                   )}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-muted">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.75rem] text-ink-muted">
                     <Badge tone="neutral">{PROVIDER[c.provider] ?? c.provider}</Badge>
                     {c.is_default && <Badge tone="brand">Default</Badge>}
                     <span>{upcoming.get(c.id) ?? 0} upcoming {upcoming.get(c.id) === 1 ? "entry" : "entries"}</span>
-                    {c.external_calendar_id && <span className="min-w-0 max-w-full truncate font-mono text-[11px] text-ink-faint">{c.external_calendar_id}</span>}
+                    {c.external_calendar_id && <span className="min-w-0 max-w-full truncate font-mono text-[0.6875rem] text-ink-faint">{c.external_calendar_id}</span>}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-                  <label className="flex items-center gap-2 text-[12.5px] text-ink-muted">
+                  <label className="flex items-center gap-2 text-[0.7812rem] text-ink-muted">
                     <Toggle on={c.sync_enabled} action={setCalendarSync.bind(null, c.id)} label={`Google sync for ${c.name}`} disabled={!canEdit} />
                     Google sync{c.sync_enabled && !googleConnected && <span className="text-amber-700">(waiting for connection)</span>}
                   </label>
@@ -118,7 +118,7 @@ export default async function CalendarsPage() {
                 <div>
                   <Label htmlFor="new_cal_colour">Colour</Label>
                   <input id="new_cal_colour" type="color" name="colour" defaultValue="#0EA5E9"
-                    className="h-10 w-12 cursor-pointer rounded-lg border border-line-strong bg-white p-1 sm:h-9" />
+                    className="h-10 w-12 cursor-pointer rounded-lg border border-line-strong bg-surface p-1 sm:h-9" />
                 </div>
                 <div className="min-w-0 flex-1 sm:min-w-[200px]">
                   <Label htmlFor="new_cal_name">Name</Label>

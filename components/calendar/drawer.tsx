@@ -14,8 +14,8 @@ export function Drawer({ title, onClose, children, accent }: {
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button type="button" aria-label="Close panel" onClick={onClose} className="absolute inset-0 bg-ink/20" />
-      <aside role="dialog" aria-modal="true" className="pt-safe relative flex h-full w-full max-w-[420px] flex-col bg-white shadow-pop sm:pt-0">
+      <button type="button" aria-label="Close panel" onClick={onClose} className="absolute inset-0 bg-black/30" />
+      <aside role="dialog" aria-modal="true" className="pt-safe relative flex h-full w-full max-w-[420px] flex-col bg-surface shadow-pop sm:pt-0">
         {accent && <div className="h-1 w-full shrink-0" style={{ backgroundColor: accent }} />}
         <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5 sm:py-4">
           <div className="min-w-0 flex-1">{title}</div>

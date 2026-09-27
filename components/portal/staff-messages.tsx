@@ -48,12 +48,12 @@ export async function StaffPortalMessages({ eventId, customerId, className }: { 
           <form action={markPortalThreadRead}>
             <input type="hidden" name="event_id" value={eventId} />
             <input type="hidden" name="customer_id" value={customerId} />
-            <button className="-my-2 py-2 text-[12px] font-medium text-brand-600 hover:text-brand-700 sm:my-0 sm:py-0">Mark as read</button>
+            <button className="-my-2 py-2 text-[0.75rem] font-medium text-brand-600 hover:text-brand-700 sm:my-0 sm:py-0">Mark as read</button>
           </form>
         ) : undefined}
       />
       <div className="space-y-3 border-t border-line px-4 py-4 sm:px-5">
-        {rows.length === 0 && <p className="py-2 text-center text-[12.5px] text-ink-muted">No portal messages for this event yet.</p>}
+        {rows.length === 0 && <p className="py-2 text-center text-[0.7812rem] text-ink-muted">No portal messages for this event yet.</p>}
         {rows.map((m) => {
           const staff = m.author_type === "staff";
           const who = staff ? nameOf(m.author_id) ?? org.name : nameOf(m.author_id) ?? customerName;
@@ -61,8 +61,8 @@ export async function StaffPortalMessages({ eventId, customerId, className }: { 
             <div key={m.id} className={cn("flex gap-2.5", staff && "flex-row-reverse")}>
               <Avatar name={who} size={26} />
               <div className={cn("min-w-0 max-w-[85%] rounded-xl px-3.5 py-2 sm:max-w-[80%]", staff ? "bg-brand-50 ring-1 ring-inset ring-brand-100" : "bg-zinc-100")}>
-                <p className="whitespace-pre-wrap break-words text-[13px] text-ink">{m.body}</p>
-                <p className="mt-1 text-[11px] text-ink-faint">
+                <p className="whitespace-pre-wrap break-words text-[0.8125rem] text-ink">{m.body}</p>
+                <p className="mt-1 text-[0.6875rem] text-ink-faint">
                   {who}{!staff && " (customer)"} · {fmtDateTime(m.created_at, org.timezone)}
                   {!staff && !m.read_at && <span className="ml-1.5 font-medium text-rose-600">· New</span>}
                 </p>

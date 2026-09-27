@@ -15,14 +15,14 @@ export default async function SuspendedPage() {
         <div className="mb-8">
           <Wordmark height={30} />
         </div>
-        <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-8">
-          <h1 className="text-[20px] font-semibold tracking-tight">Your organisation’s account is paused</h1>
-          <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
+        <div className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-8">
+          <h1 className="text-[1.25rem] font-semibold tracking-tight">Your organisation’s account is paused</h1>
+          <p className="mt-2 text-[0.8438rem] leading-relaxed text-ink-muted">
             Access has been paused by EventureOS. Your data is safe and nothing has been deleted.
             Please contact EventureOS support to restore access.
           </p>
           <form action={signOut} className="mt-6">
-            <button type="submit" className="h-11 w-full rounded-lg border border-line px-3.5 text-[13px] font-medium hover:bg-canvas sm:h-auto sm:w-auto sm:py-2">
+            <button type="submit" className="h-11 w-full rounded-lg border border-line px-3.5 text-[0.8125rem] font-medium hover:bg-canvas sm:h-auto sm:w-auto sm:py-2">
               Sign out
             </button>
           </form>

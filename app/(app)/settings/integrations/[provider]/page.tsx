@@ -60,7 +60,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
       />
 
       {sp.connected && connected && (
-        <div role="status" className="mb-5 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 ring-1 ring-inset ring-emerald-100">
+        <div role="status" className="mb-5 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[0.8125rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="min-w-0 break-words">{p.name} connected as <strong>{row!.account_label}</strong>.{" "}
             {provider === "gmail" && "Press Sync now to bring in the last 14 days, or import historical enquiries below."}
@@ -75,7 +75,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
           {!connected && (
             <Card>
               <CardHeader title="Not connected" />
-              <div className="px-4 pb-5 text-[13px] text-ink-muted sm:px-5">
+              <div className="px-4 pb-5 text-[0.8125rem] text-ink-muted sm:px-5">
                 {missing.length ? (
                   <p>Connecting is disabled until {missing.map((m, i) => <span key={m}>{i > 0 && ", "}<Code>{m}</Code></span>)} {missing.length === 1 ? "is" : "are"} set. See the setup notes on the right.</p>
                 ) : manager ? (
@@ -91,15 +91,15 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
 
           <Card>
             <CardHeader title="Sync history" />
-            {(logs ?? []).length === 0 ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No syncs yet.</p> : (
+            {(logs ?? []).length === 0 ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No syncs yet.</p> : (
               <ul className="divide-y divide-line border-t border-line">
                 {(logs ?? []).map((l) => {
                   const s = SYNC_STATUS[l.status as string] ?? { label: l.status as string, tone: "neutral" as const };
                   return (
                     <li key={l.id as string} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 sm:flex-nowrap sm:px-5">
                       <Badge tone={s.tone}>{s.label}</Badge>
-                      <p className="order-last min-w-0 basis-full break-words text-[12.5px] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{(l.message as string | null) ?? l.entity}</p>
-                      <span className="ml-auto shrink-0 text-[11.5px] sm:ml-0 text-ink-faint" title={fmtDateTime(l.started_at as string, org.timezone)}>{relative(l.started_at as string)}</span>
+                      <p className="order-last min-w-0 basis-full break-words text-[0.7812rem] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{(l.message as string | null) ?? l.entity}</p>
+                      <span className="ml-auto shrink-0 text-[0.7188rem] sm:ml-0 text-ink-faint" title={fmtDateTime(l.started_at as string, org.timezone)}>{relative(l.started_at as string)}</span>
                     </li>
                   );
                 })}
@@ -111,7 +111,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
         <div className="space-y-6">
           <Card>
             <CardHeader title="Connection" />
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 pb-5 text-[13px] sm:px-5">
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 pb-5 text-[0.8125rem] sm:px-5">
               <dt className="text-ink-faint">Status</dt><dd><Badge tone={status.tone} dot>{status.label}</Badge></dd>
               <dt className="text-ink-faint">Account</dt><dd className="truncate">{connected ? row!.account_label : "—"}</dd>
               <dt className="text-ink-faint">Connected</dt><dd>{connected && row!.connected_at ? fmtDateTime(row!.connected_at, org.timezone, "date") : "—"}</dd>
@@ -124,7 +124,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
 
           <Card>
             <CardHeader title="Setup notes" subtitle="For whoever manages the EventureOS deployment" />
-            <div className="min-w-0 space-y-3 px-4 pb-5 text-[12.5px] text-ink-muted sm:px-5">
+            <div className="min-w-0 space-y-3 px-4 pb-5 text-[0.7812rem] text-ink-muted sm:px-5">
               <p>Environment variables: {[...p.requiredEnv, "OAUTH_STATE_SECRET"].map((m, i) => <span key={m}>{i > 0 && ", "}<Code>{m}</Code></span>)}.</p>
               <div>
                 <p className="mb-1">Authorised redirect URI:</p>
@@ -163,7 +163,7 @@ async function GmailSection({ orgId, settings, aiConfigured, manager }: { orgId:
             ai_enabled: settings.ai_enabled !== false,
             initial_days: Number(settings.initial_days ?? 14),
           }} />
-        ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change these settings.</p>}
+        ) : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can change these settings.</p>}
       </Card>
       {manager && (
         <Card>
@@ -174,12 +174,12 @@ async function GmailSection({ orgId, settings, aiConfigured, manager }: { orgId:
       <Card>
         <CardHeader title="Import historical event enquiries" subtitle="Scan past Gmail conversations for customers and enquiries. Everything found goes to Import review — nothing is created until you confirm." />
         {imported > 0 && (
-          <p className="px-5 pb-3 text-[12.5px] text-ink-muted">
+          <p className="px-5 pb-3 text-[0.7812rem] text-ink-muted">
             {imported} conversation{imported === 1 ? "" : "s"} scanned{settings.import_last_run_at ? ` · last run ${relative(settings.import_last_run_at as string)}` : ""}.{" "}
             {pending ? <Link href="/settings/integrations/review" className="font-medium text-brand-600 hover:text-brand-700">{pending} waiting for review →</Link> : "Nothing waiting for review."}
           </p>
         )}
-        {manager ? <ImportForm months={Number(settings.import_months ?? 12)} inProgress={!!settings.import_page_token} /> : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can run the import.</p>}
+        {manager ? <ImportForm months={Number(settings.import_months ?? 12)} inProgress={!!settings.import_page_token} /> : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can run the import.</p>}
       </Card>
       <Card>
         <CardHeader title="Website form (optional)" subtitle="Skip email parsing entirely: post your website's enquiry form straight into EventureOS." action={<ButtonLink href="/settings/website-form" size="sm" variant="secondary">Set up website form</ButtonLink>} />
@@ -210,11 +210,11 @@ async function CalendarSection({ orgId, settings, manager }: { orgId: string; se
   return (
     <Card>
       <CardHeader title="Which calendars sync" subtitle="Choose a Google calendar for each EventureOS calendar (resource). Entries are created and updated in Google — never duplicated." />
-      {errors > 0 && <p className="mx-4 mb-3 sm:mx-5 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
-      {calendars.length === 0 && <p className="mx-4 mb-3 sm:mx-5 text-[12.5px] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
+      {errors > 0 && <p className="mx-4 mb-3 sm:mx-5 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
+      {calendars.length === 0 && <p className="mx-4 mb-3 sm:mx-5 text-[0.7812rem] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
       {manager
         ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} inviteClients={settings.invite_clients !== false} />
-        : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change calendar sync.</p>}
+        : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can change calendar sync.</p>}
     </Card>
   );
 }
@@ -239,7 +239,7 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
       <Card>
         <CardHeader title="Match review" subtitle={`${linked ?? 0} customer${linked === 1 ? "" : "s"} linked to Xero contacts.`}
           action={<ButtonLink href="/settings/integrations/review" size="sm" variant={pending ? "primary" : "secondary"}>{pending ? `Review ${pending} match${pending === 1 ? "" : "es"}` : "Open review"}</ButtonLink>} />
-        <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Xero contacts are matched to customers by email, company, phone and name. Possible duplicates wait for you to choose Merge or Keep separate — nothing is merged automatically. Invoice history comes across as soon as a customer is linked.</p>
+        <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Xero contacts are matched to customers by email, company, phone and name. Possible duplicates wait for you to choose Merge or Keep separate — nothing is merged automatically. Invoice history comes across as soon as a customer is linked.</p>
       </Card>
       <Card>
         <CardHeader title="Invoicing" subtitle="Xero stays authoritative for amounts and payment status." />
@@ -252,7 +252,7 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
             quote_acceptance_action: (orgSettings.quote_acceptance_action as string | undefined) ?? "deposit_invoice",
             deposit_percent: Number(orgSettings.deposit_percent ?? 30),
           }} />
-        ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Managers can change invoicing settings.</p>}
+        ) : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can change invoicing settings.</p>}
       </Card>
       <Card>
         <CardHeader title="Xero invoice history" subtitle="Synced from Xero — no need to open Xero." />
@@ -263,11 +263,11 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
               const body = (
                 <>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-medium text-ink">{i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span></div>
-                    <div className="truncate text-[12px] text-ink-faint">{i.due_date ? `Due ${fmtDate(i.due_date)} · ` : ""}Total {money(i.total, currency)}</div>
+                    <div className="truncate text-[0.8438rem] font-medium text-ink">{i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span></div>
+                    <div className="truncate text-[0.75rem] text-ink-faint">{i.due_date ? `Due ${fmtDate(i.due_date)} · ` : ""}Total {money(i.total, currency)}</div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="tabular text-[13px] font-medium text-ink">{money(i.balance, currency)}</span>
+                    <span className="tabular text-[0.8125rem] font-medium text-ink">{money(i.balance, currency)}</span>
                     <Badge tone={INVOICE_STATUS[i.status].tone}>{INVOICE_STATUS[i.status].label}</Badge>
                   </div>
                 </>
@@ -281,14 +281,14 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[560px] text-[13px]">
-              <thead><tr className="border-y border-line bg-zinc-50/60 text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+            <table className="w-full min-w-[560px] text-[0.8125rem]">
+              <thead><tr className="border-y border-line bg-zinc-50/60 text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2 font-medium">Invoice</th><th className="px-3 py-2 font-medium">Customer</th><th className="px-3 py-2 font-medium">Status</th><th className="px-3 py-2 text-right font-medium">Total</th><th className="px-5 py-2 text-right font-medium">Balance</th>
               </tr></thead>
               <tbody className="divide-y divide-line">
                 {((invoices ?? []) as unknown as Inv[]).map((i) => (
                   <tr key={i.id}>
-                    <td className="px-5 py-2.5">{i.event_id ? <Link href={`/events/${i.event_id}?tab=invoice`} className="text-ink hover:text-brand-700">{i.number}</Link> : i.number}<p className="text-[11.5px] text-ink-faint">{i.due_date ? `Due ${fmtDate(i.due_date)}` : ""}</p></td>
+                    <td className="px-5 py-2.5">{i.event_id ? <Link href={`/events/${i.event_id}?tab=invoice`} className="text-ink hover:text-brand-700">{i.number}</Link> : i.number}<p className="text-[0.7188rem] text-ink-faint">{i.due_date ? `Due ${fmtDate(i.due_date)}` : ""}</p></td>
                     <td className="px-3 py-2.5">{i.customer ? <Link href={`/clients/${i.customer.id}`} className="hover:text-brand-700">{i.customer.name}</Link> : "—"}</td>
                     <td className="px-3 py-2.5"><Badge tone={INVOICE_STATUS[i.status].tone}>{INVOICE_STATUS[i.status].label}</Badge></td>
                     <td className="tabular px-3 py-2.5 text-right">{money(i.total, currency)}</td>
@@ -303,13 +303,13 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
       </Card>
       <Card>
         <CardHeader title="Credit notes" subtitle="Read-only, straight from Xero." />
-        {creditError ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Couldn&apos;t load credit notes from Xero: {creditError}</p>
-          : credit.length === 0 ? <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No sales credit notes.</p> : (
+        {creditError ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Couldn&apos;t load credit notes from Xero: {creditError}</p>
+          : credit.length === 0 ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No sales credit notes.</p> : (
             <ul className="divide-y divide-line border-t border-line">
               {credit.map((c) => (
-                <li key={c.CreditNoteID} className="flex flex-col gap-1 px-4 py-2.5 text-[13px] sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
+                <li key={c.CreditNoteID} className="flex flex-col gap-1 px-4 py-2.5 text-[0.8125rem] sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-5">
                   <span className="min-w-0 break-words">{c.CreditNoteNumber ?? "Credit note"} · {c.Contact?.Name ?? "—"} <span className="text-ink-faint">{fmtDate(xeroDate(c.Date, c.DateString))}</span></span>
-                  <span className="tabular sm:shrink-0">{money(c.Total ?? 0, currency)} <span className="text-[11.5px] text-ink-faint">({c.Status?.toLowerCase()}{c.RemainingCredit ? `, ${money(c.RemainingCredit, currency)} unapplied` : ""})</span></span>
+                  <span className="tabular sm:shrink-0">{money(c.Total ?? 0, currency)} <span className="text-[0.7188rem] text-ink-faint">({c.Status?.toLowerCase()}{c.RemainingCredit ? `, ${money(c.RemainingCredit, currency)} unapplied` : ""})</span></span>
                 </li>
               ))}
             </ul>

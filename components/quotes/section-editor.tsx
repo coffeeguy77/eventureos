@@ -17,10 +17,10 @@ const GRID = cn("grid", GRID_MD);
 /** Phones (< md): each item is a stacked card — name full width, then 3-up rows of numbers. */
 const ROW = cn("grid grid-cols-3 gap-x-2 gap-y-2.5", GRID_MD);
 const cell =
-  "h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-[13px] text-ink placeholder:text-ink-faint transition-colors hover:border-line focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:hover:border-transparent max-md:h-10 max-md:border-line max-md:bg-white";
+  "h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-[0.8125rem] text-ink placeholder:text-ink-faint transition-colors hover:border-line focus:border-brand-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:hover:border-transparent max-md:h-10 max-md:border-line max-md:bg-surface";
 const numCell = cn(cell, "tabular text-right");
 /** Field label, only shown on phones (the desktop grid has a column header instead). */
-const mLabel = "mb-1 block px-0.5 text-[10.5px] font-medium uppercase tracking-wide text-ink-faint md:hidden";
+const mLabel = "mb-1 block px-0.5 text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint md:hidden";
 const iconBtn =
   "inline-flex h-10 w-10 items-center justify-center rounded-md md:h-7 md:w-7 text-ink-faint hover:bg-zinc-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-30";
 
@@ -54,7 +54,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
   const optionalTotal = items.reduce((a, i) => a + (i.is_optional ? lineTotal(draftNums(i)) : 0), 0);
 
   return (
-    <section className={cn("rounded-xl border bg-white shadow-card", section.is_optional ? "border-dashed border-brand-200" : "border-line")} aria-label={`Section ${section.title}`}>
+    <section className={cn("rounded-xl border bg-surface shadow-card", section.is_optional ? "border-dashed border-brand-200" : "border-line")} aria-label={`Section ${section.title}`}>
       {/* section header */}
       <div className="flex flex-wrap items-center gap-2 px-3 pt-3 sm:px-4">
         <input
@@ -65,9 +65,9 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
           aria-label="Section name"
           maxLength={120}
           placeholder="Section name"
-          className="h-10 min-w-0 flex-1 basis-full rounded-md border border-transparent bg-transparent px-2 text-[14px] font-semibold sm:h-8 sm:basis-auto text-ink hover:border-line focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          className="h-10 min-w-0 flex-1 basis-full rounded-md border border-transparent bg-transparent px-2 text-[0.875rem] font-semibold sm:h-8 sm:basis-auto text-ink hover:border-line focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
-        <label className={cn("inline-flex h-9 cursor-pointer md:h-7 select-none items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-medium ring-1 ring-inset",
+        <label className={cn("inline-flex h-9 cursor-pointer md:h-7 select-none items-center gap-1.5 rounded-full px-2.5 text-[0.7188rem] font-medium ring-1 ring-inset",
           section.is_optional ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-muted ring-line hover:text-ink")}>
           <input type="checkbox" className="sr-only" checked={section.is_optional} onChange={(e) => h.onSectionOptional(section.id, e.target.checked)} />
           {section.is_optional ? "Optional section" : "Mark optional"}
@@ -78,13 +78,13 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
           <button type="button" className={cn(iconBtn, "hover:bg-rose-50 hover:text-rose-700")} onClick={() => items.length ? setConfirmDelete(true) : h.onDeleteSection(section.id)} disabled={count <= 1} aria-label="Delete section" title={count <= 1 ? "A quote needs at least one section" : "Delete section"}><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
-      {section.is_optional && <p className="px-5 pt-1 text-[11.5px] text-brand-700">Everything in this section is offered as an optional extra and excluded from the total.</p>}
+      {section.is_optional && <p className="px-5 pt-1 text-[0.7188rem] text-brand-700">Everything in this section is offered as an optional extra and excluded from the total.</p>}
       {confirmDelete && (
-        <div role="alert" className="mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800 ring-1 ring-inset ring-rose-100 sm:mx-4">
+        <div role="alert" className="mx-3 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-800 ring-1 ring-inset ring-rose-100 sm:mx-4">
           <span>Delete ‘{section.title}’ and its {items.length} item{items.length === 1 ? "" : "s"}?</span>
           <span className="flex gap-2">
-            <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md px-3 py-2 font-medium text-ink-muted hover:bg-white sm:px-2.5 sm:py-1">Cancel</button>
-            <button type="button" autoFocus onClick={() => { setConfirmDelete(false); h.onDeleteSection(section.id); }} className="rounded-md bg-rose-600 px-3 py-2 font-medium text-white hover:bg-rose-700 sm:px-2.5 sm:py-1">Delete section</button>
+            <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md px-3 py-2 font-medium text-ink-muted hover:bg-surface sm:px-2.5 sm:py-1">Cancel</button>
+            <button type="button" autoFocus onClick={() => { setConfirmDelete(false); h.onDeleteSection(section.id); }} className="rounded-md bg-danger px-3 py-2 font-medium text-white hover:bg-danger-strong sm:px-2.5 sm:py-1">Delete section</button>
           </span>
         </div>
       )}
@@ -92,7 +92,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
       {/* items */}
       <div className="mt-2 md:overflow-x-auto">
         <div className="px-3 md:min-w-[880px] md:px-3">
-          <div className={cn(GRID, "hidden border-b border-line px-0 pb-1.5 md:grid text-[11px] font-medium uppercase tracking-wide text-ink-faint")}>
+          <div className={cn(GRID, "hidden border-b border-line px-0 pb-1.5 md:grid text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint")}>
             <span className="px-2">Item</span>
             <span className="px-2 text-right">Qty</span>
             <span className="px-2">Unit</span>
@@ -103,7 +103,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
             <span className="sr-only">Actions</span>
           </div>
           {items.length === 0 && (
-            <p className="py-5 text-center text-[12.5px] text-ink-muted">No items in this section yet. Add a line or use Quick add.</p>
+            <p className="py-5 text-center text-[0.7812rem] text-ink-muted">No items in this section yet. Add a line or use Quick add.</p>
           )}
           <ul className="divide-y divide-line">
             {items.map((it, i) => (
@@ -117,12 +117,12 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 sm:px-4">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => h.onAddItem(section.id)} disabled={adding}
-            className="inline-flex h-10 items-center md:h-8 gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-60">
+            className="inline-flex h-10 items-center md:h-8 gap-1.5 rounded-lg px-2.5 text-[0.7812rem] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-60">
             {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add item
           </button>
           <QuickAdd catalogue={catalogue} currency={currency} onPick={(c) => h.onQuickAdd(section.id, c)} disabled={adding} />
         </div>
-        <p className="tabular text-[12.5px] text-ink-muted">
+        <p className="tabular text-[0.7812rem] text-ink-muted">
           {section.is_optional
             ? <>Optional extras <span className="font-medium text-ink">{money(sectionTotal + optionalTotal, currency)}</span> <span className="text-ink-faint">ex GST</span></>
             : <>Section subtotal <span className="font-medium text-ink">{money(sectionTotal, currency)}</span> <span className="text-ink-faint">ex GST</span>
@@ -155,7 +155,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
 
   const chip = (field: BoolField, on: boolean, label: string, icon: React.ReactNode, title: string) => (
     <button type="button" aria-pressed={on} title={title} onClick={() => h.onField(it.id, field, !on)}
-      className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium ring-1 ring-inset transition-colors md:h-6 md:px-2",
+      className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset transition-colors md:h-6 md:px-2",
         on ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-faint ring-transparent hover:text-ink hover:ring-line")}>
       {icon}{label}
     </button>
@@ -175,13 +175,13 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
           placeholder="Description (optional)"
           aria-label="Item description"
           maxLength={4000}
-          className={cn(cell, "mt-0.5 block h-auto min-h-[28px] resize-none py-1 text-[12.5px] leading-snug text-ink-muted")}
+          className={cn(cell, "mt-0.5 block h-auto min-h-[28px] resize-none py-1 text-[0.7812rem] leading-snug text-ink-muted")}
         />
         <div className="mt-1 flex flex-wrap items-center gap-1 px-1">
           {chip("is_optional", it.is_optional, "Optional", null, "Optional items are shown to the customer but excluded from the total")}
           {chip("is_package", it.is_package, "Package", <Package className="h-3 w-3" />, "Show this line as a package / bundle")}
           <button type="button" onClick={() => setShowImage((s) => !s)} aria-pressed={showImage || !!it.image_url}
-            className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium ring-1 ring-inset md:h-6 md:px-2",
+            className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset md:h-6 md:px-2",
               it.image_url ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-faint ring-transparent hover:text-ink hover:ring-line")}>
             <ImageIcon className="h-3 w-3" />Image
           </button>
@@ -192,7 +192,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={it.image_url} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover ring-1 ring-line" />
             )}
-            {input("image_url", { className: cn(cell, "h-7 border-line text-[12px]"), placeholder: "https://… image link", "aria-label": "Image link", type: "url" })}
+            {input("image_url", { className: cn(cell, "h-7 border-line text-[0.75rem]"), placeholder: "https://… image link", "aria-label": "Image link", type: "url" })}
           </div>
         )}
       </div>
@@ -201,7 +201,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
       <div>
         <span className={mLabel} aria-hidden>Unit price</span>
         <div className="relative">
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[12px] text-ink-faint">$</span>
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[0.75rem] text-ink-faint">$</span>
           {input("unit_price", { className: cn(numCell, "pl-5"), inputMode: "decimal", "aria-label": "Unit price" })}
         </div>
       </div>
@@ -210,8 +210,8 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
       <div>
         <span className={cn(mLabel, "text-right")} aria-hidden>Total</span>
         <div className="flex h-10 flex-col items-end justify-center px-2 md:h-8">
-          <span className={cn("tabular text-[14px] md:text-[13px]", excluded ? "text-ink-faint line-through decoration-ink-faint/40" : "font-semibold text-ink md:font-medium")}>{money(total, currency)}</span>
-          {excluded && <span className="text-[10.5px] text-ink-faint">not in total</span>}
+          <span className={cn("tabular text-[0.875rem] md:text-[0.8125rem]", excluded ? "text-ink-faint line-through decoration-ink-faint/40" : "font-semibold text-ink md:font-medium")}>{money(total, currency)}</span>
+          {excluded && <span className="text-[0.6562rem] text-ink-faint">not in total</span>}
         </div>
       </div>
       <div className="col-span-3 -my-1 flex items-center justify-end md:col-span-1 md:my-0 md:h-8 md:opacity-60 md:transition-opacity md:focus-within:opacity-100 md:group-hover:opacity-100">

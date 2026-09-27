@@ -20,7 +20,7 @@ export function VersionHistory({ quoteId, versions, currentVersionId, activeNumb
     <Card>
       <CardHeader title="Version history" subtitle="Published versions are locked and never change" />
       {versions.length === 0 ? (
-        <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Nothing published yet. When you publish, the customer gets version 1 and this draft stays private.</p>
+        <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Nothing published yet. When you publish, the customer gets version 1 and this draft stays private.</p>
       ) : (
         <ol className="divide-y divide-line border-t border-line">
           {versions.map((v) => {
@@ -30,14 +30,14 @@ export function VersionHistory({ quoteId, versions, currentVersionId, activeNumb
               <li key={v.id} className={cn("relative px-5 py-3 transition-colors hover:bg-zinc-50/70", active && "bg-brand-50/60")}>
                 <div className="flex items-center justify-between gap-2">
                   <Link href={`/quotes/${quoteId}?version=${v.version_number}`} scroll={false}
-                    className="text-[13px] font-medium text-ink after:absolute after:inset-0 hover:text-brand-700">
+                    className="text-[0.8125rem] font-medium text-ink after:absolute after:inset-0 hover:text-brand-700">
                     Version {v.version_number}
-                    {v.id === currentVersionId && <span className="ml-1.5 text-[11.5px] font-normal text-ink-faint">· customer’s copy</span>}
+                    {v.id === currentVersionId && <span className="ml-1.5 text-[0.7188rem] font-normal text-ink-faint">· customer’s copy</span>}
                   </Link>
                   <Badge tone={s.tone}>{s.label}</Badge>
                 </div>
-                <p className="tabular mt-0.5 text-[13px] text-ink">{money(v.total, currency)}</p>
-                <ul className="mt-1 space-y-0.5 text-[12px] text-ink-muted">
+                <p className="tabular mt-0.5 text-[0.8125rem] text-ink">{money(v.total, currency)}</p>
+                <ul className="mt-1 space-y-0.5 text-[0.75rem] text-ink-muted">
                   <li>Sent {fmtDateTime(v.published_at, tz)}{v.published_by && names[v.published_by] ? ` by ${names[v.published_by]}` : ""}</li>
                   {v.viewed_at && <li>Viewed {fmtDateTime(v.viewed_at, tz)}</li>}
                   {v.status === "accepted" && (

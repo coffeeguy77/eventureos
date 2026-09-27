@@ -24,7 +24,7 @@ export function CustomerDetailsEditor({ customer, view }: { customer: CustomerEd
   if (!editing) {
     return (
       <div className="relative">
-        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[12.5px] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[0.7812rem] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
         {view}
@@ -71,21 +71,21 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
 
   return (
     <div className="px-5 pb-5">
-      {contacts.length === 0 && editing !== "new" && <p className="text-[12.5px] text-ink-muted">No contacts yet.</p>}
+      {contacts.length === 0 && editing !== "new" && <p className="text-[0.7812rem] text-ink-muted">No contacts yet.</p>}
       <ul className="space-y-1">
         {contacts.map((ct) => editing === ct.id ? (
           <li key={ct.id}><ContactForm customerId={customerId} contact={ct} onDone={() => setEditing(null)} /></li>
         ) : (
           <li key={ct.id} className="group -mx-2 flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-zinc-50/80">
             <Avatar name={`${ct.first_name} ${ct.last_name ?? ""}`} size={30} />
-            <div className="min-w-0 flex-1 text-[13px]">
+            <div className="min-w-0 flex-1 text-[0.8125rem]">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-medium text-ink">
                 {ct.first_name} {ct.last_name}
                 {ct.is_primary && <Badge tone="brand">Primary</Badge>}
                 {ct.portal_user_id && <Badge tone="green">Portal access</Badge>}
               </p>
-              {ct.position && <p className="text-[12px] text-ink-muted">{ct.position}</p>}
-              <div className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-ink-muted">
+              {ct.position && <p className="text-[0.75rem] text-ink-muted">{ct.position}</p>}
+              <div className="mt-0.5 flex flex-wrap gap-x-3 text-[0.75rem] text-ink-muted">
                 {ct.email && <a href={`mailto:${ct.email}`} className="inline-flex min-w-0 items-center gap-1 py-0.5 hover:text-brand-700"><Mail className="h-3 w-3 shrink-0" /><span className="min-w-0 break-all">{ct.email}</span></a>}
                 {ct.phone && <a href={`tel:${ct.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 py-0.5 hover:text-brand-700"><Phone className="h-3 w-3" />{ct.phone}</a>}
               </div>
@@ -94,14 +94,14 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
               {!ct.is_primary && (
                 <button type="button" disabled={pending} title="Make primary contact" aria-label={`Make ${ct.first_name} the primary contact`}
                   onClick={() => run(() => setPrimaryContact(customerId, ct.id))}
-                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-brand-700"><Star className="h-3.5 w-3.5" /></button>
+                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-surface hover:text-brand-700"><Star className="h-3.5 w-3.5" /></button>
               )}
               <button type="button" title="Edit contact" aria-label={`Edit ${ct.first_name}`} onClick={() => { setError(undefined); setEditing(ct.id); }}
-                className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-ink"><Pencil className="h-3.5 w-3.5" /></button>
+                className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-surface hover:text-ink"><Pencil className="h-3.5 w-3.5" /></button>
               {canRemove && (
                 <button type="button" disabled={pending} title="Remove contact" aria-label={`Remove ${ct.first_name}`}
                   onClick={() => { if (confirm(`Remove ${ct.first_name} ${ct.last_name ?? ""} from this client?`)) run(() => removeContact(customerId, ct.id)); }}
-                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-white hover:text-rose-700"><Trash2 className="h-3.5 w-3.5" /></button>
+                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-surface hover:text-rose-700"><Trash2 className="h-3.5 w-3.5" /></button>
               )}
             </div>
           </li>
@@ -111,7 +111,7 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
       {editing === "new" ? (
         <div className="mt-2"><ContactForm customerId={customerId} onDone={() => setEditing(null)} firstContact={contacts.length === 0} /></div>
       ) : (
-        <button onClick={() => { setError(undefined); setEditing("new"); }} className="mt-2 inline-flex min-h-10 items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700 sm:min-h-0">
+        <button onClick={() => { setError(undefined); setEditing("new"); }} className="mt-2 inline-flex min-h-10 items-center gap-1 text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700 sm:min-h-0">
           <Plus className="h-3.5 w-3.5" /> Add contact
         </button>
       )}
@@ -134,7 +134,7 @@ function ContactForm({ customerId, contact, onDone, firstContact }: { customerId
       <div><Label htmlFor={`ph-${k}`}>Phone</Label><Input id={`ph-${k}`} name="phone" type="tel" defaultValue={contact?.phone ?? ""} /></div>
       <div className="sm:col-span-2"><Label htmlFor={`po-${k}`}>Position</Label><Input id={`po-${k}`} name="position" defaultValue={contact?.position ?? ""} placeholder="e.g. Events Manager, Bride" /></div>
       {!contact && !firstContact && (
-        <label className="flex items-center gap-2 text-[12.5px] text-ink sm:col-span-2">
+        <label className="flex items-center gap-2 text-[0.7812rem] text-ink sm:col-span-2">
           <input type="checkbox" name="is_primary" className="h-4 w-4 rounded border-line-strong text-brand-600" /> Make this the primary contact
         </label>
       )}

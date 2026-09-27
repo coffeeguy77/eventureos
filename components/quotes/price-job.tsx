@@ -65,7 +65,7 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
 
   if (!packages.length) {
     return (
-      <div className="rounded-xl border border-line bg-white p-4 text-[13px] text-ink-muted shadow-card">
+      <div className="rounded-xl border border-line bg-surface p-4 text-[0.8125rem] text-ink-muted shadow-card">
         No packages yet. Add your services and packages in <a className="font-medium text-brand-700 underline" href="/settings/pricing">Settings → Services &amp; pricing</a>.
         <button type="button" onClick={onClose} className="ml-2 text-ink-faint hover:text-ink">Close</button>
       </div>
@@ -73,11 +73,11 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
   }
 
   return (
-    <form onSubmit={submit} className="rounded-xl border border-brand-200 bg-white p-4 shadow-card sm:p-5" aria-label="Price a job">
+    <form onSubmit={submit} className="rounded-xl border border-brand-200 bg-surface p-4 shadow-card sm:p-5" aria-label="Price a job">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-[14px] font-semibold text-ink"><Calculator className="h-4 w-4 text-brand-600" />Price a job</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-muted">Adds a section with the lines worked out from your price list.</p>
+          <p className="flex items-center gap-2 text-[0.875rem] font-semibold text-ink"><Calculator className="h-4 w-4 text-brand-600" />Price a job</p>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">Adds a section with the lines worked out from your price list.</p>
         </div>
         <button type="button" onClick={onClose} className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-zinc-100 hover:text-ink sm:m-0 sm:p-1" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
@@ -86,8 +86,8 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
         {packages.map((p) => (
           <button key={p.id} type="button" onClick={() => setPkgId(p.id)}
             className={cn("rounded-lg px-3 py-2 text-left ring-1 ring-inset", p.id === pkgId ? "bg-brand-50 ring-brand-300" : "ring-line-strong hover:bg-zinc-50")}>
-            <span className="block text-[13px] font-medium text-ink">{p.name}</span>
-            {p.summary && <span className="block max-w-[260px] text-[11.5px] text-ink-muted">{p.summary}</span>}
+            <span className="block text-[0.8125rem] font-medium text-ink">{p.name}</span>
+            {p.summary && <span className="block max-w-[260px] text-[0.7188rem] text-ink-muted">{p.summary}</span>}
           </button>
         ))}
       </div>
@@ -102,7 +102,7 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
         </div>
       </div>
       {pkg?.rules.delivery && (
-        <label className="mt-3 flex items-center gap-2 text-[13px] text-ink">
+        <label className="mt-3 flex items-center gap-2 text-[0.8125rem] text-ink">
           <input type="checkbox" checked={delivery} onChange={(x) => setDelivery(x.target.checked)} className="h-4 w-4 rounded border-line-strong text-brand-600" />
           Include delivery, setup &amp; pickup
         </label>
@@ -111,7 +111,7 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
       {preview?.ok === false && <div className="mt-3"><FormError message={preview.error} /></div>}
       {preview?.ok && (
         <div className="mt-4 overflow-hidden rounded-lg ring-1 ring-line">
-          <table className="w-full text-[12.5px]">
+          <table className="w-full text-[0.7812rem]">
             <tbody>
               {preview.r.lines.map((l, i) => (
                 <tr key={i} className="border-b border-line last:border-0">
@@ -132,7 +132,7 @@ export function PriceJobPanel({ quoteId, packages, services, defaults, currency,
         </div>
       )}
       {preview?.ok && preview.r.notes.map((t, i) => (
-        <p key={i} className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800 ring-1 ring-inset ring-amber-100">
+        <p key={i} className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-800 ring-1 ring-inset ring-amber-100">
           <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />{t}
         </p>
       ))}

@@ -15,7 +15,7 @@ export function EventStatusSelect({ id, status }: { id: string; status: EventSta
   return (
     <select aria-label="Event status" disabled={pending} value={status}
       onChange={(e) => start(() => setEventStatus(id, e.target.value as EventStatus))}
-      className={cn(inputClass, "h-10 w-full py-0 pr-8 text-[13px] font-medium sm:h-9 sm:w-auto")}>
+      className={cn(inputClass, "h-10 w-full py-0 pr-8 text-[0.8125rem] font-medium sm:h-9 sm:w-auto")}>
       {EVENT_STATUS_ORDER.map((s) => <option key={s} value={s}>{EVENT_STATUS[s].label}</option>)}
     </select>
   );
@@ -36,7 +36,7 @@ export function EventDetailsEditor({ event, members, view }: {
   if (!editing) {
     return (
       <div className="relative">
-        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[12.5px] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
+        <button onClick={() => setEditing(true)} className="absolute -top-11 right-3 inline-flex h-10 items-center gap-1 px-2 text-[0.7812rem] sm:-top-10 sm:right-5 sm:h-auto sm:px-0 font-medium text-brand-600 hover:text-brand-700">
           <Pencil className="h-3.5 w-3.5" /> Edit
         </button>
         {view}

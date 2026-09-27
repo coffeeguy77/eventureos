@@ -57,8 +57,8 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
-          <h1 className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">Calendar</h1>
-          <p className="mt-1 text-[13.5px] text-ink-muted">Every booking, hold and setup across every resource.</p>
+          <h1 className="text-[1.25rem] font-semibold tracking-tight text-ink sm:text-[1.375rem]">Calendar</h1>
+          <p className="mt-1 text-[0.8438rem] text-ink-muted">Every booking, hold and setup across every resource.</p>
         </div>
         <Button variant="primary" onClick={() => setAdding({ eventId: null })} disabled={!resources.length} className="h-10 w-full sm:h-9 sm:w-auto">
           <Plus className="h-4 w-4" /> Add entry
@@ -66,13 +66,13 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
       </div>
 
       {pairs.length > 0 && (
-        <a href="#conflicts" className="mb-4 flex items-center gap-3 rounded-xl bg-rose-600 px-4 py-3 text-white shadow-card hover:bg-rose-700">
+        <a href="#conflicts" className="mb-4 flex items-center gap-3 rounded-xl bg-danger px-4 py-3 text-white shadow-card hover:bg-danger-strong">
           <AlertTriangle className="h-5 w-5 shrink-0" />
-          <span className="min-w-0 flex-1 text-[13.5px]">
+          <span className="min-w-0 flex-1 text-[0.8438rem]">
             <span className="font-semibold">{pairs.length} scheduling conflict{pairs.length > 1 ? "s" : ""} in this view</span>
             <span className="text-white/85"> — {conflictResources.join(", ")} double-booked{hiddenConflicts ? ` (${hiddenConflicts} on hidden resources)` : ""}</span>
           </span>
-          <span className="hidden shrink-0 text-[12.5px] font-medium underline-offset-2 hover:underline sm:inline">Review conflicts</span>
+          <span className="hidden shrink-0 text-[0.7812rem] font-medium underline-offset-2 hover:underline sm:inline">Review conflicts</span>
         </a>
       )}
 
@@ -86,13 +86,13 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
                 <Link href={href({ date: stepDate(view, date, -1) })} aria-label="Previous" className={buttonClass("ghost", "sm", "h-10 w-10 px-0 sm:h-8 sm:w-auto sm:px-2")}><ChevronLeft className="h-4 w-4" /></Link>
                 <Link href={href({ date: stepDate(view, date, 1) })} aria-label="Next" className={buttonClass("ghost", "sm", "h-10 w-10 px-0 sm:h-8 sm:w-auto sm:px-2")}><ChevronRight className="h-4 w-4" /></Link>
               </div>
-              <h2 className="min-w-0 text-[15px] font-semibold text-ink">{viewTitle(view, date)}</h2>
-              {view === "day" && <span className="text-[12.5px] text-ink-faint">{relativeDay(date, today)}</span>}
+              <h2 className="min-w-0 text-[0.9375rem] font-semibold text-ink">{viewTitle(view, date)}</h2>
+              {view === "day" && <span className="text-[0.7812rem] text-ink-faint">{relativeDay(date, today)}</span>}
             </div>
             <nav className="grid w-full grid-cols-4 rounded-lg bg-zinc-100 p-0.5 sm:flex sm:w-auto" aria-label="Calendar view">
               {VIEWS.map((v) => (
                 <Link key={v.key} href={href({ view: v.key })} aria-current={view === v.key ? "page" : undefined}
-                  className={cn("rounded-md px-3 py-2 text-center text-[13px] font-medium sm:py-1 sm:text-[12.5px]", view === v.key ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+                  className={cn("rounded-md px-3 py-2 text-center text-[0.8125rem] font-medium sm:py-1 sm:text-[0.7812rem]", view === v.key ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
                   {v.label}
                 </Link>
               ))}
@@ -107,17 +107,17 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
               return (
                 <Link key={r.id} href={href({ hide: next })} scroll={false} aria-pressed={!r.hidden}
                   title={r.hidden ? `Show ${r.name}` : `Hide ${r.name}`}
-                  className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium ring-1 ring-inset transition-colors sm:px-2.5 sm:py-1",
-                    r.hidden ? "bg-white text-ink-faint ring-line line-through" : "bg-white text-ink ring-line-strong hover:bg-zinc-50")}>
+                  className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[0.75rem] font-medium ring-1 ring-inset transition-colors sm:px-2.5 sm:py-1",
+                    r.hidden ? "bg-surface text-ink-faint ring-line line-through" : "bg-surface text-ink ring-line-strong hover:bg-zinc-50")}>
                   <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", r.hidden && "opacity-30")} style={{ backgroundColor: r.colour || FALLBACK_COLOUR }} />
                   {r.name}
                   <span className="tabular text-ink-faint">{count}</span>
-                  {r.provider === "google" && <span className="rounded bg-sky-50 px-1 text-[10px] font-semibold text-sky-700">{r.syncEnabled ? "G" : "G off"}</span>}
+                  {r.provider === "google" && <span className="rounded bg-sky-50 px-1 text-[0.625rem] font-semibold text-sky-700">{r.syncEnabled ? "G" : "G off"}</span>}
                 </Link>
               );
             })}
-            {hide.length > 0 && <Link href={href({ hide: [] })} scroll={false} className="px-2 py-2 text-[12px] font-medium text-brand-600 hover:text-brand-700 sm:px-1 sm:py-0">Show all</Link>}
-            <span className={cn("w-full min-w-0 break-words text-[11.5px] sm:ml-auto sm:w-auto", google.error ? "font-medium text-rose-700" : google.connected ? "text-emerald-700" : "text-ink-faint")}>
+            {hide.length > 0 && <Link href={href({ hide: [] })} scroll={false} className="px-2 py-2 text-[0.75rem] font-medium text-brand-600 hover:text-brand-700 sm:px-1 sm:py-0">Show all</Link>}
+            <span className={cn("w-full min-w-0 break-words text-[0.7188rem] sm:ml-auto sm:w-auto", google.error ? "font-medium text-rose-700" : google.connected ? "text-emerald-700" : "text-ink-faint")}>
               {google.error ? `Google Calendar sync error: ${google.error}`
                 : google.connected ? `Google Calendar connected${google.account ? ` (${google.account})` : ""}${google.lastSync ? ` · last sync ${google.lastSync}` : ""}`
                   : "Google Calendar not connected · entries stay in EventureOS"}
@@ -125,7 +125,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
           </div>
 
           {resources.length === 0 ? (
-            <div className="px-6 py-12 text-center text-[13px] text-ink-muted">No calendar resources yet. Resources such as “Main Events” or “Coffee Cart 1” are set up in Settings.</div>
+            <div className="px-6 py-12 text-center text-[0.8125rem] text-ink-muted">No calendar resources yet. Resources such as “Main Events” or “Coffee Cart 1” are set up in Settings.</div>
           ) : view === "month" ? (
             <MonthView days={days} month={date.slice(0, 7)} today={today} entries={visible} resources={resMap} hide={hide} onOpen={setOpenId} />
           ) : view === "agenda" ? (
@@ -137,7 +137,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
 
         <div className="space-y-6">
           <Card id="conflicts" className={cn(pairs.length > 0 && "border-rose-200")}>
-            <CardHeader title={<span className="flex items-center gap-2">Conflicts {pairs.length > 0 && <span className="rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold text-white">{pairs.length}</span>}</span>}
+            <CardHeader title={<span className="flex items-center gap-2">Conflicts {pairs.length > 0 && <span className="rounded-full bg-danger px-1.5 text-[0.6875rem] font-semibold text-white">{pairs.length}</span>}</span>}
               subtitle={pairs.length ? "Overlapping entries on the same resource" : "No double-bookings in this view"} />
             {pairs.length > 0 && (
               <ul className="divide-y divide-line border-t border-line">
@@ -145,14 +145,14 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
                   const r = resMap.get(a.resourceId);
                   return (
                     <li key={a.id + b.id} className="px-4 py-3">
-                      <p className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-rose-700">
+                      <p className="mb-1.5 flex items-center gap-1.5 text-[0.7188rem] font-semibold uppercase tracking-wide text-rose-700">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: r?.colour ?? FALLBACK_COLOUR }} />
                         {r?.name} · {a.dateLabel}
                       </p>
                       {[a, b].map((e) => (
                         <button key={e.id} type="button" onClick={() => setOpenId(e.id)} className="block w-full rounded-md px-1.5 py-2 text-left hover:bg-rose-50 sm:py-1">
-                          <span className="block truncate text-[13px] font-medium text-ink">{e.title}</span>
-                          <span className="block text-[12px] text-ink-muted">{e.timeLabel}</span>
+                          <span className="block truncate text-[0.8125rem] font-medium text-ink">{e.title}</span>
+                          <span className="block text-[0.75rem] text-ink-muted">{e.timeLabel}</span>
                         </button>
                       ))}
                     </li>
@@ -169,8 +169,8 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
                 {unscheduled.map((e) => (
                   <li key={e.id} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/events/${e.id}`} className="block truncate text-[13px] font-medium text-ink hover:text-brand-700">{e.name}</Link>
-                      <p className="truncate text-[12px] text-ink-muted">{fmtDate(e.date, "weekday")}{e.customerName ? ` · ${e.customerName}` : ""}</p>
+                      <Link href={`/events/${e.id}`} className="block truncate text-[0.8125rem] font-medium text-ink hover:text-brand-700">{e.name}</Link>
+                      <p className="truncate text-[0.75rem] text-ink-muted">{fmtDate(e.date, "weekday")}{e.customerName ? ` · ${e.customerName}` : ""}</p>
                     </div>
                     <Button size="sm" className="h-10 shrink-0 sm:h-8" onClick={() => setAdding({ eventId: e.id })}>Add</Button>
                   </li>
@@ -180,8 +180,8 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
           </Card>
 
           <Card className="p-4">
-            <p className="text-[12.5px] font-medium text-ink">Legend</p>
-            <ul className="mt-2 space-y-1.5 text-[12px] text-ink-muted">
+            <p className="text-[0.7812rem] font-medium text-ink">Legend</p>
+            <ul className="mt-2 space-y-1.5 text-[0.75rem] text-ink-muted">
               {resources.map((r) => (
                 <li key={r.id} className="flex items-center gap-2" title={r.externalCalendarId ? `Google calendar ID: ${r.externalCalendarId}` : "Not linked to an external calendar"}>
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.colour || FALLBACK_COLOUR }} />

@@ -18,7 +18,7 @@ export function StaffReplyForm({ eventId, customerId }: { eventId: string; custo
       <Textarea name="body" required maxLength={5000} placeholder="Reply to the customer — they'll see this in their portal" />
       <FormError message={state?.error} />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <p className="text-[11.5px] text-ink-faint">{state?.ok ? "Reply posted to the portal." : "Visible to the customer in their portal."}</p>
+        <p className="text-[0.7188rem] text-ink-faint">{state?.ok ? "Reply posted to the portal." : "Visible to the customer in their portal."}</p>
         <Button variant="primary" size="sm" className="h-10 w-full sm:h-8 sm:w-auto" disabled={pending}>{pending ? "Sending…" : "Send reply"}</Button>
       </div>
     </form>

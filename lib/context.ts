@@ -24,7 +24,7 @@ export const getContext = cache(async () => {
   if (!user) redirect("/login");
 
   const [{ data: profile }, { data: rows, error }] = await Promise.all([
-    supabase.from("users").select("id, email, full_name").eq("id", user.id).maybeSingle(),
+    supabase.from("users").select("id, email, full_name, ui_prefs").eq("id", user.id).maybeSingle(),
     supabase
       .from("organisation_users")
       .select(

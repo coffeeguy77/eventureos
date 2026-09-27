@@ -53,37 +53,37 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
   return (
     <Drawer onClose={onClose} accent={res?.colour ?? FALLBACK_COLOUR} title={
       <>
-        <div className="flex items-center gap-2 text-[12px] text-ink-muted">
+        <div className="flex items-center gap-2 text-[0.75rem] text-ink-muted">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: res?.colour ?? FALLBACK_COLOUR }} />
           {res?.name ?? "Unknown resource"}
           <span className="text-ink-faint">·</span>
           {KIND_LABEL[entry.kind]}
         </div>
-        <h2 className="mt-1 break-words text-[16px] font-semibold leading-snug text-ink">{entry.title}</h2>
+        <h2 className="mt-1 break-words text-[1rem] font-semibold leading-snug text-ink">{entry.title}</h2>
       </>
     }>
       <div className="space-y-5 px-4 py-4 sm:px-5">
         {others.length > 0 && (
           <div className="rounded-lg bg-rose-50 p-3 ring-1 ring-inset ring-rose-200">
-            <p className="flex items-center gap-1.5 text-[13px] font-semibold text-rose-800">
+            <p className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-rose-800">
               <AlertTriangle className="h-4 w-4" /> Double-booked on {res?.name}
             </p>
-            <p className="mt-0.5 text-[12px] text-rose-800/80">Overlaps with:</p>
+            <p className="mt-0.5 text-[0.75rem] text-rose-800/80">Overlaps with:</p>
             <ul className="mt-1.5 space-y-1">
               {others.map((o) => (
                 <li key={o.id}>
-                  <button type="button" onClick={() => onOpen(o.id)} className="w-full rounded-md bg-white/70 px-2 py-2 text-left text-[12.5px] hover:bg-white sm:py-1.5">
+                  <button type="button" onClick={() => onOpen(o.id)} className="w-full rounded-md bg-surface/70 px-2 py-2 text-left text-[0.7812rem] hover:bg-surface sm:py-1.5">
                     <span className="block font-medium text-ink">{o.title}</span>
                     <span className="block text-ink-muted">{o.dateLabel} · {o.timeLabel}</span>
                   </button>
                 </li>
               ))}
             </ul>
-            {canManage && <p className="mt-2 text-[12px] text-rose-800/80">Move one of them to another resource below, or delete it.</p>}
+            {canManage && <p className="mt-2 text-[0.75rem] text-rose-800/80">Move one of them to another resource below, or delete it.</p>}
           </div>
         )}
 
-        <dl className="space-y-3 text-[13px]">
+        <dl className="space-y-3 text-[0.8125rem]">
           <div className="flex gap-3">
             <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
             <div><dt className="sr-only">When</dt><dd className="text-ink">{entry.dateLabel}</dd><dd className="text-ink-muted">{entry.timeLabel}</dd></div>
@@ -99,29 +99,29 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
             <div>
               <dt className="sr-only">Sync</dt>
               <dd><Badge tone={sync.tone}>{sync.label}</Badge></dd>
-              <dd className="mt-1 text-[12px] text-ink-muted">{sync.note}</dd>
-              {entry.externalEventId && <dd className="mt-0.5 break-all text-[11.5px] text-ink-faint">Google event ID {entry.externalEventId}</dd>}
+              <dd className="mt-1 text-[0.75rem] text-ink-muted">{sync.note}</dd>
+              {entry.externalEventId && <dd className="mt-0.5 break-all text-[0.7188rem] text-ink-faint">Google event ID {entry.externalEventId}</dd>}
             </div>
           </div>
         </dl>
 
         {entry.eventId && (
           <div className="rounded-lg border border-line p-3">
-            <p className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Event</p>
-            <Link href={`/events/${entry.eventId}`} className="mt-1 flex items-center justify-between gap-2 text-[13.5px] font-medium text-ink hover:text-brand-700">
+            <p className="text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Event</p>
+            <Link href={`/events/${entry.eventId}`} className="mt-1 flex items-center justify-between gap-2 text-[0.8438rem] font-medium text-ink hover:text-brand-700">
               <span className="truncate">{entry.eventNumber ? `EV-${entry.eventNumber} · ` : ""}{entry.eventName}</span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" />
             </Link>
-            {entry.customerName && <p className="text-[12.5px] text-ink-muted">{entry.customerName}</p>}
+            {entry.customerName && <p className="text-[0.7812rem] text-ink-muted">{entry.customerName}</p>}
           </div>
         )}
 
         {canManage ? (
           <div className="space-y-2 border-t border-line pt-4">
-            <p className="text-[12.5px] font-medium text-ink">Calendar</p>
-            <p className="text-[12px] text-ink-muted">The resource an entry sits on decides which Google calendar it syncs to.</p>
+            <p className="text-[0.7812rem] font-medium text-ink">Calendar</p>
+            <p className="text-[0.75rem] text-ink-muted">The resource an entry sits on decides which Google calendar it syncs to.</p>
             <div className="flex gap-2">
-              <Select aria-label="Move to resource" value={target} onChange={(e) => setTarget(e.target.value)} className="h-10 min-w-0 py-0 text-[13px] sm:h-9">
+              <Select aria-label="Move to resource" value={target} onChange={(e) => setTarget(e.target.value)} className="h-10 min-w-0 py-0 text-[0.8125rem] sm:h-9">
                 {resources.map((r) => (
                   <option key={r.id} value={r.id}>{r.name}{r.provider === "google" ? (r.syncEnabled ? " · Google sync" : " · Google (sync off)") : " · local"}</option>
                 ))}
@@ -130,17 +130,17 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
             </div>
           </div>
         ) : (
-          <p className="border-t border-line pt-4 text-[12px] text-ink-muted">Only owners, admins and managers can move or delete calendar entries.</p>
+          <p className="border-t border-line pt-4 text-[0.75rem] text-ink-muted">Only owners, admins and managers can move or delete calendar entries.</p>
         )}
 
         <FormError message={msg?.error} />
-        {msg?.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{msg.ok}</p>}
+        {msg?.ok && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{msg.ok}</p>}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
           {entry.eventId ? <ButtonLink href={`/events/${entry.eventId}?tab=schedule`} size="sm" className="h-10 w-full sm:h-8 sm:w-auto">Open event schedule</ButtonLink> : <span />}
           {canManage && (confirming ? (
             <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-2 py-1.5 ring-1 ring-inset ring-rose-100 sm:w-auto">
-              <span className="w-full px-1 text-[12.5px] text-rose-800 sm:w-auto sm:px-0">Delete this entry?</span>
+              <span className="w-full px-1 text-[0.7812rem] text-rose-800 sm:w-auto sm:px-0">Delete this entry?</span>
               <Button size="sm" variant="danger" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={remove} disabled={pending}>{pending ? "Deleting…" : "Delete"}</Button>
               <Button size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setConfirming(false)} disabled={pending}>Keep</Button>
             </div>

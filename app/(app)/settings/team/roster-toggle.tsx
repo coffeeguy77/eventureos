@@ -11,7 +11,7 @@ export function RosterToggle({ kind, id, field, value, label, disabled }: {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   return (
-    <label className="flex items-center gap-2 text-[12.5px] text-ink" title={error ?? undefined}>
+    <label className="flex items-center gap-2 text-[0.7812rem] text-ink" title={error ?? undefined}>
       <input type="checkbox" checked={on} disabled={disabled || pending}
         onChange={(e) => {
           const next = e.target.checked;

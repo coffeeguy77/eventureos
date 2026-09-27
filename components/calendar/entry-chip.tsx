@@ -24,7 +24,7 @@ export function EntryChip({ entry, resource, onOpen, showTime = true, timeText }
       onClick={() => onOpen(entry.id)}
       title={`${entry.title} · ${entry.timeLabel} · ${resource?.name ?? ""}${conflict ? " · CONFLICT" : ""}`}
       className={cn(
-        "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[11.5px] leading-tight transition-colors",
+        "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[0.7188rem] leading-tight transition-colors",
         conflict ? "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-300 hover:bg-rose-100"
           : bar ? "text-ink hover:brightness-95" : "text-ink hover:bg-zinc-100"
       )}

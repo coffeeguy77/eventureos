@@ -22,11 +22,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <div className="mb-8">
           <Wordmark height={30} />
         </div>
-        <div className="rounded-2xl border border-line bg-white p-5 shadow-card sm:p-8">
-          <h1 className="text-[20px] font-semibold tracking-tight">
+        <div className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-8">
+          <h1 className="text-[1.25rem] font-semibold tracking-tight">
             {memberships.length ? "Create another organisation" : `Welcome${profile.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}`}
           </h1>
-          <p className="mt-1.5 text-[13.5px] text-ink-muted">
+          <p className="mt-1.5 text-[0.8438rem] text-ink-muted">
             Tell us about your event business. You’ll be its owner and can invite your team later.
           </p>
           <OnboardingForm />

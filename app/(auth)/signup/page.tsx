@@ -9,12 +9,12 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const org = typeof sp.org === "string" ? sp.org.slice(0, 80) : "";
   return (
     <>
-      <h1 className="text-[22px] font-semibold tracking-tight">{org ? `Join ${org}` : "Create your account"}</h1>
-      <p className="mt-1.5 text-[13.5px] text-ink-muted">
+      <h1 className="text-[1.375rem] font-semibold tracking-tight">{org ? `Join ${org}` : "Create your account"}</h1>
+      <p className="mt-1.5 text-[0.8438rem] text-ink-muted">
         {org ? "Create your account with the email your invitation was sent to — you'll go straight in." : "You’ll set up your organisation next."}
       </p>
       <SignupForm defaultEmail={email} />
-      <p className="mt-6 text-[13px] text-ink-muted">
+      <p className="mt-6 text-[0.8125rem] text-ink-muted">
         Already have an account?{" "}
         <Link href="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</Link>
       </p>

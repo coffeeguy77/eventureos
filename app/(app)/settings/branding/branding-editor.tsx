@@ -49,16 +49,16 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <div className="space-y-6">
         <section>
-          <h4 className="text-[13px] font-semibold text-ink">Logo</h4>
-          <p className="mt-0.5 text-[12.5px] text-ink-muted">PNG, JPG, WebP or GIF up to 2 MB. A wide logo on a transparent background works best.</p>
+          <h4 className="text-[0.8125rem] font-semibold text-ink">Logo</h4>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">PNG, JPG, WebP or GIF up to 2 MB. A wide logo on a transparent background works best.</p>
           <div className="mt-3">
             <LogoUploader org={org} canEdit={canEdit} />
           </div>
         </section>
 
         <section>
-          <h4 className="text-[13px] font-semibold text-ink">Brand colour</h4>
-          <p className="mt-0.5 text-[12.5px] text-ink-muted">Used for buttons and headings in the customer portal and on quotes.</p>
+          <h4 className="text-[0.8125rem] font-semibold text-ink">Brand colour</h4>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">Used for buttons and headings in the customer portal and on quotes.</p>
           {canEdit ? (
             <ActionForm action={saveBrandColour} className="mt-3">
               <div className="flex flex-wrap items-end gap-3">
@@ -69,7 +69,7 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
                     type="color"
                     value={shown}
                     onChange={(e) => setColour(e.target.value.toUpperCase())}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-line-strong bg-white p-1 sm:h-9"
+                    className="h-10 w-14 cursor-pointer rounded-lg border border-line-strong bg-surface p-1 sm:h-9"
                   />
                 </div>
                 <div className="min-w-0 flex-1 sm:w-32 sm:flex-none">
@@ -83,14 +83,14 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
               <ContrastCheck colour={shown} />
             </ActionForm>
           ) : (
-            <div className="mt-3 flex items-center gap-2 text-[13px] text-ink">
+            <div className="mt-3 flex items-center gap-2 text-[0.8125rem] text-ink">
               <span className="h-6 w-6 rounded-md ring-1 ring-inset ring-black/10" style={{ background: shown }} />
               <span className="font-mono">{shown}</span>
             </div>
           )}
         </section>
 
-        <p className="rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+        <p className="rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
           Business name and contact details come from <a href="/settings" className="font-medium text-brand-600 hover:text-brand-700">Organisation</a> settings.
         </p>
       </div>
@@ -116,7 +116,7 @@ function ContrastCheck({ colour }: { colour: string }) {
         const level = r.ratio >= 7 ? "AAA" : r.ratio >= 4.5 ? "AA" : r.ratio >= 3 ? "Large text only" : "Fails";
         const good = r.ratio >= 4.5;
         return (
-          <div key={r.label} className="flex items-center justify-between gap-3 text-[12.5px]">
+          <div key={r.label} className="flex items-center justify-between gap-3 text-[0.7812rem]">
             <span className="text-ink-muted">{r.label}</span>
             <span className={cn("tabular shrink-0 font-medium", good ? "text-emerald-700" : r.ratio >= 3 ? "text-amber-700" : "text-rose-700")}>
               {r.ratio.toFixed(2)}:1 · {level}
@@ -125,7 +125,7 @@ function ContrastCheck({ colour }: { colour: string }) {
         );
       })}
       {white < 4.5 && (
-        <p className="text-[12px] text-amber-800">
+        <p className="text-[0.75rem] text-amber-800">
           White text is hard to read on this colour. The portal will use dark text on buttons instead — or pick a deeper shade.
         </p>
       )}
@@ -201,7 +201,7 @@ function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) 
           </div>
         )}
       </div>
-      {!canEdit && <p className="mt-2 text-[12px] text-ink-faint">Only owners and admins can change the logo.</p>}
+      {!canEdit && <p className="mt-2 text-[0.75rem] text-ink-faint">Only owners and admins can change the logo.</p>}
       {error && <div className="mt-3"><FormError message={error} /></div>}
     </div>
   );
@@ -210,24 +210,24 @@ function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) 
 function PortalPreview({ org, colour, onBrand }: { org: BrandingOrg; colour: string; onBrand: string }) {
   return (
     <div>
-      <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Customer portal preview</div>
-      <div className="overflow-hidden rounded-xl border border-line bg-white shadow-card">
+      <div className="mb-1.5 text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Customer portal preview</div>
+      <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <LogoMark org={org} size={28} />
-            {!org.logoUrl && <span className="truncate text-[13.5px] font-semibold text-ink">{org.name}</span>}
+            {!org.logoUrl && <span className="truncate text-[0.8438rem] font-semibold text-ink">{org.name}</span>}
           </div>
-          <span className="shrink-0 text-[12px] text-ink-muted">emma@example.com</span>
+          <span className="shrink-0 text-[0.75rem] text-ink-muted">emma@example.com</span>
         </div>
         <div className="px-4 py-4" style={{ background: colour, color: onBrand }}>
-          <div className="text-[12px] opacity-80">Your booking with {org.name}</div>
-          <div className="mt-0.5 text-[17px] font-semibold">Smith Wedding · Sat 14 March</div>
+          <div className="text-[0.75rem] opacity-80">Your booking with {org.name}</div>
+          <div className="mt-0.5 text-[1.0625rem] font-semibold">Smith Wedding · Sat 14 March</div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="text-[12.5px] text-ink-muted">Quote Q-1042 is ready to review</div>
-          <span className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium" style={{ background: colour, color: onBrand }}>Review quote</span>
+          <div className="text-[0.7812rem] text-ink-muted">Quote Q-1042 is ready to review</div>
+          <span className="rounded-lg px-3 py-1.5 text-[0.7812rem] font-medium" style={{ background: colour, color: onBrand }}>Review quote</span>
         </div>
-        <div className="border-t border-line bg-canvas px-4 py-2.5 text-[11.5px] text-ink-muted">
+        <div className="border-t border-line bg-canvas px-4 py-2.5 text-[0.7188rem] text-ink-muted">
           Questions? {[org.contactEmail, org.contactPhone].filter(Boolean).join(" · ") || "Add contact details in Organisation settings"}
         </div>
       </div>
@@ -238,14 +238,14 @@ function PortalPreview({ org, colour, onBrand }: { org: BrandingOrg; colour: str
 function QuotePreview({ org, colour }: { org: BrandingOrg; colour: string }) {
   return (
     <div>
-      <div className="mb-1.5 text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Quote header preview</div>
-      <div className="rounded-xl border border-line bg-white px-4 py-4 shadow-card sm:px-5">
+      <div className="mb-1.5 text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Quote header preview</div>
+      <div className="rounded-xl border border-line bg-surface px-4 py-4 shadow-card sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <LogoMark org={org} size={36} />
-            {!org.logoUrl && <div className="mt-1.5 text-[14px] font-semibold text-ink">{org.name}</div>}
+            {!org.logoUrl && <div className="mt-1.5 text-[0.875rem] font-semibold text-ink">{org.name}</div>}
           </div>
-          <div className="min-w-0 break-words text-right text-[11.5px] leading-relaxed text-ink-muted">
+          <div className="min-w-0 break-words text-right text-[0.7188rem] leading-relaxed text-ink-muted">
             {org.logoUrl && <div className="font-medium text-ink">{org.name}</div>}
             {org.address && <div className="whitespace-pre-line">{org.address}</div>}
             {org.contactEmail && <div>{org.contactEmail}</div>}
@@ -255,10 +255,10 @@ function QuotePreview({ org, colour }: { org: BrandingOrg; colour: string }) {
         </div>
         <div className="my-3 h-[3px] rounded-full" style={{ background: colour }} />
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-[18px] font-semibold tracking-tight" style={{ color: contrast(colour, "#FFFFFF") >= 3 ? colour : "#16151D" }}>Quote Q-1042</div>
-          <div className="text-[12px] text-ink-muted">Issued 2 Feb · Valid until 16 Feb</div>
+          <div className="text-[1.125rem] font-semibold tracking-tight" style={{ color: contrast(colour, "#FFFFFF") >= 3 ? colour : "#16151D" }}>Quote Q-1042</div>
+          <div className="text-[0.75rem] text-ink-muted">Issued 2 Feb · Valid until 16 Feb</div>
         </div>
-        <div className="mt-1 text-[12.5px] text-ink-muted">Prepared for Emma Smith — Smith Wedding</div>
+        <div className="mt-1 text-[0.7812rem] text-ink-muted">Prepared for Emma Smith — Smith Wedding</div>
       </div>
     </div>
   );

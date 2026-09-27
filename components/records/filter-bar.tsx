@@ -42,7 +42,7 @@ export function FilterBar({ filters, searchPlaceholder = "Search…" }: {
               aria-label={f.label}
               value={params.get(f.key) ?? ""}
               onChange={(e) => set(f.key, e.target.value)}
-              className={cn(inputClass, "h-10 w-auto shrink-0 py-0 pr-8 text-[13px] sm:h-9")}
+              className={cn(inputClass, "h-10 w-auto shrink-0 py-0 pr-8 text-[0.8125rem] sm:h-9")}
             >
               <option value="">{f.label}: All</option>
               {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

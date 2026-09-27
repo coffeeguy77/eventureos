@@ -18,13 +18,13 @@ export const SYNC_STATUS: Record<string, { label: string; tone: Tone }> = {
 
 export function Mark({ p, small }: { p: ProviderDef; small?: boolean }) {
   return (
-    <span className={cn("inline-flex shrink-0 items-center justify-center rounded-lg font-semibold", p.mark.bg, p.mark.fg, small ? "h-8 w-8 text-[13px]" : "h-10 w-10 text-[16px]")} aria-hidden>
+    <span className={cn("inline-flex shrink-0 items-center justify-center rounded-lg font-semibold", p.mark.bg, p.mark.fg, small ? "h-8 w-8 text-[0.8125rem]" : "h-10 w-10 text-[1rem]")} aria-hidden>
       {p.mark.letter}
     </span>
   );
 }
 
 export function Code({ children }: { children: React.ReactNode }) {
-  return <code className="break-all rounded bg-zinc-100 px-1 py-0.5 text-[11.5px] text-ink">{children}</code>;
+  return <code className="break-all rounded bg-zinc-100 px-1 py-0.5 text-[0.7188rem] text-ink">{children}</code>;
 }
 

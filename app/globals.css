@@ -4,11 +4,20 @@
 
 :root {
   color-scheme: light;
+  --shadow: 22 21 29;
+  --fs: 1;
+  --page-max: 1440px;
 }
+html[data-width="full"] { --page-max: 100%; }
+html[data-scheme="dim"], html[data-scheme="dark"], html[data-scheme="midnight"] { --shadow: 0 0 0; }
+@media (prefers-color-scheme: dark) { html[data-scheme="system"] { --shadow: 0 0 0; } }
+
+/* Text size (Personalise → A− / A+): everything is sized in rem, so scaling the root scales the app evenly. */
+html { font-size: calc(100% * var(--fs)); }
 
 html, body {
-  background: #F7F7F9;
-  color: #16151D;
+  background: rgb(var(--canvas));
+  color: rgb(var(--ink));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv11", "ss01";
@@ -33,4 +42,4 @@ html, body {
   .no-scrollbar::-webkit-scrollbar { display: none; }
 }
 
-::selection { background: #EAE4FF; }
+::selection { background: rgb(var(--brand-100)); }

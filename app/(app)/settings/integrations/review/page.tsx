@@ -69,15 +69,15 @@ export default async function ReviewPage() {
         subtitle="Emails that might be enquiries, possible duplicate customers from Gmail and Xero, and follow-ups that are slipping. Nothing merges or gets created until you choose."
       />
 
-      <nav className="no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 text-[12.5px] sm:mx-0 sm:px-0">
+      <nav className="no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 text-[0.7812rem] sm:mx-0 sm:px-0">
         {[
           ["#suggestions", "Suggestions", threads.length + reviewEnquiries.length],
           ["#follow-ups", "Follow-ups", followUps.length],
           ["#match-review", "Xero match review", xero.length],
           ["#import-review", "Gmail import review", gmailContacts.length + gmailEnquiries.length],
         ].map(([href, label, n]) => (
-          <a key={href as string} href={href as string} className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2 font-medium sm:py-1.5 text-ink ring-1 ring-inset ring-line hover:bg-zinc-50">
-            {label} <span className={cn("rounded-full px-1.5 text-[10.5px] font-semibold", Number(n) ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint")}>{n}</span>
+          <a key={href as string} href={href as string} className="flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-3 py-2 font-medium sm:py-1.5 text-ink ring-1 ring-inset ring-line hover:bg-zinc-50">
+            {label} <span className={cn("rounded-full px-1.5 text-[0.6562rem] font-semibold", Number(n) ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint")}>{n}</span>
           </a>
         ))}
       </nav>
@@ -94,10 +94,10 @@ export default async function ReviewPage() {
               {reviewEnquiries.map((e) => (
                 <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:px-5">
                   <Badge tone="amber">Needs review</Badge>
-                  <Link href={`/enquiries/${e.id}`} className="min-w-0 flex-1 basis-40 truncate text-[13px] font-medium text-ink hover:text-brand-700">ENQ-{e.number} · {e.title}</Link>
-                  <span className="min-w-0 break-words text-[12px] text-ink-muted">{e.contact_name ?? e.contact_email}{e.classification_confidence != null ? ` · ${Math.round(e.classification_confidence * 100)}% sure` : ""}</span>
-                  <span className="text-[11.5px] text-ink-faint">{relative(e.received_at)}</span>
-                  <Link href={`/enquiries/${e.id}`} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Open <ArrowRight className="h-3.5 w-3.5" /></Link>
+                  <Link href={`/enquiries/${e.id}`} className="min-w-0 flex-1 basis-40 truncate text-[0.8125rem] font-medium text-ink hover:text-brand-700">ENQ-{e.number} · {e.title}</Link>
+                  <span className="min-w-0 break-words text-[0.75rem] text-ink-muted">{e.contact_name ?? e.contact_email}{e.classification_confidence != null ? ` · ${Math.round(e.classification_confidence * 100)}% sure` : ""}</span>
+                  <span className="text-[0.7188rem] text-ink-faint">{relative(e.received_at)}</span>
+                  <Link href={`/enquiries/${e.id}`} className="inline-flex items-center gap-1 text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">Open <ArrowRight className="h-3.5 w-3.5" /></Link>
                 </li>
               ))}
               {threads.map((t) => {
@@ -113,16 +113,16 @@ export default async function ReviewPage() {
                   <li key={t.id} className="px-4 py-4 sm:px-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Mail className="h-4 w-4 shrink-0 text-ink-faint" />
-                      <span className="min-w-0 break-words text-[13px] font-semibold text-ink">{t.subject ?? "(no subject)"}</span>
+                      <span className="min-w-0 break-words text-[0.8125rem] font-semibold text-ink">{t.subject ?? "(no subject)"}</span>
                       <Badge tone={c.tone}>{c.label}{t.classification_confidence != null ? ` · ${Math.round(t.classification_confidence * 100)}%` : ""}</Badge>
-                      <span className="text-[11.5px] text-ink-faint">{t.classified_by === "ai" ? "AI" : t.classified_by === "user" ? "You" : "Rules"}</span>
-                      <span className="ml-auto text-[11.5px] text-ink-faint" title={t.last_inbound_at ? fmtDateTime(t.last_inbound_at, org.timezone) : undefined}>{relative(t.last_inbound_at)}</span>
+                      <span className="text-[0.7188rem] text-ink-faint">{t.classified_by === "ai" ? "AI" : t.classified_by === "user" ? "You" : "Rules"}</span>
+                      <span className="ml-auto text-[0.7188rem] text-ink-faint" title={t.last_inbound_at ? fmtDateTime(t.last_inbound_at, org.timezone) : undefined}>{relative(t.last_inbound_at)}</span>
                     </div>
-                    <p className="mt-1 break-words text-[12.5px] text-ink-muted">From {who}{t.customer ? <> · existing customer <Link href={`/clients/${t.customer.id}`} className="text-brand-600 hover:text-brand-700">{t.customer.name}</Link></> : ""}</p>
-                    {first?.snippet && <p className="mt-1.5 line-clamp-2 break-words text-[12.5px] text-ink">{first.snippet}</p>}
-                    {chips.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{chips.map((ch) => <span key={ch} className="rounded-full bg-brand-50 px-2 py-0.5 text-[11.5px] text-brand-700">{ch}</span>)}</div>}
+                    <p className="mt-1 break-words text-[0.7812rem] text-ink-muted">From {who}{t.customer ? <> · existing customer <Link href={`/clients/${t.customer.id}`} className="text-brand-600 hover:text-brand-700">{t.customer.name}</Link></> : ""}</p>
+                    {first?.snippet && <p className="mt-1.5 line-clamp-2 break-words text-[0.7812rem] text-ink">{first.snippet}</p>}
+                    {chips.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{chips.map((ch) => <span key={ch} className="rounded-full bg-brand-50 px-2 py-0.5 text-[0.7188rem] text-brand-700">{ch}</span>)}</div>}
                     {t.classification_reasons?.length > 0 && (
-                      <ul className="mt-2 list-disc break-words pl-5 text-[12px] text-ink-faint">{t.classification_reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul>
+                      <ul className="mt-2 list-disc break-words pl-5 text-[0.75rem] text-ink-faint">{t.classification_reasons.slice(0, 3).map((r) => <li key={r}>{r}</li>)}</ul>
                     )}
                     <div className="mt-3">
                       <SuggestionForm threadId={t.id} values={{
@@ -152,8 +152,8 @@ export default async function ReviewPage() {
                   <Link href={f.href} className="flex min-h-[56px] items-start gap-3 px-4 py-3 hover:bg-zinc-50/70 active:bg-zinc-50 sm:px-5">
                     <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", f.urgency === "high" ? "bg-rose-500" : "bg-amber-400")} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium text-ink">{f.title}</p>
-                      <p className="break-words text-[12px] text-ink-muted">{f.detail}</p>
+                      <p className="text-[0.8125rem] font-medium text-ink">{f.title}</p>
+                      <p className="break-words text-[0.75rem] text-ink-muted">{f.detail}</p>
                     </div>
                     <Badge tone={f.kind === "quote_no_reply" ? "brand" : f.kind === "email_no_reply" ? "blue" : "amber"}>
                       {f.kind === "quote_no_reply" ? "Quote" : f.kind === "email_no_reply" ? "Email" : "Payment"}
@@ -193,7 +193,7 @@ export default async function ReviewPage() {
                 const x = (c.payload.extracted ?? {}) as Record<string, unknown>;
                 return (
                   <CandidateItem key={c.id} c={c} existing={c.suggested_customer_id ? suggested.get(c.suggested_customer_id) ?? null : null} customers={customers} manager={manager}
-                    heading={<><Badge tone={CLASSIFICATION[(c.payload.classification as EmailClassification) ?? "event_enquiry"]?.tone ?? "brand"}>{CLASSIFICATION[(c.payload.classification as EmailClassification) ?? "event_enquiry"]?.label ?? "Enquiry"}</Badge> <span className="text-[13px] font-semibold text-ink">{String(c.payload.subject ?? "(no subject)")}</span> <span className="text-[11.5px] text-ink-faint">{fmtDate(String(c.payload.first_at ?? ""))}{c.payload.quote_mentioned ? " · quote mentioned" : ""}{c.payload.we_replied ? " · you replied" : ""}</span></>}
+                    heading={<><Badge tone={CLASSIFICATION[(c.payload.classification as EmailClassification) ?? "event_enquiry"]?.tone ?? "brand"}>{CLASSIFICATION[(c.payload.classification as EmailClassification) ?? "event_enquiry"]?.label ?? "Enquiry"}</Badge> <span className="text-[0.8125rem] font-semibold text-ink">{String(c.payload.subject ?? "(no subject)")}</span> <span className="text-[0.7188rem] text-ink-faint">{fmtDate(String(c.payload.first_at ?? ""))}{c.payload.quote_mentioned ? " · quote mentioned" : ""}{c.payload.we_replied ? " · you replied" : ""}</span></>}
                     mergeLabel="Import for this customer" separateLabel="Import without linking"
                     incomingLabel="Gmail" incoming={[
                       ["Name", person.name ?? null], ["Email", person.email ?? null], ["Phone", person.phone ?? null], ["Company", person.company ?? null],
@@ -233,7 +233,7 @@ function CandidateItem({ c, existing, customers, manager, incoming, incomingLabe
         <div className="flex flex-row items-center justify-center gap-2 md:flex-col md:px-2">
           {existing ? (
             <>
-              <span className={cn("text-[20px] font-semibold tabular", band === "certain" ? "text-emerald-700" : band === "likely" ? "text-sky-700" : "text-amber-700")}>{score ?? 0}%</span>
+              <span className={cn("text-[1.25rem] font-semibold tabular", band === "certain" ? "text-emerald-700" : band === "likely" ? "text-sky-700" : "text-amber-700")}>{score ?? 0}%</span>
               <Badge tone={tone}>{band === "certain" ? "Likely same" : band === "likely" ? "Probable match" : "Possible match"}</Badge>
             </>
           ) : <Badge tone="neutral">No match</Badge>}
@@ -245,10 +245,10 @@ function CandidateItem({ c, existing, customers, manager, incoming, incomingLabe
             ...(existing.xero_contact_id ? [["Xero", "Already linked to a Xero contact"] as [string, string]] : []),
           ]} />
         ) : (
-          <div className="flex items-center rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-[12.5px] text-ink-muted">No existing customer looks like this one.</div>
+          <div className="flex items-center rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-[0.7812rem] text-ink-muted">No existing customer looks like this one.</div>
         )}
       </div>
-      {c.reasons?.length > 0 && <p className="mt-2 break-words text-[12px] text-ink-faint">Why: {c.reasons.join(" · ")}</p>}
+      {c.reasons?.length > 0 && <p className="mt-2 break-words text-[0.75rem] text-ink-faint">Why: {c.reasons.join(" · ")}</p>}
       <div className="mt-3">
         <CandidateActions id={c.id} suggestedId={c.suggested_customer_id} customers={customers} canResolve={manager} mergeLabel={mergeLabel} separateLabel={separateLabel} />
       </div>
@@ -259,10 +259,10 @@ function CandidateItem({ c, existing, customers, manager, incoming, incomingLabe
 function Side({ label, rows, href }: { label: string; rows: [string, string | null][]; href?: string }) {
   return (
     <div className="rounded-lg bg-zinc-50/80 px-3 py-2.5 ring-1 ring-inset ring-line">
-      <p className="mb-1.5 flex items-center justify-between text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+      <p className="mb-1.5 flex items-center justify-between text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint">
         {label}{href && <Link href={href} className="normal-case tracking-normal text-brand-600 hover:text-brand-700">Open</Link>}
       </p>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12.5px]">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[0.7812rem]">
         {rows.filter(([, v]) => v).map(([k, v]) => (<Fragment key={k}><dt className="text-ink-faint">{k}</dt><dd className="min-w-0 truncate text-ink">{v}</dd></Fragment>))}
       </dl>
     </div>

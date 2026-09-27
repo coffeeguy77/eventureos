@@ -66,17 +66,17 @@ export default async function PortalAdminPage() {
           <Card>
             <CardHeader title="Your portal link" subtitle="Share this with customers — in your quote emails, email signature or booking confirmations." />
             <div className="flex flex-wrap items-center gap-2 px-4 pb-4 sm:px-5">
-              <code className="min-w-0 max-w-full flex-1 basis-full truncate sm:basis-auto rounded-lg bg-zinc-50 px-3 py-2 font-mono text-[12.5px] text-ink ring-1 ring-inset ring-line">{portalUrl}</code>
+              <code className="min-w-0 max-w-full flex-1 basis-full truncate sm:basis-auto rounded-lg bg-zinc-50 px-3 py-2 font-mono text-[0.7812rem] text-ink ring-1 ring-inset ring-line">{portalUrl}</code>
               <CopyLink url={portalUrl} />
             </div>
             <div className="border-t border-line px-4 py-4 sm:px-5">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-faint">How customers sign in</p>
-              <ol className="mt-2 space-y-1.5 text-[13px] text-ink">
+              <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">How customers sign in</p>
+              <ol className="mt-2 space-y-1.5 text-[0.8125rem] text-ink">
                 <li>1. They open the link and enter the email address their booking is under.</li>
                 <li>2. We email them a one-time 6-digit code — no password to remember.</li>
                 <li>3. Once verified, they see only the events, quotes, invoices and shared documents for their own customer record.</li>
               </ol>
-              <p className="mt-3 text-[12.5px] text-ink-muted">
+              <p className="mt-3 text-[0.7812rem] text-ink-muted">
                 The email must match the customer&apos;s email or one of their contacts in EventureOS. Internal notes, draft quotes and internal documents are never shown.
               </p>
             </div>
@@ -96,9 +96,9 @@ export default async function PortalAdminPage() {
                     <>
                       <Avatar name={name} size={30} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13.5px] font-medium text-ink">{name}</p>
-                        <p className="truncate text-[12.5px] text-ink-muted">{c.customer?.name ?? "—"}{c.email ? ` · ${c.email}` : ""}</p>
-                        <p className="truncate text-[12px] text-ink-faint">{last ? `${relative(last.at)} · ${last.summary}` : "No activity yet"}</p>
+                        <p className="truncate text-[0.8438rem] font-medium text-ink">{name}</p>
+                        <p className="truncate text-[0.7812rem] text-ink-muted">{c.customer?.name ?? "—"}{c.email ? ` · ${c.email}` : ""}</p>
+                        <p className="truncate text-[0.75rem] text-ink-faint">{last ? `${relative(last.at)} · ${last.summary}` : "No activity yet"}</p>
                       </div>
                     </>
                   );
@@ -112,9 +112,9 @@ export default async function PortalAdminPage() {
                 })}
               </ul>
               <div className="hidden overflow-x-auto border-t border-line md:block">
-                <table className="w-full min-w-[520px] text-[13px]">
+                <table className="w-full min-w-[520px] text-[0.8125rem]">
                   <thead>
-                    <tr className="text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+                    <tr className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                       <th className="px-5 py-2.5 font-medium">Contact</th>
                       <th className="px-3 py-2.5 font-medium">Customer</th>
                       <th className="px-5 py-2.5 font-medium">Last portal activity</th>
@@ -131,7 +131,7 @@ export default async function PortalAdminPage() {
                               <Avatar name={name} size={26} />
                               <div className="min-w-0">
                                 <p className="truncate text-ink">{name}</p>
-                                <p className="truncate text-[11.5px] text-ink-faint">{c.email}</p>
+                                <p className="truncate text-[0.7188rem] text-ink-faint">{c.email}</p>
                               </div>
                             </div>
                           </td>
@@ -139,7 +139,7 @@ export default async function PortalAdminPage() {
                             {c.customer ? <Link href={`/clients/${c.customer.id}`} className="text-ink hover:text-brand-700">{c.customer.name}</Link> : "—"}
                           </td>
                           <td className="px-5 py-3 text-ink-muted">
-                            {last ? <><span className="text-ink">{relative(last.at)}</span><span className="block truncate text-[11.5px] text-ink-faint">{last.summary}</span></> : "No activity yet"}
+                            {last ? <><span className="text-ink">{relative(last.at)}</span><span className="block truncate text-[0.7188rem] text-ink-faint">{last.summary}</span></> : "No activity yet"}
                           </td>
                         </tr>
                       );
@@ -162,12 +162,12 @@ export default async function PortalAdminPage() {
                     <Link href={m.event_id ? `/events/${m.event_id}?tab=communication` : `/clients/${m.customer_id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-50 active:bg-zinc-50 sm:px-5">
                       <Avatar name={m.customer?.name ?? "Customer"} size={26} />
                       <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-2 text-[13px] text-ink">
+                        <p className="flex items-center gap-2 text-[0.8125rem] text-ink">
                           <span className="min-w-0 truncate font-medium">{m.customer?.name ?? "Customer"}</span>
                           {!m.read_at && <Badge tone="red">New</Badge>}
-                          <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint">{relative(m.created_at)}</span>
+                          <span className="ml-auto shrink-0 text-[0.7188rem] text-ink-faint">{relative(m.created_at)}</span>
                         </p>
-                        <p className="truncate text-[12.5px] text-ink-muted">{m.body}</p>
+                        <p className="truncate text-[0.7812rem] text-ink-muted">{m.body}</p>
                       </div>
                     </Link>
                   </li>
@@ -179,24 +179,24 @@ export default async function PortalAdminPage() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Branding" subtitle="What customers see." action={<Link href="/settings/branding" className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Edit in Settings</Link>} />
+            <CardHeader title="Branding" subtitle="What customers see." action={<Link href="/settings/branding" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">Edit in Settings</Link>} />
             <div className="px-4 pb-5 sm:px-5">
               <div className="overflow-hidden rounded-xl border border-line">
                 <div className="h-1" style={{ background: colour }} />
-                <div className="flex items-center gap-3 bg-white px-4 py-3">
+                <div className="flex items-center gap-3 bg-surface px-4 py-3">
                   {brand.logo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={brand.logo_url} alt={brand.name} className="h-8 w-auto max-w-[140px] object-contain" />
                   ) : (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[12px] font-semibold text-white" style={{ background: colour }}>{initials(brand.name)}</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-[0.75rem] font-semibold text-white" style={{ background: colour }}>{initials(brand.name)}</span>
                   )}
-                  <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{brand.name}</span>
+                  <span className="min-w-0 truncate text-[0.875rem] font-semibold text-ink">{brand.name}</span>
                 </div>
                 <div className="border-t border-line bg-zinc-50 px-4 py-3">
-                  <span className="inline-flex h-8 items-center rounded-lg px-3 text-[12.5px] font-medium text-white" style={{ background: colour }}>Accept quote</span>
+                  <span className="inline-flex h-8 items-center rounded-lg px-3 text-[0.7812rem] font-medium text-white" style={{ background: colour }}>Accept quote</span>
                 </div>
               </div>
-              <dl className="mt-4 space-y-2 text-[12.5px]">
+              <dl className="mt-4 space-y-2 text-[0.7812rem]">
                 <div className="flex items-center gap-2 text-ink-muted"><span className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-line" style={{ background: colour }} />Brand colour {colour}</div>
                 <div className="flex items-center gap-2 text-ink-muted"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 break-all">{brand.contact_email ?? <span className="break-normal text-amber-700">No contact email set</span>}</span></div>
                 <div className="flex items-center gap-2 text-ink-muted"><Phone className="h-3.5 w-3.5 shrink-0" />{brand.contact_phone ?? <span className="text-ink-faint">No phone set</span>}</div>
@@ -214,14 +214,14 @@ export default async function PortalAdminPage() {
           <Card>
             <CardHeader title="Waiting on customers" subtitle="Requested documents not yet uploaded." />
             {requests.length === 0 ? (
-              <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Nothing outstanding.</p>
+              <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Nothing outstanding.</p>
             ) : (
               <ul className="divide-y divide-line border-t border-line">
                 {requests.map((d) => (
                   <li key={d.id} className="flex items-start justify-between gap-3 px-4 py-3 sm:px-5">
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] text-ink">{d.name}</p>
-                      <p className="truncate text-[11.5px] text-ink-faint">
+                      <p className="truncate text-[0.8125rem] text-ink">{d.name}</p>
+                      <p className="truncate text-[0.7188rem] text-ink-faint">
                         {d.customer?.name ?? "Customer"}
                         {d.event && <> · <Link href={`/events/${d.event_id}?tab=documents`} className="hover:text-ink">{d.event.name}</Link></>}
                         {" · "}requested {relative(d.created_at)}
@@ -230,7 +230,7 @@ export default async function PortalAdminPage() {
                     {manager && (
                       <form action={cancelDocumentRequest} className="shrink-0">
                         <input type="hidden" name="id" value={d.id} />
-                        <button className="-my-2 h-10 px-1 text-[12px] text-ink-faint hover:text-rose-700 sm:my-0 sm:h-auto sm:px-0">Cancel</button>
+                        <button className="-my-2 h-10 px-1 text-[0.75rem] text-ink-faint hover:text-rose-700 sm:my-0 sm:h-auto sm:px-0">Cancel</button>
                       </form>
                     )}
                   </li>

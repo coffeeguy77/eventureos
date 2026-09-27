@@ -64,7 +64,7 @@ export default async function AdminOverview() {
         <Card>
           <CardHeader title="Integration health" subtitle="Connections across all organisations." />
           <div className="overflow-x-auto border-t border-line">
-            <table className="w-full text-[13px] sm:min-w-[420px]">
+            <table className="w-full text-[0.8125rem] sm:min-w-[420px]">
               <tbody className="divide-y divide-line">
                 {Object.keys(byProvider).length === 0 && (
                   <tr><td className="px-5 py-6 text-center text-ink-muted">No integrations yet.</td></tr>
@@ -90,7 +90,7 @@ export default async function AdminOverview() {
 
         <Card>
           <CardHeader title="System health" subtitle={health ? `Checked ${fmtDateTime(health.checked_at, TZ, "time")} (Sydney)` : undefined} />
-          <ul className="divide-y divide-line border-t border-line text-[13px]">
+          <ul className="divide-y divide-line border-t border-line text-[0.8125rem]">
             <HealthRow label="Database" ok={!!health?.db_reachable}
               detail={health ? `Reachable · ${latency} ms round trip · Postgres ${health.server_version}` : `Health check failed: ${healthRes.error?.message}`} />
             <HealthRow
@@ -126,7 +126,7 @@ function HealthRow({ label, ok, warn, detail }: { label: string; ok: boolean; wa
     <li className="flex items-start justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-5">
       <div className="min-w-0">
         <div className="font-medium text-ink">{label}</div>
-        <div className="mt-0.5 break-words text-[12.5px] text-ink-muted">{detail}</div>
+        <div className="mt-0.5 break-words text-[0.7812rem] text-ink-muted">{detail}</div>
       </div>
       <Badge tone={tone} dot className="shrink-0">{ok ? "Healthy" : warn ? "Check" : "Problem"}</Badge>
     </li>

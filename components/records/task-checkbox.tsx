@@ -15,7 +15,7 @@ export function TaskCheckbox({ id, done }: { id: string; done: boolean }) {
       onClick={() => start(async () => { setOptimistic(!optimistic); await setTaskDone(id, !optimistic); })}
       className={cn(
         "relative mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors before:absolute before:-inset-3 before:content-[''] sm:before:hidden",
-        optimistic ? "border-brand-500 bg-brand-500 text-white" : "border-line-strong bg-white hover:border-brand-400"
+        optimistic ? "border-brand-500 bg-brand-500 text-on-brand" : "border-line-strong bg-surface hover:border-brand-400"
       )}
     >
       {optimistic && <Check className="h-3 w-3" strokeWidth={3} />}

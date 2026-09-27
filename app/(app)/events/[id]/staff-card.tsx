@@ -31,7 +31,7 @@ export function StaffCard({ eventId, rows, team, canEdit }: {
 
   return (
     <div className="px-5 pb-5">
-      {rows.length === 0 ? <p className="text-[12.5px] text-ink-muted">Nobody rostered yet.</p> : (
+      {rows.length === 0 ? <p className="text-[0.7812rem] text-ink-muted">Nobody rostered yet.</p> : (
         <ul className="divide-y divide-line">
           {rows.map((r) => {
             const effective = r.sees_details ?? r.default_details;
@@ -39,18 +39,18 @@ export function StaffCard({ eventId, rows, team, canEdit }: {
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
                 <Avatar name={r.name} size={28} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium text-ink">{r.name} {r.auto_added && <Badge tone="slate">every event</Badge>}</p>
+                  <p className="truncate text-[0.8125rem] font-medium text-ink">{r.name} {r.auto_added && <Badge tone="slate">every event</Badge>}</p>
                   {canEdit ? (
                     <input defaultValue={r.role ?? ""} placeholder="Role, e.g. Barista" maxLength={60} aria-label={`Role for ${r.name}`}
                       onBlur={(e) => { if ((e.target.value || null) !== r.role) run(() => updateEventStaff(r.id, { role: e.target.value })); }}
-                      className="mt-0.5 w-full rounded border-0 bg-transparent p-0 text-[12px] text-ink-muted placeholder:text-ink-faint focus:ring-0" />
-                  ) : <p className="text-[12px] text-ink-muted">{r.role ?? r.team_role}</p>}
+                      className="mt-0.5 w-full rounded border-0 bg-transparent p-0 text-[0.75rem] text-ink-muted placeholder:text-ink-faint focus:ring-0" />
+                  ) : <p className="text-[0.75rem] text-ink-muted">{r.role ?? r.team_role}</p>}
                 </div>
                 {r.team_role === "staff" && (
                   <select disabled={!canEdit || pending} value={r.sees_details === null ? "default" : r.sees_details ? "yes" : "no"}
                     onChange={(e) => run(() => updateEventStaff(r.id, { sees_details: e.target.value === "default" ? null : e.target.value === "yes" }))}
                     aria-label={`Can ${r.name} see what's included`}
-                    className={cn("rounded-md border-line-strong py-1 pl-2 pr-7 text-[12px]", effective ? "text-emerald-800" : "text-ink-muted")}>
+                    className={cn("rounded-md border-line-strong py-1 pl-2 pr-7 text-[0.75rem]", effective ? "text-emerald-800" : "text-ink-muted")}>
                     <option value="default">Inclusions: {r.default_details ? "shown" : "hidden"} (their default)</option>
                     <option value="yes">Inclusions: shown on this job</option>
                     <option value="no">Inclusions: hidden on this job</option>
@@ -76,7 +76,7 @@ export function StaffCard({ eventId, rows, team, canEdit }: {
         </div>
       )}
       {error && <div className="mt-2"><FormError message={error} /></div>}
-      <p className="mt-3 text-[11.5px] text-ink-faint">Rostered staff see this job in My jobs — never prices. They're added to the calendar invite.</p>
+      <p className="mt-3 text-[0.7188rem] text-ink-faint">Rostered staff see this job in My jobs — never prices. They're added to the calendar invite.</p>
     </div>
   );
 }

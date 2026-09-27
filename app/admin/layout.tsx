@@ -15,14 +15,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-canvas">
-      <header className="bg-zinc-950 text-white">
+      <header className="bg-[#0E0E12] text-white">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 lg:px-8">
           <Link href="/admin" className="flex items-center gap-2.5">
             <Wordmark height={20} tone="light" />
-            <span className="rounded bg-amber-400 px-1.5 py-px text-[10.5px] font-bold uppercase tracking-wide text-amber-950">Platform admin</span>
+            <span className="rounded bg-[#FBBF24] px-1.5 py-px text-[0.6562rem] font-bold uppercase tracking-wide text-[#451A03]">Platform admin</span>
           </Link>
           <AdminNav />
-          <div className="ml-auto flex items-center gap-4 text-[12.5px] text-zinc-400">
+          <div className="ml-auto flex items-center gap-4 text-[0.7812rem] text-zinc-400">
             <span className="hidden sm:inline">{user?.email}</span>
             <Link href="/dashboard" className="whitespace-nowrap py-2 font-medium text-zinc-200 hover:text-white sm:py-0">Back to app →</Link>
           </div>

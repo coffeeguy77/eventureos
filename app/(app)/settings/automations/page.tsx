@@ -115,7 +115,7 @@ export default async function AutomationsPage() {
           subtitle="Rules that do the routine work for you. Everything they do is written to the activity log."
         />
         {!canToggle && (
-          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
             Only owners, admins and managers can switch automations on or off.
           </p>
         )}
@@ -130,15 +130,15 @@ export default async function AutomationsPage() {
                 <li key={r.id} className="flex gap-3 px-4 py-4 sm:gap-4 sm:px-5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="min-w-0 break-words text-[13.5px] font-medium text-ink">{r.name}</span>
+                      <span className="min-w-0 break-words text-[0.8438rem] font-medium text-ink">{r.name}</span>
                       <Badge tone={r.enabled ? "green" : "slate"} dot>{r.enabled ? "On" : "Off"}</Badge>
                     </div>
-                    <p className="mt-1.5 text-[13px] leading-relaxed text-ink">
-                      <span className="mr-1 rounded bg-brand-50 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-brand-700">When</span>
+                    <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-ink">
+                      <span className="mr-1 rounded bg-brand-50 px-1.5 py-0.5 text-[0.6562rem] font-semibold uppercase tracking-wide text-brand-700">When</span>
                       {whenText(r.trigger_type, s)}
                     </p>
-                    <div className="mt-1 flex gap-1 text-[13px] leading-relaxed text-ink">
-                      <span className="mr-1 h-fit rounded bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Then</span>
+                    <div className="mt-1 flex gap-1 text-[0.8125rem] leading-relaxed text-ink">
+                      <span className="mr-1 h-fit rounded bg-emerald-50 px-1.5 py-0.5 text-[0.6562rem] font-semibold uppercase tracking-wide text-emerald-700">Then</span>
                       {acts.length ? (
                         <ol className="list-inside list-decimal space-y-0.5 marker:text-ink-faint">
                           {acts.map((a, i) => <li key={i}>{actionText(a, s)}</li>)}
@@ -146,11 +146,11 @@ export default async function AutomationsPage() {
                       ) : <span className="text-ink-muted">no actions configured</span>}
                     </div>
                     {dep && (
-                      <p className={dep.tone === "warn" ? "mt-2 text-[12px] text-amber-800" : dep.tone === "ok" ? "mt-2 text-[12px] text-emerald-700" : "mt-2 text-[12px] text-ink-muted"}>
+                      <p className={dep.tone === "warn" ? "mt-2 text-[0.75rem] text-amber-800" : dep.tone === "ok" ? "mt-2 text-[0.75rem] text-emerald-700" : "mt-2 text-[0.75rem] text-ink-muted"}>
                         {dep.text}
                       </p>
                     )}
-                    {!r.enabled && OFF_NOTE[r.trigger_type] && <p className="mt-1 text-[12px] text-ink-faint">{OFF_NOTE[r.trigger_type]}</p>}
+                    {!r.enabled && OFF_NOTE[r.trigger_type] && <p className="mt-1 text-[0.75rem] text-ink-faint">{OFF_NOTE[r.trigger_type]}</p>}
                   </div>
                   <div className="shrink-0 pt-0.5">
                     <Toggle on={r.enabled} action={setRuleEnabled.bind(null, r.id)} label={`Turn ${r.enabled ? "off" : "on"} “${r.name}”`} disabled={!canToggle} />
@@ -162,11 +162,11 @@ export default async function AutomationsPage() {
         )}
         {missing.length > 0 && (
           <div className="border-t border-line px-4 py-4 sm:px-5">
-            <div className="text-[12px] font-medium uppercase tracking-wide text-ink-faint">Standard rules you don’t have yet</div>
+            <div className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Standard rules you don’t have yet</div>
             <ul className="mt-2 space-y-2">
               {missing.map((t) => (
                 <li key={t} className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0 text-[13px]">
+                  <div className="min-w-0 text-[0.8125rem]">
                     <span className="font-medium text-ink">{STANDARD_RULES[t].name}</span>
                     <span className="text-ink-muted"> — when {whenText(t, s)}</span>
                   </div>
@@ -189,14 +189,14 @@ export default async function AutomationsPage() {
           {canSettings ? (
             <ActionForm action={saveAutomationSettings}>
               <fieldset>
-                <legend className="mb-2 text-[12.5px] font-medium text-ink">On acceptance</legend>
+                <legend className="mb-2 text-[0.7812rem] font-medium text-ink">On acceptance</legend>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {(Object.keys(QUOTE_ACCEPTANCE_ACTIONS) as QuoteAcceptanceAction[]).map((k) => (
                     <label key={k} className="flex cursor-pointer gap-2.5 rounded-lg border border-line p-3 has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50/60">
                       <input type="radio" name="quote_acceptance_action" value={k} defaultChecked={s.action === k} className="mt-0.5 accent-brand-500" />
                       <span>
-                        <span className="block text-[13px] font-medium text-ink">{QUOTE_ACCEPTANCE_ACTIONS[k].label}</span>
-                        <span className="block text-[12px] text-ink-muted">{QUOTE_ACCEPTANCE_ACTIONS[k].hint}</span>
+                        <span className="block text-[0.8125rem] font-medium text-ink">{QUOTE_ACCEPTANCE_ACTIONS[k].label}</span>
+                        <span className="block text-[0.75rem] text-ink-muted">{QUOTE_ACCEPTANCE_ACTIONS[k].hint}</span>
                       </span>
                     </label>
                   ))}
@@ -221,10 +221,10 @@ export default async function AutomationsPage() {
               </div>
             </ActionForm>
           ) : (
-            <div className="space-y-1.5 text-[13px] text-ink">
+            <div className="space-y-1.5 text-[0.8125rem] text-ink">
               <p><span className="text-ink-muted">On acceptance:</span> {QUOTE_ACCEPTANCE_ACTIONS[s.action].label}</p>
               <p><span className="text-ink-muted">Deposit:</span> {s.deposit}% · <span className="text-ink-muted">Payment terms:</span> {s.terms} days · <span className="text-ink-muted">Follow-up after:</span> {s.followUp} days</p>
-              <p className="pt-1 text-[12px] text-ink-faint">Only owners and admins can change these.</p>
+              <p className="pt-1 text-[0.75rem] text-ink-faint">Only owners and admins can change these.</p>
             </div>
           )}
         </div>
@@ -246,12 +246,12 @@ export default async function AutomationsPage() {
               return (
                 <li key={run.id} className="flex min-h-[56px] items-start gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-medium text-ink">{rule?.name ?? "Deleted rule"}</div>
-                    <div className="break-words text-[12.5px] text-ink-muted">
+                    <div className="truncate text-[0.8438rem] font-medium text-ink">{rule?.name ?? "Deleted rule"}</div>
+                    <div className="break-words text-[0.7812rem] text-ink-muted">
                       {done}
                       {eventId && <> · <Link href={`/events/${eventId}`} className="text-brand-600 hover:text-brand-700">event</Link></>}
                     </div>
-                    <div className="mt-0.5 text-[12px] text-ink-faint">{relative(run.created_at)}</div>
+                    <div className="mt-0.5 text-[0.75rem] text-ink-faint">{relative(run.created_at)}</div>
                   </div>
                   <Badge tone={RUN_TONE[run.status] ?? "neutral"} className="shrink-0">{run.status}</Badge>
                 </li>
@@ -259,9 +259,9 @@ export default async function AutomationsPage() {
             })}
           </ul>
           <div className="hidden overflow-x-auto border-t border-line md:block">
-            <table className="w-full min-w-[560px] text-[13px]">
+            <table className="w-full min-w-[560px] text-[0.8125rem]">
               <thead>
-                <tr className="text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-2.5 font-medium">When</th>
                   <th className="px-3 py-2.5 font-medium">Rule</th>
                   <th className="px-3 py-2.5 font-medium">Result</th>

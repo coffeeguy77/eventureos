@@ -16,16 +16,16 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="relative flex h-full flex-col justify-between p-14 text-white">
           <div>
             <Wordmark height={34} tone="light" />
-            <p className="mt-3 text-[13px] tracking-[0.18em] text-white/60">The operating system for event businesses.</p>
+            <p className="mt-3 text-[0.8125rem] tracking-[0.18em] text-white/60">The operating system for event businesses.</p>
           </div>
           <div>
-          <p className="max-w-md text-[28px] font-semibold leading-tight tracking-tight">
+          <p className="max-w-md text-[1.75rem] font-semibold leading-tight tracking-tight">
             Every enquiry, event, quote and invoice — finally in one place.
           </p>
-          <p className="mt-4 max-w-md text-[14px] text-white/70">
+          <p className="mt-4 max-w-md text-[0.875rem] text-white/70">
             Enquiry → customer → event → quote → acceptance → calendar → delivery → invoice → payment.
           </p>
-          <div className="mt-10 grid max-w-md grid-cols-3 gap-3 text-[12px] text-white/70">
+          <div className="mt-10 grid max-w-md grid-cols-3 gap-3 text-[0.75rem] text-white/70">
             {["Gmail", "Google Calendar", "Xero"].map((i) => (
               <div key={i} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">{i}</div>
             ))}

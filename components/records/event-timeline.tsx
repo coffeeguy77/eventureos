@@ -38,20 +38,20 @@ export function EventTimeline({ activity, tz, cancelled }: { activity: ActivityL
           <li key={r.key} className="relative flex gap-3 pb-3">
             {i < visible.length - 1 && <span className={cn("absolute left-[9px] top-5 h-[calc(100%-12px)] w-px", r.hit ? "bg-brand-300" : "bg-line")} />}
             <span className={cn("mt-0.5 flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full",
-              r.hit ? "bg-brand-500 text-white" : isNext ? "border-2 border-brand-400 bg-white" : "border border-line-strong bg-white")}>
+              r.hit ? "bg-brand-500 text-on-brand" : isNext ? "border-2 border-brand-400 bg-surface" : "border border-line-strong bg-surface")}>
               {r.hit && <Check className="h-3 w-3" strokeWidth={3} />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className={cn("text-[13px]", r.hit ? "text-ink" : isNext ? "font-medium text-ink" : "text-ink-faint", skipped && "line-through decoration-ink-faint/50")}>
+              <p className={cn("text-[0.8125rem]", r.hit ? "text-ink" : isNext ? "font-medium text-ink" : "text-ink-faint", skipped && "line-through decoration-ink-faint/50")}>
                 {r.label}
               </p>
-              {r.hit && <p className="text-[11.5px] text-ink-faint">{fmtDateTime(r.hit.created_at, tz)}</p>}
-              {isNext && <p className="text-[11.5px] font-medium text-brand-600">Up next</p>}
+              {r.hit && <p className="text-[0.7188rem] text-ink-faint">{fmtDateTime(r.hit.created_at, tz)}</p>}
+              {isNext && <p className="text-[0.7188rem] font-medium text-brand-600">Up next</p>}
             </div>
           </li>
         );
       })}
-      {cancelled && <li className="ml-8 text-[12.5px] font-medium text-rose-700">Event cancelled</li>}
+      {cancelled && <li className="ml-8 text-[0.7812rem] font-medium text-rose-700">Event cancelled</li>}
     </ol>
   );
 }

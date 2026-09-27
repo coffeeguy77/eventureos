@@ -52,14 +52,14 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   <Link href={`/clients/${c.id}`} className="flex min-h-[56px] items-center gap-3 px-4 py-3 active:bg-zinc-50">
                     <Avatar name={c.name} size={32} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px] font-medium text-ink">{c.name}</div>
-                      <div className="truncate text-[12.5px] text-ink-muted">{c.email ?? c.phone ?? "—"}</div>
-                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">{c.events.length} event{c.events.length === 1 ? "" : "s"}</div>
+                      <div className="truncate text-[0.8438rem] font-medium text-ink">{c.name}</div>
+                      <div className="truncate text-[0.7812rem] text-ink-muted">{c.email ?? c.phone ?? "—"}</div>
+                      <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">{c.events.length} event{c.events.length === 1 ? "" : "s"}</div>
                     </div>
                     {owing > 0 && (
                       <div className="shrink-0 text-right">
-                        <div className={`tabular text-[12.5px] ${overdue ? "font-medium text-rose-700" : "text-ink"}`}>{money(owing, org.currency)}</div>
-                        <div className="text-[11.5px] text-ink-faint">{overdue ? "overdue" : "owing"}</div>
+                        <div className={`tabular text-[0.7812rem] ${overdue ? "font-medium text-rose-700" : "text-ink"}`}>{money(owing, org.currency)}</div>
+                        <div className="text-[0.7188rem] text-ink-faint">{overdue ? "overdue" : "owing"}</div>
                       </div>
                     )}
                   </Link>
@@ -68,8 +68,8 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[860px] text-left text-[13px]">
-              <thead><tr className="border-b border-line text-[11.5px] uppercase tracking-wide text-ink-faint">
+            <table className="w-full min-w-[860px] text-left text-[0.8125rem]">
+              <thead><tr className="border-b border-line text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                 {["Client", "Contact", "Events", "Lifetime value", "Outstanding", "Client since"].map((h) => (
                   <th key={h} className={`px-4 py-2.5 font-medium ${["Events", "Lifetime value", "Outstanding"].includes(h) ? "text-right" : ""}`}>{h}</th>
                 ))}
@@ -87,12 +87,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                           <Avatar name={c.name} size={30} />
                           <span className="min-w-0">
                             <span className="block truncate font-medium text-ink">{c.name}</span>
-                            <span className="flex gap-1">{c.tags.slice(0, 2).map((t) => <Badge key={t} className="!py-0 !text-[10.5px]">{t}</Badge>)}</span>
+                            <span className="flex gap-1">{c.tags.slice(0, 2).map((t) => <Badge key={t} className="!py-0 !text-[0.6562rem]">{t}</Badge>)}</span>
                           </span>
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-ink-muted"><span className="block">{c.email ?? "—"}</span><span className="text-[12px] text-ink-faint">{c.phone}</span></td>
-                      <td className="tabular px-4 py-3 text-right text-ink">{c.events.length}{upcoming > 0 && <span className="block text-[11.5px] text-ink-faint">{upcoming} upcoming</span>}</td>
+                      <td className="px-4 py-3 text-ink-muted"><span className="block">{c.email ?? "—"}</span><span className="text-[0.75rem] text-ink-faint">{c.phone}</span></td>
+                      <td className="tabular px-4 py-3 text-right text-ink">{c.events.length}{upcoming > 0 && <span className="block text-[0.7188rem] text-ink-faint">{upcoming} upcoming</span>}</td>
                       <td className="tabular px-4 py-3 text-right text-ink">{money(ltv, org.currency, { cents: false })}</td>
                       <td className={`tabular px-4 py-3 text-right ${overdue ? "font-medium text-rose-700" : owing > 0 ? "text-ink" : "text-ink-faint"}`}>{owing > 0 ? money(owing, org.currency) : "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{fmtDate(c.customer_since)}</td>
@@ -104,7 +104,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           </div>
           </>
         )}
-        <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} client{rows.length === 1 ? "" : "s"}</div>
+        <div className="border-t border-line px-4 py-2.5 text-[0.75rem] text-ink-faint">{rows.length} client{rows.length === 1 ? "" : "s"}</div>
       </Card>
     </div>
   );

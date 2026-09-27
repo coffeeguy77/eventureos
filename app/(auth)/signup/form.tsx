@@ -8,7 +8,7 @@ import { FormError, Input, Label } from "@/components/ui/form";
 export function SignupForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [state, action, pending] = useActionState(signUp, undefined);
   if (state?.message) {
-    return <p className="mt-8 rounded-lg bg-brand-50 px-4 py-3 text-[13.5px] text-brand-800 ring-1 ring-inset ring-brand-100">{state.message}</p>;
+    return <p className="mt-8 rounded-lg bg-brand-50 px-4 py-3 text-[0.8438rem] text-brand-800 ring-1 ring-inset ring-brand-100">{state.message}</p>;
   }
   return (
     <form action={action} className="mt-8 space-y-4">

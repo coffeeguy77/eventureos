@@ -4,9 +4,9 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:mb-6 sm:gap-4">
       <div className="min-w-0">
-        {eyebrow && <div className="mb-1 text-[12px] font-medium text-ink-faint">{eyebrow}</div>}
-        <h1 className="text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]">{title}</h1>
-        {subtitle && <p className="mt-1 text-[13.5px] text-ink-muted">{subtitle}</p>}
+        {eyebrow && <div className="mb-1 text-[0.75rem] font-medium text-ink-faint">{eyebrow}</div>}
+        <h1 className="text-[1.25rem] font-semibold tracking-tight text-ink sm:text-[1.375rem]">{title}</h1>
+        {subtitle && <p className="mt-1 text-[0.8438rem] text-ink-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto [&>*]:flex-1 sm:[&>*]:flex-none">{actions}</div>}
     </div>

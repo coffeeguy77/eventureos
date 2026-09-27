@@ -77,11 +77,11 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
           {days.map((d) => (
             <Link key={d} href={calendarHref({ view: "day", date: d, hide, today })}
               className={cn("border-l border-line px-2 py-2 text-center hover:bg-zinc-50", d === today && "bg-brand-50/50")}>
-              <span className={cn("block text-[11px] font-semibold uppercase tracking-wide", d === today ? "text-brand-700" : "text-ink-faint")}>
+              <span className={cn("block text-[0.6875rem] font-semibold uppercase tracking-wide", d === today ? "text-brand-700" : "text-ink-faint")}>
                 {fmtDate(d, "weekday").split(" ")[0]}
               </span>
-              <span className={cn("mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-semibold tabular",
-                d === today ? "bg-brand-500 text-white" : "text-ink")}>{Number(d.slice(8))}</span>
+              <span className={cn("mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-[0.875rem] font-semibold tabular",
+                d === today ? "bg-brand-500 text-on-brand" : "text-ink")}>{Number(d.slice(8))}</span>
             </Link>
           ))}
         </div>
@@ -89,7 +89,7 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
         {/* All-day lane */}
         {hasAllDay && (
           <div className={cn("grid border-b border-line bg-zinc-50/40", cols)}>
-            <div className="px-1.5 py-1.5 text-right text-[10.5px] font-medium text-ink-faint">All day</div>
+            <div className="px-1.5 py-1.5 text-right text-[0.6562rem] font-medium text-ink-faint">All day</div>
             {perDay.map(({ d, allDay }) => (
               <div key={d} className="min-w-0 space-y-0.5 border-l border-line p-1">
                 {allDay.map(({ entry }) => (
@@ -105,7 +105,7 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
           <div className={cn("relative grid", cols)} style={{ height: HOURS.length * HOUR_PX }}>
             <div className="relative">
               {HOURS.map((h, i) => (
-                <span key={h} className="absolute right-2 -translate-y-1/2 text-[10.5px] text-ink-faint tabular" style={{ top: i * HOUR_PX }}>
+                <span key={h} className="absolute right-2 -translate-y-1/2 text-[0.6562rem] text-ink-faint tabular" style={{ top: i * HOUR_PX }}>
                   {i === 0 ? "" : minutesLabel(h * 60)}
                 </span>
               ))}
@@ -123,8 +123,8 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
                   return (
                     <button key={p.entry.id} type="button" onClick={() => onOpen(p.entry.id)}
                       title={`${p.entry.title} · ${p.entry.timeLabel} · ${res?.name ?? ""}${conflict ? " · CONFLICT" : ""}`}
-                      className={cn("absolute overflow-hidden rounded-md px-1.5 py-1 text-left text-[11.5px] leading-tight shadow-sm transition hover:z-10 hover:shadow-pop",
-                        conflict ? "bg-rose-50 text-rose-900 ring-2 ring-rose-500" : "text-ink ring-1 ring-white")}
+                      className={cn("absolute overflow-hidden rounded-md px-1.5 py-1 text-left text-[0.7188rem] leading-tight shadow-sm transition hover:z-10 hover:shadow-pop",
+                        conflict ? "bg-rose-50 text-rose-900 ring-2 ring-rose-500" : "text-ink ring-1 ring-surface")}
                       style={{
                         top: p.top + 1, height: p.height,
                         left: `calc(${(p.col / p.cols) * 100}% + 2px)`, width: `calc(${100 / p.cols}% - 4px)`,

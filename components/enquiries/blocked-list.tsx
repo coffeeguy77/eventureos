@@ -40,21 +40,21 @@ export function BlockedList({ rows, canEdit }: { rows: BlockRow[]; canEdit: bool
           </form>
         )}
       </div>
-      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[12.5px] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
+      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[0.7812rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
       {shown.length === 0 ? (
-        <p className="px-4 py-10 text-center text-[13px] text-ink-muted">{rows.length ? "No blocked senders match your search." : "No blocked senders yet. Block them from the Spam folder, from an enquiry, or add one above."}</p>
+        <p className="px-4 py-10 text-center text-[0.8125rem] text-ink-muted">{rows.length ? "No blocked senders match your search." : "No blocked senders yet. Block them from the Spam folder, from an enquiry, or add one above."}</p>
       ) : (
         <ul className="divide-y divide-line">
           {shown.map((r) => (
             <li key={r.id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium text-ink">{r.value.startsWith("@") ? <>Anyone at <span className="font-semibold">{r.value.slice(1)}</span></> : r.value}</p>
-                <p className="truncate text-[12px] text-ink-muted">
+                <p className="truncate text-[0.8438rem] font-medium text-ink">{r.value.startsWith("@") ? <>Anyone at <span className="font-semibold">{r.value.slice(1)}</span></> : r.value}</p>
+                <p className="truncate text-[0.75rem] text-ink-muted">
                   {r.reason ?? "Blocked"} · added {r.added}{r.by ? ` by ${r.by}` : ""}{r.hits ? ` · stopped ${r.hits} email${r.hits === 1 ? "" : "s"}${r.last_hit ? `, last ${r.last_hit}` : ""}` : ""}
                 </p>
               </div>
               {canEdit && (
-                <button type="button" disabled={pending} onClick={() => run(() => removeBlock(r.id))} className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[12.5px] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink">
+                <button type="button" disabled={pending} onClick={() => run(() => removeBlock(r.id))} className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[0.7812rem] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink">
                   <X className="h-3.5 w-3.5" />Unblock
                 </button>
               )}
@@ -62,7 +62,7 @@ export function BlockedList({ rows, canEdit }: { rows: BlockRow[]; canEdit: bool
           ))}
         </ul>
       )}
-      <p className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">Blocked senders are never imported — they don't reach Enquiries or Spam. Your own team&apos;s emails are never imported either.</p>
+      <p className="border-t border-line px-4 py-2.5 text-[0.75rem] text-ink-faint">Blocked senders are never imported — they don't reach Enquiries or Spam. Your own team&apos;s emails are never imported either.</p>
     </div>
   );
 }

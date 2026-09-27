@@ -82,25 +82,25 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1 basis-72">
-          <div className="mb-1 flex items-center gap-2 text-[12px] text-ink-faint">
+          <div className="mb-1 flex items-center gap-2 text-[0.75rem] text-ink-faint">
             <Link href="/invoices" className="hover:text-ink">Invoices</Link><span>/</span><span>{inv.number}</span>
           </div>
-          <h1 className={cn("break-words text-[20px] font-semibold tracking-tight text-ink sm:text-[22px]", inv.status === "void" && "text-ink-muted line-through")}>
+          <h1 className={cn("break-words text-[1.25rem] font-semibold tracking-tight text-ink sm:text-[1.375rem]", inv.status === "void" && "text-ink-muted line-through")}>
             {inv.number} <span className="font-normal text-ink-muted">· {KIND_LABEL[inv.kind] ?? "Invoice"}</span>
           </h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-ink-muted">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink-muted">
             <Badge tone={s.tone} dot>{s.label}</Badge>
             {inv.customer && <Link href={`/clients/${inv.customer.id}`} className="font-medium text-ink hover:text-brand-700">{inv.customer.name}</Link>}
             <span>Issued {fmtDate(inv.issue_date)}</span>
             <span className={cn(late && "font-medium text-rose-700")}>Due {fmtDate(inv.due_date)}{late ? ` · ${lateDays}d overdue` : ""}</span>
-            <span className={cn("text-[12.5px]", xeroManaged ? "text-emerald-700" : "text-ink-faint")}>
+            <span className={cn("text-[0.7812rem]", xeroManaged ? "text-emerald-700" : "text-ink-faint")}>
               {xeroManaged ? `Synced with Xero · ${inv.xero_synced_at ? `last sync ${relative(inv.xero_synced_at)}` : "awaiting first sync"}` : "Not in Xero"}
             </span>
           </div>
         </div>
-        <div className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-line bg-white px-4 py-2.5 sm:block sm:w-auto sm:border-0 sm:bg-transparent sm:p-0 sm:text-right">
-          <p className="text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">Balance</p>
-          <p className={cn("tabular text-[24px] font-semibold tracking-tight", late ? "text-rose-700" : "text-ink")}>{money(inv.balance, cur)}</p>
+        <div className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2.5 sm:block sm:w-auto sm:border-0 sm:bg-transparent sm:p-0 sm:text-right">
+          <p className="text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Balance</p>
+          <p className={cn("tabular text-[1.5rem] font-semibold tracking-tight", late ? "text-rose-700" : "text-ink")}>{money(inv.balance, cur)}</p>
         </div>
       </div>
 
@@ -122,7 +122,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100">
                   <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, (Number(inv.amount_paid) / Number(inv.total)) * 100)}%` }} />
                 </div>
-                <p className="mt-1 text-[11.5px] text-ink-faint">{Math.round((Number(inv.amount_paid) / Number(inv.total)) * 100)}% paid</p>
+                <p className="mt-1 text-[0.7188rem] text-ink-faint">{Math.round((Number(inv.amount_paid) / Number(inv.total)) * 100)}% paid</p>
               </div>
             )}
           </Card>
@@ -139,10 +139,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               <div className="px-5 pb-5">
                 {version.snapshot.sections.map((sec) => (
                   <div key={sec.title} className="mb-3">
-                    <p className="mb-1 text-[11.5px] font-semibold uppercase tracking-wide text-ink-faint">{sec.title}</p>
+                    <p className="mb-1 text-[0.7188rem] font-semibold uppercase tracking-wide text-ink-faint">{sec.title}</p>
                     <ul className="divide-y divide-line">
                       {sec.items.map((it, idx) => (
-                        <li key={idx} className={cn("flex items-baseline justify-between gap-3 py-1.5 text-[13px]", it.optional && "text-ink-faint")}>
+                        <li key={idx} className={cn("flex items-baseline justify-between gap-3 py-1.5 text-[0.8125rem]", it.optional && "text-ink-faint")}>
                           <span className="min-w-0 truncate text-ink">{it.name}{it.optional ? " (optional)" : ""} <span className="text-ink-faint">× {Number(it.quantity)}{it.unit ? ` ${it.unit}` : ""}</span></span>
                           <span className="tabular shrink-0 text-ink-muted">{money(it.line_total, cur)}</span>
                         </li>
@@ -150,7 +150,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                     </ul>
                   </div>
                 ))}
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2 text-[13px]">
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-zinc-50 px-3 py-2 text-[0.8125rem]">
                   <span className="text-ink-muted">
                     {KIND_LABEL[inv.kind] ?? "Invoice"}
                     {Number(version.total) > 0 && Number(inv.total) !== Number(version.total) ? ` · ${Math.round((Number(inv.total) / Number(version.total)) * 100)}% of quote` : ""}
@@ -168,12 +168,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 {payments.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-ink">{fmtDateTime(p.paid_at, tz, "date")} · {p.method ?? "Payment"}</p>
-                      <p className="truncate text-[12px] text-ink-muted">
+                      <p className="text-[0.8125rem] font-medium text-ink">{fmtDateTime(p.paid_at, tz, "date")} · {p.method ?? "Payment"}</p>
+                      <p className="truncate text-[0.75rem] text-ink-muted">
                         {p.reference ? `Ref ${p.reference} · ` : ""}{p.xero_payment_id ? "From Xero" : `Recorded manually${p.created_by && names[p.created_by] ? ` by ${names[p.created_by]}` : ""}`}
                       </p>
                     </div>
-                    <span className="tabular shrink-0 text-[13.5px] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                    <span className="tabular shrink-0 text-[0.8438rem] font-medium text-emerald-700">{money(p.amount, cur)}</span>
                   </li>
                 ))}
               </ul>
@@ -190,11 +190,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </Card>
 
           <Card>
-            <CardHeader title="Customer" action={inv.customer && <Link href={`/clients/${inv.customer.id}`} className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
+            <CardHeader title="Customer" action={inv.customer && <Link href={`/clients/${inv.customer.id}`} className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">View record</Link>} />
             <div className="px-5 pb-5">
-              <p className="break-words text-[14px] font-semibold text-ink">{inv.customer?.name ?? "—"}</p>
-              {inv.customer?.company && inv.customer.company !== inv.customer.name && <p className="text-[12.5px] text-ink-muted">{inv.customer.company}</p>}
-              <ul className="mt-3 space-y-1.5 text-[13px] text-ink">
+              <p className="break-words text-[0.875rem] font-semibold text-ink">{inv.customer?.name ?? "—"}</p>
+              {inv.customer?.company && inv.customer.company !== inv.customer.name && <p className="text-[0.7812rem] text-ink-muted">{inv.customer.company}</p>}
+              <ul className="mt-3 space-y-1.5 text-[0.8125rem] text-ink">
                 {inv.customer?.email && <li className="flex min-w-0 items-center gap-2"><Mail className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`mailto:${inv.customer.email}`} className="min-w-0 break-all hover:text-brand-700">{inv.customer.email}</a></li>}
                 {inv.customer?.phone && <li className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${inv.customer.phone.replace(/\s+/g, "")}`} className="hover:text-brand-700">{inv.customer.phone}</a></li>}
               </ul>
@@ -206,12 +206,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             {inv.event ? (
               <Link href={`/events/${inv.event.id}?tab=invoice`} className="mx-5 mb-5 flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2.5 hover:border-brand-200">
                 <div className="min-w-0">
-                  <p className="truncate text-[13.5px] font-medium text-ink">{inv.event.name}</p>
-                  <p className="truncate text-[12px] text-ink-muted">EV-{inv.event.number} · {fmtDate(inv.event.event_date)}{inv.event.venue ? ` · ${inv.event.venue}` : ""}</p>
+                  <p className="truncate text-[0.8438rem] font-medium text-ink">{inv.event.name}</p>
+                  <p className="truncate text-[0.75rem] text-ink-muted">EV-{inv.event.number} · {fmtDate(inv.event.event_date)}{inv.event.venue ? ` · ${inv.event.venue}` : ""}</p>
                 </div>
                 <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" />
               </Link>
-            ) : <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Not linked to an event.</p>}
+            ) : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Not linked to an event.</p>}
           </Card>
 
         </div>
@@ -222,7 +222,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
       </div>
-      <p className="mt-8 text-[11.5px] text-ink-faint">Created {fmtDateTime(inv.created_at, tz)} · last updated {relative(inv.updated_at)}</p>
+      <p className="mt-8 text-[0.7188rem] text-ink-faint">Created {fmtDateTime(inv.created_at, tz)} · last updated {relative(inv.updated_at)}</p>
     </div>
   );
 }

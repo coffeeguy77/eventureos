@@ -34,7 +34,7 @@ export function RequestDocumentForm({ events }: { events: { id: string; label: s
   useEffect(() => {
     if (state?.ok) ref.current?.reset();
   }, [state]);
-  if (events.length === 0) return <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No active events to request documents for.</p>;
+  if (events.length === 0) return <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No active events to request documents for.</p>;
   return (
     <form ref={ref} action={action} className="space-y-3 px-5 pb-5">
       <div>
@@ -49,7 +49,7 @@ export function RequestDocumentForm({ events }: { events: { id: string; label: s
         <Input id="req-name" name="name" required maxLength={200} placeholder="e.g. Signed venue contract, Public liability certificate" />
       </div>
       <FormError message={state?.error} />
-      {state?.message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.message}</p>}
+      {state?.message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.message}</p>}
       <Button variant="primary" size="sm" disabled={pending}>{pending ? "Requesting…" : "Request document"}</Button>
     </form>
   );

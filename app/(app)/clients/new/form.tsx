@@ -28,7 +28,7 @@ export function NewClientForm() {
       <Card className="p-4 sm:p-6">
         <div className="mb-5 flex rounded-lg bg-zinc-100 p-0.5 sm:inline-flex" role="radiogroup" aria-label="Client type">
           {(["individual", "company"] as const).map((k) => (
-            <label key={k} className={cn("flex-1 cursor-pointer rounded-md px-3 py-2 text-center text-[13px] font-medium sm:flex-none sm:py-1.5 sm:text-[12.5px]", kind === k ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+            <label key={k} className={cn("flex-1 cursor-pointer rounded-md px-3 py-2 text-center text-[0.8125rem] font-medium sm:flex-none sm:py-1.5 sm:text-[0.7812rem]", kind === k ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
               <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
               {k === "individual" ? "Individual" : "Company"}
             </label>
@@ -48,7 +48,7 @@ export function NewClientForm() {
         {kind === "company" && (
           <>
             <div className="my-6 border-t border-line" />
-            <p className="mb-3 text-[12.5px] font-semibold text-ink">Main contact</p>
+            <p className="mb-3 text-[0.7812rem] font-semibold text-ink">Main contact</p>
             <div className="grid gap-5 sm:grid-cols-2">
               <div><Label htmlFor="contact_first_name">First name</Label><Input id="contact_first_name" name="contact_first_name" /></div>
               <div><Label htmlFor="contact_last_name">Last name</Label><Input id="contact_last_name" name="contact_last_name" /></div>
@@ -74,17 +74,17 @@ export function NewClientForm() {
 
         {dupes.length > 0 && (
           <div role="alert" className="mt-6 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3">
-            <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-900"><AlertTriangle className="h-4 w-4" />This client may already exist</p>
+            <p className="flex items-center gap-2 text-[0.8125rem] font-semibold text-amber-900"><AlertTriangle className="h-4 w-4" />This client may already exist</p>
             <ul className="mt-2 space-y-1.5">
               {dupes.map((d) => (
-                <li key={d.id} className="text-[13px] text-ink">
+                <li key={d.id} className="text-[0.8125rem] text-ink">
                   Possible duplicate:{" "}
                   <Link href={`/clients/${d.id}`} className="inline-flex items-center gap-0.5 font-medium text-brand-700 hover:underline">{d.name}<ArrowUpRight className="h-3.5 w-3.5" /></Link>
                   <span className="text-ink-muted"> — {d.reason}</span>
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-[12.5px] text-ink-muted">Open the existing record to add an event or contact there. Only create a new client if this is genuinely someone different.</p>
+            <p className="mt-2 text-[0.7812rem] text-ink-muted">Open the existing record to add an event or contact there. Only create a new client if this is genuinely someone different.</p>
           </div>
         )}
 

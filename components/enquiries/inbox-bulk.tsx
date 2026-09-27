@@ -43,7 +43,7 @@ export function InboxBulkBar({ total }: { total: number }) {
     <>
       <form id={FORM} onSubmit={(e) => e.preventDefault()} />
       <div className={cn("flex flex-wrap items-center gap-2 border-b border-line px-4 py-2", count ? "bg-brand-50/60" : "")}>
-        <label className="flex items-center gap-2 text-[12.5px] font-medium text-ink-muted">
+        <label className="flex items-center gap-2 text-[0.7812rem] font-medium text-ink-muted">
           <input type="checkbox" checked={all} ref={(el) => { if (el) el.indeterminate = count > 0 && !all; }} onChange={() => setAll(!all)} disabled={!total}
             className="h-4 w-4 rounded border-line-strong text-brand-600" aria-label="Select all enquiries" />
           {count ? `${count} selected` : "Select"}
@@ -57,13 +57,13 @@ export function InboxBulkBar({ total }: { total: number }) {
         )}
       </div>
       {confirmBlock && count > 0 && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900">
+        <div className="flex flex-wrap items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-[0.8125rem] text-amber-900">
           <span className="min-w-0 flex-1">Block the sender{count === 1 ? "" : "s"}? Their unworked emails are removed from EventureOS (Gmail keeps them) and they&apos;re never imported again.</span>
           <Button size="sm" onClick={() => setConfirmBlock(false)}>Cancel</Button>
           <Button size="sm" variant="primary" disabled={pending} onClick={() => run(() => blockSenders(selected()))}>{pending ? "Blocking…" : "Block"}</Button>
         </div>
       )}
-      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[12.5px] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
+      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[0.7812rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
     </>
   );
 }

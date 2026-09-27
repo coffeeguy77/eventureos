@@ -6,6 +6,7 @@ import { SupportBanner } from "@/components/shell/support-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
+import { PrefsSync } from "@/components/shell/personalise";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
@@ -35,6 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
+      <PrefsSync saved={(profile as { ui_prefs?: unknown }).ui_prefs ?? null} />
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
       <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0 }} isSuperAdmin={admin} role={role} />
       <div className="lg:pl-[232px]">
@@ -46,7 +48,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           notifications={notif.data ?? []}
           unread={unread.count ?? 0}
         />
-        <main className="mx-auto max-w-[1360px] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto max-w-[var(--page-max)] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
       <MobileTabBar
         role={role}

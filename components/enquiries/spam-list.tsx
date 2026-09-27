@@ -34,8 +34,8 @@ export function SpamList({ rows }: { rows: SpamRow[] }) {
 
   return (
     <div>
-      <div className="sticky top-14 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-white/95 px-4 py-2.5 backdrop-blur">
-        <label className="flex items-center gap-2 text-[13px] font-medium text-ink">
+      <div className="sticky top-14 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-surface/95 px-4 py-2.5 backdrop-blur">
+        <label className="flex items-center gap-2 text-[0.8125rem] font-medium text-ink">
           <input type="checkbox" checked={all} ref={(el) => { if (el) el.indeterminate = some; }} disabled={!rows.length}
             onChange={() => setPicked(all ? new Set() : new Set(rows.map((r) => r.id)))} className="h-4 w-4 rounded border-line-strong text-brand-600" aria-label="Select all" />
           {picked.size ? `${picked.size} selected` : "Select all"}
@@ -47,7 +47,7 @@ export function SpamList({ rows }: { rows: SpamRow[] }) {
       </div>
 
       {confirm && picked.size > 0 && (
-        <div className={cn("flex flex-wrap items-center gap-3 border-b px-4 py-3 text-[13px]", confirm === "delete" ? "border-rose-100 bg-rose-50 text-rose-900" : "border-amber-100 bg-amber-50 text-amber-900")}>
+        <div className={cn("flex flex-wrap items-center gap-3 border-b px-4 py-3 text-[0.8125rem]", confirm === "delete" ? "border-rose-100 bg-rose-50 text-rose-900" : "border-amber-100 bg-amber-50 text-amber-900")}>
           {confirm === "delete" ? (
             <span className="min-w-0 flex-1">Delete {picked.size} email{picked.size === 1 ? "" : "s"} from EventureOS? Gmail keeps its copy. The senders can still email you — block them to stop that.</span>
           ) : (
@@ -64,7 +64,7 @@ export function SpamList({ rows }: { rows: SpamRow[] }) {
           </Button>
         </div>
       )}
-      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[12.5px] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
+      {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[0.7812rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
 
       <ul className="divide-y divide-line">
         {rows.map((r) => (
@@ -73,12 +73,12 @@ export function SpamList({ rows }: { rows: SpamRow[] }) {
               className="mt-1 h-4 w-4 shrink-0 rounded border-line-strong text-brand-600" />
             <Link href={`/enquiries/${r.id}`} className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="min-w-0 truncate text-[13.5px] font-medium text-ink">{r.from}{r.email && r.email !== r.from && <span className="font-normal text-ink-faint"> · {r.email}</span>}</span>
-                <span className="shrink-0 text-[12px] text-ink-faint">{r.received}</span>
+                <span className="min-w-0 truncate text-[0.8438rem] font-medium text-ink">{r.from}{r.email && r.email !== r.from && <span className="font-normal text-ink-faint"> · {r.email}</span>}</span>
+                <span className="shrink-0 text-[0.75rem] text-ink-faint">{r.received}</span>
               </div>
-              <p className="truncate text-[13px] text-ink">{r.subject}</p>
-              {r.snippet && <p className="line-clamp-1 text-[12.5px] text-ink-muted">{r.snippet}</p>}
-              {r.reason && <p className="mt-0.5 line-clamp-1 text-[11.5px] text-rose-700/90">Why: {r.reason}</p>}
+              <p className="truncate text-[0.8125rem] text-ink">{r.subject}</p>
+              {r.snippet && <p className="line-clamp-1 text-[0.7812rem] text-ink-muted">{r.snippet}</p>}
+              {r.reason && <p className="mt-0.5 line-clamp-1 text-[0.7188rem] text-rose-700/90">Why: {r.reason}</p>}
             </Link>
           </li>
         ))}

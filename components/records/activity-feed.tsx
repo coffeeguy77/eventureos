@@ -12,7 +12,7 @@ const SYSTEM_DOT: Record<string, string> = {
 export function ActivityFeed({ items, names, tz, compact = false }: {
   items: ActivityLog[]; names: Record<string, string>; tz: string; compact?: boolean;
 }) {
-  if (items.length === 0) return <p className="px-5 py-6 text-[12.5px] text-ink-muted">No activity yet.</p>;
+  if (items.length === 0) return <p className="px-5 py-6 text-[0.7812rem] text-ink-muted">No activity yet.</p>;
   return (
     <ol className="px-5 pb-4">
       {items.map((a, i) => {
@@ -28,9 +28,9 @@ export function ActivityFeed({ items, names, tz, compact = false }: {
               </span>
             )}
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="break-words text-[13px] leading-snug text-ink">{a.summary}</p>
+              <p className="break-words text-[0.8125rem] leading-snug text-ink">{a.summary}</p>
               {!compact && a.changes && <ChangeList changes={a.changes} />}
-              <p className="mt-0.5 text-[11.5px] text-ink-faint" title={fmtDateTime(a.created_at, tz)}>
+              <p className="mt-0.5 text-[0.7188rem] text-ink-faint" title={fmtDateTime(a.created_at, tz)}>
                 {a.actor_type !== "user" && <span>{who} · </span>}
                 {relative(a.created_at)}
               </p>
@@ -52,7 +52,7 @@ function ChangeList({ changes }: { changes: Record<string, [unknown, unknown]> }
   return (
     <ul className="mt-1 space-y-0.5">
       {Object.entries(changes).map(([field, [from, to]]) => (
-        <li key={field} className="break-words text-[12px] text-ink-muted">
+        <li key={field} className="break-words text-[0.75rem] text-ink-muted">
           <span className="capitalize">{field.replace(/_/g, " ")}</span>:{" "}
           <span className="line-through decoration-ink-faint/60">{pretty(from)}</span> → <span className="font-medium text-ink">{pretty(to)}</span>
         </li>

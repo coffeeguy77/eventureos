@@ -31,7 +31,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
   const pathname = usePathname();
   const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff"));
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-white lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
         <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home"><Wordmark height={21} /></Link>
       </div>
@@ -45,25 +45,25 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
               key={item.href}
               href={item.href}
               className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-colors",
+                "group flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[0.8125rem] font-medium transition-colors",
                 active ? "bg-brand-50 text-brand-800" : "text-ink-muted hover:bg-zinc-50 hover:text-ink"
               )}
             >
               <Icon className={cn("h-[16px] w-[16px] shrink-0", active ? "text-brand-600" : "text-ink-faint group-hover:text-ink-muted")} strokeWidth={1.8} />
               <span className="flex-1 truncate">{item.label}</span>
               {count > 0 && (
-                <span className="rounded-full bg-brand-500 px-1.5 py-px text-[10.5px] font-semibold text-white">{count}</span>
+                <span className="rounded-full bg-brand-500 px-1.5 py-px text-[0.6562rem] font-semibold text-on-brand">{count}</span>
               )}
             </Link>
           );
         })}
         {isSuperAdmin && (
-          <Link href="/admin" className="mt-3 flex items-center gap-2.5 rounded-lg border-t border-line px-2.5 pb-[7px] pt-3 text-[13px] font-medium text-ink-muted hover:text-ink">
+          <Link href="/admin" className="mt-3 flex items-center gap-2.5 rounded-lg border-t border-line px-2.5 pb-[7px] pt-3 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">
             <ShieldCheck className="h-[16px] w-[16px] text-ink-faint" strokeWidth={1.8} /> Platform admin
           </Link>
         )}
       </nav>
-      <div className="border-t border-line px-5 py-3 text-[11.5px] text-ink-faint">
+      <div className="border-t border-line px-5 py-3 text-[0.7188rem] text-ink-faint">
         <span className="font-medium text-ink-muted">{orgName}</span>
       </div>
     </aside>

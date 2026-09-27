@@ -36,9 +36,9 @@ export default async function EnquiriesPage({ searchParams }: {
     <div className="mb-4 flex gap-1 border-b border-line">
       {([["inbox", "Inbox", Inbox, null], ["spam", "Spam", ShieldAlert, spamCount ?? 0], ["blocked", "Blocked", Ban, blockedCount ?? 0]] as const).map(([key, label, Icon, n]) => (
         <Link key={key} href={key === "inbox" ? "/enquiries" : `/enquiries?folder=${key}`} scroll={false}
-          className={cn("-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2.5 pt-1 text-[13.5px] font-medium",
+          className={cn("-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2.5 pt-1 text-[0.8438rem] font-medium",
             folder === key ? "border-brand-500 text-ink" : "border-transparent text-ink-muted hover:text-ink")}>
-          <Icon className="h-4 w-4" />{label}{n != null && n > 0 && <span className="rounded-full bg-zinc-100 px-1.5 text-[11px] text-ink-muted">{n}</span>}
+          <Icon className="h-4 w-4" />{label}{n != null && n > 0 && <span className="rounded-full bg-zinc-100 px-1.5 text-[0.6875rem] text-ink-muted">{n}</span>}
         </Link>
       ))}
     </div>
@@ -80,10 +80,10 @@ export default async function EnquiriesPage({ searchParams }: {
             {rows.length === 0
               ? <EmptyState title={sp.q ? "Nothing in Spam matches" : "Spam is empty"}>{sp.q ? "Try another search." : "Junk that gets past your filters lands here instead of your inbox."}</EmptyState>
               : <SpamList rows={rows} />}
-            <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} in Spam</div>
+            <div className="border-t border-line px-4 py-2.5 text-[0.75rem] text-ink-faint">{rows.length} in Spam</div>
           </Card>
           <Card className="self-start">
-            <div className="border-b border-line px-4 py-3 sm:px-5"><p className="text-[13.5px] font-semibold text-ink">Spam rules</p></div>
+            <div className="border-b border-line px-4 py-3 sm:px-5"><p className="text-[0.8438rem] font-semibold text-ink">Spam rules</p></div>
             <SpamRules auto={gs.spam_auto !== false} phrases={gs.spam_phrases ?? []} builtIn={DEFAULT_SPAM_PHRASES} canEdit={manager} />
           </Card>
         </div>
@@ -170,10 +170,10 @@ export default async function EnquiriesPage({ searchParams }: {
           const c = counts[t.key] ?? 0;
           return (
             <Link key={t.key} href={qs(t.key)} scroll={false}
-              className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-medium",
-                on ? "bg-ink text-white" : "bg-white text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
+              className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
+                on ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
               {t.label}
-              <span className={cn("text-[11px]", on ? "text-white/70" : "text-ink-faint")}>{c}</span>
+              <span className={cn("text-[0.6875rem]", on ? "text-white/70" : "text-ink-faint")}>{c}</span>
             </Link>
           );
         })}
@@ -206,18 +206,18 @@ export default async function EnquiriesPage({ searchParams }: {
                   <span className="pl-4 pt-3.5"><RowCheck id={e.id} label={e.title} /></span>
                   <Link href={`/enquiries/${e.id}`} className="flex min-h-[56px] min-w-0 flex-1 items-start gap-3 px-3 py-3 active:bg-zinc-50">
                     <div className="min-w-0 flex-1">
-                      <div className={cn("truncate text-[13.5px] text-ink", unread ? "font-semibold" : "font-medium")}>
+                      <div className={cn("truncate text-[0.8438rem] text-ink", unread ? "font-semibold" : "font-medium")}>
                         {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
                       </div>
-                      <div className="truncate text-[12.5px] text-ink-muted">{e.title}</div>
-                      <div className="mt-0.5 truncate text-[12px] text-ink-faint">
+                      <div className="truncate text-[0.7812rem] text-ink-muted">{e.title}</div>
+                      <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
                         {e.event_date ? fmtDate(e.event_date) : "No date"} · {relative(e.received_at)}
                         {na.due && na.due < now ? <span className="font-medium text-rose-700"> · Overdue</span> : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <Badge tone={s.tone} dot>{s.label}</Badge>
-                      {e.budget ? <span className="tabular text-[12.5px] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
+                      {e.budget ? <span className="tabular text-[0.7812rem] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
                     </div>
                   </Link>
                 </li>
@@ -225,9 +225,9 @@ export default async function EnquiriesPage({ searchParams }: {
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1180px] text-left text-[13px]">
+            <table className="w-full min-w-[1180px] text-left text-[0.8125rem]">
               <thead>
-                <tr className="border-b border-line text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
+                <tr className="border-b border-line text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                   <th className="w-10 px-4 py-2.5" aria-label="Select" />
                   {["Customer", "Event", "Type", "Event date", "Received", "Source", "Budget", "Status", "Assigned", "Last contact", "Next action"].map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", h === "Budget" && "text-right")}>{h}</th>
@@ -247,14 +247,14 @@ export default async function EnquiriesPage({ searchParams }: {
                           <span className={cn("block max-w-[200px] truncate text-ink", unread ? "font-semibold" : "font-medium")}>
                             {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
                           </span>
-                          <span className="block max-w-[200px] truncate text-[12px] text-ink-faint">
+                          <span className="block max-w-[200px] truncate text-[0.75rem] text-ink-faint">
                             {e.customer ? e.contact_name : e.company ?? "New contact"}
                           </span>
                         </Link>
                       </td>
                       <td className="max-w-[240px] px-4 py-3">
                         <span className="block truncate text-ink">{e.title}</span>
-                        <span className="text-[12px] text-ink-faint">ENQ-{e.number}{e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
+                        <span className="text-[0.75rem] text-ink-faint">ENQ-{e.number}{e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.event_type ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{fmtDate(e.event_date)}</td>
@@ -265,13 +265,13 @@ export default async function EnquiriesPage({ searchParams }: {
                       <td className="px-4 py-3">
                         {e.assigned_to ? (
                           <span className="flex items-center gap-2 whitespace-nowrap text-ink-muted"><Avatar name={names[e.assigned_to]} size={20} />{names[e.assigned_to]?.split(" ")[0]}</span>
-                        ) : <span className="text-[12px] font-medium text-amber-700">Unassigned</span>}
+                        ) : <span className="text-[0.75rem] font-medium text-amber-700">Unassigned</span>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.last_contact_at ? relative(e.last_contact_at) : <span className="text-amber-700">Not contacted</span>}</td>
                       <td className="max-w-[220px] px-4 py-3">
                         <span className={cn("block truncate", na.urgency === "done" ? "text-ink-faint" : "text-ink")}>{na.label}</span>
                         {na.due && (
-                          <span className={cn("text-[12px]", na.due < now ? "font-medium text-rose-700" : "text-ink-faint")}>
+                          <span className={cn("text-[0.75rem]", na.due < now ? "font-medium text-rose-700" : "text-ink-faint")}>
                             {na.due < now ? "Overdue · " : "Due "}{relative(na.due)}
                           </span>
                         )}
@@ -284,7 +284,7 @@ export default async function EnquiriesPage({ searchParams }: {
           </div>
           </>
         )}
-        <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} enquir{rows.length === 1 ? "y" : "ies"}</div>
+        <div className="border-t border-line px-4 py-2.5 text-[0.75rem] text-ink-faint">{rows.length} enquir{rows.length === 1 ? "y" : "ies"}</div>
       </Card>
     </div>
   );

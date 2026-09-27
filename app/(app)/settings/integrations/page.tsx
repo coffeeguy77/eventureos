@@ -60,12 +60,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       />
 
       {sp.error && (
-        <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl bg-rose-50 px-4 py-3 text-[13px] text-rose-800 ring-1 ring-inset ring-rose-100">
+        <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl bg-rose-50 px-4 py-3 text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-100">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> <span className="min-w-0 break-words">{sp.error}</span>
         </div>
       )}
       {sp.connected && (
-        <div role="status" className="mb-5 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 ring-1 ring-inset ring-emerald-100">
+        <div role="status" className="mb-5 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[0.8125rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> <span>Connected.</span>
         </div>
       )}
@@ -80,7 +80,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         <Card>
           <CardHeader title="Recent sync activity" subtitle="Every sync is logged — nothing happens silently." />
           {logs.length === 0 ? (
-            <p className="px-5 pb-5 text-[12.5px] text-ink-muted">No syncs yet. They&apos;ll appear here once an integration is connected.</p>
+            <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No syncs yet. They&apos;ll appear here once an integration is connected.</p>
           ) : (
             <ul className="divide-y divide-line border-t border-line">
               {logs.map((l) => {
@@ -89,8 +89,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 return (
                   <li key={l.id} className="flex flex-wrap items-start gap-x-3 gap-y-1 px-4 py-3 sm:flex-nowrap sm:px-5">
                     <Badge tone={s.tone}>{prov?.name ?? "Sync"}</Badge>
-                    <p className="order-last min-w-0 basis-full break-words text-[12.5px] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{l.message ?? `${l.entity ?? "Sync"} ${l.status}`}</p>
-                    <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint sm:ml-0" title={fmtDateTime(l.started_at, org.timezone)}>{relative(l.started_at)}</span>
+                    <p className="order-last min-w-0 basis-full break-words text-[0.7812rem] text-ink-muted sm:order-none sm:flex-1 sm:basis-auto">{l.message ?? `${l.entity ?? "Sync"} ${l.status}`}</p>
+                    <span className="ml-auto shrink-0 text-[0.7188rem] text-ink-faint sm:ml-0" title={fmtDateTime(l.started_at, org.timezone)}>{relative(l.started_at)}</span>
                   </li>
                 );
               })}
@@ -100,7 +100,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
 
         <Card>
           <CardHeader title="Automation & background sync" />
-          <ul className="space-y-3 px-4 pb-5 text-[12.5px] sm:px-5">
+          <ul className="space-y-3 px-4 pb-5 text-[0.7812rem] sm:px-5">
             <SetupLine ok={env.ai} title={env.ai ? `AI classification on (${env.aiModel ?? "claude-haiku-4-5-20251001"})` : "AI classification off — rules engine in use"}
               detail={env.ai ? "New emails are classified by Claude, with the rules engine as a fallback." : <>Add <Code>ANTHROPIC_API_KEY</Code> (optional <Code>AI_MODEL</Code>) to let Claude classify emails and extract event details. The built-in rules already handle website forms, replies, quotes, suppliers and spam.</>} />
             <SetupLine ok={env.serviceRole && env.cronSecret} title={env.serviceRole && env.cronSecret ? "Background sync once a day, overnight" : "Background sync is off"}
@@ -111,14 +111,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         </Card>
       </div>
 
-      <h2 className="mb-3 mt-8 text-[13.5px] font-semibold text-ink">Coming soon</h2>
+      <h2 className="mb-3 mt-8 text-[0.8438rem] font-semibold text-ink">Coming soon</h2>
       <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         {soon.map((p) => (
-          <div key={p.id} className="flex items-start gap-3 rounded-xl border border-dashed border-line-strong bg-white/60 px-4 py-3">
+          <div key={p.id} className="flex items-start gap-3 rounded-xl border border-dashed border-line-strong bg-surface/60 px-4 py-3">
             <Mark p={p} small />
             <div className="min-w-0">
-              <p className="flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-ink">{p.name} <span className="text-[11px] font-normal text-ink-faint">{p.category}</span></p>
-              <p className="mt-0.5 text-[12px] text-ink-muted">{p.description}</p>
+              <p className="flex flex-wrap items-center gap-x-2 text-[0.8125rem] font-medium text-ink">{p.name} <span className="text-[0.6875rem] font-normal text-ink-faint">{p.category}</span></p>
+              <p className="mt-0.5 text-[0.75rem] text-ink-muted">{p.description}</p>
             </div>
           </div>
         ))}
@@ -146,24 +146,24 @@ function ProviderCard({ p, row, missing, manager, tz }: { p: ProviderDef; row: I
         <Mark p={p} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold text-ink">{p.name}</h3>
+            <h3 className="text-[0.9375rem] font-semibold text-ink">{p.name}</h3>
             <Badge tone={status.tone} dot>{status.label}</Badge>
           </div>
-          <p className="text-[12px] text-ink-faint">{p.category}</p>
+          <p className="text-[0.75rem] text-ink-faint">{p.category}</p>
         </div>
       </div>
-      <p className="px-4 pt-3 text-[12.5px] leading-relaxed text-ink-muted sm:px-5">{p.description}</p>
-      <dl className="mx-4 mt-4 sm:mx-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-zinc-50/80 px-3 py-2.5 text-[12.5px]">
+      <p className="px-4 pt-3 text-[0.7812rem] leading-relaxed text-ink-muted sm:px-5">{p.description}</p>
+      <dl className="mx-4 mt-4 sm:mx-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 rounded-lg bg-zinc-50/80 px-3 py-2.5 text-[0.7812rem]">
         <dt className="text-ink-faint">Account</dt><dd className="min-w-0 truncate text-ink">{connected ? row!.account_label ?? "—" : "—"}</dd>
         <dt className="text-ink-faint">Last sync</dt><dd className="text-ink" title={row?.last_sync_at ? fmtDateTime(row.last_sync_at, tz) : undefined}>{connected && row!.last_sync_at ? relative(row!.last_sync_at) : connected ? "Not yet" : "—"}</dd>
         <dt className="text-ink-faint">Sync status</dt>
         <dd className="min-w-0">{connected ? (sync ? <Badge tone={sync.tone}>{sync.label}</Badge> : <span className="text-ink-muted">Waiting for first sync</span>) : <span className="text-ink-muted">—</span>}</dd>
       </dl>
       {connected && row!.last_error && (
-        <p className="mx-4 mt-2 break-words rounded-lg bg-rose-50 px-3 py-2 text-[12px] text-rose-800 sm:mx-5 ring-1 ring-inset ring-rose-100">{row!.last_error}</p>
+        <p className="mx-4 mt-2 break-words rounded-lg bg-rose-50 px-3 py-2 text-[0.75rem] text-rose-800 sm:mx-5 ring-1 ring-inset ring-rose-100">{row!.last_error}</p>
       )}
       <ul className="flex flex-wrap gap-1.5 px-4 pt-3 sm:px-5">
-        {p.capabilities.map((c) => <li key={c} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-ink-muted">{c}</li>)}
+        {p.capabilities.map((c) => <li key={c} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] text-ink-muted">{c}</li>)}
       </ul>
       <div className="mt-auto flex flex-wrap items-center gap-2 px-4 pb-5 pt-4 sm:px-5">
         {connected ? (
@@ -180,14 +180,14 @@ function ProviderCard({ p, row, missing, manager, tz }: { p: ProviderDef; row: I
         ) : missing.length ? (
           <div className="w-full">
             <button disabled className={buttonClass("primary", "sm", "h-10 w-full sm:h-8 sm:w-auto")}>Connect {p.name}</button>
-            <p className="mt-2 text-[12px] text-ink-muted">
+            <p className="mt-2 text-[0.75rem] text-ink-muted">
               Not set up yet. Add {missing.map((m, i) => <span key={m}>{i > 0 && (i === missing.length - 1 ? " and " : ", ")}<Code>{m}</Code></span>)} to the environment variables (Vercel → Settings → Environment Variables), then redeploy.
             </p>
           </div>
         ) : manager ? (
           <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("primary", "sm", "h-10 w-full sm:h-8 sm:w-auto")}>Connect {p.name}</a>
         ) : (
-          <p className="text-[12px] text-ink-muted">Ask an owner, admin or manager to connect {p.name}.</p>
+          <p className="text-[0.75rem] text-ink-muted">Ask an owner, admin or manager to connect {p.name}.</p>
         )}
       </div>
     </Card>

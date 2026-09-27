@@ -62,21 +62,21 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
     : `${res.name} is a local calendar — this stays in EventureOS.`;
 
   return (
-    <Drawer onClose={onClose} title={<h2 className="text-[16px] font-semibold text-ink">Add to calendar</h2>}>
+    <Drawer onClose={onClose} title={<h2 className="text-[1rem] font-semibold text-ink">Add to calendar</h2>}>
       <form action={action} className="space-y-4 px-4 pt-4 sm:px-5 sm:py-4">
         <div>
           <Label>Type</Label>
           <div className="flex flex-wrap gap-1.5" role="radiogroup">
             {KIND_ORDER.map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
-                className={cn("rounded-full px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset sm:py-1.5",
-                  kind === k ? "bg-ink text-white ring-ink" : "bg-white text-ink-muted ring-line-strong hover:text-ink")}>
+                className={cn("rounded-full px-3 py-2 text-[0.7812rem] font-medium ring-1 ring-inset sm:py-1.5",
+                  kind === k ? "bg-ink text-surface ring-ink" : "bg-surface text-ink-muted ring-line-strong hover:text-ink")}>
                 {k === "event" ? "Event booking" : KIND_LABEL[k]}
               </button>
             ))}
           </div>
           <input type="hidden" name="kind" value={kind} />
-          <p className="mt-1.5 text-[12px] text-ink-muted">{KIND_HINT[kind]}</p>
+          <p className="mt-1.5 text-[0.75rem] text-ink-muted">{KIND_HINT[kind]}</p>
         </div>
 
         <div>
@@ -89,7 +89,7 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
               </option>
             ))}
           </Select>
-          {kind === "event" && ev?.onCalendar && <p className="mt-1 text-[12px] text-amber-800">Already has a booking entry — adding another on the same resource is blocked to avoid duplicates.</p>}
+          {kind === "event" && ev?.onCalendar && <p className="mt-1 text-[0.75rem] text-amber-800">Already has a booking entry — adding another on the same resource is blocked to avoid duplicates.</p>}
         </div>
 
         <div>
@@ -97,7 +97,7 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
           <Select id="cal_res" name="calendar_connection_id" value={resourceId} onChange={(e) => setResourceId(e.target.value)} required>
             {resources.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </Select>
-          {syncNote && <p className="mt-1 text-[12px] text-ink-muted">{syncNote}</p>}
+          {syncNote && <p className="mt-1 text-[0.75rem] text-ink-muted">{syncNote}</p>}
         </div>
 
         <div>
@@ -105,7 +105,7 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
           <Input id="cal_title" name="title" placeholder={titlePlaceholder} required={!ev} maxLength={200} />
         </div>
 
-        <label className="flex min-h-10 items-center gap-2 text-[13px] text-ink sm:min-h-0">
+        <label className="flex min-h-10 items-center gap-2 text-[0.8125rem] text-ink sm:min-h-0">
           <input type="checkbox" name="all_day" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} className="h-4 w-4 rounded border-line-strong text-brand-500" />
           All day
         </label>
@@ -136,7 +136,7 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
         </div>
 
         <FormError message={state?.error} />
-        <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-line bg-white px-4 py-3 sm:static sm:mx-0 sm:px-0 sm:pb-0 sm:pt-4">
+        <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:px-0 sm:pb-0 sm:pt-4">
           <Button type="button" variant="ghost" className="h-10 flex-1 sm:h-9 sm:flex-none" onClick={onClose}>Cancel</Button>
           <Button variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none" disabled={pending || !resources.length}>{pending ? "Adding…" : "Add to calendar"}</Button>
         </div>

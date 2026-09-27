@@ -36,13 +36,13 @@ export function ColumnChart({ groups, series, currency, height = 190 }: {
   // Phones have roughly a third of the width, so thin labels further there.
   const everySm = groups.length > 8 ? 3 : groups.length > 5 ? 2 : 1;
 
-  if (max === 0) return <p className="py-10 text-center text-[12.5px] text-ink-muted">Nothing recorded in this period.</p>;
+  if (max === 0) return <p className="py-10 text-center text-[0.7812rem] text-ink-muted">Nothing recorded in this period.</p>;
 
   return (
     <div className="flex gap-2">
       <div className="relative shrink-0 text-right" style={{ height, width: 44 }} aria-hidden>
         {ticks.map((t) => (
-          <span key={t} className="tabular absolute right-0 text-[10.5px] text-ink-faint" style={{ bottom: `${(t / top) * 100}%`, transform: "translateY(50%)" }}>
+          <span key={t} className="tabular absolute right-0 text-[0.6562rem] text-ink-faint" style={{ bottom: `${(t / top) * 100}%`, transform: "translateY(50%)" }}>
             {compact(t, currency)}
           </span>
         ))}
@@ -73,11 +73,11 @@ export function ColumnChart({ groups, series, currency, height = 190 }: {
                   );
                 })}
                 {active === gi && (
-                  <div role="tooltip" className={cn("pointer-events-none absolute bottom-full z-10 mb-2 w-max min-w-[150px] rounded-lg border border-line bg-white px-3 py-2 shadow-pop",
+                  <div role="tooltip" className={cn("pointer-events-none absolute bottom-full z-10 mb-2 w-max min-w-[150px] rounded-lg border border-line bg-surface px-3 py-2 shadow-pop",
                     gi < groups.length / 2 ? "left-0" : "right-0")}>
-                    <p className="mb-1 text-[11.5px] font-medium text-ink-muted">{g.label}</p>
+                    <p className="mb-1 text-[0.7188rem] font-medium text-ink-muted">{g.label}</p>
                     {series.map((s, si) => (
-                      <p key={s.label} className="flex items-center gap-2 text-[12px]">
+                      <p key={s.label} className="flex items-center gap-2 text-[0.75rem]">
                         <span className="h-0.5 w-3 rounded" style={{ background: s.color }} />
                         <span className="tabular font-semibold text-ink">{full(g.values[si] ?? 0, currency)}</span>
                         <span className="text-ink-muted">{s.label}</span>
@@ -94,7 +94,7 @@ export function ColumnChart({ groups, series, currency, height = 190 }: {
             const desk = gi % every === 0 || gi === groups.length - 1;
             const phone = gi % everySm === 0;
             return (
-              <span key={g.key} className={cn("relative h-[14px] min-w-0 flex-1 text-[10.5px] text-ink-faint", !phone && "max-sm:invisible", !desk && "sm:invisible")}>
+              <span key={g.key} className={cn("relative h-[14px] min-w-0 flex-1 text-[0.6562rem] text-ink-faint", !phone && "max-sm:invisible", !desk && "sm:invisible")}>
                 <span className="absolute left-1/2 top-0 -translate-x-1/2 whitespace-nowrap">{g.label}</span>
               </span>
             );

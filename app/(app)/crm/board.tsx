@@ -90,11 +90,11 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Badge tone={col.tone} dot>{col.label}</Badge>
-                      <span className="text-[12px] font-medium text-ink-faint">{list.length}</span>
+                      <span className="text-[0.75rem] font-medium text-ink-faint">{list.length}</span>
                     </div>
-                    {col.hint && <p className="mt-1 text-[11px] text-ink-faint">{col.hint}</p>}
+                    {col.hint && <p className="mt-1 text-[0.6875rem] text-ink-faint">{col.hint}</p>}
                   </div>
-                  <span className="tabular shrink-0 pt-0.5 text-[12.5px] font-semibold text-ink" title="Total quote value, or budget where there is no quote yet">{total > 0 ? fmt(total, currency) : "—"}</span>
+                  <span className="tabular shrink-0 pt-0.5 text-[0.7812rem] font-semibold text-ink" title="Total quote value, or budget where there is no quote yet">{total > 0 ? fmt(total, currency) : "—"}</span>
                 </header>
                 <ol className="flex min-h-[120px] flex-1 flex-col gap-2 px-2 pb-2">
                   {list.map((c) => (
@@ -102,42 +102,42 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                       draggable
                       onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; setDragging(c.id); }}
                       onDragEnd={() => { setDragging(null); setOver(null); }}
-                      className={cn("group relative cursor-grab rounded-lg border border-line bg-white p-3 shadow-card transition-shadow hover:border-brand-200 hover:shadow-pop active:cursor-grabbing",
+                      className={cn("group relative cursor-grab rounded-lg border border-line bg-surface p-3 shadow-card transition-shadow hover:border-brand-200 hover:shadow-pop active:cursor-grabbing",
                         dragging === c.id && "opacity-40")}
                     >
                       <GripVertical className="absolute right-1.5 top-2.5 hidden h-3.5 w-3.5 text-ink-faint/60 sm:block" aria-hidden />
                       <div className="flex items-start gap-2 pr-3">
                         <div className="min-w-0 flex-1">
-                          <Link href={c.href} className="block truncate text-[13px] font-semibold text-ink after:absolute after:inset-0 hover:text-brand-700 sm:after:hidden" draggable={false}>{c.customer}</Link>
-                          <p className="truncate text-[12px] text-ink-muted" title={c.title}>{c.ref} · {c.title}</p>
+                          <Link href={c.href} className="block truncate text-[0.8125rem] font-semibold text-ink after:absolute after:inset-0 hover:text-brand-700 sm:after:hidden" draggable={false}>{c.customer}</Link>
+                          <p className="truncate text-[0.75rem] text-ink-muted" title={c.title}>{c.ref} · {c.title}</p>
                         </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-muted">
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.7188rem] text-ink-muted">
                         <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3 text-ink-faint" />{c.date ?? "No date"}{c.dateHint && <span className="text-ink-faint">· {c.dateHint}</span>}</span>
                       </div>
                       <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <span className="tabular text-[13px] font-semibold text-ink">
+                        <span className="tabular text-[0.8125rem] font-semibold text-ink">
                           {c.value != null ? fmt(c.value, currency) : <span className="font-normal text-ink-faint">No value yet</span>}
-                          {c.valueKind && <span className="ml-1 text-[11px] font-normal text-ink-faint">{c.valueKind === "quote" ? "quote" : "budget"}</span>}
+                          {c.valueKind && <span className="ml-1 text-[0.6875rem] font-normal text-ink-faint">{c.valueKind === "quote" ? "quote" : "budget"}</span>}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className={cn("text-[11px]", c.daysInStage >= 14 ? "font-medium text-amber-700" : "text-ink-faint")} title="Days in this stage">{c.daysInStage}d</span>
+                          <span className={cn("text-[0.6875rem]", c.daysInStage >= 14 ? "font-medium text-amber-700" : "text-ink-faint")} title="Days in this stage">{c.daysInStage}d</span>
                           {c.owner ? <Avatar name={c.owner} size={20} /> : <span className="h-5 w-5 rounded-full border border-dashed border-line-strong" title="Unassigned" />}
                         </span>
                       </div>
                       {c.statusLabel && <Badge tone="amber" className="mt-2">{c.statusLabel}</Badge>}
-                      <div className={cn("mt-2 border-t border-line pt-2 text-[11.5px] leading-snug",
+                      <div className={cn("mt-2 border-t border-line pt-2 text-[0.7188rem] leading-snug",
                         c.urgency === "overdue" ? "font-medium text-rose-700" : c.urgency === "soon" ? "text-amber-800" : c.urgency === "done" ? "text-ink-faint" : "text-ink")}>
                         <span className="text-ink-faint">Next: </span>{c.nextAction}
                       </div>
-                      <label className="relative z-10 mt-2 flex items-center gap-1.5 text-[11px] text-ink-faint">
+                      <label className="relative z-10 mt-2 flex items-center gap-1.5 text-[0.6875rem] text-ink-faint">
                         <span>Move to</span>
                         <select
                           aria-label={`Move ${c.ref} to another stage`}
                           value={c.column}
                           disabled={pending}
                           onChange={(e) => move(c.id, e.target.value)}
-                          className="min-w-0 flex-1 rounded-md border border-line bg-transparent py-1.5 text-[11.5px] sm:border-transparent sm:py-0.5 text-ink-muted hover:border-line focus:border-brand-300 focus:outline-none"
+                          className="min-w-0 flex-1 rounded-md border border-line bg-transparent py-1.5 text-[0.7188rem] sm:border-transparent sm:py-0.5 text-ink-muted hover:border-line focus:border-brand-300 focus:outline-none"
                         >
                           {columns.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                         </select>
@@ -145,7 +145,7 @@ export function PipelineBoard({ kind, columns, cards: initial, currency }: {
                     </li>
                   ))}
                   {list.length === 0 && (
-                    <li className={cn("flex flex-1 items-center justify-center rounded-lg border border-dashed px-3 py-6 text-center text-[12px]",
+                    <li className={cn("flex flex-1 items-center justify-center rounded-lg border border-dashed px-3 py-6 text-center text-[0.75rem]",
                       isOver ? "border-brand-300 text-brand-700" : "border-line text-ink-faint")}>
                       {isOver ? "Drop here" : "Nothing here"}
                     </li>

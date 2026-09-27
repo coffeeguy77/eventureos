@@ -25,13 +25,13 @@ export function OnboardingForm() {
       </div>
       <div>
         <Label htmlFor="slug" hint="Letters, numbers and dashes">Workspace ID</Label>
-        <div className="flex items-center rounded-lg border border-line-strong bg-white text-[13px] focus-within:ring-2 focus-within:ring-brand-100">
+        <div className="flex items-center rounded-lg border border-line-strong bg-surface text-[0.8125rem] focus-within:ring-2 focus-within:ring-brand-100">
                     <input
             id="slug"
             name="slug"
             value={touched ? slug : auto}
             onChange={(e) => { setTouched(true); setSlug(e.target.value); }}
-            className="w-full rounded-lg border-0 bg-white px-3 py-2 text-[13.5px] text-ink focus:outline-none"
+            className="w-full rounded-lg border-0 bg-surface px-3 py-2 text-[0.8438rem] text-ink focus:outline-none"
           />
         </div>
       </div>

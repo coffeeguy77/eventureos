@@ -70,7 +70,7 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
             {[...sessions.entries()].map(([orgId, until]) => {
               const o = (orgsRes.data as OrgRow[]).find((x) => x.id === orgId);
               return (
-                <li key={orgId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[13px] sm:px-5">
+                <li key={orgId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-[0.8125rem] sm:px-5">
                   <span className="min-w-0 break-words"><span className="font-medium text-ink">{o?.name ?? orgId}</span> <span className="text-ink-muted">· ends {relative(until)}</span></span>
                   <span className="flex gap-2">
                     <form action={openSupportSession.bind(null, orgId)}><button className={buttonClass("secondary", "sm", "h-10 sm:h-8")}>Open</button></form>
@@ -96,9 +96,9 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
                 <li key={o.id} className={open ? "bg-brand-50/40" : undefined}>
                   <div className="flex min-h-[56px] items-start gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px] font-medium text-ink">{o.name}</div>
-                      <div className="truncate text-[12.5px] text-ink-muted">{o.owner_email ?? o.owner_name ?? "—"}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-ink-faint">
+                      <div className="truncate text-[0.8438rem] font-medium text-ink">{o.name}</div>
+                      <div className="truncate text-[0.7812rem] text-ink-muted">{o.owner_email ?? o.owner_name ?? "—"}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-ink-faint">
                         <Badge tone={STATUS_TONE[o.status] ?? "neutral"} dot>{o.status}</Badge>
                         <span>{PLAN_LABEL[o.plan] ?? o.plan} · {o.users} user{o.users === 1 ? "" : "s"} · {o.events} events</span>
                         {inSession && <Badge tone="amber">Support session</Badge>}
@@ -115,9 +115,9 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1120px] text-[13px]">
+            <table className="w-full min-w-[1120px] text-[0.8125rem]">
               <thead>
-                <tr className="border-b border-line text-left text-[11.5px] uppercase tracking-wide text-ink-faint">
+                <tr className="border-b border-line text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-2.5 font-medium">Business</th>
                   <th className="px-3 py-2.5 font-medium">Owner</th>
                   <th className="px-3 py-2.5 font-medium">Plan</th>
@@ -138,11 +138,11 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
                     <tr key={o.id} className={open ? "bg-brand-50/40" : undefined}>
                       <td className="px-5 py-3">
                         <div className="font-medium text-ink">{o.name}</div>
-                        <div className="text-[12px] text-ink-muted">/{o.slug} · since {fmtDateTime(o.created_at, TZ, "date")}</div>
+                        <div className="text-[0.75rem] text-ink-muted">/{o.slug} · since {fmtDateTime(o.created_at, TZ, "date")}</div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="text-ink">{o.owner_name ?? "—"}</div>
-                        <div className="text-[12px] text-ink-muted">{o.owner_email ?? ""}</div>
+                        <div className="text-[0.75rem] text-ink-muted">{o.owner_email ?? ""}</div>
                       </td>
                       <td className="px-3 py-3 text-ink">{PLAN_LABEL[o.plan] ?? o.plan}</td>
                       <td className="tabular px-3 py-3 text-right">{o.users}</td>
@@ -151,12 +151,12 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-1">
                           {o.integrations.length ? o.integrations.map((i) => <Badge key={i} tone="green">{PROVIDER_LABEL[i] ?? i}</Badge>)
-                            : <span className="text-[12px] text-ink-faint">None connected</span>}
+                            : <span className="text-[0.75rem] text-ink-faint">None connected</span>}
                         </div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="tabular text-ink">{o.status === "active" ? `${money(PLAN_PRICE[o.plan] ?? 0, "AUD", { cents: false })}/mo` : "—"}</div>
-                        <div className="text-[12px] text-ink-muted">{o.last_activity ? `Active ${relative(o.last_activity)}` : "No activity"}</div>
+                        <div className="text-[0.75rem] text-ink-muted">{o.last_activity ? `Active ${relative(o.last_activity)}` : "No activity"}</div>
                       </td>
                       <td className="px-3 py-3">
                         <Badge tone={STATUS_TONE[o.status] ?? "neutral"} dot>{o.status}</Badge>
@@ -191,9 +191,9 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
 function ManagePanel({ o, inSession, until, idp }: { o: OrgRow; inSession: boolean; until: string | undefined; idp: string }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-xl border border-line bg-white p-4">
-        <div className="text-[13px] font-semibold text-ink">Plan & status</div>
-        <p className="mt-0.5 text-[12px] text-ink-muted">Suspending blocks the portal and website form. Logged in the organisation’s audit trail.</p>
+      <div className="rounded-xl border border-line bg-surface p-4">
+        <div className="text-[0.8125rem] font-semibold text-ink">Plan & status</div>
+        <p className="mt-0.5 text-[0.75rem] text-ink-muted">Suspending blocks the portal and website form. Logged in the organisation’s audit trail.</p>
         <ActionForm action={setOrganisationPlanStatus} className="mt-3">
           <input type="hidden" name="org_id" value={o.id} />
           <div className="flex flex-wrap items-end gap-3">
@@ -215,17 +215,17 @@ function ManagePanel({ o, inSession, until, idp }: { o: OrgRow; inSession: boole
           </div>
         </ActionForm>
       </div>
-      <div className="rounded-xl border border-amber-200 bg-white p-4">
-        <div className="text-[13px] font-semibold text-ink">Support session</div>
+      <div className="rounded-xl border border-amber-200 bg-surface p-4">
+        <div className="text-[0.8125rem] font-semibold text-ink">Support session</div>
         {inSession ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-ink-muted">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[0.7812rem] text-ink-muted">
             Active — ends {relative(until)}.
             <form action={openSupportSession.bind(null, o.id)}><button className={buttonClass("secondary", "sm", "h-10 sm:h-8")}>Open</button></form>
             <form action={endSupportSession.bind(null, o.id)}><button className={buttonClass("danger", "sm", "h-10 sm:h-8")}>End session</button></form>
           </div>
         ) : (
           <>
-            <p className="mt-0.5 text-[12px] text-ink-muted">
+            <p className="mt-0.5 text-[0.75rem] text-ink-muted">
               You join {o.name} as a temporary admin. The reason and everything you do are recorded in their activity log, and access ends automatically.
             </p>
             <ActionForm action={startSupportSession} className="mt-3">

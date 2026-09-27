@@ -223,7 +223,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <nav className="no-scrollbar inline-flex max-w-full overflow-x-auto rounded-lg bg-zinc-100 p-0.5" aria-label="Report period">
           {PRESETS.map((p) => (
             <Link key={p.key} href={p.key === "3m" ? "/reports" : `/reports?period=${p.key}`} scroll={false} aria-current={period === p.key ? "page" : undefined}
-              className={cn("shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-[12.5px] font-medium sm:py-1.5", period === p.key ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+              className={cn("shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-[0.7812rem] font-medium sm:py-1.5", period === p.key ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
               {p.label}
             </Link>
           ))}
@@ -231,15 +231,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <form action="/reports" className={cn("flex w-full items-center gap-2 rounded-lg px-1 py-0.5 sm:w-auto sm:flex-wrap", period === "custom" && "bg-brand-50/60 ring-1 ring-inset ring-brand-100")}>
           <input type="hidden" name="period" value="custom" />
           <label className="sr-only" htmlFor="from">From</label>
-          <input id="from" name="from" type="date" defaultValue={from} max={today} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[12.5px] sm:h-8 sm:w-[140px] sm:flex-none")} />
-          <span className="shrink-0 text-[12px] text-ink-faint">to</span>
+          <input id="from" name="from" type="date" defaultValue={from} max={today} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[0.7812rem] sm:h-8 sm:w-[140px] sm:flex-none")} />
+          <span className="shrink-0 text-[0.75rem] text-ink-faint">to</span>
           <label className="sr-only" htmlFor="to">To</label>
-          <input id="to" name="to" type="date" defaultValue={to} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[12.5px] sm:h-8 sm:w-[140px] sm:flex-none")} />
+          <input id="to" name="to" type="date" defaultValue={to} className={cn(inputClass, "h-10 min-w-0 flex-1 py-0 text-[0.7812rem] sm:h-8 sm:w-[140px] sm:flex-none")} />
           <Button size="sm" variant={period === "custom" ? "primary" : "secondary"} className="h-10 shrink-0 sm:h-8">Apply</Button>
         </form>
-        <span className="text-[12px] text-ink-faint">{rangeLabel}</span>
+        <span className="text-[0.75rem] text-ink-faint">{rangeLabel}</span>
       </div>
-      {rangeError && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-inset ring-amber-100">{rangeError}</p>}
+      {rangeError && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-100">{rangeError}</p>}
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Revenue received" value={m0(revenueTotal)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} />
@@ -276,7 +276,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <Stat label="Sent" value={published.length} sub={`${m0(published.reduce((s, v) => s + Number(v.total), 0))} quoted`} />
             <Stat label="Awaiting reply" value={awaiting.length} sub={`${m0(awaiting.reduce((s, v) => s + Number(v.total), 0))} open`} />
           </div>
-          <p className="mt-3 text-[11.5px] text-ink-faint">Win rate counts accepted ÷ (accepted + declined + expired). Versions replaced by a newer version are excluded.</p>
+          <p className="mt-3 text-[0.7188rem] text-ink-faint">Win rate counts accepted ÷ (accepted + declined + expired). Versions replaced by a newer version are excluded.</p>
         </ChartFrame>
 
         <ChartFrame title="Events by type" subtitle="Events dated in the period (cancelled excluded), with accepted quote value"
@@ -285,13 +285,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </ChartFrame>
 
         <ChartFrame title="Outstanding and overdue" subtitle={`As of today · ${m0(outstanding)} across ${openInvoices.length} invoice${openInvoices.length === 1 ? "" : "s"}`}
-          action={<Link href="/invoices" className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">Invoices</Link>}
+          action={<Link href="/invoices" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">Invoices</Link>}
           table={<DataTable head={["Age", "Invoices", "Balance"]} align={["left", "right", "right"]} rows={buckets.map((b) => [b.label, b.count, m0(b.value)])} />}>
           <BarList rows={buckets.map((b) => ({ label: b.label, value: b.value, color: b.color, note: `${b.count} inv.` }))} format={m0} empty="Nothing outstanding — every invoice is paid." />
           {openInvoices.length > 0 && (
             <ul className="mt-4 divide-y divide-line border-t border-line">
               {[...openInvoices].filter((i) => i.due_date && i.due_date < today).sort((a, b) => a.due_date!.localeCompare(b.due_date!)).slice(0, 4).map((i) => (
-                <li key={i.id} className="flex items-center justify-between gap-3 py-2 text-[12.5px]">
+                <li key={i.id} className="flex items-center justify-between gap-3 py-2 text-[0.7812rem]">
                   <span className="min-w-0 truncate">
                     {i.customer ? <Link href={`/clients/${i.customer.id}?tab=invoices`} className="font-medium text-ink hover:text-brand-700">{i.customer.name}</Link> : "—"}
                     <span className="text-ink-faint"> · <Link href={`/invoices/${i.id}`} className="hover:text-brand-700">{i.number}</Link> · {daysBetween(i.due_date!, today)} days overdue</span>
@@ -306,10 +306,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <ChartFrame title="Top customers by lifetime value" subtitle="All payments ever received; the period column shows this range only"
           table={<DataTable head={["Customer", "Lifetime value", "In period", "Last payment"]} align={["left", "right", "right", "right"]}
             rows={topCustomers.map((c) => [c.name, m0(c.total), m0(c.period), fmtDate(todayISO(tz, new Date(c.last)))])} />}>
-          {topCustomers.length === 0 ? <p className="py-6 text-center text-[12.5px] text-ink-muted">No payments recorded yet.</p> : (
+          {topCustomers.length === 0 ? <p className="py-6 text-center text-[0.7812rem] text-ink-muted">No payments recorded yet.</p> : (
             <ol className="space-y-2">
               {topCustomers.map((c, i) => (
-                <li key={c.id} className="grid grid-cols-[18px_minmax(90px,34%)_1fr] items-center gap-3 text-[12.5px]">
+                <li key={c.id} className="grid grid-cols-[18px_minmax(90px,34%)_1fr] items-center gap-3 text-[0.7812rem]">
                   <span className="tabular text-ink-faint">{i + 1}</span>
                   <Link href={`/clients/${c.id}`} className="truncate text-ink hover:text-brand-700">{c.name}</Link>
                   <span className="flex min-w-0 items-center gap-2" title={`${c.name}: ${m0(c.total)} lifetime, ${m0(c.period)} in period`}>
@@ -325,7 +325,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <ChartFrame title="Response time" subtitle="From enquiry received to the first email reply"
           table={responseHours.length ? <DataTable head={["Time to first reply", "Enquiries"]} align={["left", "right"]} rows={respBuckets.map((b) => [b.label, b.value])} /> : undefined}>
           {responseHours.length === 0 ? (
-            <p className="py-6 text-center text-[12.5px] text-ink-muted">
+            <p className="py-6 text-center text-[0.7812rem] text-ink-muted">
               No replies recorded for enquiries in this period yet. Response times appear once replies are sent or synced from Gmail.
             </p>
           ) : (
@@ -340,7 +340,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           )}
         </ChartFrame>
       </div>
-      <p className="mt-6 text-[11.5px] text-ink-faint">
+      <p className="mt-6 text-[0.7188rem] text-ink-faint">
         Figures are calculated from records in EventureOS{org.currency ? ` in ${org.currency}` : ""}, using your organisation’s timezone ({tz}). Money figures include GST.
       </p>
     </div>

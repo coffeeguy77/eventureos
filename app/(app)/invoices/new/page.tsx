@@ -13,7 +13,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Invoices" title="New invoice" />
-        <Card className="p-6 text-[13px] text-ink-muted">Only owners, admins and managers can raise invoices.</Card>
+        <Card className="p-6 text-[0.8125rem] text-ink-muted">Only owners, admins and managers can raise invoices.</Card>
       </div>
     );
   }

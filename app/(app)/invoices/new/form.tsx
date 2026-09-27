@@ -91,7 +91,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
               {custQuotes.map((q) => <option key={q.id} value={q.id}>{q.label} · {money(q.total, currency)}</option>)}
             </Select>
             {quote && (
-              <p className="mt-1 text-[12px] text-ink-muted">
+              <p className="mt-1 text-[0.75rem] text-ink-muted">
                 Quote total {money(quote.total, currency)}{quote.invoiced > 0 ? ` · ${money(quote.invoiced, currency)} already invoiced` : " · nothing invoiced yet"}
               </p>
             )}
@@ -103,9 +103,9 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
               {KINDS.map((k) => (
                 <button key={k.key} type="button" role="radio" aria-checked={kind === k.key} onClick={() => chooseKind(k.key)}
                   className={cn("rounded-lg px-3 py-2 text-left ring-1 ring-inset transition-colors",
-                    kind === k.key ? "bg-brand-50 ring-brand-300" : "bg-white ring-line-strong hover:bg-zinc-50")}>
-                  <span className="block text-[13px] font-medium text-ink">{k.label}</span>
-                  <span className="block text-[11.5px] text-ink-muted">{k.key === "deposit" ? `${depositPct}% · ${k.hint.toLowerCase()}` : k.hint}</span>
+                    kind === k.key ? "bg-brand-50 ring-brand-300" : "bg-surface ring-line-strong hover:bg-zinc-50")}>
+                  <span className="block text-[0.8125rem] font-medium text-ink">{k.label}</span>
+                  <span className="block text-[0.7188rem] text-ink-muted">{k.key === "deposit" ? `${depositPct}% · ${k.hint.toLowerCase()}` : k.hint}</span>
                 </button>
               ))}
             </div>
@@ -115,7 +115,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
           <div>
             <Label htmlFor="amount" hint="Including GST">Amount</Label>
             <Input id="amount" name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="0.00" />
-            {Number.isFinite(n) && n > 0 && <p className="mt-1 text-[12px] text-ink-muted">{money(n, currency)} · GST {money(n - Math.round((n * 100) / 1.1) / 100, currency)}</p>}
+            {Number.isFinite(n) && n > 0 && <p className="mt-1 text-[0.75rem] text-ink-muted">{money(n, currency)} · GST {money(n - Math.round((n * 100) / 1.1) / 100, currency)}</p>}
           </div>
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
             <div><Label htmlFor="issue_date">Date</Label><Input id="issue_date" name="issue_date" type="date" value={issueDate} required
@@ -123,7 +123,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
             <div><Label htmlFor="due_date" hint={`${terms}-day terms`}>Due</Label><Input id="due_date" name="due_date" type="date" value={dueDate} min={issueDate} required onChange={(e) => setDueDate(e.target.value)} /></div>
           </div>
         </div>
-        <p className="mt-5 text-[12px] text-ink-muted">The invoice number is assigned automatically.</p>
+        <p className="mt-5 text-[0.75rem] text-ink-muted">The invoice number is assigned automatically.</p>
         <div className="mt-4"><FormError message={state?.error} /></div>
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
           <ButtonLink href="/invoices" variant="ghost" className="h-10 w-full sm:h-9 sm:w-auto">Cancel</ButtonLink>

@@ -34,7 +34,7 @@ export function MonthView({ days, month, today, entries, resources, hide, onOpen
     <>
       {/* Desktop / tablet grid */}
       <div className="hidden sm:block">
-        <div className="grid grid-cols-7 border-b border-line text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        <div className="grid grid-cols-7 border-b border-line text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint">
           {WEEKDAYS.map((w) => <div key={w} className="px-2 py-2">{w}</div>)}
         </div>
         <div className="grid grid-cols-7 gap-px bg-line">
@@ -44,15 +44,15 @@ export function MonthView({ days, month, today, entries, resources, hide, onOpen
             const extra = items.length - MAX_PER_CELL;
             const isToday = d === today;
             return (
-              <div key={d} className={cn("min-h-[118px] min-w-0 p-1.5", inMonth(d) ? "bg-white" : "bg-zinc-50/80", isToday && "bg-brand-50/50")}>
+              <div key={d} className={cn("min-h-[118px] min-w-0 p-1.5", inMonth(d) ? "bg-surface" : "bg-zinc-50/80", isToday && "bg-brand-50/50")}>
                 <div className="mb-1 flex items-center justify-between gap-1 px-0.5">
                   <Link href={dayHref(d)}
-                    className={cn("flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[12px] font-medium tabular",
-                      isToday ? "bg-brand-500 text-white" : inMonth(d) ? "text-ink hover:bg-zinc-100" : "text-ink-faint hover:bg-zinc-100")}
+                    className={cn("flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[0.75rem] font-medium tabular",
+                      isToday ? "bg-brand-500 text-on-brand" : inMonth(d) ? "text-ink hover:bg-zinc-100" : "text-ink-faint hover:bg-zinc-100")}
                     aria-label={fmtDate(d, "long")}>
                     {Number(d.slice(8))}
                   </Link>
-                  {conflicts > 0 && <span className="rounded-full bg-rose-600 px-1.5 text-[10px] font-semibold text-white">{conflicts} clash</span>}
+                  {conflicts > 0 && <span className="rounded-full bg-danger px-1.5 text-[0.625rem] font-semibold text-white">{conflicts} clash</span>}
                 </div>
                 <div className="space-y-0.5">
                   {items.slice(0, extra > 0 ? MAX_PER_CELL - 1 : MAX_PER_CELL).map(({ entry, seg }) => (
@@ -60,7 +60,7 @@ export function MonthView({ days, month, today, entries, resources, hide, onOpen
                       timeText={seg.fromPrev ? "…" : minutesLabel(seg.startMin)} />
                   ))}
                   {extra > 0 && (
-                    <Link href={dayHref(d)} className="block px-1.5 py-0.5 text-[11.5px] font-medium text-ink-muted hover:text-brand-700">
+                    <Link href={dayHref(d)} className="block px-1.5 py-0.5 text-[0.7188rem] font-medium text-ink-muted hover:text-brand-700">
                       +{extra + 1} more
                     </Link>
                   )}
@@ -91,7 +91,7 @@ function PhoneMonth({ days, today, entries, resources, inMonth, dayHref, onOpen 
 
   return (
     <div className="sm:hidden">
-      <div className="grid grid-cols-7 border-b border-line text-center text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="grid grid-cols-7 border-b border-line text-center text-[0.6562rem] font-semibold uppercase tracking-wide text-ink-faint">
         {WEEKDAYS.map((w) => <div key={w} className="py-1.5">{w.slice(0, 1)}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-px border-b border-line bg-line">
@@ -103,9 +103,9 @@ function PhoneMonth({ days, today, entries, resources, inMonth, dayHref, onOpen 
           return (
             <button key={d} type="button" onClick={() => setSelected(d)} aria-pressed={isSel}
               aria-label={`${fmtDate(d, "long")}${items.length ? ` · ${items.length} booking${items.length > 1 ? "s" : ""}` : ""}${conflict ? " · conflict" : ""}`}
-              className={cn("flex min-h-[52px] min-w-0 flex-col items-center gap-1 pb-1.5 pt-1", inMonth(d) ? "bg-white" : "bg-zinc-50/80", isSel && "bg-brand-50")}>
-              <span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-medium tabular",
-                isToday ? "bg-brand-500 text-white" : isSel ? "ring-2 ring-inset ring-brand-400 text-ink" : inMonth(d) ? "text-ink" : "text-ink-faint",
+              className={cn("flex min-h-[52px] min-w-0 flex-col items-center gap-1 pb-1.5 pt-1", inMonth(d) ? "bg-surface" : "bg-zinc-50/80", isSel && "bg-brand-50")}>
+              <span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-[0.8125rem] font-medium tabular",
+                isToday ? "bg-brand-500 text-on-brand" : isSel ? "ring-2 ring-inset ring-brand-400 text-ink" : inMonth(d) ? "text-ink" : "text-ink-faint",
                 conflict && !isToday && "text-rose-700")}>
                 {Number(d.slice(8))}
               </span>
@@ -115,7 +115,7 @@ function PhoneMonth({ days, today, entries, resources, inMonth, dayHref, onOpen 
                     <span key={entry.id} className={cn("h-1.5 w-1.5 rounded-full", entry.conflictsWith.length > 0 && "ring-1 ring-rose-500 ring-offset-1")}
                       style={{ backgroundColor: entry.conflictsWith.length ? "#e11d48" : resources.get(entry.resourceId)?.colour || FALLBACK_COLOUR }} />
                   ))}
-                  {items.length > MAX_DOTS && <span className="text-[9px] font-semibold leading-none text-ink-faint">+{items.length - MAX_DOTS}</span>}
+                  {items.length > MAX_DOTS && <span className="text-[0.5625rem] font-semibold leading-none text-ink-faint">+{items.length - MAX_DOTS}</span>}
                 </span>
               )}
             </button>
@@ -125,15 +125,15 @@ function PhoneMonth({ days, today, entries, resources, inMonth, dayHref, onOpen 
 
       <div className="px-4 py-3">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold text-ink">{fmtDate(selected, "weekday")}</p>
-          <Link href={dayHref(selected)} className="-mr-2 inline-flex h-9 items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-brand-600 hover:bg-brand-50">
+          <p className="text-[0.8125rem] font-semibold text-ink">{fmtDate(selected, "weekday")}</p>
+          <Link href={dayHref(selected)} className="-mr-2 inline-flex h-9 items-center gap-1 rounded-md px-2 text-[0.7812rem] font-medium text-brand-600 hover:bg-brand-50">
             Day view <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
         {selItems.length === 0 ? (
-          <p className="rounded-lg bg-zinc-50 px-3 py-3 text-center text-[12.5px] text-ink-muted">Nothing booked.</p>
+          <p className="rounded-lg bg-zinc-50 px-3 py-3 text-center text-[0.7812rem] text-ink-muted">Nothing booked.</p>
         ) : (
-          <div className="space-y-1.5 [&>button]:min-h-10 [&>button]:py-2 [&>button]:text-[13px]">
+          <div className="space-y-1.5 [&>button]:min-h-10 [&>button]:py-2 [&>button]:text-[0.8125rem]">
             {selItems.map(({ entry, seg }) => (
               <EntryChip key={entry.id} entry={entry} resource={resources.get(entry.resourceId)} onOpen={onOpen}
                 timeText={seg.fromPrev ? "…" : minutesLabel(seg.startMin)} />

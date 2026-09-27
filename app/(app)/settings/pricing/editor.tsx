@@ -29,35 +29,35 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
         <CardHeader title="Price list"
           subtitle="Everything you charge for. Prices are excluding GST. These appear in Quick add on every quote."
           action={canEdit ? <Button size="sm" onClick={() => setEditing("new")}><Plus className="h-3.5 w-3.5" />Add service</Button> : undefined} />
-        {!canEdit && <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">Only owners, admins and managers can change prices.</p>}
+        {!canEdit && <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">Only owners, admins and managers can change prices.</p>}
         <ul className="divide-y divide-line border-t border-line">
           {editing === "new" && <li className="px-5 py-4"><ServiceForm initial={blankService} onDone={() => setEditing(null)} /></li>}
           {services.map((s, i) => (<Fragment key={s.id}>
             {(i === 0 || services[i - 1].category !== s.category) && (
-              <li className="bg-zinc-50 px-5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{s.category || "Other"}</li>
+              <li className="bg-zinc-50 px-5 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{s.category || "Other"}</li>
             )}
             <li className="px-5 py-3">
               {editing === s.id ? <ServiceForm initial={s} onDone={() => setEditing(null)} /> : (
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[13.5px] font-medium text-ink">{s.name}</span>
-                      {s.code && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px] text-ink-muted">{s.code}</span>}
+                      <span className="text-[0.8438rem] font-medium text-ink">{s.name}</span>
+                      {s.code && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[0.6875rem] text-ink-muted">{s.code}</span>}
                       {!s.active && <Badge tone="neutral">Off</Badge>}
                     </div>
-                    {s.description && <p className="mt-0.5 line-clamp-2 text-[12.5px] text-ink-muted">{s.description}</p>}
-                    <p className="mt-0.5 text-[12px] text-ink-faint">{[s.category, s.xero_account_code ? `Xero account ${s.xero_account_code}` : null].filter(Boolean).join(" · ")}</p>
+                    {s.description && <p className="mt-0.5 line-clamp-2 text-[0.7812rem] text-ink-muted">{s.description}</p>}
+                    <p className="mt-0.5 text-[0.75rem] text-ink-faint">{[s.category, s.xero_account_code ? `Xero account ${s.xero_account_code}` : null].filter(Boolean).join(" · ")}</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-[13.5px] font-semibold text-ink">{money(s.unit_price, currency, { cents: true })}{s.unit ? <span className="font-normal text-ink-muted"> /{s.unit}</span> : null}</div>
-                    <div className="text-[11.5px] text-ink-faint">+{s.tax_rate}% GST = {money(s.unit_price * (1 + s.tax_rate / 100), currency, { cents: true })}</div>
+                    <div className="text-[0.8438rem] font-semibold text-ink">{money(s.unit_price, currency, { cents: true })}{s.unit ? <span className="font-normal text-ink-muted"> /{s.unit}</span> : null}</div>
+                    <div className="text-[0.7188rem] text-ink-faint">+{s.tax_rate}% GST = {money(s.unit_price * (1 + s.tax_rate / 100), currency, { cents: true })}</div>
                   </div>
                   {canEdit && <button onClick={() => setEditing(s.id)} className="rounded-md p-1.5 text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label={`Edit ${s.name}`}><Pencil className="h-4 w-4" /></button>}
                 </div>
               )}
             </li>
           </Fragment>))}
-          {!services.length && editing !== "new" && <li className="px-5 py-6 text-center text-[13px] text-ink-muted">No services yet.</li>}
+          {!services.length && editing !== "new" && <li className="px-5 py-6 text-center text-[0.8125rem] text-ink-muted">No services yet.</li>}
         </ul>
       </Card>
 
@@ -72,9 +72,9 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
               {editingPkg === p.id ? <PackageForm initial={p} services={services} onDone={() => setEditingPkg(null)} /> : (
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2"><span className="text-[14px] font-semibold text-ink">{p.name}</span>{!p.active && <Badge tone="neutral">Off</Badge>}</div>
-                    {p.summary && <p className="text-[12.5px] text-ink-muted">{p.summary}</p>}
-                    <ul className="mt-2 space-y-0.5 text-[12.5px] text-ink">
+                    <div className="flex items-center gap-2"><span className="text-[0.875rem] font-semibold text-ink">{p.name}</span>{!p.active && <Badge tone="neutral">Off</Badge>}</div>
+                    {p.summary && <p className="text-[0.7812rem] text-ink-muted">{p.summary}</p>}
+                    <ul className="mt-2 space-y-0.5 text-[0.7812rem] text-ink">
                       {describeRules(p.rules, byId, currency).map((l, i) => <li key={i}>• {l}</li>)}
                     </ul>
                   </div>
@@ -83,7 +83,7 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
               )}
             </li>
           ))}
-          {!packages.length && editingPkg !== "new" && <li className="px-5 py-6 text-center text-[13px] text-ink-muted">No packages yet.</li>}
+          {!packages.length && editingPkg !== "new" && <li className="px-5 py-6 text-center text-[0.8125rem] text-ink-muted">No packages yet.</li>}
         </ul>
       </Card>
     </div>
@@ -148,7 +148,7 @@ function ServiceForm({ initial, onDone }: { initial: ServiceInput & { id?: strin
         <div><Label htmlFor="sv-cat">Group</Label><input id="sv-cat" value={v.category ?? ""} onChange={set("category")} className={inputClass} maxLength={80} /></div>
         <div><Label htmlFor="sv-acc" hint="Xero">Account</Label><input id="sv-acc" value={v.xero_account_code ?? ""} onChange={set("xero_account_code")} className={inputClass} maxLength={20} /></div>
       </div>
-      <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} className="h-4 w-4 rounded" />Available on quotes</label>
+      <label className="flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} className="h-4 w-4 rounded" />Available on quotes</label>
       <FormError message={error} />
       <div className="flex items-center gap-2">
         {initial.id && <Button type="button" variant="danger" size="sm" onClick={remove} disabled={pending}><Trash2 className="h-3.5 w-3.5" />Delete</Button>}
@@ -237,7 +237,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
         <ServicePick id="pk-serve" label="Per serve" value={perServe} onChange={setPerServe} services={services} />
       </div>
       <fieldset className="rounded-lg p-3 ring-1 ring-inset ring-line">
-        <legend className="px-1 text-[12.5px] font-semibold text-ink">Staff</legend>
+        <legend className="px-1 text-[0.7812rem] font-semibold text-ink">Staff</legend>
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="sm:col-span-2"><ServicePick id="pk-staff" label="Hourly rate" value={staffSvc} onChange={setStaffSvc} services={services} optional="No staff charge" /></div>
           <div><Label htmlFor="pk-label">Called</Label><input id="pk-label" value={label} onChange={(e) => setLabel(e.target.value)} className={inputClass} maxLength={30} /></div>
@@ -248,12 +248,12 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
           {num("pk-incl", "Hours included", incl, setIncl, "not charged")}
         </div>
         {Number(incl) > 0 && (
-          <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
+          <div className="mt-3 flex flex-wrap gap-4 text-[0.8125rem]">
             <label className="flex items-center gap-2"><input type="radio" checked={inclTo === "first"} onChange={() => setInclTo("first")} />Included hours for the first staff member only</label>
             <label className="flex items-center gap-2"><input type="radio" checked={inclTo === "each"} onChange={() => setInclTo("each")} />For each staff member</label>
           </div>
         )}
-        <label className="mt-3 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={extraOn} onChange={(e) => setExtraOn(e.target.checked)} className="h-4 w-4 rounded" />Recommend a second staff member for busy, short jobs</label>
+        <label className="mt-3 flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" checked={extraOn} onChange={(e) => setExtraOn(e.target.checked)} className="h-4 w-4 rounded" />Recommend a second staff member for busy, short jobs</label>
         {extraOn && (
           <div className="mt-2 grid gap-3 sm:grid-cols-[120px_120px_1fr]">
             {num("pk-xs", "Over serves", extraServes, setExtraServes, undefined, "1")}
@@ -262,7 +262,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
           </div>
         )}
       </fieldset>
-      <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4 rounded" />Available in “Price a job”</label>
+      <label className="flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-4 w-4 rounded" />Available in “Price a job”</label>
       <FormError message={error} />
       <div className="flex items-center gap-2">
         {initial.id && <Button type="button" variant="danger" size="sm" onClick={remove} disabled={pending}><Trash2 className="h-3.5 w-3.5" />Delete</Button>}
@@ -298,7 +298,7 @@ function XeroItemsCard() {
       </div>
       {error && <div className="px-5 pb-4"><FormError message={error} /></div>}
       {result && (
-        <div className="mx-5 mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-900 ring-1 ring-inset ring-emerald-100">
+        <div className="mx-5 mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-900 ring-1 ring-inset ring-emerald-100">
           Checked {result.seen} Xero items. {result.updated.length ? `Updated: ${result.updated.join("; ")}.` : "Nothing to update."} {result.added.length ? `Added: ${result.added.join(", ")}.` : ""}
         </div>
       )}

@@ -33,22 +33,22 @@ export function PeopleCard({ eventId, rows, others, canEdit }: {
 
   return (
     <div className="px-5 pb-5">
-      {rows.length === 0 ? <p className="text-[12.5px] text-ink-muted">No contacts linked to this job yet.</p> : (
+      {rows.length === 0 ? <p className="text-[0.7812rem] text-ink-muted">No contacts linked to this job yet.</p> : (
         <ul className="divide-y divide-line">
           {rows.map((r) => (
             <li key={r.id} className="flex items-start gap-2 py-2">
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-ink">{r.name} {r.primary && <Badge tone="brand">Main contact</Badge>}</p>
-                <p className="break-all text-[12px] text-ink-muted">{[r.role, r.email, r.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
-                {r.invited_at && <p className="text-[11.5px] text-ink-faint">Portal invite sent {new Date(r.invited_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}</p>}
+                <p className="text-[0.8125rem] font-medium text-ink">{r.name} {r.primary && <Badge tone="brand">Main contact</Badge>}</p>
+                <p className="break-all text-[0.75rem] text-ink-muted">{[r.role, r.email, r.phone].filter(Boolean).join(" · ") || "No contact details"}</p>
+                {r.invited_at && <p className="text-[0.7188rem] text-ink-faint">Portal invite sent {new Date(r.invited_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}</p>}
               </div>
               {canEdit && r.email && (
                 <button type="button" disabled={pending} onClick={() => run(() => sendJobPortalInvite(r.id), () => setNote(`Portal invite emailed to ${r.email}.`))}
-                  className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink">{r.invited_at ? "Invite again" : "Invite to portal"}</button>
+                  className="shrink-0 rounded-md px-2 py-1 text-[0.75rem] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink">{r.invited_at ? "Invite again" : "Invite to portal"}</button>
               )}
               {canEdit && !r.primary && (
                 <>
-                  <button type="button" disabled={pending} onClick={() => run(() => makeMainContact(eventId, r.contact_id))} className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-brand-700 hover:bg-brand-50">Make main</button>
+                  <button type="button" disabled={pending} onClick={() => run(() => makeMainContact(eventId, r.contact_id))} className="shrink-0 rounded-md px-2 py-1 text-[0.75rem] font-medium text-brand-700 hover:bg-brand-50">Make main</button>
                   <button type="button" disabled={pending} onClick={() => run(() => removeJobPerson(r.id))} aria-label={`Remove ${r.name}`} className="shrink-0 rounded-md p-1.5 text-ink-faint hover:bg-zinc-100 hover:text-ink"><X className="h-4 w-4" /></button>
                 </>
               )}
@@ -79,7 +79,7 @@ export function PeopleCard({ eventId, rows, others, canEdit }: {
               placeholder={{ first: "First name", last: "Last name", email: "Email", phone: "Mobile" }[k]} type={k === "email" ? "email" : "text"} />
           ))}
           <input value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })} className={cn(inputClass, "py-1.5 sm:col-span-2")} placeholder="Role, e.g. On-site contact / Taking over" />
-          <label className="flex items-center gap-2 text-[12.5px] text-ink sm:col-span-2">
+          <label className="flex items-center gap-2 text-[0.7812rem] text-ink sm:col-span-2">
             <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} className="h-4 w-4 rounded" />
             Email them a link to the booking in the client portal
           </label>
@@ -90,7 +90,7 @@ export function PeopleCard({ eventId, rows, others, canEdit }: {
         </div>
       )}
       {error && <div className="mt-2"><FormError message={error} /></div>}
-      {note && !error && <p className="mt-2 text-[12.5px] font-medium text-emerald-700">{note}</p>}
+      {note && !error && <p className="mt-2 text-[0.7812rem] font-medium text-emerald-700">{note}</p>}
     </div>
   );
 }

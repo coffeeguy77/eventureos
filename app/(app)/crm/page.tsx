@@ -192,7 +192,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
       <PipelineBoard kind={view} columns={columns} cards={cards} currency={org.currency} />
 
-      <p className="mt-2 text-[12px] text-ink-faint">
+      <p className="mt-2 text-[0.75rem] text-ink-faint">
         {view === "enquiries"
           ? <>Lost and archived enquiries are hidden. Change those from the <Link href="/enquiries" className="text-brand-600 hover:text-brand-700">enquiry</Link> itself so a reason is captured.</>
           : <>Cancelled events are hidden. Moving an event here changes its status exactly as it would on the event page.</>}
@@ -206,7 +206,7 @@ function Segmented({ items }: { items: { href: string; label: string; active: bo
     <nav className="inline-flex shrink-0 rounded-lg bg-zinc-100 p-0.5">
       {items.map((i) => (
         <Link key={i.label} href={i.href} scroll={false} aria-current={i.active ? "page" : undefined}
-          className={cn("whitespace-nowrap rounded-md px-3 py-2 text-[12.5px] font-medium sm:py-1.5", i.active ? "bg-white text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
+          className={cn("whitespace-nowrap rounded-md px-3 py-2 text-[0.7812rem] font-medium sm:py-1.5", i.active ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>
           {i.label}
         </Link>
       ))}

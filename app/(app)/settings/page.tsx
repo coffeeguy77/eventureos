@@ -30,7 +30,7 @@ export default async function OrganisationSettingsPage() {
           action={<Badge tone="brand">{PLAN_LABEL[o.plan] ?? o.plan} plan</Badge>}
         />
         {!canEdit && (
-          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
             You’re a {ROLE_LABEL[role as keyof typeof ROLE_LABEL]?.toLowerCase() ?? role}, so these details are read-only. Only owners and admins can change them.
           </p>
         )}
@@ -71,14 +71,14 @@ export default async function OrganisationSettingsPage() {
                   <datalist id="tz-options">
                     {TIMEZONES.map((t) => <option key={t} value={t} />)}
                   </datalist>
-                  <p className="mt-1 text-[11.5px] text-ink-faint">Used for dates, “today”, reminders and follow-ups.</p>
+                  <p className="mt-1 text-[0.7188rem] text-ink-faint">Used for dates, “today”, reminders and follow-ups.</p>
                 </div>
                 <div>
                   <Label htmlFor="currency">Currency</Label>
                   <Select id="currency" name="currency" defaultValue={o.currency}>
                     {currencies.map((c) => <option key={c}>{c}</option>)}
                   </Select>
-                  <p className="mt-1 text-[11.5px] text-ink-faint">Changing currency doesn’t convert existing amounts.</p>
+                  <p className="mt-1 text-[0.7188rem] text-ink-faint">Changing currency doesn’t convert existing amounts.</p>
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
@@ -105,7 +105,7 @@ export default async function OrganisationSettingsPage() {
         <dl className="grid gap-5 border-t border-line px-5 py-5 sm:grid-cols-3">
           <Field label="Plan">{PLAN_LABEL[o.plan] ?? o.plan}</Field>
           <Field label="Status"><span className="capitalize">{o.status}</span></Field>
-          <Field label="Portal address"><span className="font-mono text-[12.5px]">/p/{o.slug}</span></Field>
+          <Field label="Portal address"><span className="font-mono text-[0.7812rem]">/p/{o.slug}</span></Field>
         </dl>
       </Card>
     </>

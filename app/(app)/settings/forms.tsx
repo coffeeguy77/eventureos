@@ -44,7 +44,7 @@ export function ActionForm({ action, children, className, resetOnOk, confirm, sh
       </PendingContext.Provider>
       {state?.error && <div className="mt-3"><FormError message={state.error} /></div>}
       {showOk && state?.ok && !pending && (
-        <p role="status" className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-emerald-700">
+        <p role="status" className="mt-3 inline-flex items-center gap-1.5 text-[0.7812rem] font-medium text-emerald-700">
           <Check className="h-3.5 w-3.5" /> {state.ok}
         </p>
       )}
@@ -94,7 +94,7 @@ export function ActionButton({ action, children, confirm, variant = "secondary",
       >
         {children}
       </Button>
-      {error && <span role="alert" className="mt-1 max-w-[260px] text-right text-[11.5px] text-rose-700">{error}</span>}
+      {error && <span role="alert" className="mt-1 max-w-[260px] text-right text-[0.7188rem] text-rose-700">{error}</span>}
     </span>
   );
 }
@@ -129,9 +129,9 @@ export function Toggle({ on, action, label, disabled }: {
           on ? "bg-brand-500" : "bg-zinc-300"
         )}
       >
-        <span className={cn("inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", on ? "translate-x-[18px]" : "translate-x-[2px]")} />
+        <span className={cn("inline-block h-4 w-4 rounded-full bg-surface shadow transition-transform", on ? "translate-x-[18px]" : "translate-x-[2px]")} />
       </button>
-      {error && <span role="alert" className="mt-1 max-w-[260px] text-right text-[11.5px] text-rose-700">{error}</span>}
+      {error && <span role="alert" className="mt-1 max-w-[260px] text-right text-[0.7188rem] text-rose-700">{error}</span>}
     </span>
   );
 }

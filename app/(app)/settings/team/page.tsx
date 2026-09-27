@@ -68,7 +68,7 @@ export default async function TeamPage() {
           subtitle={`${members.length} ${members.length === 1 ? "person" : "people"} can sign in to ${org.name}.`}
         />
         {!canAdmin && (
-          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+          <p className="mx-5 mb-4 rounded-lg bg-zinc-50 px-3 py-2 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
             Only owners and admins can invite people or change roles.
           </p>
         )}
@@ -89,9 +89,9 @@ export default async function TeamPage() {
                 <div className="flex items-center gap-3">
                   <Avatar name={name} size={32} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-medium text-ink">{name}{isMe && <span className="ml-1.5 text-[11.5px] font-normal text-ink-faint">(you)</span>}</div>
-                    <div className="truncate text-[12.5px] text-ink-muted">{m.user?.email}</div>
-                    <div className="truncate text-[12px] text-ink-faint">{m.title ? `${m.title} · ` : ""}Joined {fmtDateTime(m.created_at, org.timezone, "date")}</div>
+                    <div className="truncate text-[0.8438rem] font-medium text-ink">{name}{isMe && <span className="ml-1.5 text-[0.7188rem] font-normal text-ink-faint">(you)</span>}</div>
+                    <div className="truncate text-[0.7812rem] text-ink-muted">{m.user?.email}</div>
+                    <div className="truncate text-[0.75rem] text-ink-faint">{m.title ? `${m.title} · ` : ""}Joined {fmtDateTime(m.created_at, org.timezone, "date")}</div>
                   </div>
                   {!editable && (
                     <span title={lockReason ?? undefined} className="shrink-0">
@@ -106,7 +106,7 @@ export default async function TeamPage() {
                       <ActionForm action={changeMemberRole} showOk={false} className="min-w-0 flex-1">
                         <input type="hidden" name="member_id" value={m.id} />
                         <div className="flex items-center gap-1.5">
-                          <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-10 min-w-0 flex-1 py-1 text-[12.5px]">
+                          <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-10 min-w-0 flex-1 py-1 text-[0.7812rem]">
                             {options.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                           </Select>
                           <SubmitButton size="sm" variant="secondary" pendingLabel="…" className="h-10">Save</SubmitButton>
@@ -130,9 +130,9 @@ export default async function TeamPage() {
           })}
         </ul>
         <div className="hidden overflow-x-auto border-t border-line md:block">
-          <table className="w-full min-w-[720px] text-[13px]">
+          <table className="w-full min-w-[720px] text-[0.8125rem]">
             <thead>
-              <tr className="text-left text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
+              <tr className="text-left text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Role</th>
                 <th className="px-3 py-2.5 font-medium">Rostering</th>
@@ -159,8 +159,8 @@ export default async function TeamPage() {
                       <div className="flex items-center gap-2.5">
                         <Avatar name={name} size={30} />
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-ink">{name}{isMe && <span className="ml-1.5 text-[11.5px] font-normal text-ink-faint">(you)</span>}</div>
-                          <div className="truncate text-[12px] text-ink-muted">{m.user?.email}</div>
+                          <div className="truncate font-medium text-ink">{name}{isMe && <span className="ml-1.5 text-[0.7188rem] font-normal text-ink-faint">(you)</span>}</div>
+                          <div className="truncate text-[0.75rem] text-ink-muted">{m.user?.email}</div>
                         </div>
                       </div>
                     </td>
@@ -169,7 +169,7 @@ export default async function TeamPage() {
                         <ActionForm action={changeMemberRole} showOk={false}>
                           <input type="hidden" name="member_id" value={m.id} />
                           <div className="flex items-center gap-1.5">
-                            <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-8 w-[112px] py-1 text-[12.5px]">
+                            <Select name="role" defaultValue={m.role} aria-label={`Role for ${name}`} className="h-8 w-[112px] py-1 text-[0.7812rem]">
                               {options.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                             </Select>
                             <SubmitButton size="sm" variant="secondary" pendingLabel="…">Save</SubmitButton>
@@ -207,7 +207,7 @@ export default async function TeamPage() {
           <CardHeader title="EventureOS Support access" subtitle="Temporary access granted by EventureOS to help with a support request. Everything they do is logged." />
           <ul className="divide-y divide-line border-t border-line">
             {support.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-[13px] sm:px-5">
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-[0.8125rem] sm:px-5">
                 <span className="min-w-0 break-words font-medium text-ink">{s.user?.full_name ?? s.user?.email}</span>
                 <span className="text-ink-muted">Ends {relative(s.expires_at)} ({fmtDateTime(s.expires_at, org.timezone)})</span>
               </li>
@@ -237,14 +237,14 @@ export default async function TeamPage() {
                 </div>
                 <SubmitButton pendingLabel="Inviting…" className="w-full sm:w-auto">Invite</SubmitButton>
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px] text-ink">
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.7812rem] text-ink">
                 <label className="flex items-center gap-2"><input type="checkbox" name="auto_add" className="h-4 w-4 rounded" />Add to every event (e.g. whoever does the rosters)</label>
                 <label className="flex items-center gap-2"><input type="checkbox" name="sees_details" className="h-4 w-4 rounded" />Can see what's included on their jobs (hours, coffees, catering — never prices)</label>
               </div>
             </ActionForm>
           </div>
           <div className="border-t border-line">
-            <div className="px-5 pb-1 pt-4 text-[12px] font-medium uppercase tracking-wide text-ink-faint">Pending invitations</div>
+            <div className="px-5 pb-1 pt-4 text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Pending invitations</div>
             {invites.length === 0 ? (
               <EmptyState title="No pending invitations" />
             ) : (
@@ -252,8 +252,8 @@ export default async function TeamPage() {
                 {invites.map((i) => (
                   <li key={i.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:flex-wrap sm:px-5">
                     <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium text-ink">{i.email}</div>
-                      <div className="text-[12px] text-ink-muted">
+                      <div className="truncate text-[0.8125rem] font-medium text-ink">{i.email}</div>
+                      <div className="text-[0.75rem] text-ink-muted">
                         {ROLE_LABEL[i.role]} · invited {relative(i.created_at)}{i.inviter ? ` by ${i.inviter.full_name ?? i.inviter.email}` : ""}
                         {" · "}{i.last_sent_at ? `emailed ${relative(i.last_sent_at)}` : <span className="text-amber-700">not emailed yet</span>}
                       </div>
@@ -276,14 +276,14 @@ export default async function TeamPage() {
       <Card>
         <CardHeader title="What each role can do" subtitle="Customers never see the staff app — they only use the customer portal." />
         <div className="overflow-x-auto border-t border-line">
-          <table className="w-full text-[12.5px] md:min-w-[560px]">
+          <table className="w-full text-[0.7812rem] md:min-w-[560px]">
             <thead>
               <tr className="text-left">
                 <th className="px-4 py-2.5 font-medium text-ink-faint md:px-5" />
                 {roleOrder.map((r) => (
                   <th key={r} className="px-1.5 py-2.5 text-center font-medium text-ink md:px-3">
                     {ROLE_LABEL[r]}
-                    <div className="hidden text-[11px] font-normal text-ink-faint md:block">{ROLE_HINT[r]}</div>
+                    <div className="hidden text-[0.6875rem] font-normal text-ink-faint md:block">{ROLE_HINT[r]}</div>
                   </th>
                 ))}
               </tr>
@@ -297,7 +297,7 @@ export default async function TeamPage() {
                     return (
                       <td key={r} className="px-1.5 py-2 text-center md:px-3">
                         {v === true ? <Check className="mx-auto h-4 w-4 text-emerald-600" aria-label="Yes" />
-                          : v === "limited" ? <span className="text-[11.5px] text-amber-700">Limited</span>
+                          : v === "limited" ? <span className="text-[0.7188rem] text-amber-700">Limited</span>
                           : <Minus className="mx-auto h-4 w-4 text-ink-faint" aria-label="No" />}
                       </td>
                     );

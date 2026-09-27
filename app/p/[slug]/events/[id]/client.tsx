@@ -42,8 +42,8 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
   return (
     <div className="rounded-2xl border border-[var(--portal-brand-line)] bg-[var(--portal-brand-soft)] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-[16px] font-semibold text-ink sm:text-[15px]">{mode === "accept" ? "Accept this quote" : "Decline this quote"}</h3>
-        <div className="grid w-full grid-cols-2 rounded-lg bg-white p-0.5 ring-1 ring-inset ring-line sm:flex sm:w-auto" role="radiogroup" aria-label="Your response">
+        <h3 className="text-[1rem] font-semibold text-ink sm:text-[0.9375rem]">{mode === "accept" ? "Accept this quote" : "Decline this quote"}</h3>
+        <div className="grid w-full grid-cols-2 rounded-lg bg-surface p-0.5 ring-1 ring-inset ring-line sm:flex sm:w-auto" role="radiogroup" aria-label="Your response">
           {(["accept", "decline"] as const).map((m) => (
             <button
               key={m}
@@ -51,7 +51,7 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
               role="radio"
               aria-checked={mode === m}
               onClick={() => setMode(m)}
-              className={cn("h-10 rounded-md px-3 text-[14px] font-medium sm:h-auto sm:py-1 sm:text-[12.5px]", mode === m ? "bg-ink text-white" : "text-ink-muted hover:text-ink")}
+              className={cn("h-10 rounded-md px-3 text-[0.875rem] font-medium sm:h-auto sm:py-1 sm:text-[0.7812rem]", mode === m ? "bg-ink text-surface" : "text-ink-muted hover:text-ink")}
             >
               {m === "accept" ? "Accept" : "Decline"}
             </button>
@@ -67,20 +67,20 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
 
         {mode === "accept" ? (
           <>
-            <p className="text-[13px] text-ink-muted">
+            <p className="text-[0.8125rem] text-ink-muted">
               You&apos;re accepting version {versionNumber} for <strong className="text-ink">{total}</strong>. We&apos;ll record your name,
               the date and time, and your connection details as a record of your acceptance.
             </p>
             <div>
               <Label htmlFor="accept-name">Your full name</Label>
-              <Input id="accept-name" name="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={120} required className="bg-white" />
+              <Input id="accept-name" name="name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={120} required className="bg-surface" />
             </div>
-            <label className="flex cursor-pointer items-start gap-3 py-1 text-[14px] text-ink sm:gap-2.5 sm:py-0 sm:text-[13px]">
+            <label className="flex cursor-pointer items-start gap-3 py-1 text-[0.875rem] text-ink sm:gap-2.5 sm:py-0 sm:text-[0.8125rem]">
               <input type="checkbox" name="agree" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 rounded border-line-strong accent-[var(--portal-brand)] sm:h-4 sm:w-4" />
               <span>I accept the quote and terms from {businessName}.</span>
             </label>
             <FormError message={state?.error} />
-            <button className={portalButton("primary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending || !agree || name.trim().length < 2}>
+            <button className={portalButton("primary", "h-12 w-full text-[0.9375rem] sm:h-10 sm:w-auto sm:text-[0.8438rem]")} disabled={pending || !agree || name.trim().length < 2}>
               {pending ? "Recording your acceptance…" : "Accept quote"}
             </button>
           </>
@@ -88,11 +88,11 @@ export function QuoteResponse({ slug, eventId, versionId, versionNumber, total, 
           <>
             <div>
               <Label htmlFor="decline-reason" hint="Optional">Let us know why</Label>
-              <Textarea id="decline-reason" name="reason" maxLength={1000} placeholder="e.g. Our plans have changed, or the budget doesn't work for us" className="bg-white" />
+              <Textarea id="decline-reason" name="reason" maxLength={1000} placeholder="e.g. Our plans have changed, or the budget doesn't work for us" className="bg-surface" />
             </div>
             <input type="hidden" name="name" value={name} />
             <FormError message={state?.error} />
-            <button className={portalButton("secondary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending}>
+            <button className={portalButton("secondary", "h-12 w-full text-[0.9375rem] sm:h-10 sm:w-auto sm:text-[0.8438rem]")} disabled={pending}>
               {pending ? "Sending…" : "Decline quote"}
             </button>
           </>
@@ -121,8 +121,8 @@ export function MessageForm({ slug, eventId, placeholder }: { slug: string; even
         onFocus={(e) => { const el = e.currentTarget; setTimeout(() => el.form?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300); }} />
       <FormError message={state?.error} />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <p className="text-center text-[12px] text-ink-faint sm:text-left">{state?.ok ? "Sent — we'll reply here." : "We'll reply here in your portal."}</p>
-        <button className={portalButton("primary", "h-12 w-full text-[15px] sm:h-10 sm:w-auto sm:text-[13.5px]")} disabled={pending}>{pending ? "Sending…" : "Send message"}</button>
+        <p className="text-center text-[0.75rem] text-ink-faint sm:text-left">{state?.ok ? "Sent — we'll reply here." : "We'll reply here in your portal."}</p>
+        <button className={portalButton("primary", "h-12 w-full text-[0.9375rem] sm:h-10 sm:w-auto sm:text-[0.8438rem]")} disabled={pending}>{pending ? "Sending…" : "Send message"}</button>
       </div>
     </form>
   );
@@ -181,10 +181,10 @@ export function UploadButton({ slug, eventId, orgId, customerId, requestId, requ
   return (
     <div className={cn("flex flex-col items-end gap-1.5", fullOnMobile && "w-full items-stretch sm:w-auto sm:items-end")}>
       <input ref={input} type="file" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} aria-label={label} />
-      <button type="button" onClick={() => input.current?.click()} disabled={busy} className={portalButton(requestId ? "primary" : "secondary", fullOnMobile ? "h-11 w-full text-[14px] sm:h-9 sm:w-auto sm:text-[13px]" : "h-10 text-[13px] sm:h-9")}>
+      <button type="button" onClick={() => input.current?.click()} disabled={busy} className={portalButton(requestId ? "primary" : "secondary", fullOnMobile ? "h-11 w-full text-[0.875rem] sm:h-9 sm:w-auto sm:text-[0.8125rem]" : "h-10 text-[0.8125rem] sm:h-9")}>
         <Upload className="h-4 w-4" />{busy ? "Uploading…" : label}
       </button>
-      {error && <p role="alert" className={cn("max-w-xs text-right text-[12px] text-rose-700", fullOnMobile && "max-w-none text-left sm:max-w-xs sm:text-right")}>{error}</p>}
+      {error && <p role="alert" className={cn("max-w-xs text-right text-[0.75rem] text-rose-700", fullOnMobile && "max-w-none text-left sm:max-w-xs sm:text-right")}>{error}</p>}
     </div>
   );
 }
@@ -201,7 +201,7 @@ export function AddPersonForm({ slug, eventId, businessName }: { slug: string; e
   if (!open) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[13px] text-ink-muted">{state?.ok ? `Added — ${businessName} has been told, and they can sign in here with their own email.` : "Someone else looking after this booking, or taking it over?"}</p>
+        <p className="text-[0.8125rem] text-ink-muted">{state?.ok ? `Added — ${businessName} has been told, and they can sign in here with their own email.` : "Someone else looking after this booking, or taking it over?"}</p>
         <button type="button" onClick={() => setOpen(true)} className={portalButton("secondary", "h-12 w-full sm:h-10 sm:w-auto")}>Add a person</button>
       </div>
     );
@@ -218,7 +218,7 @@ export function AddPersonForm({ slug, eventId, businessName }: { slug: string; e
         <div className="sm:col-span-2"><Label htmlFor="ap-role">Their role (optional)</Label><Input id="ap-role" name="role" maxLength={60} placeholder="e.g. On-site contact, Taking over from me" /></div>
       </div>
       <FormError message={state?.error} />
-      <p className="text-[12px] text-ink-faint">They'll be able to sign in to this portal with their email, and they'll be included on the calendar invite.</p>
+      <p className="text-[0.75rem] text-ink-faint">They'll be able to sign in to this portal with their email, and they'll be included on the calendar invite.</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={() => setOpen(false)} className={portalButton("secondary", "h-12 w-full sm:h-10 sm:w-auto")}>Cancel</button>
         <button className={portalButton("primary", "h-12 w-full sm:h-10 sm:w-auto")} disabled={pending}>{pending ? "Adding…" : "Add person"}</button>

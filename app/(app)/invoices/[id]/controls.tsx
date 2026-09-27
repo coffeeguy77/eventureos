@@ -10,7 +10,7 @@ const METHODS = ["Bank transfer", "Card", "Cash", "Cheque", "Stripe", "PayPal", 
 
 function Ok({ state }: { state: InvoiceFormState }) {
   if (!state?.ok) return null;
-  return <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>;
+  return <p className="rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{state.ok}</p>;
 }
 
 export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroManaged, canManage }: {
@@ -27,7 +27,7 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
   if (xeroManaged) {
     return (
       <div className="px-5 pb-5">
-        <div className="flex gap-2.5 rounded-lg bg-zinc-50 px-3 py-2.5 text-[12.5px] text-ink-muted ring-1 ring-inset ring-line">
+        <div className="flex gap-2.5 rounded-lg bg-zinc-50 px-3 py-2.5 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
           <Lock className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
           <span><span className="font-medium text-ink">Managed in Xero</span> — changes sync from Xero. Record payments, send or void this invoice in Xero.</span>
         </div>
@@ -39,8 +39,8 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
       </div>
     );
   }
-  if (!canManage) return <p className="px-5 pb-5 text-[12.5px] text-ink-muted">Only owners, admins and managers can record payments or change invoices.</p>;
-  if (status === "void") return <p className="px-5 pb-5 text-[12.5px] text-ink-muted">This invoice is void. No further changes can be made.</p>;
+  if (!canManage) return <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Only owners, admins and managers can record payments or change invoices.</p>;
+  if (status === "void") return <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">This invoice is void. No further changes can be made.</p>;
 
   const canPay = balance > 0;
   return (
@@ -80,7 +80,7 @@ export function InvoiceActions({ id, status, balance, balanceLabel, today, xeroM
 
       {mode === "void" && (
         <form action={voidAction} className="space-y-3 rounded-lg border border-rose-200 bg-rose-50/40 p-3">
-          <p className="text-[12.5px] text-rose-900">Voiding cancels the invoice permanently. It stays on record for the audit trail.</p>
+          <p className="text-[0.7812rem] text-rose-900">Voiding cancels the invoice permanently. It stays on record for the audit trail.</p>
           <div><Label htmlFor="void_reason">Reason</Label><Textarea id="void_reason" name="reason" rows={2} required maxLength={500} placeholder="e.g. Raised in error — replaced by INV-1012" /></div>
           <FormError message={voidState?.error} />
           <div className="flex justify-end gap-2">

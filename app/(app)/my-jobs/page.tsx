@@ -37,7 +37,7 @@ export default async function MyJobsPage({ searchParams }: { searchParams: Promi
       <div className="mb-4 flex gap-1.5">
         {[["Upcoming", "/my-jobs"], ["Past", "/my-jobs?show=past"]].map(([label, href]) => {
           const active = (label === "Past") === past;
-          return <Link key={label} href={href} className={cn("rounded-lg px-3 py-1.5 text-[13px] font-medium ring-1 ring-inset", active ? "bg-brand-50 text-brand-800 ring-brand-300" : "text-ink-muted ring-line-strong hover:bg-zinc-50")}>{label}</Link>;
+          return <Link key={label} href={href} className={cn("rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium ring-1 ring-inset", active ? "bg-brand-50 text-brand-800 ring-brand-300" : "text-ink-muted ring-line-strong hover:bg-zinc-50")}>{label}</Link>;
         })}
       </div>
       {jobs.length === 0 ? (
@@ -63,13 +63,13 @@ function JobCard({ j, today }: { j: Job; today: string }) {
       <div className="px-4 py-4 sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-brand-700">{isToday ? "Today" : fmtDate(j.event_date, "weekday")}</p>
-            <h2 className="text-[16px] font-semibold text-ink">{j.name}</h2>
-            {j.client && <p className="text-[13px] text-ink-muted">{j.client}</p>}
+            <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-brand-700">{isToday ? "Today" : fmtDate(j.event_date, "weekday")}</p>
+            <h2 className="text-[1rem] font-semibold text-ink">{j.name}</h2>
+            {j.client && <p className="text-[0.8125rem] text-ink-muted">{j.client}</p>}
           </div>
           {j.my_role && <Badge tone="brand">{j.my_role}</Badge>}
         </div>
-        <ul className="mt-3 space-y-1.5 text-[13px] text-ink">
+        <ul className="mt-3 space-y-1.5 text-[0.8125rem] text-ink">
           <li className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-ink-faint" />{fmtDate(j.event_date, "long")}</li>
           {(j.start_time || j.finish_time) && <li className="flex items-center gap-2"><Clock className="h-4 w-4 text-ink-faint" />{fmtTime(j.start_time)}{j.finish_time ? ` – ${fmtTime(j.finish_time)}` : ""}</li>}
           {j.venue && (
@@ -88,11 +88,11 @@ function JobCard({ j, today }: { j: Job; today: string }) {
         </ul>
         {j.details_allowed && (j.inclusions?.length ?? 0) > 0 && (
           <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-3 ring-1 ring-inset ring-line">
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">What's included</p>
+            <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">What's included</p>
             {[...sections.entries()].map(([title, items]) => (
               <div key={title} className="mb-2 last:mb-0">
-                {title && <p className="text-[12.5px] font-medium text-ink">{title}</p>}
-                <ul className="text-[13px] text-ink">
+                {title && <p className="text-[0.7812rem] font-medium text-ink">{title}</p>}
+                <ul className="text-[0.8125rem] text-ink">
                   {items.map((i, k) => (
                     <li key={k} className="flex gap-2">
                       <span className="tabular w-16 shrink-0 text-right text-ink-muted">{Number(i.quantity)}{i.unit ? ` ${i.unit === "person" ? "pp" : i.unit}` : ""}</span>

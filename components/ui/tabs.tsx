@@ -35,13 +35,13 @@ export function Tabs({ tabs, active, baseHref }: {
             scroll={false}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-3 pt-2 sm:pb-2.5 sm:pt-1 text-[13px] font-medium transition-colors",
+              "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 pb-3 pt-2 sm:pb-2.5 sm:pt-1 text-[0.8125rem] font-medium transition-colors",
               isActive ? "border-brand-500 text-ink" : "border-transparent text-ink-muted hover:text-ink"
             )}
           >
             {t.label}
             {t.count != null && t.count > 0 && (
-              <span className={cn("rounded-full px-1.5 text-[11px]", isActive ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-muted")}>
+              <span className={cn("rounded-full px-1.5 text-[0.6875rem]", isActive ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-muted")}>
                 {t.count}
               </span>
             )}

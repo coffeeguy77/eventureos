@@ -1,0 +1,67 @@
+[
+  {
+    "id": "violet",
+    "name": "EventureOS",
+    "hex": "#6028EC"
+  },
+  {
+    "id": "blue",
+    "name": "Blue",
+    "hex": "#2563EB"
+  },
+  {
+    "id": "azure",
+    "name": "Azure",
+    "hex": "#3B9EFF"
+  },
+  {
+    "id": "teal",
+    "name": "Teal",
+    "hex": "#14B8A6"
+  },
+  {
+    "id": "sage",
+    "name": "Sage",
+    "hex": "#8FAE6B"
+  },
+  {
+    "id": "lime",
+    "name": "Lime",
+    "hex": "#C5E13F"
+  },
+  {
+    "id": "amber",
+    "name": "Amber",
+    "hex": "#D97706"
+  },
+  {
+    "id": "signal",
+    "name": "Signal",
+    "hex": "#F97316"
+  },
+  {
+    "id": "terracotta",
+    "name": "Terracotta",
+    "hex": "#C47A4A"
+  },
+  {
+    "id": "rust",
+    "name": "Rust",
+    "hex": "#C85A2C"
+  },
+  {
+    "id": "rose",
+    "name": "Rose",
+    "hex": "#E8A0A8"
+  },
+  {
+    "id": "mauve",
+    "name": "Mauve",
+    "hex": "#B28BB8"
+  },
+  {
+    "id": "magenta",
+    "name": "Magenta",
+    "hex": "#FF4DA6"
+  }
+]

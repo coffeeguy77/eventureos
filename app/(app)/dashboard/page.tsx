@@ -180,10 +180,10 @@ export default async function DashboardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-[24px] font-semibold tracking-tight text-ink">
+        <h1 className="text-[1.5rem] font-semibold tracking-tight text-ink">
           {greeting(tz)}, {firstName(profile.full_name, profile.email)}
         </h1>
-        <p className="mt-1 text-[13.5px] text-ink-muted">Here’s what’s happening with your event business today.</p>
+        <p className="mt-1 text-[0.8438rem] text-ink-muted">Here’s what’s happening with your event business today.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -213,10 +213,10 @@ export default async function DashboardPage() {
                       <li key={it.key}>
                         <Link href={it.href} className="flex items-center gap-4 px-5 py-3 hover:bg-zinc-50/70">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13.5px] font-medium text-ink">{it.title}</p>
-                            <p className="truncate text-[12.5px] text-ink-muted">{it.subtitle}</p>
+                            <p className="truncate text-[0.8438rem] font-medium text-ink">{it.title}</p>
+                            <p className="truncate text-[0.7812rem] text-ink-muted">{it.subtitle}</p>
                           </div>
-                          <span className={cn("shrink-0 text-right text-[12px]", it.alert ? "font-medium text-rose-700" : "text-ink-faint")}>{it.meta}</span>
+                          <span className={cn("shrink-0 text-right text-[0.75rem]", it.alert ? "font-medium text-rose-700" : "text-ink-faint")}>{it.meta}</span>
                         </Link>
                       </li>
                     ))}
@@ -227,7 +227,7 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Upcoming events" action={<Link href="/events" className="text-[12.5px] font-medium text-brand-600 hover:text-brand-700">All events</Link>} />
+            <CardHeader title="Upcoming events" action={<Link href="/events" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">All events</Link>} />
             <ClientTabs
               tabs={[
                 { key: "today", label: "Today", count: eventsToday.length, content: <EventList rows={eventsToday} today={today} /> },
@@ -238,20 +238,20 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[11.5px] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
+            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[0.7188rem] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line sm:grid-cols-7">
               {days.map((d) => {
                 const items = cal.filter((c) => localDay(c.starts_at) === d);
                 return (
-                  <div key={d} className={cn("flex gap-3 bg-white px-4 py-2.5 sm:block sm:min-h-[120px] sm:p-2", d === today && "bg-brand-50/40")}>
-                    <div className={cn("w-24 shrink-0 pt-1 text-[12px] font-medium sm:mb-1.5 sm:w-auto sm:pt-0 sm:text-[11px]", d === today ? "text-brand-700" : "text-ink-faint")}>
+                  <div key={d} className={cn("flex gap-3 bg-surface px-4 py-2.5 sm:block sm:min-h-[120px] sm:p-2", d === today && "bg-brand-50/40")}>
+                    <div className={cn("w-24 shrink-0 pt-1 text-[0.75rem] font-medium sm:mb-1.5 sm:w-auto sm:pt-0 sm:text-[0.6875rem]", d === today ? "text-brand-700" : "text-ink-faint")}>
                       {fmtDate(d, "weekday")}
                     </div>
-                    {items.length === 0 && <div className="pt-1 text-[12px] text-ink-faint sm:hidden">Nothing booked</div>}
+                    {items.length === 0 && <div className="pt-1 text-[0.75rem] text-ink-faint sm:hidden">Nothing booked</div>}
                     <div className="min-w-0 flex-1 space-y-1">
                       {items.map((c) => (
                         <Link key={c.id} href={c.event_id ? `/events/${c.event_id}` : "#"}
-                          className={cn("block rounded-md border-l-[3px] bg-zinc-50 px-1.5 py-1 text-[11px] leading-tight hover:bg-zinc-100", conflicts.has(c.id) && "ring-1 ring-rose-300")}
+                          className={cn("block rounded-md border-l-[3px] bg-zinc-50 px-1.5 py-1 text-[0.6875rem] leading-tight hover:bg-zinc-100", conflicts.has(c.id) && "ring-1 ring-rose-300")}
                           style={{ borderLeftColor: c.calendar?.colour ?? "#6028EC" }}>
                           <span className="block truncate font-medium text-ink">{c.title}</span>
                           <span className="block truncate text-ink-muted">{fmtDateTime(c.starts_at, tz, "time")} · {c.calendar?.name}</span>
@@ -278,11 +278,11 @@ export default async function DashboardPage() {
                     <li key={t.id} className="flex gap-3 px-5 py-2.5">
                       <TaskCheckbox id={t.id} done={false} />
                       <div className="min-w-0 flex-1">
-                        <Link href={href} className="block truncate text-[13px] font-medium text-ink hover:text-brand-700">{t.title}</Link>
-                        <p className="truncate text-[12px] text-ink-muted">{t.event?.name ?? t.enquiry?.title ?? "General"}</p>
+                        <Link href={href} className="block truncate text-[0.8125rem] font-medium text-ink hover:text-brand-700">{t.title}</Link>
+                        <p className="truncate text-[0.75rem] text-ink-muted">{t.event?.name ?? t.enquiry?.title ?? "General"}</p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className={cn("text-[11.5px]", overdue ? "font-medium text-rose-700" : "text-ink-faint")}>
+                        <span className={cn("text-[0.7188rem]", overdue ? "font-medium text-rose-700" : "text-ink-faint")}>
                           {t.due_at ? (overdue ? `Overdue ${relative(t.due_at).replace(" ago", "")}` : `Due ${relative(t.due_at)}`) : "No due date"}
                         </span>
                         {t.assigned_to && <Avatar name={names[t.assigned_to]} size={18} />}
@@ -296,7 +296,7 @@ export default async function DashboardPage() {
 
           <Card id="outstanding">
             <CardHeader title="Outstanding payments" subtitle={`${money(outstanding, cur)} across ${invoices.length} invoices`}
-              action={<span className="text-[11.5px] text-ink-faint">{connLabel("xero", "Xero")}</span>} />
+              action={<span className="text-[0.7188rem] text-ink-faint">{connLabel("xero", "Xero")}</span>} />
             {invoices.length === 0 ? <EmptyState title="Everything is paid" /> : (
               <ul className="divide-y divide-line border-t border-line">
                 {invoices.slice(0, 6).map((i) => {
@@ -306,12 +306,12 @@ export default async function DashboardPage() {
                     <li key={i.id}>
                       <Link href={`/invoices/${i.id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-zinc-50/70">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-medium text-ink">{i.customer?.name}</p>
-                          <p className="truncate text-[12px] text-ink-muted">{i.number} · {i.event?.name ?? "No event"}</p>
+                          <p className="truncate text-[0.8125rem] font-medium text-ink">{i.customer?.name}</p>
+                          <p className="truncate text-[0.75rem] text-ink-muted">{i.number} · {i.event?.name ?? "No event"}</p>
                         </div>
                         <div className="text-right">
-                          <p className="tabular text-[13px] font-medium text-ink">{money(i.balance, cur)}</p>
-                          <p className={cn("text-[11.5px]", i.status === "overdue" ? "text-rose-700" : "text-ink-faint")}>
+                          <p className="tabular text-[0.8125rem] font-medium text-ink">{money(i.balance, cur)}</p>
+                          <p className={cn("text-[0.7188rem]", i.status === "overdue" ? "text-rose-700" : "text-ink-faint")}>
                             {i.status === "overdue" ? `${daysLate}d overdue` : i.due_date ? `Due ${fmtDate(i.due_date, "short")}` : s.label}
                           </p>
                         </div>
@@ -324,7 +324,7 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Recent customer communication" action={<span className="text-[11.5px] text-ink-faint">{conn("gmail")?.status === "connected" ? connLabel("gmail", "Gmail") : "Gmail not connected · demo messages"}</span>} />
+            <CardHeader title="Recent customer communication" action={<span className="text-[0.7188rem] text-ink-faint">{conn("gmail")?.status === "connected" ? connLabel("gmail", "Gmail") : "Gmail not connected · demo messages"}</span>} />
             <ul className="divide-y divide-line border-t border-line">
               {messages.map((m) => (
                 <li key={m.id}>
@@ -332,12 +332,12 @@ export default async function DashboardPage() {
                     <Avatar name={m.direction === "outbound" ? org.name : m.from_name ?? m.from_email} size={26} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <p className={cn("truncate text-[13px] text-ink", !m.is_read && "font-semibold")}>
+                        <p className={cn("truncate text-[0.8125rem] text-ink", !m.is_read && "font-semibold")}>
                           {m.direction === "outbound" ? `You → ${m.thread.subject}` : m.from_name ?? m.from_email}
                         </p>
-                        <span className="ml-auto shrink-0 text-[11.5px] text-ink-faint">{relative(m.sent_at)}</span>
+                        <span className="ml-auto shrink-0 text-[0.7188rem] text-ink-faint">{relative(m.sent_at)}</span>
                       </div>
-                      <p className="truncate text-[12px] text-ink-muted">{m.snippet}</p>
+                      <p className="truncate text-[0.75rem] text-ink-muted">{m.snippet}</p>
                     </div>
                   </Link>
                 </li>
@@ -365,18 +365,18 @@ function EventList({ rows, today }: { rows: Row[]; today: string }) {
           <li key={e.id}>
             <Link href={`/events/${e.id}`} className="flex items-center gap-4 px-5 py-3 hover:bg-zinc-50/70">
               <div className="w-12 shrink-0 rounded-lg bg-zinc-50 py-1 text-center ring-1 ring-line">
-                <div className="text-[10px] font-semibold uppercase text-ink-faint">{fmtDate(e.event_date, "short").split(" ")[1]}</div>
-                <div className="text-[16px] font-semibold leading-tight text-ink">{fmtDate(e.event_date, "short").split(" ")[0]}</div>
+                <div className="text-[0.625rem] font-semibold uppercase text-ink-faint">{fmtDate(e.event_date, "short").split(" ")[1]}</div>
+                <div className="text-[1rem] font-semibold leading-tight text-ink">{fmtDate(e.event_date, "short").split(" ")[0]}</div>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium text-ink">{e.name}</p>
-                <p className="truncate text-[12.5px] text-ink-muted">
+                <p className="truncate text-[0.8438rem] font-medium text-ink">{e.name}</p>
+                <p className="truncate text-[0.7812rem] text-ink-muted">
                   {[e.customer?.name, timeRange(e.start_time, e.finish_time), e.venue, e.guest_count ? `${e.guest_count} guests` : null].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <div className="hidden shrink-0 text-right sm:block">
                 <Badge tone={s.tone} dot>{s.label}</Badge>
-                <p className="mt-1 text-[11.5px] text-ink-faint">{relativeDay(e.event_date, today)}</p>
+                <p className="mt-1 text-[0.7188rem] text-ink-faint">{relativeDay(e.event_date, today)}</p>
               </div>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" />
             </Link>

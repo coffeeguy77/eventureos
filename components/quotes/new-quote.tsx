@@ -56,7 +56,7 @@ export function EventPicker({ events, today }: { events: PickerEvent[]; today: s
         {error && <div className="mt-3"><FormError message={error} /></div>}
       </div>
       {list.length === 0 ? (
-        <div className="px-5 py-10 text-center text-[13px] text-ink-muted">
+        <div className="px-5 py-10 text-center text-[0.8125rem] text-ink-muted">
           No matching events. <Link href="/events/new" className="font-medium text-brand-700 hover:underline">Create an event</Link> first — every quote belongs to one.
         </div>
       ) : (
@@ -69,12 +69,12 @@ export function EventPicker({ events, today }: { events: PickerEvent[]; today: s
                 <button type="button" disabled={!!pendingId} onClick={() => create(e.id)}
                   className="group flex w-full items-center gap-3 px-4 py-3 text-left sm:gap-4 sm:px-5 hover:bg-zinc-50 focus:bg-brand-50/50 focus:outline-none disabled:cursor-wait">
                   <div className="w-[5.5rem] shrink-0 sm:w-24">
-                    <p className="whitespace-nowrap text-[13px] text-ink">{e.event_date ? fmtDate(e.event_date) : "No date"}</p>
-                    {e.event_date && <p className="text-[11.5px] text-ink-faint">{relativeDay(e.event_date, today)}</p>}
+                    <p className="whitespace-nowrap text-[0.8125rem] text-ink">{e.event_date ? fmtDate(e.event_date) : "No date"}</p>
+                    {e.event_date && <p className="text-[0.7188rem] text-ink-faint">{relativeDay(e.event_date, today)}</p>}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-medium text-ink">{e.name}</p>
-                    <p className="truncate text-[12px] text-ink-muted">{e.customer} · EV-{e.number}</p>
+                    <p className="truncate text-[0.8438rem] font-medium text-ink">{e.name}</p>
+                    <p className="truncate text-[0.75rem] text-ink-muted">{e.customer} · EV-{e.number}</p>
                   </div>
                   <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
                     {e.quotes.map((qq) => <Badge key={qq.id} tone={QUOTE_STATUS[qq.status].tone}>Q-{qq.number} {QUOTE_STATUS[qq.status].label}</Badge>)}
@@ -116,7 +116,7 @@ export function AutoCreate({ eventId, eventName }: { eventId: string; eventName:
     <Card className="mx-auto max-w-md px-5 py-10 text-center sm:px-6">
       {error ? (
         <>
-          <p className="text-[14px] font-semibold text-ink">Couldn’t create the quote</p>
+          <p className="text-[0.875rem] font-semibold text-ink">Couldn’t create the quote</p>
           <div className="mt-3 text-left"><FormError message={error} /></div>
           <div className="mt-4 flex flex-col-reverse justify-center gap-2 sm:flex-row">
             <Button variant="primary" onClick={go} className="h-10 sm:h-9">Try again</Button>
@@ -126,8 +126,8 @@ export function AutoCreate({ eventId, eventName }: { eventId: string; eventName:
       ) : (
         <>
           <Loader2 className="mx-auto h-5 w-5 animate-spin text-brand-600" />
-          <p className="mt-3 text-[14px] font-semibold text-ink">Creating a quote for {eventName}…</p>
-          <p className="mt-1 text-[12.5px] text-ink-muted">You’ll be taken to the quote builder in a moment.</p>
+          <p className="mt-3 text-[0.875rem] font-semibold text-ink">Creating a quote for {eventName}…</p>
+          <p className="mt-1 text-[0.7812rem] text-ink-muted">You’ll be taken to the quote builder in a moment.</p>
         </>
       )}
     </Card>
@@ -142,15 +142,15 @@ export function ExistingQuotes({ eventId, eventName, quotes }: { eventId: string
   return (
     <Card className="mx-auto max-w-lg">
       <div className="px-5 pb-3 pt-5">
-        <p className="text-[14px] font-semibold text-ink">{eventName} already has {quotes.length === 1 ? "a quote" : `${quotes.length} quotes`}</p>
-        <p className="mt-0.5 text-[12.5px] text-ink-muted">Open the existing quote to keep editing, or start a separate one (for example, an alternative package).</p>
+        <p className="text-[0.875rem] font-semibold text-ink">{eventName} already has {quotes.length === 1 ? "a quote" : `${quotes.length} quotes`}</p>
+        <p className="mt-0.5 text-[0.7812rem] text-ink-muted">Open the existing quote to keep editing, or start a separate one (for example, an alternative package).</p>
       </div>
       <ul className="divide-y divide-line border-y border-line">
         {quotes.map((qq) => (
           <li key={qq.id}>
             <Link href={`/quotes/${qq.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50">
-              <span className="tabular text-[13px] font-medium text-ink">Q-{qq.number}</span>
-              <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{qq.title}</span>
+              <span className="tabular text-[0.8125rem] font-medium text-ink">Q-{qq.number}</span>
+              <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-ink-muted">{qq.title}</span>
               <Badge tone={QUOTE_STATUS[qq.status].tone} dot>{QUOTE_STATUS[qq.status].label}</Badge>
               <ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" />
             </Link>

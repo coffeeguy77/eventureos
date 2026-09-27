@@ -8,8 +8,9 @@
  */
 import { cn } from "@/lib/cn";
 
-export const SERIES = ["#6028EC", "#eb6834"] as const;
-export const ORDINAL = ["#8757F2", "#4F17DB", "#2A0D73"] as const;
+// Follow the chosen accent colour and appearance (see app/theme.css)
+export const SERIES = ["rgb(var(--brand-500))", "#eb6834"] as const;
+export const ORDINAL = ["rgb(var(--brand-300))", "rgb(var(--brand-500))", "rgb(var(--brand-700))"] as const;
 export const STATUS = { neutral: "#A1A1AA", warning: "#fab219", serious: "#ec835a", critical: "#d03b3b" } as const;
 
 /** A report card: title, optional caption, the chart, and a "View as table" disclosure. */
@@ -17,18 +18,18 @@ export function ChartFrame({ title, subtitle, children, table, action, className
   title: string; subtitle?: React.ReactNode; children: React.ReactNode; table?: React.ReactNode; action?: React.ReactNode; className?: string;
 }) {
   return (
-    <figure className={cn("min-w-0 rounded-xl border border-line bg-white shadow-card", className)}>
+    <figure className={cn("min-w-0 rounded-xl border border-line bg-surface shadow-card", className)}>
       <figcaption className="flex flex-col gap-2 px-4 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:px-5">
         <div className="min-w-0">
-          <h2 className="text-[13.5px] font-semibold text-ink">{title}</h2>
-          {subtitle && <p className="mt-0.5 text-[12.5px] text-ink-muted">{subtitle}</p>}
+          <h2 className="text-[0.8438rem] font-semibold text-ink">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-[0.7812rem] text-ink-muted">{subtitle}</p>}
         </div>
         {action && <div className="sm:shrink-0">{action}</div>}
       </figcaption>
       <div className="px-4 pb-4 sm:px-5">{children}</div>
       {table && (
         <details className="group border-t border-line">
-          <summary className="cursor-pointer list-none px-4 py-3 sm:px-5 sm:py-2.5 text-[12px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
+          <summary className="cursor-pointer list-none px-4 py-3 sm:px-5 sm:py-2.5 text-[0.75rem] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
             <span className="group-open:hidden">View as table</span><span className="hidden group-open:inline">Hide table</span>
           </summary>
           <div className="overflow-x-auto px-4 pb-4 sm:px-5">{table}</div>
@@ -40,8 +41,8 @@ export function ChartFrame({ title, subtitle, children, table, action, className
 
 export function DataTable({ head, rows, align }: { head: string[]; rows: React.ReactNode[][]; align?: ("left" | "right")[] }) {
   return (
-    <table className="w-full text-left text-[12.5px] sm:min-w-[360px]">
-      <thead><tr className="border-b border-line text-[11px] uppercase tracking-wide text-ink-faint">
+    <table className="w-full text-left text-[0.7812rem] sm:min-w-[360px]">
+      <thead><tr className="border-b border-line text-[0.6875rem] uppercase tracking-wide text-ink-faint">
         {head.map((h, i) => <th key={h} scope="col" className={cn("py-2 pr-3 font-medium", align?.[i] === "right" && "text-right")}>{h}</th>)}
       </tr></thead>
       <tbody className="divide-y divide-line">
@@ -58,18 +59,18 @@ export function BarList({ rows, format = (n) => String(n), color = SERIES[0], em
   rows: { label: string; value: number; note?: React.ReactNode; color?: string; href?: string }[];
   format?: (n: number) => string; color?: string; empty?: string;
 }) {
-  if (rows.length === 0 || rows.every((r) => r.value === 0)) return <p className="py-6 text-center text-[12.5px] text-ink-muted">{empty}</p>;
+  if (rows.length === 0 || rows.every((r) => r.value === 0)) return <p className="py-6 text-center text-[0.7812rem] text-ink-muted">{empty}</p>;
   const max = Math.max(...rows.map((r) => r.value), 1);
   return (
     <ul className="space-y-2">
       {rows.map((r) => (
         <li key={r.label} className="grid grid-cols-[minmax(72px,30%)_1fr_auto] items-center gap-2 sm:grid-cols-[minmax(84px,30%)_1fr_auto] sm:gap-3" title={`${r.label}: ${format(r.value)}`}>
-          <span className="truncate text-[12.5px] text-ink-muted">{r.label}</span>
+          <span className="truncate text-[0.7812rem] text-ink-muted">{r.label}</span>
           <span className="flex min-w-0 items-center gap-2">
             <span className="block h-[14px] min-w-[2px] rounded-r-[4px]" style={{ width: `${(r.value / max) * 100}%`, background: r.color ?? color }} />
-            <span className="tabular shrink-0 text-[12.5px] font-medium text-ink">{format(r.value)}</span>
+            <span className="tabular shrink-0 text-[0.7812rem] font-medium text-ink">{format(r.value)}</span>
           </span>
-          <span className="tabular whitespace-nowrap text-right text-[12px] text-ink-faint sm:min-w-[64px] sm:whitespace-normal">{r.note}</span>
+          <span className="tabular whitespace-nowrap text-right text-[0.75rem] text-ink-faint sm:min-w-[64px] sm:whitespace-normal">{r.note}</span>
         </li>
       ))}
     </ul>
@@ -79,7 +80,7 @@ export function BarList({ rows, format = (n) => String(n), color = SERIES[0], em
 /** Conversion funnel: ordered stages on the ordinal ramp, each with its share of the first stage and step conversion. */
 export function Funnel({ stages }: { stages: { label: string; value: number; hint?: string }[] }) {
   const top = stages[0]?.value ?? 0;
-  if (top === 0) return <p className="py-6 text-center text-[12.5px] text-ink-muted">No enquiries in this period.</p>;
+  if (top === 0) return <p className="py-6 text-center text-[0.7812rem] text-ink-muted">No enquiries in this period.</p>;
   return (
     <ol className="space-y-3">
       {stages.map((s, i) => {
@@ -87,7 +88,7 @@ export function Funnel({ stages }: { stages: { label: string; value: number; hin
         const step = prev ? Math.round((s.value / prev) * 100) : null;
         return (
           <li key={s.label}>
-            <div className="mb-1 flex items-baseline justify-between gap-3 text-[12.5px]">
+            <div className="mb-1 flex items-baseline justify-between gap-3 text-[0.7812rem]">
               <span className="min-w-0 text-ink">{s.label}{s.hint && <span className="ml-1.5 text-ink-faint">{s.hint}</span>}</span>
               <span className="tabular shrink-0 text-ink-muted">
                 <span className="font-semibold text-ink">{s.value}</span>
@@ -107,7 +108,7 @@ export function Funnel({ stages }: { stages: { label: string; value: number; hin
 /** Legend key for bars (rect swatch) — text stays in ink tokens. */
 export function Legend({ items }: { items: { label: string; color: string }[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-muted">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[0.75rem] text-ink-muted">
       {items.map((i) => (
         <li key={i.label} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-[2px]" style={{ background: i.color }} />{i.label}</li>
       ))}
@@ -118,9 +119,9 @@ export function Legend({ items }: { items: { label: string; color: string }[] })
 export function Stat({ label, value, sub, alert }: { label: string; value: React.ReactNode; sub?: React.ReactNode; alert?: boolean }) {
   return (
     <div className="min-w-0 rounded-lg bg-zinc-50/80 px-3.5 py-3 ring-1 ring-inset ring-line">
-      <div className="text-[11.5px] font-medium text-ink-muted">{label}</div>
-      <div className={cn("mt-1 break-words text-[20px] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
-      {sub && <div className="mt-0.5 text-[11.5px] text-ink-faint">{sub}</div>}
+      <div className="text-[0.7188rem] font-medium text-ink-muted">{label}</div>
+      <div className={cn("mt-1 break-words text-[1.25rem] font-semibold tracking-tight", alert ? "text-rose-700" : "text-ink")}>{value}</div>
+      {sub && <div className="mt-0.5 text-[0.7188rem] text-ink-faint">{sub}</div>}
     </div>
   );
 }

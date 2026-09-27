@@ -17,7 +17,7 @@ export default async function BrandingPage() {
     <Card>
       <CardHeader
         title="Branding & customer portal"
-        subtitle={<>Customers see this at <span className="font-mono text-[12px]">/p/{o.slug}</span> and on every quote you send.</>}
+        subtitle={<>Customers see this at <span className="font-mono text-[0.75rem]">/p/{o.slug}</span> and on every quote you send.</>}
       />
       <div className="border-t border-line px-4 py-5 sm:px-5">
         <BrandingEditor

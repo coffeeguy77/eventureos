@@ -58,7 +58,7 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
 
   if (!menus.length) {
     return (
-      <div className="rounded-xl border border-line bg-white p-4 text-[13px] text-ink-muted shadow-card">
+      <div className="rounded-xl border border-line bg-surface p-4 text-[0.8125rem] text-ink-muted shadow-card">
         Nothing to pick from yet. Give services a group in <a className="font-medium text-brand-700 underline" href="/settings/pricing">Settings → Services &amp; pricing</a>.
         <button type="button" onClick={onClose} className="ml-2 text-ink-faint hover:text-ink">Close</button>
       </div>
@@ -66,11 +66,11 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
   }
 
   return (
-    <form onSubmit={submit} className="rounded-xl border border-brand-200 bg-white p-4 shadow-card sm:p-5" aria-label="Add from menu">
+    <form onSubmit={submit} className="rounded-xl border border-brand-200 bg-surface p-4 shadow-card sm:p-5" aria-label="Add from menu">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-[14px] font-semibold text-ink"><UtensilsCrossed className="h-4 w-4 text-brand-600" />Add from menu</p>
-          <p className="mt-0.5 text-[12.5px] text-ink-muted">Tick items and set quantities. Per-person items start at the number of people.</p>
+          <p className="flex items-center gap-2 text-[0.875rem] font-semibold text-ink"><UtensilsCrossed className="h-4 w-4 text-brand-600" />Add from menu</p>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">Tick items and set quantities. Per-person items start at the number of people.</p>
         </div>
         <button type="button" onClick={onClose} className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-zinc-100 hover:text-ink sm:m-0 sm:p-1" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
@@ -80,7 +80,7 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
           <div className="flex flex-wrap gap-1.5">
             {menus.map((m) => (
               <button key={m} type="button" onClick={() => setMenu(m)}
-                className={cn("rounded-lg px-3 py-1.5 text-[13px] font-medium ring-1 ring-inset", m === menu ? "bg-brand-50 text-brand-800 ring-brand-300" : "text-ink ring-line-strong hover:bg-zinc-50")}>{m}</button>
+                className={cn("rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium ring-1 ring-inset", m === menu ? "bg-brand-50 text-brand-800 ring-brand-300" : "text-ink ring-line-strong hover:bg-zinc-50")}>{m}</button>
             ))}
           </div>
         )}
@@ -91,7 +91,7 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
       <div className="mt-4 max-h-[55vh] space-y-4 overflow-y-auto pr-1">
         {groups.map((g) => (
           <div key={g.name}>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">{g.name}</p>
+            <p className="mb-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">{g.name}</p>
             <ul className="divide-y divide-line rounded-lg ring-1 ring-line">
               {g.items.map((s) => {
                 const on = Number(qty[s.id]) > 0;
@@ -99,10 +99,10 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
                   <li key={s.id} className={cn("flex items-start gap-3 px-3 py-2", on && "bg-brand-50/40")}>
                     <input type="checkbox" checked={on} onChange={() => toggle(s)} aria-label={`Add ${s.name}`} className="mt-1 h-4 w-4 rounded border-line-strong text-brand-600" />
                     <button type="button" onClick={() => toggle(s)} className="min-w-0 flex-1 text-left">
-                      <span className="block text-[13px] font-medium text-ink">{s.name}</span>
-                      {s.description && <span className="block text-[12px] text-ink-muted">{s.description}</span>}
+                      <span className="block text-[0.8125rem] font-medium text-ink">{s.name}</span>
+                      {s.description && <span className="block text-[0.75rem] text-ink-muted">{s.description}</span>}
                     </button>
-                    <span className="shrink-0 pt-0.5 text-right text-[12.5px] text-ink-muted">{money(s.unit_price, currency, { cents: true })}{s.unit ? <span className="text-ink-faint"> /{s.unit === "person" ? "pp" : s.unit}</span> : null}</span>
+                    <span className="shrink-0 pt-0.5 text-right text-[0.7812rem] text-ink-muted">{money(s.unit_price, currency, { cents: true })}{s.unit ? <span className="text-ink-faint"> /{s.unit === "person" ? "pp" : s.unit}</span> : null}</span>
                     <input type="number" min={0} step="1" inputMode="numeric" value={qty[s.id] ?? ""} placeholder="0" aria-label={`Quantity of ${s.name}`}
                       onChange={(e) => setQty((all) => ({ ...all, [s.id]: e.target.value }))}
                       className={cn(inputClass, "w-20 shrink-0 py-1 text-right")} />
@@ -116,7 +116,7 @@ export function MenuPicker({ quoteId, services, guests, currency, onClose, onAdd
 
       <div className="mt-4"><FormError message={error} /></div>
       <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
-        <span className="mr-auto text-[12.5px] text-ink-muted">{picked.length} item{picked.length === 1 ? "" : "s"} · {money(subtotal, currency, { cents: true })} + GST</span>
+        <span className="mr-auto text-[0.7812rem] text-ink-muted">{picked.length} item{picked.length === 1 ? "" : "s"} · {money(subtotal, currency, { cents: true })} + GST</span>
         <Button type="button" onClick={onClose}>Cancel</Button>
         <Button type="submit" variant="primary" disabled={pending || !picked.length}>{pending ? "Adding…" : "Add to quote"}</Button>
       </div>

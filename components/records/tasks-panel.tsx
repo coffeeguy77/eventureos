@@ -31,9 +31,9 @@ export function TasksPanel({ tasks, members, action }: {
             <li key={t.id} className="flex gap-2.5 py-2 sm:py-1.5">
               <TaskCheckbox id={t.id} done={t.status === "done"} />
               <div className="min-w-0 flex-1">
-                <p className={cn("break-words text-[13px]", t.status === "done" ? "text-ink-faint line-through" : "text-ink")}>{t.title}</p>
+                <p className={cn("break-words text-[0.8125rem]", t.status === "done" ? "text-ink-faint line-through" : "text-ink")}>{t.title}</p>
                 {t.due_at && t.status !== "done" && (
-                  <p className={cn("text-[11.5px]", overdue ? "font-medium text-rose-700" : "text-ink-faint")}>
+                  <p className={cn("text-[0.7188rem]", overdue ? "font-medium text-rose-700" : "text-ink-faint")}>
                     {overdue ? "Overdue · " : "Due "}{relative(t.due_at)}
                   </p>
                 )}
@@ -42,7 +42,7 @@ export function TasksPanel({ tasks, members, action }: {
             </li>
           );
         })}
-        {tasks.length === 0 && !adding && <li className="text-[12.5px] text-ink-muted">No tasks.</li>}
+        {tasks.length === 0 && !adding && <li className="text-[0.7812rem] text-ink-muted">No tasks.</li>}
       </ul>
       {adding ? (
         <form ref={form} className="mt-3 space-y-2"
@@ -61,7 +61,7 @@ export function TasksPanel({ tasks, members, action }: {
           </div>
         </form>
       ) : (
-        <button onClick={() => setAdding(true)} className="mt-2 inline-flex min-h-10 items-center gap-1 text-[12.5px] font-medium text-brand-600 hover:text-brand-700 sm:min-h-0">
+        <button onClick={() => setAdding(true)} className="mt-2 inline-flex min-h-10 items-center gap-1 text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700 sm:min-h-0">
           <Plus className="h-3.5 w-3.5" /> Add task
         </button>
       )}
