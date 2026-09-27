@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Bell, Check, ChevronDown, Plus, Search, LogOut } from "lucide-react";
+import { flushSync } from "react-dom";
+import { Bell, Check, ChevronDown, Plus, Search, LogOut, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Personalise } from "./personalise";
 import { relative } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
-import { Logo } from "@/components/shell/sidebar";
+import { Logo, Wordmark } from "@/components/shell/sidebar";
 import { globalSearch, markAllNotificationsRead, signOut, switchOrganisation, type SearchResult } from "@/app/(app)/shell-actions";
 
 export interface TopbarProps {
@@ -34,8 +35,10 @@ export function Topbar(props: TopbarProps) {
   const staff = props.role === "staff";
   return (
     <header className="pt-safe sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
-      <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
-        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="shrink-0 lg:hidden"><Logo size={30} /></Link>
+      <div className="relative flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
+        {/* Phones: the full wordmark; tablets: the E mark (room for the search box); desktop: the sidebar has the logo */}
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="shrink-0 sm:hidden"><Wordmark height={20} /></Link>
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="hidden shrink-0 sm:block lg:hidden"><Logo size={30} /></Link>
         {!staff && <GlobalSearch />}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {!staff && <QuickCreate canInvoice={props.role !== "sales"} />}
@@ -62,9 +65,17 @@ function GlobalSearch() {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [pending, startTransition] = useTransition();
+  // Phones: search is an icon that expands across the header
+  const [expanded, setExpanded] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
-  useClickOutside(box, () => setOpen(false));
+  useClickOutside(box, () => { setOpen(false); if (!q.trim()) setExpanded(false); });
+  function expand() {
+    flushSync(() => setExpanded(true)); // render the field now so focusing it opens the keyboard on iPhone
+    input.current?.focus();
+    setOpen(true);
+  }
+  function collapse() { setOpen(false); setExpanded(false); setQ(""); }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -106,11 +117,19 @@ function GlobalSearch() {
   function go(r: SearchResult) {
     setOpen(false);
     setQ("");
+    setExpanded(false);
     router.push(r.href);
   }
 
   return (
-    <div ref={box} className="relative min-w-0 flex-1 lg:max-w-[520px]">
+    <div ref={box} className={cn("min-w-0 sm:relative sm:flex-1 lg:max-w-[520px]",
+      expanded ? "absolute inset-0 z-30 flex items-center gap-2 bg-surface px-3 sm:static sm:z-auto sm:bg-transparent sm:px-0" : "ml-auto sm:ml-0")}>
+      {!expanded && (
+        <button type="button" onClick={expand} aria-label="Search" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-zinc-100 hover:text-ink sm:hidden">
+          <Search className="h-[1.15rem] w-[1.15rem]" />
+        </button>
+      )}
+      <div className={cn("relative min-w-0 flex-1", !expanded && "hidden sm:block")}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
       <input
         ref={input}
@@ -121,12 +140,19 @@ function GlobalSearch() {
           if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, flat.length - 1)); }
           if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
           if (e.key === "Enter" && flat[active]) go(flat[active]);
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") { setOpen(false); if (expanded) collapse(); }
         }}
+        type="search" enterKeyHint="search"
         placeholder="Search clients, events, quotes…"
-        className="h-9 w-full rounded-lg border border-line bg-canvas pl-9 pr-14 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-300 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
+        className="h-10 w-full rounded-lg border border-line bg-canvas pl-9 pr-3 text-base text-ink sm:h-9 sm:pr-14 sm:text-[0.8125rem] [&::-webkit-search-cancel-button]:hidden placeholder:text-ink-faint focus:border-brand-300 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100"
       />
       <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded border border-line bg-surface px-1.5 text-[0.6562rem] font-medium text-ink-faint sm:block">⌘K</kbd>
+      </div>
+      {expanded && (
+        <button type="button" onClick={collapse} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2 text-[0.875rem] font-medium text-ink-muted hover:text-ink sm:hidden">
+          <X className="h-4 w-4" /><span>Cancel</span>
+        </button>
+      )}
       {open && q.trim().length >= 2 && (
         <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-40 max-h-[70vh] overflow-y-auto rounded-xl border border-line bg-surface p-1.5 shadow-pop sm:absolute sm:inset-x-0 sm:top-11">
           {error && <p className="px-3 py-3 text-[0.7812rem] text-rose-700">{error}</p>}
