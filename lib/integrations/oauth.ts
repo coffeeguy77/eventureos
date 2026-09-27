@@ -50,7 +50,8 @@ export interface OAuthProviderConfig {
  *    offline_access            — refresh tokens
  *    accounting.contacts       — read contacts for matching; create a contact when pushing an invoice
  *    accounting.invoices       — read invoices + credit notes; create invoices
- *    accounting.payments.read  — read payments (Xero stays authoritative for payment status)
+ *    accounting.payments       — read payments; record card payments taken through EventureOS (Stripe)
+ *    accounting.settings.read  — items (codes/accounts for the price list), chart of accounts, tracking categories
  *  Override with XERO_SCOPES (space separated) if your Xero app predates granular scopes.
  */
 export const OAUTH: Record<LiveProviderId, OAuthProviderConfig> = {
@@ -74,7 +75,7 @@ export const OAUTH: Record<LiveProviderId, OAuthProviderConfig> = {
     authorizeUrl: "https://login.xero.com/identity/connect/authorize",
     tokenUrl: "https://identity.xero.com/connect/token",
     clientIdEnv: "XERO_CLIENT_ID", clientSecretEnv: "XERO_CLIENT_SECRET",
-    scopes: ["offline_access", "accounting.contacts", "accounting.invoices", "accounting.payments.read"],
+    scopes: ["offline_access", "accounting.contacts", "accounting.invoices", "accounting.payments", "accounting.settings.read"],
     pkce: false, tokenAuth: "basic",
   },
 };

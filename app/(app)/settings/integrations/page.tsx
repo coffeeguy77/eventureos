@@ -9,6 +9,14 @@ import { envStatus, LIVE_PROVIDERS, missingEnv, PROVIDERS, type ProviderDef } fr
 import { fmtDateTime, relative } from "@/lib/format";
 import type { Tone } from "@/lib/status";
 import { DisconnectButton, SyncNowButton } from "./controls";
+import { OAUTH } from "@/lib/integrations/oauth";
+
+/** The connection was made before EventureOS asked for permissions it now uses. */
+function needsNewScopes(provider: string, granted: string[] | null | undefined) {
+  const cfg = (OAUTH as Record<string, { scopes: string[] }>)[provider];
+  if (!cfg || !granted?.length) return false;
+  return cfg.scopes.some((sc) => !granted.includes(sc));
+}
 import { Code, Mark, STATUS, SYNC_STATUS } from "./ui";
 
 export const metadata = { title: "Integrations" };
@@ -25,7 +33,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const env = envStatus();
 
   const [intRes, pendingRes, logsRes, suggestRes] = await Promise.all([
-    supabase.from("integrations").select("id, provider, status, account_label, last_sync_at, last_sync_status, last_error, connected_at").eq("organisation_id", org.id),
+    supabase.from("integrations").select("id, provider, status, account_label, last_sync_at, last_sync_status, last_error, connected_at, scopes").eq("organisation_id", org.id),
     supabase.from("import_candidates").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "pending"),
     supabase.from("integration_sync_logs").select("id, entity, direction, status, records_processed, message, started_at, finished_at, integration:integrations(provider)")
       .eq("organisation_id", org.id).order("started_at", { ascending: false }).limit(8),
@@ -163,8 +171,10 @@ function ProviderCard({ p, row, missing, manager, tz }: { p: ProviderDef; row: I
             <ButtonLink href={`/settings/integrations/${p.id}`} size="sm" variant="secondary" className="h-10 sm:h-8">Settings</ButtonLink>
             {manager && <SyncNowButton provider={p.id} />}
             {manager && <DisconnectButton provider={p.id} name={p.name} />}
-            {row!.status === "error" && manager && !missing.length && (
-              <a href={`/api/integrations/${p.id}/connect`} className={buttonClass("ghost", "sm", "h-10 sm:h-8")}>Reconnect</a>
+            {(row!.status === "error" || needsNewScopes(p.id, (row as { scopes?: string[] | null }).scopes)) && manager && !missing.length && (
+              <a href={`/api/integrations/${p.id}/connect`} className={buttonClass(row!.status === "error" ? "ghost" : "primary", "sm", "h-10 sm:h-8")}>
+                {row!.status === "error" ? "Reconnect" : "Reconnect to allow new features"}
+              </a>
             )}
           </>
         ) : missing.length ? (
