@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SpamButtons } from "@/components/enquiries/spam-buttons";
 import { notFound } from "next/navigation";
 import { ArrowUpRight, Mail, Phone, Building2 } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
@@ -112,12 +113,13 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           {e.event ? (
             <ButtonLink href={`/events/${e.event.id}`} variant="primary" className="col-span-2 h-10 sm:h-9">Open event EV-{e.event.number} <ArrowUpRight className="h-4 w-4" /></ButtonLink>
           ) : (
-            !["lost", "archived"].includes(e.status) && <ConvertToEvent id={e.id} defaultName={e.title} />
+            !["lost", "archived", "spam"].includes(e.status) && <ConvertToEvent id={e.id} defaultName={e.title} />
           )}
         </div>
       </div>
 
-      <NextActionBanner action={na} />
+      <SpamButtons id={e.id} isSpam={e.status === "spam"} sender={e.contact_email} reason={(e as { spam_reason?: string | null }).spam_reason ?? null} hasEvent={!!e.event} />
+      {e.status !== "spam" && <NextActionBanner action={na} />}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
         <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">

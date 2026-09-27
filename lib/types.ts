@@ -2,7 +2,7 @@ export type OrgRole = "owner" | "admin" | "manager" | "sales" | "staff" | "custo
 
 export type EnquiryStatus =
   | "new" | "needs_review" | "contacted" | "qualified" | "quote_required"
-  | "quote_sent" | "negotiating" | "won" | "lost" | "archived";
+  | "quote_sent" | "negotiating" | "won" | "lost" | "archived" | "spam";
 
 export type EnquirySource =
   | "website" | "email" | "phone" | "referral" | "instagram" | "facebook" | "manual" | "other";

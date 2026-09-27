@@ -11,16 +11,102 @@ import { enquiryNextAction } from "@/lib/next-action";
 import { fmtDate, money, relative } from "@/lib/format";
 import type { Enquiry, EnquirySource, EnquiryStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { Ban, Inbox, ShieldAlert } from "lucide-react";
+import { InboxBulkBar, RowCheck } from "@/components/enquiries/inbox-bulk";
+import { SpamList, type SpamRow } from "@/components/enquiries/spam-list";
+import { BlockedList, type BlockRow } from "@/components/enquiries/blocked-list";
+import { SpamRules } from "@/components/enquiries/spam-rules";
+import { DEFAULT_SPAM_PHRASES } from "@/lib/integrations/spam";
 
 export const metadata = { title: "Enquiries" };
 
 type Row = Enquiry & { customer: { name: string } | null };
 
 export default async function EnquiriesPage({ searchParams }: {
-  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string }>;
 }) {
   const sp = await searchParams;
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, role } = await requireOrg();
+  const folder = sp.folder === "spam" || sp.folder === "blocked" ? sp.folder : "inbox";
+  const [{ count: spamCount }, { count: blockedCount }] = await Promise.all([
+    supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "spam"),
+    supabase.from("email_blocklist").select("id", { count: "exact", head: true }).eq("organisation_id", org.id),
+  ]);
+  const folders = (
+    <div className="mb-4 flex gap-1 border-b border-line">
+      {([["inbox", "Inbox", Inbox, null], ["spam", "Spam", ShieldAlert, spamCount ?? 0], ["blocked", "Blocked", Ban, blockedCount ?? 0]] as const).map(([key, label, Icon, n]) => (
+        <Link key={key} href={key === "inbox" ? "/enquiries" : `/enquiries?folder=${key}`} scroll={false}
+          className={cn("-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2.5 pt-1 text-[13.5px] font-medium",
+            folder === key ? "border-brand-500 text-ink" : "border-transparent text-ink-muted hover:text-ink")}>
+          <Icon className="h-4 w-4" />{label}{n != null && n > 0 && <span className="rounded-full bg-zinc-100 px-1.5 text-[11px] text-ink-muted">{n}</span>}
+        </Link>
+      ))}
+    </div>
+  );
+  const header = (
+    <PageHeader
+      title="Enquiries"
+      subtitle={folder === "spam" ? "Junk and unwanted email — nothing here is lost; move it back if it's real." : folder === "blocked" ? "Senders that are never imported again." : "Every new lead, from every channel, in one inbox."}
+      actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>}
+    />
+  );
+
+  if (folder === "spam") {
+    let q = supabase.from("enquiries").select("id, number, title, contact_name, contact_email, company, message, spam_reason, received_at")
+      .eq("organisation_id", org.id).eq("status", "spam").order("received_at", { ascending: false }).limit(500);
+    if (sp.q) {
+      const term = sp.q.replace(/[,()%"\\]/g, " ").trim();
+      if (term) q = q.or(["title", "contact_name", "contact_email", "company", "message"].map((c) => `${c}.ilike."%${term}%"`).join(","));
+    }
+    const [{ data, error }, { data: integ }] = await Promise.all([
+      q, supabase.from("integrations").select("settings").eq("organisation_id", org.id).eq("provider", "gmail").maybeSingle(),
+    ]);
+    if (error) throw new Error(`Could not load spam: ${error.message}`);
+    const rows: SpamRow[] = (data ?? []).map((e) => ({
+      id: e.id, number: e.number, from: e.contact_name ?? e.company ?? e.contact_email ?? "Unknown sender", email: e.contact_email,
+      subject: e.title, snippet: (e.message as string | null)?.replace(/\s+/g, " ").slice(0, 200) ?? null, reason: e.spam_reason, received: relative(e.received_at),
+    }));
+    const gs = (integ?.settings ?? {}) as { spam_auto?: boolean; spam_phrases?: string[] };
+    const manager = ["owner", "admin", "manager"].includes(role);
+    return (
+      <div>
+        {header}
+        {folders}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <Card className="overflow-hidden">
+            <div className="border-b border-line px-4 py-3">
+              <FilterBar searchPlaceholder="Search spam — sender, subject, message…" filters={[]} />
+            </div>
+            {rows.length === 0
+              ? <EmptyState title={sp.q ? "Nothing in Spam matches" : "Spam is empty"}>{sp.q ? "Try another search." : "Junk that gets past your filters lands here instead of your inbox."}</EmptyState>
+              : <SpamList rows={rows} />}
+            <div className="border-t border-line px-4 py-2.5 text-[12px] text-ink-faint">{rows.length} in Spam</div>
+          </Card>
+          <Card className="self-start">
+            <div className="border-b border-line px-4 py-3 sm:px-5"><p className="text-[13.5px] font-semibold text-ink">Spam rules</p></div>
+            <SpamRules auto={gs.spam_auto !== false} phrases={gs.spam_phrases ?? []} builtIn={DEFAULT_SPAM_PHRASES} canEdit={manager} />
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (folder === "blocked") {
+    const { data, error } = await supabase.from("email_blocklist").select("id, value, reason, hits, last_hit_at, created_at, created_by")
+      .eq("organisation_id", org.id).order("created_at", { ascending: false });
+    if (error) throw new Error(`Could not load blocked senders: ${error.message}`);
+    const members = await getMembers(org.id);
+    const who = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
+    const rows: BlockRow[] = (data ?? []).map((b) => ({ id: b.id, value: b.value, reason: b.reason, hits: b.hits, last_hit: b.last_hit_at ? relative(b.last_hit_at) : null,
+      added: fmtDate(b.created_at), by: b.created_by ? who[b.created_by] ?? null : null }));
+    return (
+      <div>
+        {header}
+        {folders}
+        <Card className="overflow-hidden"><BlockedList rows={rows} canEdit /></Card>
+      </div>
+    );
+  }
   const members = await getMembers(org.id);
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
   const statusKey = sp.status ?? "open";
@@ -33,6 +119,7 @@ export default async function EnquiriesPage({ searchParams }: {
     .limit(500);
   if (statusKey === "open") query = query.in("status", OPEN_ENQUIRY_STATUSES);
   else if (statusKey !== "all") query = query.eq("status", statusKey);
+  else query = query.neq("status", "spam");
   if (sp.source) query = query.eq("source", sp.source);
   if (sp.assignee === "unassigned") query = query.is("assigned_to", null);
   else if (sp.assignee) query = query.eq("assigned_to", sp.assignee);
@@ -46,7 +133,7 @@ export default async function EnquiriesPage({ searchParams }: {
 
   const [{ data, error }, { data: allStatuses, error: e2 }] = await Promise.all([
     query,
-    supabase.from("enquiries").select("status").eq("organisation_id", org.id),
+    supabase.from("enquiries").select("status").eq("organisation_id", org.id).neq("status", "spam"),
   ]);
   if (error || e2) throw new Error(`Could not load enquiries: ${(error ?? e2)!.message}`);
   const rows = (data ?? []) as Row[];
@@ -74,11 +161,8 @@ export default async function EnquiriesPage({ searchParams }: {
 
   return (
     <div>
-      <PageHeader
-        title="Enquiries"
-        subtitle="Every new lead, from every channel, in one inbox."
-        actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>}
-      />
+      {header}
+      {folders}
 
       <div className="no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
         {tabs.map((t) => {
@@ -105,6 +189,7 @@ export default async function EnquiriesPage({ searchParams }: {
             ]}
           />
         </div>
+        {rows.length > 0 && <InboxBulkBar total={rows.length} />}
         {rows.length === 0 ? (
           <EmptyState title="No enquiries match" action={<ButtonLink href="/enquiries" size="sm">Clear filters</ButtonLink>}>
             Try another status or clear your filters.
@@ -117,8 +202,9 @@ export default async function EnquiriesPage({ searchParams }: {
               const na = enquiryNextAction(e);
               const unread = e.status === "new" || e.status === "needs_review";
               return (
-                <li key={e.id}>
-                  <Link href={`/enquiries/${e.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
+                <li key={e.id} className="relative flex items-start">
+                  <span className="pl-4 pt-3.5"><RowCheck id={e.id} label={e.title} /></span>
+                  <Link href={`/enquiries/${e.id}`} className="flex min-h-[56px] min-w-0 flex-1 items-start gap-3 px-3 py-3 active:bg-zinc-50">
                     <div className="min-w-0 flex-1">
                       <div className={cn("truncate text-[13.5px] text-ink", unread ? "font-semibold" : "font-medium")}>
                         {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
@@ -142,6 +228,7 @@ export default async function EnquiriesPage({ searchParams }: {
             <table className="w-full min-w-[1180px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-line text-[11.5px] font-medium uppercase tracking-wide text-ink-faint">
+                  <th className="w-10 px-4 py-2.5" aria-label="Select" />
                   {["Customer", "Event", "Type", "Event date", "Received", "Source", "Budget", "Status", "Assigned", "Last contact", "Next action"].map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", h === "Budget" && "text-right")}>{h}</th>
                   ))}
@@ -154,6 +241,7 @@ export default async function EnquiriesPage({ searchParams }: {
                   const unread = e.status === "new" || e.status === "needs_review";
                   return (
                     <tr key={e.id} className="relative hover:bg-zinc-50/70">
+                      <td className="px-4 py-3"><RowCheck id={e.id} label={e.title} /></td>
                       <td className="px-4 py-3">
                         <Link href={`/enquiries/${e.id}`} className="after:absolute after:inset-0">
                           <span className={cn("block max-w-[200px] truncate text-ink", unread ? "font-semibold" : "font-medium")}>

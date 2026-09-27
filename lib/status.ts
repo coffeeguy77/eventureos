@@ -13,8 +13,10 @@ export const ENQUIRY_STATUS: Record<EnquiryStatus, { label: string; tone: Tone }
   won: { label: "Won", tone: "green" },
   lost: { label: "Lost", tone: "slate" },
   archived: { label: "Archived", tone: "slate" },
+  spam: { label: "Spam", tone: "red" },
 };
-export const ENQUIRY_STATUS_ORDER = Object.keys(ENQUIRY_STATUS) as EnquiryStatus[];
+/** Inbox status tabs — Spam has its own folder. */
+export const ENQUIRY_STATUS_ORDER = (Object.keys(ENQUIRY_STATUS) as EnquiryStatus[]).filter((s) => s !== "spam");
 export const OPEN_ENQUIRY_STATUSES: EnquiryStatus[] = [
   "new", "needs_review", "contacted", "qualified", "quote_required", "quote_sent", "negotiating",
 ];

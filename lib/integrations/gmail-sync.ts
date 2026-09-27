@@ -1,9 +1,10 @@
 import "server-only";
 import {
-  AUTO_ENQUIRY_THRESHOLD, classifyEmail, stripQuoted,
+  AUTO_ENQUIRY_THRESHOLD, classifyEmail, parseFormFields, stripQuoted,
   type Classification, type ClassificationResult, type ClassifyContext,
 } from "@/lib/ai/classify";
 import { evaluateFilter, gmailQueryFor, resolveFilter, type EmailFilterSettings } from "@/lib/integrations/email-filter";
+import { scoreSpam } from "@/lib/integrations/spam";
 import { getMessage, gmailProfile, listHistory, listMessages, parseMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import {
   ApiError, RateLimited, errMessage, finishSyncLog, likeExact, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
@@ -36,6 +37,10 @@ export interface GmailSettings extends EmailFilterSettings {
   import_query?: string;
   import_scanned?: number;
   import_last_run_at?: string;
+  /** Send likely junk straight to the Spam folder (default on). */
+  spam_auto?: boolean;
+  /** Extra spam phrases for this organisation (added to the built-in list). */
+  spam_phrases?: string[];
 }
 
 const MAX_MESSAGES_PER_RUN = 200;
@@ -43,6 +48,57 @@ const FETCH_CONCURRENCY = 6;
 const TIME_BUDGET_MS = 45_000;
 
 export interface GmailSyncResult { processed: number; skipped: number; filtered: number; enquiries: number; review: number; partial: boolean; message: string }
+
+// ------------------------------------------------------------------------------------------------
+// Gate: blocked senders and the business's own team never become enquiries
+// ------------------------------------------------------------------------------------------------
+interface Gate { block: { id: string; value: string }[]; team: Set<string> }
+const gates = new WeakMap<SyncContext, Gate>();
+
+async function loadGate(ctx: SyncContext): Promise<Gate> {
+  const hit = gates.get(ctx);
+  if (hit) return hit;
+  const [{ data: bl }, { data: team }] = await Promise.all([
+    ctx.db.from("email_blocklist").select("id, value").eq("organisation_id", ctx.org.id),
+    ctx.db.from("organisation_users").select("role, user:users!organisation_users_user_id_fkey(email)").eq("organisation_id", ctx.org.id).neq("role", "customer"),
+  ]);
+  const { data: invites } = await ctx.db.from("organisation_invitations").select("email").eq("organisation_id", ctx.org.id);
+  const teamEmails = new Set<string>([
+    ...((team ?? []) as unknown as { user: { email: string } | null }[]).map((t) => t.user?.email?.toLowerCase() ?? ""),
+    ...((invites ?? []) as { email: string }[]).map((i) => i.email.toLowerCase()),
+  ].filter(Boolean));
+  const g: Gate = { block: ((bl ?? []) as { id: string; value: string }[]).map((b) => ({ id: b.id, value: b.value.toLowerCase() })), team: teamEmails };
+  gates.set(ctx, g);
+  return g;
+}
+
+/** The blocklist entry matching an address: the exact address, "@domain", "domain", or a parent domain. */
+export function blockedBy(list: { id: string; value: string }[], email: string | null | undefined) {
+  const e = email?.trim().toLowerCase();
+  if (!e || !e.includes("@")) return null;
+  const domain = e.split("@")[1];
+  for (const b of list) {
+    if (b.value === e) return b;
+    const d = b.value.startsWith("@") ? b.value.slice(1) : b.value.includes("@") ? null : b.value;
+    if (d && (domain === d || domain.endsWith("." + d))) return b;
+  }
+  return null;
+}
+
+async function gateCheck(ctx: SyncContext, emails: (string | null | undefined)[]): Promise<string | null> {
+  const g = await loadGate(ctx);
+  for (const e of emails) {
+    const addr = e?.trim().toLowerCase();
+    if (!addr) continue;
+    if (g.team.has(addr)) return `${addr} is on your team`;
+    const b = blockedBy(g.block, addr);
+    if (b) {
+      await ctx.db.rpc("blocklist_hit", { p_id: b.id });
+      return `${addr} is blocked (${b.value})`;
+    }
+  }
+  return null;
+}
 
 export function gmailSettings(ctx: SyncContext): GmailSettings {
   return (ctx.integration.settings ?? {}) as GmailSettings;
@@ -238,11 +294,24 @@ interface ThreadRow {
   customer_id: string | null; event_id: string | null; enquiry_id: string | null; extracted: Record<string, unknown> | null;
 }
 
+/** The customer's email inside a website form notification ("Email: …" or "From: Name <email>"). */
+function parseFormEmail(body: string): string | null {
+  const f = parseFormFields(body);
+  const raw = f["email"] ?? f["email address"] ?? f["your email"] ?? f["from"] ?? f["sender"] ?? "";
+  return raw.match(/[^\s<>"]+@[^\s<>"]+\.[^\s<>"]+/)?.[0]?.toLowerCase() ?? null;
+}
+
 export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: Map<string, SenderMatch>) {
   const db = ctx.db;
   const own = ownAddresses(ctx);
   const outbound = pm.labelIds.includes("SENT") || own.includes(pm.from.email);
   const res = { enquiryCreated: false, review: false, threadId: "", filtered: false, filterReason: "" };
+
+  // Blocked senders and your own team are never imported (not even into Spam)
+  if (!outbound) {
+    const why = await gateCheck(ctx, [pm.from.email, pm.replyTo && !own.includes(pm.replyTo.email) ? pm.replyTo.email : null]);
+    if (why) return { ...res, filtered: true, filterReason: why };
+  }
 
   let { data: thread } = await db.from("email_threads")
     .select("id, subject, classification, state, participants, message_count, last_message_at, last_inbound_at, customer_id, event_id, enquiry_id, extracted")
@@ -273,6 +342,12 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
       subject: pm.subject, from_email: pm.from.email, body: pm.text, headers: pm.headers, knownPerson,
     });
     if (!d.import) return { ...res, filtered: true, filterReason: d.reason };
+    if (!outbound && d.form) {
+      // A website form: the customer is inside the message — check them too
+      const formEmail = parseFormEmail(pm.text);
+      const why = await gateCheck(ctx, [formEmail]);
+      if (why) return { ...res, filtered: true, filterReason: why };
+    }
   }
 
   if (!thread) {
@@ -402,12 +477,21 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
     else if (m.openEvents.length > 1) c.reasons.push(`Customer has ${m.openEvents.length} open events — link this conversation to the right one`);
   }
 
-  // Create an enquiry for (probable) new event enquiries
+  // Junk goes straight to the Spam folder (known customers only when Gmail itself says spam)
+  const gs = gmailSettings(ctx);
+  const verdict = scoreSpam({
+    subject: pm.subject, from_email: pm.from.email, from_name: pm.from.name, body: pm.text, headers: pm.headers,
+    gmailSpam, classifiedSpam: c.classification === "spam", keywords: resolveFilter(gs).keywords, extraPhrases: gs.spam_phrases,
+  });
+  const toSpam = gs.spam_auto !== false && verdict.spam && (!m?.customerId || gmailSpam)
+    && !["supplier", "existing_event", "quote_discussion"].includes(c.classification);
+
+  // Create an enquiry for (probable) new event enquiries — or a Spam folder entry for junk
   let enquiryId: string | null = null;
   let enquiryCreated = false;
-  const wantsEnquiry = c.classification === "event_enquiry" || (c.classification === "needs_review" && c.best_guess === "event_enquiry");
+  const wantsEnquiry = toSpam || c.classification === "event_enquiry" || (c.classification === "needs_review" && c.best_guess === "event_enquiry");
   if (wantsEnquiry) {
-    const status = c.classification === "event_enquiry" && c.confidence >= AUTO_ENQUIRY_THRESHOLD ? "new" : "needs_review";
+    const status = toSpam ? "spam" : c.classification === "event_enquiry" && c.confidence >= AUTO_ENQUIRY_THRESHOLD ? "new" : "needs_review";
     // Don't create a duplicate if this person already has an open enquiry from the last 30 days
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
     const contactEmail = c.extracted.email ?? customerEmail;
@@ -415,7 +499,7 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
       ? await db.from("enquiries").select("id").eq("organisation_id", ctx.org.id).ilike("contact_email", likeExact(contactEmail))
           .in("status", ["new", "needs_review", "contacted", "qualified", "quote_required"]).gte("received_at", since).limit(1)
       : { data: [] as { id: string }[] };
-    if (dup?.length) {
+    if (dup?.length && !toSpam) {
       enquiryId = dup[0].id;
       c.reasons.push("Attached to this person's open enquiry instead of creating a duplicate");
     } else {
@@ -437,24 +521,27 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
         message: bodyClean.slice(0, 5000),
         source: preliminary.website_form ? "website" : "email",
         status,
+        spam_reason: toSpam ? `Score ${verdict.score}: ${verdict.reasons.join("; ")}`.slice(0, 500) : null,
         classification: c.classification,
         classification_confidence: c.confidence,
         received_at: pm.sentAt,
-        next_action: status === "new" ? "Reply to the enquiry" : "Check this email and confirm it's an enquiry",
-        next_action_due: new Date(Math.max(Date.parse(pm.sentAt), Date.now()) + 4 * 3600000).toISOString(),
+        next_action: status === "spam" ? null : status === "new" ? "Reply to the enquiry" : "Check this email and confirm it's an enquiry",
+        next_action_due: status === "spam" ? null : new Date(Math.max(Date.parse(pm.sentAt), Date.now()) + 4 * 3600000).toISOString(),
       }).select("id, number").single();
       if (error) throw new Error(`Could not create enquiry from email: ${error.message}`);
       enquiryId = enq.id;
-      enquiryCreated = true;
-      await db.from("notifications").insert({
+      enquiryCreated = !toSpam;
+      if (!toSpam) await db.from("notifications").insert({
         organisation_id: ctx.org.id, type: status === "new" ? "enquiry.new" : "enquiry.needs_review",
         title: status === "new" ? `New enquiry from ${who}` : `Enquiry needs review — ${who}`,
         body: bodyClean.slice(0, 140), link: `/enquiries/${enq.id}`, entity_type: "enquiry", entity_id: enq.id,
       });
       await logIntegration(ctx, {
         action: "enquiry.created", entityType: "enquiry", entityId: enq.id, enquiryId: enq.id, customerId: m?.customerId ?? null,
-        summary: `Enquiry ENQ-${enq.number} created from email — ${who} (${c.provider === "ai" ? "AI" : "rules"}: ${c.classification.replace("_", " ")} ${Math.round(c.confidence * 100)}%)`,
-        metadata: { reasons: c.reasons },
+        summary: toSpam
+          ? `Email from ${who} sent to Spam (score ${verdict.score}: ${verdict.reasons.slice(0, 2).join("; ")})`
+          : `Enquiry ENQ-${enq.number} created from email — ${who} (${c.provider === "ai" ? "AI" : "rules"}: ${c.classification.replace("_", " ")} ${Math.round(c.confidence * 100)}%)`,
+        metadata: { reasons: c.reasons, spam: toSpam ? verdict : undefined },
       });
     }
   }
@@ -465,7 +552,7 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
     classification: c.classification, classification_confidence: c.confidence, classified_by: c.provider,
     classification_reasons: c.reasons.slice(0, 8),
     extracted: { ...c.extracted, website_form: !!c.website_form, best_guess: c.best_guess ?? null },
-    state: c.classification === "spam" ? "closed" : "open", participants: [], message_count: 0,
+    state: c.classification === "spam" || toSpam ? "closed" : "open", participants: [], message_count: 0,
   }).select("id, subject, classification, state, participants, message_count, last_message_at, last_inbound_at, customer_id, event_id, enquiry_id, extracted").single();
   if (error) throw new Error(`Could not create email thread: ${error.message}`);
 
