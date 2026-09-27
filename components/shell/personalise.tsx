@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { Check, Minus, Palette, Plus, RotateCcw, X } from "lucide-react";
 import { savePrefs } from "@/app/prefs-actions";
 import { ACCENTS, DEFAULT_PREFS, htmlAttrs, parsePrefs, SCHEMES, TEXT_STEPS, type UiPrefs } from "@/lib/theme/prefs";
@@ -36,13 +37,26 @@ export function Personalise({ variant = "icon" }: { variant?: "icon" | "row" }) 
   const [p, setP] = useState<UiPrefs>(DEFAULT_PREFS);
   const [, start] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Phones: the panel is portalled to <body> so the blurred top bar can't clip or confine it
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const on = () => setPhone(mq.matches);
+    on(); mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setP(readCurrent()); }, [open]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     window.addEventListener("keydown", onKey); document.addEventListener("mousedown", onDown);
     return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
   }, [open]);
@@ -81,18 +95,28 @@ export function Personalise({ variant = "icon" }: { variant?: "icon" | "row" }) 
           <Palette className="h-5 w-5 text-ink-muted" /> Personalise display
         </button>
       )}
+      {(() => {
+        const ui = (
+          <>
       {open && (
-        <div role="dialog" aria-label="Personalise your display"
-          className={cn("z-50 w-[22rem] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-pop",
-            variant === "icon" ? "absolute right-0 top-11" : "fixed inset-x-3 bottom-24 mx-auto")}>
-          <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+        // Phones: a full-width bottom sheet over a backdrop. Larger screens: a dropdown under the icon.
+        <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-[69] bg-black/40 sm:hidden" />
+      )}
+      {open && (
+        <div ref={panelRef} role="dialog" aria-modal={phone || undefined} aria-label="Personalise your display"
+          className={cn("z-[70] flex flex-col overflow-hidden border border-line bg-surface shadow-pop",
+            "fixed inset-x-0 bottom-0 max-h-[88dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom)]",
+            variant === "icon" ? "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-11 sm:max-h-none sm:w-[22rem] sm:max-w-[calc(100vw-1.5rem)] sm:rounded-xl sm:pb-0"
+              : "sm:inset-x-3 sm:bottom-24 sm:mx-auto sm:w-[22rem] sm:rounded-xl sm:pb-0")}>
+          <div aria-hidden className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line-strong sm:hidden" />
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line px-4 py-3">
             <div>
               <p className="text-[0.9rem] font-semibold text-ink">Personalise your display</p>
               <p className="text-[0.75rem] text-ink-muted">Saved to this browser and your account.</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-md p-1 text-ink-faint hover:bg-zinc-100 hover:text-ink"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-zinc-100 hover:text-ink sm:m-0 sm:p-1"><X className="h-5 w-5 sm:h-4 sm:w-4" /></button>
           </div>
-          <div className="max-h-[70vh] divide-y divide-line overflow-y-auto px-4">
+          <div className="min-h-0 flex-1 divide-y divide-line overflow-y-auto overscroll-contain px-4 sm:max-h-[70vh] sm:flex-none">
             <div className="py-3">
               <p className="mb-2 text-[0.8125rem] font-semibold text-ink">Appearance</p>
               <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Appearance">
@@ -110,10 +134,10 @@ export function Personalise({ variant = "icon" }: { variant?: "icon" | "row" }) 
             </div>
             <div className="py-3">
               <p className="mb-2 text-[0.8125rem] font-semibold text-ink">Accent colour</p>
-              <div className="grid grid-cols-7 gap-2" role="radiogroup" aria-label="Accent colour">
+              <div className="grid grid-cols-7 gap-2 justify-items-center sm:justify-items-start" role="radiogroup" aria-label="Accent colour">
                 {ACCENTS.map((a) => (
                   <button key={a.id} type="button" role="radio" aria-checked={p.accent === a.id} aria-label={a.name} title={a.name} onClick={() => update({ accent: a.id })}
-                    className={cn("relative h-8 w-8 rounded-full ring-offset-2 ring-offset-surface", p.accent === a.id ? "ring-2 ring-ink" : "hover:ring-2 hover:ring-line-strong")}
+                    className={cn("relative aspect-square w-full max-w-[2.5rem] rounded-full ring-offset-2 ring-offset-surface sm:h-8 sm:w-8", p.accent === a.id ? "ring-2 ring-ink" : "hover:ring-2 hover:ring-line-strong")}
                     style={{ background: a.hex }}>
                     {p.accent === a.id && <Check className="absolute inset-0 m-auto h-4 w-4 text-white mix-blend-difference" />}
                   </button>
@@ -134,13 +158,17 @@ export function Personalise({ variant = "icon" }: { variant?: "icon" | "row" }) 
             {seg("Contrast", p.contrast, [["normal", "Standard"], ["more", "Increased"]], (v) => update({ contrast: v as UiPrefs["contrast"] }))}
             {seg("Motion", p.motion, [["full", "Full"], ["reduce", "Reduced"]], (v) => update({ motion: v as UiPrefs["motion"] }))}
           </div>
-          <div className="flex justify-end border-t border-line px-4 py-2.5">
+          <div className="flex shrink-0 justify-end border-t border-line px-4 py-2.5">
             <button type="button" onClick={() => update(DEFAULT_PREFS)} className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[0.8125rem] font-medium text-ink-muted hover:bg-zinc-100 hover:text-ink">
               <RotateCcw className="h-3.5 w-3.5" />Reset to defaults
             </button>
           </div>
         </div>
       )}
+          </>
+        );
+        return phone && open ? createPortal(ui, document.body) : ui;
+      })()}
     </div>
   );
 }
