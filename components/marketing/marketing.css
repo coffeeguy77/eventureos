@@ -1,0 +1,135 @@
+/*
+ * EventureOS sales page — three appearance directions as tokens.
+ *   data-look on .mk   : midnight | studio | editorial
+ *   data-band on a section : a | b   (each look maps bands to its own palette; Editorial alternates dark/light)
+ * The product mock-ups (.mk-app) always use the real app's dark interface.
+ */
+
+.mk {
+  --mk-pink: 255 61 139;
+  --mk-violet: 124 77 255;
+  --mk-maxw: 1440px;
+  --mk-serif: var(--font-mk-serif), ui-serif, Georgia, serif;
+  --mk-h1: clamp(2.9rem, 1.4rem + 5.2vw, 6.4rem);
+  --mk-h2: clamp(2.1rem, 1.3rem + 2.8vw, 3.9rem);
+  --mk-track: -0.02em;
+  --mk-eyebrow-track: 0.18em;
+  --mk-radius: 22px;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+/* ---------- palettes ---------- */
+.mk [data-band],
+.mk {
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+}
+
+/* Midnight — cinematic dark, restrained pink light */
+.mk[data-look="midnight"] { --bg: 9 8 13; --bg2: 15 13 21; --ink: 244 242 248; --muted: 166 162 182; --faint: 112 108 128; --line: 255 255 255; --line-a: .08; --card: 255 255 255; --card-a: .035; --accent: 255 61 139; --accent-ink: 255 255 255; --glow: .55; }
+.mk[data-look="midnight"] [data-band="a"] { --bg: 9 8 13; }
+.mk[data-look="midnight"] [data-band="b"] { --bg: 14 12 20; }
+
+/* Studio — warm off-white, charcoal type, confident pink */
+.mk[data-look="studio"] { --bg: 247 244 239; --bg2: 239 234 226; --ink: 22 21 29; --muted: 88 84 100; --faint: 130 125 140; --line: 22 21 29; --line-a: .1; --card: 255 255 255; --card-a: 1; --accent: 226 29 110; --accent-ink: 255 255 255; --glow: .22; }
+.mk[data-look="studio"] [data-band="a"] { --bg: 247 244 239; }
+.mk[data-look="studio"] [data-band="b"] { --bg: 239 234 226; }
+
+/* Editorial — deliberate dark/light rhythm, bigger type */
+.mk[data-look="editorial"] { --mk-h1: clamp(3.2rem, 1.2rem + 6.4vw, 7.6rem); --mk-h2: clamp(2.4rem, 1.2rem + 3.6vw, 4.8rem); --mk-track: -0.035em; --mk-radius: 14px; }
+.mk[data-look="editorial"],
+.mk[data-look="editorial"] [data-band="a"] { --bg: 12 11 16; --ink: 245 243 248; --muted: 170 166 186; --faint: 116 112 132; --line: 255 255 255; --line-a: .1; --card: 255 255 255; --card-a: .04; --accent: 255 61 139; --accent-ink: 255 255 255; --glow: .5; }
+.mk[data-look="editorial"] [data-band="b"] { --bg: 244 241 235; --ink: 18 17 24; --muted: 84 80 96; --faint: 128 123 138; --line: 18 17 24; --line-a: .12; --card: 255 255 255; --card-a: 1; --accent: 222 24 104; --accent-ink: 255 255 255; --glow: .18; }
+
+/* ---------- primitives ---------- */
+.mk-wrap { width: 100%; max-width: var(--mk-maxw); margin: 0 auto; padding-left: clamp(16px, 4vw, 64px); padding-right: clamp(16px, 4vw, 64px); }
+.mk-serif { font-family: var(--mk-serif); font-weight: 400; letter-spacing: var(--mk-track); }
+.mk-h1 { font-family: var(--mk-serif); font-size: var(--mk-h1); line-height: .96; letter-spacing: var(--mk-track); font-weight: 400; }
+.mk-h2 { font-family: var(--mk-serif); font-size: var(--mk-h2); line-height: 1.02; letter-spacing: var(--mk-track); font-weight: 400; }
+.mk-eyebrow { font-size: .75rem; font-weight: 600; letter-spacing: var(--mk-eyebrow-track); text-transform: uppercase; color: rgb(var(--accent)); }
+.mk-muted { color: rgb(var(--muted)); }
+.mk-faint { color: rgb(var(--faint)); }
+.mk-line { border-color: rgb(var(--line) / var(--line-a)); }
+.mk-card { background: rgb(var(--card) / var(--card-a)); border: 1px solid rgb(var(--line) / var(--line-a)); border-radius: var(--mk-radius); }
+.mk-accent { color: rgb(var(--accent)); }
+.mk-grad-text { background: linear-gradient(100deg, rgb(var(--mk-pink)) 0%, #ff7ab8 40%, rgb(var(--mk-violet)) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+.mk-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; height: 3.25rem; padding: 0 1.5rem; border-radius: 999px; font-weight: 600; font-size: .9375rem; transition: transform .2s ease, box-shadow .25s ease, background-color .2s ease; white-space: nowrap; }
+.mk-btn:focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 3px; }
+.mk-btn-primary { background: rgb(var(--accent)); color: rgb(var(--accent-ink)); box-shadow: 0 10px 30px -10px rgb(var(--accent) / .7), inset 0 1px 0 rgb(255 255 255 / .25); }
+.mk-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 16px 40px -12px rgb(var(--accent) / .85), inset 0 1px 0 rgb(255 255 255 / .25); }
+.mk-btn-ghost { border: 1px solid rgb(var(--line) / calc(var(--line-a) * 2.2)); color: rgb(var(--ink)); }
+.mk-btn-ghost:hover { background: rgb(var(--line) / .06); }
+
+/* Glows + grain */
+.mk-glow { position: absolute; pointer-events: none; border-radius: 999px; filter: blur(80px); opacity: var(--glow); }
+.mk-grain::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .05; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.9'/></svg>"); }
+.mk-gridlines { background-image: linear-gradient(rgb(var(--line) / calc(var(--line-a) * .6)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--line) / calc(var(--line-a) * .6)) 1px, transparent 1px); background-size: 72px 72px; mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 20%, transparent 75%); }
+
+/* Reveal on scroll */
+.mk [data-reveal] { opacity: 0; transform: translateY(24px); transition: opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); transition-delay: var(--d, 0ms); }
+.mk [data-reveal][data-shown] { opacity: 1; transform: none; }
+.mk-noscript [data-reveal] { opacity: 1; transform: none; }
+
+/* Hero app tilt */
+.mk-tilt { transform: perspective(2200px) rotateX(9deg) scale(.985); transform-origin: 50% 0; transition: transform 1.4s cubic-bezier(.2,.7,.2,1); }
+.mk-tilt[data-shown] { transform: perspective(2200px) rotateX(0deg) scale(1); }
+
+/* Marquee of the workflow words */
+@keyframes mk-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.mk-marquee { animation: mk-marquee 42s linear infinite; }
+
+/* Hero toast cycle */
+@keyframes mk-toast-in { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.mk-toast { animation: mk-toast-in .6s cubic-bezier(.2,.7,.2,1) both; }
+
+/* Thread pulse travelling along the workflow line */
+@keyframes mk-pulse { 0% { box-shadow: 0 0 0 0 rgb(var(--mk-pink) / .55); } 70% { box-shadow: 0 0 0 14px rgb(var(--mk-pink) / 0); } 100% { box-shadow: 0 0 0 0 rgb(var(--mk-pink) / 0); } }
+.mk-pulse { animation: mk-pulse 2.2s ease-out infinite; }
+
+/* ---------- product mock-ups: the real app's dark UI ---------- */
+.mk-app { --a-bg: 14 14 18; --a-surface: 23 23 29; --a-raise: 30 30 38; --a-line: 38 38 47; --a-ink: 237 237 242; --a-muted: 169 169 184; --a-faint: 118 118 134; --a-pink: 255 77 166;
+  background: rgb(var(--a-bg)); color: rgb(var(--a-ink)); border: 1px solid rgb(255 255 255 / .1); border-radius: 18px; overflow: hidden;
+  box-shadow: 0 50px 120px -30px rgb(0 0 0 / .65), 0 0 0 1px rgb(0 0 0 / .4), 0 30px 80px -40px rgb(var(--mk-pink) / .35); }
+.mk-app .a-surface { background: rgb(var(--a-surface)); }
+.mk-app .a-raise { background: rgb(var(--a-raise)); }
+.mk-app .a-line { border-color: rgb(var(--a-line)); }
+.mk-app .a-muted { color: rgb(var(--a-muted)); }
+.mk-app .a-faint { color: rgb(var(--a-faint)); }
+.mk-app .a-pink { color: rgb(var(--a-pink)); }
+.mk-app .a-pink-bg { background: rgb(var(--a-pink)); color: white; }
+.mk-app .a-chip { display: inline-flex; align-items: center; gap: .35rem; border-radius: 999px; padding: .1rem .5rem; font-size: .6875rem; font-weight: 500; }
+
+/* Reduced motion: everything visible, nothing moving */
+@media (prefers-reduced-motion: reduce) {
+  .mk [data-reveal], .mk-tilt { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .mk-marquee, .mk-toast, .mk-pulse { animation: none !important; }
+}
+
+/* Wordmark follows the band: white on dark, ink on light */
+.mk-wm-dark { display: none; }
+.mk[data-look="studio"] .mk-wm-light { display: none; }
+.mk[data-look="studio"] .mk-wm-dark { display: block; }
+.mk[data-look="editorial"] footer .mk-wm-light { display: none; }
+.mk[data-look="editorial"] footer .mk-wm-dark { display: block; }
+.mk .no-scrollbar::-webkit-scrollbar { display: none; }
+html:has(.mk) { scroll-behavior: smooth; scroll-padding-top: 88px; }
+@media (prefers-reduced-motion: reduce) { html:has(.mk) { scroll-behavior: auto; } }
+/* Native controls (select menus, scrollbars) match each band */
+.mk[data-look="midnight"], .mk[data-look="editorial"] [data-band="a"], .mk[data-look="editorial"] { color-scheme: dark; }
+.mk[data-look="studio"], .mk[data-look="editorial"] [data-band="b"] { color-scheme: light; }
+
+/* Editorial: magazine layout — left-aligned hero, rule-led eyebrows, heavier contrast between bands */
+@media (min-width: 1024px) {
+  .mk[data-look="editorial"] .mk-hero-copy { text-align: left; margin-left: 0; max-width: 1240px; }
+  .mk[data-look="editorial"] .mk-hero-sub { margin-left: 0; }
+  .mk[data-look="editorial"] .mk-hero-cta { justify-content: flex-start; }
+}
+.mk[data-look="editorial"] .mk-eyebrow { display: inline-flex; align-items: center; gap: .75rem; color: rgb(var(--ink)); }
+.mk[data-look="editorial"] .mk-eyebrow::before { content: ""; width: 2.5rem; height: 2px; background: rgb(var(--accent)); }
+.mk[data-look="editorial"] .mk-h1 em, .mk[data-look="editorial"] .mk-h2 .mk-grad-text { -webkit-text-fill-color: rgb(var(--accent)); background: none; }
+.mk[data-look="editorial"] .mk-card { box-shadow: none; }
+.mk[data-look="studio"] .mk-card { box-shadow: 0 1px 2px rgb(22 21 29 / .04), 0 12px 32px -18px rgb(22 21 29 / .18); }

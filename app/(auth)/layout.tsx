@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="pt-safe pb-safe flex flex-col justify-center px-5 py-10 sm:px-12 sm:py-12 lg:px-20">
         <div className="mx-auto w-full max-w-[380px]">
           <div className="mb-8 sm:mb-10">
-            <Wordmark height={30} />
+            <a href="/" aria-label="EventureOS home"><Wordmark height={30} /></a>
           </div>
           {children}
         </div>
@@ -15,7 +15,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(96,40,236,0.55),transparent_60%)]" />
         <div className="relative flex h-full flex-col justify-between p-14 text-white">
           <div>
-            <Wordmark height={34} tone="light" />
+            <a href="/" aria-label="EventureOS home"><Wordmark height={34} tone="light" /></a>
             <p className="mt-3 text-[0.8125rem] tracking-[0.18em] text-white/60">The operating system for event businesses.</p>
           </div>
           <div>

@@ -10,6 +10,9 @@ export async function updateSession(request: NextRequest) {
   const forwarded = new Headers(request.headers);
   forwarded.set("x-pathname", request.nextUrl.pathname);
   let response = NextResponse.next({ request: { headers: forwarded } });
+  // Public marketing + crawler files: no session work needed (keeps the sales page fast)
+  const p0 = request.nextUrl.pathname;
+  if (p0 === "/" || p0 === "/robots.txt" || p0 === "/sitemap.xml") return response;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
@@ -40,7 +43,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  // "/" is the public sales page; robots/sitemap for search engines
+  const isPublic = path === "/" || path === "/robots.txt" || path === "/sitemap.xml" || PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
 
   if (!user && !isPublic) {
     const redirect = request.nextUrl.clone();
