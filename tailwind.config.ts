@@ -6,6 +6,11 @@ const FAMILIES = ["zinc", "slate", "gray", "emerald", "green", "rose", "red", "a
 const scale = (name: string, shades: string[]) => Object.fromEntries(shades.map((s) => [s, v(`${name}-${s}`)]));
 
 const config: Config = {
+  // `dark:` = any night appearance chosen in Personalise (or System on a dark device)
+  darkMode: ["variant", [
+    'html[data-scheme="dim"] &', 'html[data-scheme="dark"] &', 'html[data-scheme="midnight"] &',
+    '@media (prefers-color-scheme: dark) { html[data-scheme="system"] & }',
+  ]],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {

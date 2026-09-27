@@ -73,7 +73,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
           on ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
         {label}
         <span className={cn("rounded-full px-1.5 text-[0.6562rem] font-semibold",
-          on ? "bg-white/20 text-white" : key === "overdue" && count > 0 ? "bg-rose-100 text-rose-700" : "bg-zinc-100 text-ink-faint")}>{count}</span>
+          on ? "bg-surface/20 text-surface" : key === "overdue" && count > 0 ? "bg-rose-100 text-rose-700" : "bg-zinc-100 text-ink-faint")}>{count}</span>
       </Link>
     );
   };

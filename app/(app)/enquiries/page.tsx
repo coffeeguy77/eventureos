@@ -173,7 +173,7 @@ export default async function EnquiriesPage({ searchParams }: {
               className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
                 on ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
               {t.label}
-              <span className={cn("text-[0.6875rem]", on ? "text-white/70" : "text-ink-faint")}>{c}</span>
+              <span className={cn("text-[0.6875rem]", on ? "text-surface/70" : "text-ink-faint")}>{c}</span>
             </Link>
           );
         })}

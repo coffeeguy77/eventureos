@@ -33,7 +33,7 @@ export function ClientTabs({ tabs, className, variant = "pills" }: {
               {t.count != null && (
                 <span className={cn(
                   "rounded-full px-1.5 text-[0.6562rem] font-semibold",
-                  on && variant === "pills" ? "bg-white/20 text-white"
+                  on && variant === "pills" ? "bg-surface/20 text-surface"
                     : t.tone === "alert" && t.count > 0 ? "bg-rose-100 text-rose-700"
                       : t.count > 0 ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint"
                 )}>{t.count}</span>

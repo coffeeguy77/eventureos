@@ -67,14 +67,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
       <div className="no-scrollbar mb-4 flex gap-1 overflow-x-auto">
         <Link href={qs(null)} className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
           !status ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
-          All <span className={cn("rounded-full px-1.5 text-[0.6562rem] font-semibold", !status ? "bg-white/20" : "bg-zinc-100 text-ink-faint")}>{all.length}</span>
+          All <span className={cn("rounded-full px-1.5 text-[0.6562rem] font-semibold", !status ? "bg-surface/20" : "bg-zinc-100 text-ink-faint")}>{all.length}</span>
         </Link>
         {FILTERS.map((s) => (
           <Link key={s} href={qs(s)} className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
             status === s ? "bg-ink text-surface" : "text-ink-muted hover:bg-surface hover:text-ink")}>
             {QUOTE_STATUS[s].label}
             <span className={cn("tabular rounded-full px-1.5 text-[0.6562rem] font-semibold",
-              status === s ? "bg-white/20 text-white" : counts[s] > 0 ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint")}>{counts[s]}</span>
+              status === s ? "bg-surface/20 text-surface" : counts[s] > 0 ? "bg-brand-50 text-brand-700" : "bg-zinc-100 text-ink-faint")}>{counts[s]}</span>
           </Link>
         ))}
       </div>

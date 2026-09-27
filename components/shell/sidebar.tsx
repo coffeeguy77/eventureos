@@ -76,13 +76,19 @@ export function Logo({ size = 26 }: { size?: number }) {
 }
 
 /** The EventureOS wordmark. `tone="light"` is for dark backgrounds. */
-export function Wordmark({ height = 22, tone = "dark", className }: { height?: number; tone?: "dark" | "light"; className?: string }) {
+export function Wordmark({ height = 22, tone = "auto", className }: { height?: number; tone?: "auto" | "dark" | "light"; className?: string }) {
   const width = Math.round((height * 720) / 109);
+  const img = (src: string, cls?: string) => (
+    <Image src={src} width={width} height={height} alt="EventureOS" priority className={cn("shrink-0", cls, className)} />
+  );
+  if (tone === "light") return img("/brand/eventureos-wordmark-white.png");
+  if (tone === "dark") return img("/brand/eventureos-wordmark.png");
+  // Follows the appearance: dark ink on light, white on night modes
   return (
-    <Image
-      src={tone === "light" ? "/brand/eventureos-wordmark-white.png" : "/brand/eventureos-wordmark.png"}
-      width={width} height={height} alt="EventureOS" priority className={cn("shrink-0", className)}
-    />
+    <>
+      {img("/brand/eventureos-wordmark.png", "dark:hidden")}
+      {img("/brand/eventureos-wordmark-white.png", "hidden dark:block")}
+    </>
   );
 }
 
