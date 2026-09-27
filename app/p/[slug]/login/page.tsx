@@ -5,8 +5,12 @@ import { portalSignOut } from "../actions";
 import { BrandMark } from "../ui";
 import { PortalSignInForm } from "./form";
 
-export default async function PortalLoginPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PortalLoginPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ email?: string; next?: string }> }) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const prefill = typeof sp.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sp.email) ? sp.email.slice(0, 254) : "";
+  // Only follow links back into this portal
+  const next = typeof sp.next === "string" && sp.next.startsWith(`/p/${slug}/`) && !sp.next.includes("//") ? sp.next : `/p/${slug}`;
   const b = await getBranding(slug);
   if (!b) notFound();
 
@@ -19,7 +23,7 @@ export default async function PortalLoginPage({ params }: { params: Promise<{ sl
   if (user) {
     // Already signed in (e.g. returning customer, or a booking was added since last visit): try to link and go straight in.
     const { data } = await supabase.rpc("portal_claim_access", { p_slug: slug });
-    if ((data as { linked?: boolean } | null)?.linked) redirect(`/p/${slug}`);
+    if ((data as { linked?: boolean } | null)?.linked) redirect(next);
     signedInWithoutAccess = user.email ?? "this account";
   }
 
@@ -50,7 +54,7 @@ export default async function PortalLoginPage({ params }: { params: Promise<{ sl
             </form>
           </div>
         ) : (
-          <PortalSignInForm slug={slug} />
+          <PortalSignInForm slug={slug} email={prefill} next={next} />
         )}
       </div>
       <p className="mt-5 text-center text-[12px] text-ink-faint">

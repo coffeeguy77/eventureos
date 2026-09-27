@@ -63,7 +63,8 @@ export async function portalSignIn(prev: SignInState, form: FormData): Promise<S
         error: `We couldn't find any bookings for ${email}. Please contact ${b?.name ?? "us"}${contact ? ` (${contact})` : ""} and check which email your booking is under.`,
       };
     }
-    redirect(`/p/${slug}`);
+    const next = String(form.get("next") ?? "");
+    redirect(next.startsWith(`/p/${slug}/`) && !next.includes("//") ? next : `/p/${slug}`);
   }
 
   return { step: "email", error: "Something went wrong — please try again." };
@@ -236,13 +237,26 @@ export async function portalAddPerson(_prev: ActionResult | undefined, form: For
   try {
     const slug = String(form.get("slug") ?? "");
     const eventId = String(form.get("event_id") ?? "");
-    const { supabase, ev } = await portalEvent(slug, eventId);
-    const { error } = await supabase.rpc("portal_add_person", {
+    const { supabase, ev, user } = await portalEvent(slug, eventId);
+    const { data: added, error } = await supabase.rpc("portal_add_person", {
       p_event_id: ev.id,
       p_first: String(form.get("first_name") ?? ""), p_last: String(form.get("last_name") ?? ""),
       p_email: String(form.get("email") ?? ""), p_phone: String(form.get("phone") ?? ""), p_role: String(form.get("role") ?? ""),
     });
     if (error) return { error: error.message };
+    const a = added as { email: string; first_name: string; invited_by: string | null; send: boolean } | null;
+    if (a?.send) {
+      const [{ data: brand }, { data: evRow }] = await Promise.all([
+        supabase.rpc("portal_branding", { p_slug: slug }),
+        supabase.from("portal_events").select("event_date").eq("id", ev.id).maybeSingle(),
+      ]);
+      const b = brand as { name: string; slug: string; brand_colour: string | null; logo_url: string | null; contact_email: string | null } | null;
+      if (b) {
+        const { sendPortalInvite } = await import("@/lib/email/portal-invite");
+        await sendPortalInvite({ org: b, event: { id: ev.id, name: ev.name, event_date: (evRow as { event_date?: string | null } | null)?.event_date ?? null },
+          to: a.email, firstName: a.first_name, invitedBy: a.invited_by, replyTo: user.email ?? null });
+      }
+    }
     revalidatePath(`/p/${slug}/events/${ev.id}`);
     return { ok: true };
   } catch (e) {

@@ -5,7 +5,7 @@ import { signUp } from "../actions";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label } from "@/components/ui/form";
 
-export function SignupForm() {
+export function SignupForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [state, action, pending] = useActionState(signUp, undefined);
   if (state?.message) {
     return <p className="mt-8 rounded-lg bg-brand-50 px-4 py-3 text-[13.5px] text-brand-800 ring-1 ring-inset ring-brand-100">{state.message}</p>;
@@ -18,7 +18,7 @@ export function SignupForm() {
       </div>
       <div>
         <Label htmlFor="email">Work email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Input id="email" name="email" type="email" autoComplete="email" required defaultValue={defaultEmail} />
       </div>
       <div>
         <Label htmlFor="password" hint="8+ characters">Password</Label>

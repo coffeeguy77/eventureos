@@ -7,7 +7,7 @@ import { Input, Label, Select } from "@/components/ui/form";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { OrgRole } from "@/lib/types";
 import { ActionButton, ActionForm, SubmitButton } from "../forms";
-import { changeMemberRole, inviteMember, removeMember, revokeInvitation } from "../actions";
+import { changeMemberRole, inviteMember, removeMember, resendInvitation, revokeInvitation } from "../actions";
 import { PERMISSIONS, ROLE_HINT, ROLE_LABEL } from "../constants";
 import { RosterToggle } from "./roster-toggle";
 
@@ -35,7 +35,7 @@ export default async function TeamPage() {
     canAdmin
       ? supabase
           .from("organisation_invitations")
-          .select("id, email, role, created_at, auto_add_to_events, sees_job_details, inviter:users!organisation_invitations_invited_by_fkey(full_name, email)")
+          .select("id, email, role, created_at, auto_add_to_events, sees_job_details, last_sent_at, inviter:users!organisation_invitations_invited_by_fkey(full_name, email)")
           .eq("organisation_id", org.id)
           .is("accepted_at", null)
           .order("created_at", { ascending: false })
@@ -49,7 +49,7 @@ export default async function TeamPage() {
   const members = all.filter((m) => !m.expires_at);
   const support = all.filter((m) => m.expires_at && Date.parse(m.expires_at) > now);
   const invites = (invitesRes.data ?? []) as unknown as {
-    id: string; email: string; role: StaffRole; created_at: string; auto_add_to_events: boolean; sees_job_details: boolean; inviter: { full_name: string | null; email: string } | null;
+    id: string; email: string; role: StaffRole; created_at: string; auto_add_to_events: boolean; sees_job_details: boolean; last_sent_at: string | null; inviter: { full_name: string | null; email: string } | null;
   }[];
   const ownerCount = members.filter((m) => m.role === "owner").length;
   const roleOrder: StaffRole[] = ["owner", "admin", "manager", "sales", "staff"];
@@ -220,7 +220,7 @@ export default async function TeamPage() {
         <Card>
           <CardHeader
             title="Invite someone"
-            subtitle="They get access automatically when they sign up — or next sign in — with this email address. No email is sent by EventureOS yet, so let them know."
+            subtitle="We email them an invitation. They get access as soon as they create their account (or next sign in) with this email address."
           />
           <div className="border-t border-line px-5 py-5">
             <ActionForm action={inviteMember} resetOnOk>
@@ -255,9 +255,13 @@ export default async function TeamPage() {
                       <div className="truncate text-[13px] font-medium text-ink">{i.email}</div>
                       <div className="text-[12px] text-ink-muted">
                         {ROLE_LABEL[i.role]} · invited {relative(i.created_at)}{i.inviter ? ` by ${i.inviter.full_name ?? i.inviter.email}` : ""}
+                        {" · "}{i.last_sent_at ? `emailed ${relative(i.last_sent_at)}` : <span className="text-amber-700">not emailed yet</span>}
                       </div>
                     </div>
                     <div className="ml-auto mr-2 hidden sm:block">{toggles("invite", i.id, i.auto_add_to_events, i.sees_job_details)}</div>
+                    <ActionButton action={resendInvitation.bind(null, i.id)} variant="secondary" className="h-10 sm:h-8">
+                      {i.last_sent_at ? "Email again" : "Send email"}
+                    </ActionButton>
                     <ActionButton action={revokeInvitation.bind(null, i.id)} variant="ghost" className="h-10 sm:h-8" confirm={`Revoke the invitation for ${i.email}?`}>
                       Revoke
                     </ActionButton>

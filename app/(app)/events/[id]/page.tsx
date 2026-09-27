@@ -65,11 +65,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     supabase.from("event_staff").select("id, user_id, role, sees_details, auto_added, created_at").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("organisation_users").select("user_id, role, sees_job_details, user:users!organisation_users_user_id_fkey(full_name, email)")
       .eq("organisation_id", org.id).eq("status", "active").neq("role", "customer").is("expires_at", null),
-    supabase.from("event_contacts").select("id, contact_id, role, created_at, contact:contacts(first_name, last_name, email, phone)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
+    supabase.from("event_contacts").select("id, contact_id, role, created_at, invited_at, contact:contacts(first_name, last_name, email, phone)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("contacts").select("id, first_name, last_name, email").eq("organisation_id", org.id).eq("customer_id", e.customer_id).order("first_name"),
   ]);
-  const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
-    .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id }))
+  const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; invited_at: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
+    .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id, invited_at: r.invited_at }))
     .sort((a, b) => Number(b.primary) - Number(a.primary));
   const contactOptions = ((clientContacts ?? []) as { id: string; first_name: string; last_name: string | null; email: string | null }[]).map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name ?? ""}`.trim(), email: c.email }));
   const teamList = ((teamRows ?? []) as unknown as { user_id: string; role: string; sees_job_details: boolean; user: { full_name: string | null; email: string } | null }[])

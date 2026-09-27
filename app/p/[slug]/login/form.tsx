@@ -5,8 +5,8 @@ import { portalSignIn, type SignInState } from "../actions";
 import { FormError, Input, Label } from "@/components/ui/form";
 import { portalButton } from "../ui";
 
-export function PortalSignInForm({ slug }: { slug: string }) {
-  const [state, action, pending] = useActionState<SignInState, FormData>(portalSignIn, { step: "email" });
+export function PortalSignInForm({ slug, email = "", next = "" }: { slug: string; email?: string; next?: string }) {
+  const [state, action, pending] = useActionState<SignInState, FormData>(portalSignIn, { step: "email", email: email || undefined });
 
   if (state.step === "code" && state.email) {
     return (
@@ -18,6 +18,7 @@ export function PortalSignInForm({ slug }: { slug: string }) {
         )}
         <form action={action} className="space-y-4">
           <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="next" value={next} />
           <input type="hidden" name="email" value={state.email} />
           <input type="hidden" name="intent" value="verify" />
           <div>
@@ -43,11 +44,13 @@ export function PortalSignInForm({ slug }: { slug: string }) {
         <div className="flex items-center justify-between text-[12.5px]">
           <form action={action}>
             <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="next" value={next} />
             <input type="hidden" name="intent" value="restart" />
             <button className="text-ink-muted hover:text-ink" disabled={pending}>Use a different email</button>
           </form>
           <form action={action}>
             <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="next" value={next} />
             <input type="hidden" name="email" value={state.email} />
             <input type="hidden" name="intent" value="resend" />
             <button className="font-medium text-[color:var(--portal-brand-ink)] hover:underline" disabled={pending}>Send a new code</button>
@@ -60,6 +63,7 @@ export function PortalSignInForm({ slug }: { slug: string }) {
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="next" value={next} />
       <input type="hidden" name="intent" value="send" />
       <div>
         <Label htmlFor="email">Email address</Label>

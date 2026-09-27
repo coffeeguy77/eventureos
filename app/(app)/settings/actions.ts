@@ -5,10 +5,13 @@ import { canManage, getMembers, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import type { OrgRole } from "@/lib/types";
 import {
-  QUOTE_ACCEPTANCE_ACTIONS, ROLE_LABEL, STANDARD_RULES, TRIGGER_ORDER,
+  QUOTE_ACCEPTANCE_ACTIONS, ROLE_HINT, ROLE_LABEL, STANDARD_RULES, TRIGGER_ORDER,
   type QuoteAcceptanceAction, type TriggerType,
 } from "./constants";
 import type { ActionState } from "./forms";
+import { emailConfigured, sendEmail } from "@/lib/email/send";
+import { teamInviteEmail } from "@/lib/email/templates";
+import { appBaseUrl } from "@/lib/integrations/registry";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -284,12 +287,45 @@ export async function inviteMember(_prev: ActionState, form: FormData): Promise<
     if (error.code === "23505") return { error: `${email} already has a pending invitation. Revoke it first to change the role.` };
     return { error: `Couldn't create the invitation: ${error.message}` };
   }
+  const sent = await emailInvitation(data.id);
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "team.invited", entityType: "invitation", entityId: data.id,
     summary: `${actorName(profile)} invited ${email} as ${ROLE_LABEL[inviteRole as keyof typeof ROLE_LABEL]}`,
   });
   revalidatePath("/settings/team");
-  return { ok: `Invitation saved. ${email} gets access as soon as they sign up or sign in with that email.` };
+  return sent.ok
+    ? { ok: `Invitation emailed to ${email}. They get access as soon as they create their account with that email.` }
+    : { ok: `Invitation saved, but the email didn't go: ${sent.error} They still get access when they sign up with ${email}.` };
+}
+
+/** Email (or re-email) a pending team invitation. Never throws. */
+async function emailInvitation(invitationId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (!emailConfigured()) return { ok: false, error: "email isn't set up (RESEND_API_KEY)." };
+    const { supabase, org, profile } = await requireOrg();
+    const { data: inv } = await supabase.from("organisation_invitations").select("id, email, role, accepted_at, send_count")
+      .eq("id", invitationId).eq("organisation_id", org.id).maybeSingle();
+    if (!inv || inv.accepted_at) return { ok: false, error: "that invitation is no longer pending." };
+    const role = inv.role as keyof typeof ROLE_LABEL;
+    const url = `${appBaseUrl()}/signup?email=${encodeURIComponent(inv.email)}&org=${encodeURIComponent(org.name)}`;
+    const inviter = profile.full_name ?? profile.email;
+    const m = teamInviteEmail({ businessName: org.name, inviterName: inviter, roleLabel: ROLE_LABEL[role] ?? String(inv.role), roleHint: ROLE_HINT[role] ?? "",
+      url, brand: org.brand_colour, logoUrl: org.logo_url });
+    await sendEmail({ to: inv.email, ...m, replyTo: profile.email, fromName: `${org.name} via EventureOS` });
+    await supabase.from("organisation_invitations").update({ last_sent_at: new Date().toISOString(), send_count: (inv.send_count ?? 0) + 1 }).eq("id", inv.id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function resendInvitation(id: string) {
+  const { supabase, org, user, profile } = await ownerOrAdmin();
+  const r = await emailInvitation(id);
+  if (!r.ok) throw new Error(`Couldn't send: ${r.error}`);
+  await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "team.invitation_sent", entityType: "invitation", entityId: id,
+    summary: `${actorName(profile)} emailed a team invitation` });
+  revalidatePath("/settings/team");
 }
 
 /** Roster defaults for a team member or a pending invitation (owners/admins). */

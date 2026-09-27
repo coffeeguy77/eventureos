@@ -76,7 +76,7 @@ export async function removeEventStaff(id: string): Promise<StaffResult> {
 // ---------------------------------------------------------------------------
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export async function addJobPerson(eventId: string, input: { contactId?: string; first?: string; last?: string; email?: string; phone?: string; role?: string }): Promise<StaffResult> {
+export async function addJobPerson(eventId: string, input: { contactId?: string; first?: string; last?: string; email?: string; phone?: string; role?: string; sendInvite?: boolean }): Promise<StaffResult> {
   return wrap(async () => {
     const { supabase, org, user, profile } = await office();
     if (!UUID.test(eventId)) throw new Error("Refresh the page and try again.");
@@ -106,9 +106,13 @@ export async function addJobPerson(eventId: string, input: { contactId?: string;
       }
       who = `${first} ${input.last ?? ""}`.trim();
     }
-    const { error } = await supabase.from("event_contacts").upsert({ organisation_id: org.id, event_id: eventId, contact_id: contactId, role: input.role?.trim().slice(0, 60) || null },
-      { onConflict: "event_id,contact_id" });
+    const { data: link, error } = await supabase.from("event_contacts").upsert({ organisation_id: org.id, event_id: eventId, contact_id: contactId, role: input.role?.trim().slice(0, 60) || null },
+      { onConflict: "event_id,contact_id" }).select("id").single();
     if (error) throw new Error(error.message);
+    if (input.sendInvite) {
+      const problem = await invitePerson(link.id as string);
+      if (problem) throw new Error(`Added to the job, but the portal invite wasn't sent: ${problem}`);
+    }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "event.person_added", entityType: "event", entityId: eventId, eventId, customerId: ev.customer_id,
       summary: `${actorName(profile)} added ${who} to ${ev.name}${input.role ? ` (${input.role})` : ""}` });
     await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("event_id", eventId).eq("organisation_id", org.id);
@@ -150,5 +154,35 @@ export async function makeMainContact(eventId: string, contactId: string): Promi
       summary: `${actorName(profile)} made ${`${c.first_name} ${c.last_name ?? ""}`.trim()} the main contact for ${ev.name}` });
     await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("event_id", eventId).eq("organisation_id", org.id);
     revalidatePath(`/events/${eventId}`);
+  });
+}
+
+/** Email a job contact a link to the booking in the client portal. Returns a problem or null. */
+async function invitePerson(eventContactId: string): Promise<string | null> {
+  const { supabase, org, profile } = await office();
+  const { data: row } = await supabase.from("event_contacts")
+    .select("id, event:events(id, name, event_date), contact:contacts(first_name, email)").eq("id", eventContactId).eq("organisation_id", org.id).maybeSingle();
+  const r = row as unknown as { id: string; event: { id: string; name: string; event_date: string | null } | null; contact: { first_name: string; email: string | null } | null } | null;
+  if (!r?.event || !r.contact) return "that person is no longer on the job";
+  if (!r.contact.email) return "they don't have an email address";
+  const { sendPortalInvite } = await import("@/lib/email/portal-invite");
+  const problem = await sendPortalInvite({ org, event: r.event, to: r.contact.email, firstName: r.contact.first_name,
+    invitedBy: profile.full_name ? `${profile.full_name} from ${org.name}` : org.name, replyTo: profile.email });
+  if (!problem) await supabase.from("event_contacts").update({ invited_at: new Date().toISOString() }).eq("id", r.id);
+  return problem;
+}
+
+export async function sendJobPortalInvite(eventContactId: string): Promise<StaffResult> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    if (!UUID.test(eventContactId)) throw new Error("Refresh the page and try again.");
+    const problem = await invitePerson(eventContactId);
+    if (problem) throw new Error(`The invite wasn't sent: ${problem}.`);
+    const { data } = await supabase.from("event_contacts").select("event_id").eq("id", eventContactId).maybeSingle();
+    if (data) {
+      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "event.portal_invite", entityType: "event", entityId: data.event_id as string, eventId: data.event_id as string,
+        summary: `${actorName(profile)} emailed a client portal invite` });
+      revalidatePath(`/events/${data.event_id}`);
+    }
   });
 }
