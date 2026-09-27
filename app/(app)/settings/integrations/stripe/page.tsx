@@ -11,17 +11,20 @@ import { xeroGet } from "@/lib/integrations/xero";
 import { ActionForm, SubmitButton } from "../../forms";
 import { connectStripe, disconnectStripe, saveStripeXeroAccount } from "./actions";
 import { CopyField } from "./copy-field";
+import { platformStripe } from "@/lib/payments/service";
 
 export const metadata = { title: "Stripe" };
 
 type XeroAccount = { AccountID: string; Code?: string; Name: string; Type: string; Status: string; EnablePaymentsToAccount?: boolean };
 
-export default async function StripePage() {
+export default async function StripePage({ searchParams }: { searchParams: Promise<{ error?: string; connected?: string; setup?: string }> }) {
+  const sp = await searchParams;
   const { supabase, org, role, user } = await requireOrg();
   const manager = canManage(role);
   const { data: integ } = await supabase.from("integrations").select("id, status, account_label, settings, connected_at").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
   const connected = integ?.status === "connected";
-  const settings = (integ?.settings ?? {}) as { mode?: string; xero_account?: string | null };
+  const settings = (integ?.settings ?? {}) as { mode?: string; xero_account?: string | null; connect?: boolean };
+  const platform = platformStripe();
   const webhookUrl = `${appBaseUrl()}/api/stripe/webhook/${org.id}`;
 
   // Xero bank accounts (needs the newer Xero permissions — falls back to typing a code)
@@ -43,26 +46,53 @@ export default async function StripePage() {
       <PageHeader eyebrow={<Link href="/settings/integrations" className="hover:text-ink">Integrations</Link>} title="Stripe card payments"
         subtitle="Customers pay invoices by card from a link or their portal. The money goes to your own Stripe account; Xero stays your books." />
 
+      {sp.error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-100">{sp.error}</p>}
+      {sp.connected && <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-[0.8125rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">
+        Stripe connected.{sp.setup ? " Stripe still needs a few details before it can take payments — finish setting up your account in Stripe." : ""}</p>}
+
       <Card>
         <CardHeader title="1. Connect your Stripe account" action={connected ? <Badge tone={settings.mode === "test" ? "amber" : "green"} dot>{settings.mode === "test" ? "Test mode" : "Connected"}</Badge> : undefined} />
         <div className="space-y-4 border-t border-line px-4 py-5 text-[0.8125rem] sm:px-5">
-          {connected && <p className="flex items-center gap-2 text-ink"><CheckCircle2 className="h-4 w-4 text-emerald-600" />{integ?.account_label}</p>}
-          <ol className="list-decimal space-y-2 pl-5 text-ink-muted">
-            <li>In Stripe, go to <strong className="text-ink">Developers → Webhooks → Add endpoint</strong>. Paste this URL and choose the event <strong className="text-ink">checkout.session.completed</strong>:
-              <div className="mt-1.5"><CopyField value={webhookUrl} /></div></li>
-            <li>Open the new webhook and copy its <strong className="text-ink">Signing secret</strong> (starts with <code>whsec_</code>).</li>
-            <li>Go to <strong className="text-ink">Developers → API keys</strong> and copy the <strong className="text-ink">Secret key</strong> (starts with <code>sk_live_</code>). A restricted key (<code>rk_live_</code>) works too if it can write Checkout Sessions and read the account.</li>
-          </ol>
-          {manager ? (
-            <ActionForm action={connectStripe} resetOnOk>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div><Label htmlFor="secret_key">Secret key</Label><Input id="secret_key" name="secret_key" type="password" autoComplete="off" placeholder="sk_live_…" required /></div>
-                <div><Label htmlFor="webhook_secret">Webhook signing secret</Label><Input id="webhook_secret" name="webhook_secret" type="password" autoComplete="off" placeholder="whsec_…" required /></div>
+          {connected && <p className="flex items-center gap-2 text-ink"><CheckCircle2 className="h-4 w-4 text-emerald-600" />{integ?.account_label}{settings.connect ? " · via Stripe Connect" : " · with API keys"}</p>}
+          {platform.ready ? (
+            <>
+              <p className="text-ink-muted">
+                {connected ? "Connected. To switch to a different Stripe account, connect again." : "Sign in to Stripe and approve EventureOS. Don’t have Stripe yet? You can create an account on the way — it takes a few minutes."}
+                {" "}Payments go straight into your own Stripe account.
+              </p>
+              {manager ? (
+                <a href="/api/stripe/connect" className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#635BFF] px-4 text-[0.875rem] font-semibold text-white shadow-sm hover:opacity-90">
+                  {connected ? "Reconnect with Stripe" : "Connect with Stripe"}
+                </a>
+              ) : <p className="text-ink-faint">Only owners, admins and managers can connect Stripe.</p>}
+            </>
+          ) : (
+            <p className="rounded-lg bg-zinc-50 px-3 py-2 text-ink-muted ring-1 ring-inset ring-line">
+              One-click “Connect with Stripe” isn’t switched on for EventureOS yet. You can connect with your own API keys below instead.
+            </p>
+          )}
+
+          {manager && (
+            <details className="rounded-lg ring-1 ring-inset ring-line" open={!platform.ready && !connected}>
+              <summary className="cursor-pointer px-3 py-2 font-medium text-ink">Advanced: connect with API keys instead</summary>
+              <div className="space-y-3 border-t border-line px-3 py-3">
+                <ol className="list-decimal space-y-2 pl-5 text-ink-muted">
+                  <li>In Stripe, go to <strong className="text-ink">Developers → Webhooks → Add endpoint</strong>. Paste this URL and choose the event <strong className="text-ink">checkout.session.completed</strong>:
+                    <div className="mt-1.5"><CopyField value={webhookUrl} /></div></li>
+                  <li>Open the new webhook and copy its <strong className="text-ink">Signing secret</strong> (starts with <code>whsec_</code>).</li>
+                  <li>Go to <strong className="text-ink">Developers → API keys</strong> and copy the <strong className="text-ink">Secret key</strong> (<code>sk_live_</code>, or a restricted <code>rk_live_</code> key that can write Checkout Sessions and read the account).</li>
+                </ol>
+                <ActionForm action={connectStripe} resetOnOk>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div><Label htmlFor="secret_key">Secret key</Label><Input id="secret_key" name="secret_key" type="password" autoComplete="off" placeholder="sk_live_…" required /></div>
+                    <div><Label htmlFor="webhook_secret">Webhook signing secret</Label><Input id="webhook_secret" name="webhook_secret" type="password" autoComplete="off" placeholder="whsec_…" required /></div>
+                  </div>
+                  <p className="mt-2 text-[0.75rem] text-ink-faint">Keys are kept server-side where no screen or user can read them back.</p>
+                  <div className="mt-4 flex justify-end"><SubmitButton pendingLabel="Checking with Stripe…">Connect with keys</SubmitButton></div>
+                </ActionForm>
               </div>
-              <p className="mt-2 text-[0.75rem] text-ink-faint">Keys are kept server-side where no screen or user can read them back. Use test keys (sk_test_) first if you want to try it.</p>
-              <div className="mt-4 flex justify-end"><SubmitButton pendingLabel="Checking with Stripe…">{connected ? "Replace keys" : "Connect Stripe"}</SubmitButton></div>
-            </ActionForm>
-          ) : <p className="text-ink-faint">Only owners, admins and managers can connect Stripe.</p>}
+            </details>
+          )}
         </div>
       </Card>
 

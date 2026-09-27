@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireOrg, canManage } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
-import { getAccount, keyMode, StripeError } from "@/lib/payments/stripe";
+import { connectDeauthorize, getAccount, keyMode, StripeError } from "@/lib/payments/stripe";
+import { platformStripe } from "@/lib/payments/service";
 import type { ActionState } from "../../forms";
 
 async function manager() {
@@ -60,8 +61,13 @@ export async function saveStripeXeroAccount(_prev: ActionState, form: FormData):
 export async function disconnectStripe(_prev: ActionState): Promise<ActionState> {
   try {
     const { supabase, org } = await manager();
-    const { data: integ } = await supabase.from("integrations").select("id").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
+    const { data: integ } = await supabase.from("integrations").select("id, settings, external_account_id").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
     if (!integ) return { ok: "Not connected." };
+    // Connected with Stripe Connect: revoke EventureOS's access in Stripe too
+    if ((integ.settings as { connect?: boolean } | null)?.connect && integ.external_account_id) {
+      const p = platformStripe();
+      if (p.key && p.clientId) await connectDeauthorize(p.key, p.clientId, integ.external_account_id as string).catch(() => undefined);
+    }
     const { error } = await supabase.rpc("disconnect_integration", { p_integration_id: integ.id });
     if (error) return { error: error.message };
     revalidatePath("/settings/integrations");

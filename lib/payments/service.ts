@@ -6,20 +6,35 @@ import { xeroPut } from "@/lib/integrations/xero";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { createCheckout, toCents, verifyWebhook, type CheckoutSession } from "./stripe";
 
-export interface StripeSettings { mode?: "live" | "test"; account_name?: string; xero_account?: string | null }
-export interface StripeConfig { integrationId: string; secretKey: string; webhookSecret: string | null; settings: StripeSettings }
+export interface StripeSettings { mode?: "live" | "test"; account_name?: string; xero_account?: string | null; connect?: boolean }
+/** secretKey + account: with Stripe Connect it's the platform key acting on the connected account (Stripe-Account header). */
+export interface StripeConfig { integrationId: string; secretKey: string; account: string | null; webhookSecret: string | null; settings: StripeSettings }
+
+/** EventureOS's own Stripe platform (Connect). Set in Vercel: STRIPE_SECRET_KEY, STRIPE_CONNECT_CLIENT_ID, STRIPE_WEBHOOK_SECRET. */
+export function platformStripe() {
+  const key = process.env.STRIPE_SECRET_KEY?.trim() || null;
+  const clientId = process.env.STRIPE_CONNECT_CLIENT_ID?.trim() || null;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || null;
+  return { key, clientId, webhookSecret, ready: !!(key && clientId), missing: [!key && "STRIPE_SECRET_KEY", !clientId && "STRIPE_CONNECT_CLIENT_ID", !webhookSecret && "STRIPE_WEBHOOK_SECRET"].filter(Boolean) as string[] };
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The organisation's Stripe keys (service role only). Null when Stripe isn't connected. */
 export async function loadStripe(db: SupabaseClient, orgId: string): Promise<StripeConfig | null> {
-  const { data: integ } = await db.from("integrations").select("id, status, settings").eq("organisation_id", orgId).eq("provider", "stripe").maybeSingle();
+  const { data: integ } = await db.from("integrations").select("id, status, settings, external_account_id").eq("organisation_id", orgId).eq("provider", "stripe").maybeSingle();
   if (!integ || integ.status !== "connected") return null;
+  const settings = (integ.settings ?? {}) as StripeSettings;
+  if (settings.connect) {
+    const p = platformStripe();
+    if (!p.key || !integ.external_account_id) return null;
+    return { integrationId: integ.id as string, secretKey: p.key, account: integ.external_account_id as string, webhookSecret: p.webhookSecret, settings };
+  }
   const { data: tok, error } = await db.rpc("service_get_integration_tokens", { p_integration_id: integ.id });
   if (error) throw new Error(`Couldn't read the Stripe keys: ${error.message}`);
   const row = (Array.isArray(tok) ? tok[0] : tok) as { access_token: string | null; refresh_token: string | null } | undefined;
   if (!row?.access_token) return null;
-  return { integrationId: integ.id as string, secretKey: row.access_token, webhookSecret: row.refresh_token, settings: (integ.settings ?? {}) as StripeSettings };
+  return { integrationId: integ.id as string, secretKey: row.access_token, account: null, webhookSecret: row.refresh_token, settings };
 }
 
 export interface PayInvoice {
@@ -64,6 +79,7 @@ export async function startCheckout(token: string): Promise<string> {
     metadata: { eventureos_invoice_id: inv.id, eventureos_org_id: inv.organisation_id, invoice_number: inv.number ?? "" },
     // Same invoice + same amount within a minute reuses one session (double-clicks)
     idempotencyKey: `inv-${inv.id}-${toCents(amount)}-${Math.floor(Date.now() / 60000)}`,
+    account: cfg.account,
   });
   if (!session.url) throw new Error("Stripe didn't return a payment page. Please try again.");
   return session.url;
@@ -81,13 +97,39 @@ async function pushToXero(db: SupabaseClient, orgId: string, xeroInvoiceId: stri
   return id;
 }
 
-/** Handle a Stripe webhook for one organisation. Returns a short description for the response/logs. */
+type StripeEvent = { type: string; account?: string; data: { object: CheckoutSession & { id: string } } };
+
+/** Webhook for an organisation that connected with its own API keys (…/api/stripe/webhook/<org id>). */
 export async function handleStripeWebhook(orgId: string, rawBody: string, signature: string | null): Promise<string> {
   if (!UUID.test(orgId)) throw new Error("Unknown organisation");
   const db = createServiceClient();
   const cfg = await loadStripe(db, orgId);
-  if (!cfg?.webhookSecret) throw new Error("Stripe isn't connected for this organisation (or the webhook secret is missing)");
-  const event = verifyWebhook<{ type: string; data: { object: CheckoutSession } }>(rawBody, signature, cfg.webhookSecret);
+  if (!cfg?.webhookSecret || cfg.settings.connect) throw new Error("Stripe isn't connected for this organisation (or the webhook secret is missing)");
+  const event = verifyWebhook<StripeEvent>(rawBody, signature, cfg.webhookSecret);
+  return processEvent(db, orgId, cfg, event);
+}
+
+/** Platform (Connect) webhook: one endpoint for every connected account (…/api/stripe/webhook). */
+export async function handlePlatformWebhook(rawBody: string, signature: string | null): Promise<string> {
+  const p = platformStripe();
+  if (!p.webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET isn't set");
+  const event = verifyWebhook<StripeEvent>(rawBody, signature, p.webhookSecret);
+  if (!event.account) return `ignored ${event.type} (platform account event)`;
+  const db = createServiceClient();
+  const { data: integ } = await db.from("integrations").select("id, organisation_id, status").eq("provider", "stripe").eq("external_account_id", event.account).eq("settings->>connect", "true").maybeSingle();
+  if (!integ) return `ignored ${event.type} (${event.account} isn't connected to an organisation)`;
+  if (event.type === "account.application.deauthorized") {
+    await db.from("integrations").update({ status: "disconnected", last_error: "Disconnected from the Stripe dashboard" }).eq("id", integ.id);
+    await db.from("activity_logs").insert({ organisation_id: integ.organisation_id, actor_type: "system", actor_label: "Stripe", action: "integration.disconnected",
+      entity_type: "integration", entity_id: integ.id, summary: "Stripe was disconnected from the Stripe dashboard — card payments are off" });
+    return "disconnected";
+  }
+  const cfg = await loadStripe(db, integ.organisation_id as string);
+  if (!cfg) return "organisation's Stripe isn't active";
+  return processEvent(db, integ.organisation_id as string, cfg, event);
+}
+
+async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig, event: StripeEvent): Promise<string> {
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") return `ignored ${event.type}`;
   const s = event.data.object;
   if (s.payment_status !== "paid") return "not paid yet";

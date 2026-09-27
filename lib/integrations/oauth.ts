@@ -100,7 +100,7 @@ export function stateSecret(): string | null {
 const b64url = (buf: Buffer) => buf.toString("base64url");
 
 export interface OAuthState {
-  p: LiveProviderId; // provider
+  p: LiveProviderId | "stripe"; // provider
   o: string;         // organisation id
   u: string;         // user id who started the flow
   n: string;         // nonce (also stored in an httpOnly cookie)
