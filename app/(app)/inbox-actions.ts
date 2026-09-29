@@ -7,6 +7,8 @@ import { buildRawMessage, replySubject, sendGmail } from "@/lib/integrations/gma
 import { ApiError, errMessage } from "@/lib/integrations/runtime";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { ownAddresses } from "@/lib/integrations/gmail-sync";
+import { signatureForSend } from "@/lib/signatures/server";
+import { textToHtml } from "@/lib/signatures/render";
 
 export type ReplyState = { error?: string; ok?: boolean; sentTo?: string } | undefined;
 
@@ -57,10 +59,22 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   const subject = replySubject(thread.subject);
   const fromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;
 
+  // The company signature (once published): full on our first signed email in this conversation, short after that.
+  // Only this message is signed — earlier messages aren't quoted, so a thread never collects repeated signatures.
+  let sig: Awaited<ReturnType<typeof signatureForSend>> = null;
+  if (form.get("signature") !== "off") {
+    try { sig = await signatureForSend(supabase, org.id, user.id, thread.id); }
+    catch (e) { return { error: `Couldn't add your signature: ${errMessage(e)}. Untick “Add my signature” to send without it.` }; }
+  }
+  const bodyText = sig ? `${text}\n\n-- \n${sig.text}` : text;
+  const bodyHtml = sig
+    ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937;">${textToHtml(text)}<div style="margin-top:16px;">${sig.html}</div></div>`
+    : null;
+
   let sent: Awaited<ReturnType<typeof sendGmail>>;
   let gmailThreadId: string | null = thread.gmail_thread_id;
   try {
-    const raw = buildRawMessage({ from, fromName, to: [to], subject, inReplyTo, references, text });
+    const raw = buildRawMessage({ from, fromName, to: [to], subject, inReplyTo, references, text: bodyText, html: bodyHtml });
     try {
       sent = await sendGmail(ctx, raw, gmailThreadId);
     } catch (e) {
@@ -77,7 +91,8 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   const { error: mErr } = await supabase.from("email_messages").insert({
     organisation_id: org.id, thread_id: thread.id, gmail_message_id: sent.id, rfc_message_id: sent.messageId,
     direction: "outbound", from_email: from.toLowerCase(), from_name: fromName, to_emails: [to], subject,
-    snippet: text.replace(/\s+/g, " ").slice(0, 280), body_text: text, sent_at: now, is_read: true, sent_by: user.id,
+    snippet: text.replace(/\s+/g, " ").slice(0, 280), body_text: bodyText, body_html: bodyHtml, signature_version: sig?.version ?? null,
+    sent_at: now, is_read: true, sent_by: user.id,
   });
   if (mErr) return { error: `Sent from Gmail, but couldn't save it here: ${mErr.message}. It will appear after the next sync.` };
   const { error: uErr } = await supabase.from("email_threads").update({
@@ -125,5 +140,22 @@ export async function draftReplyAction(threadId: string): Promise<DraftState> {
     return { ok: true, body: r.body, notes: r.notes };
   } catch (e) {
     return { ok: false, error: errMessage(e) };
+  }
+}
+
+export type SignaturePreviewState =
+  | { ok: true; html: string; variant: "full" | "compact"; version: number }
+  | { ok: false; reason: "unpublished" | "error"; message?: string; canEdit: boolean };
+
+/** What signature a reply in this thread will get — shown under the reply box. */
+export async function replySignaturePreview(threadId: string): Promise<SignaturePreviewState> {
+  const { supabase, org, user, role } = await requireOrg();
+  const canEdit = role === "owner" || role === "admin";
+  try {
+    const sig = await signatureForSend(supabase, org.id, user.id, threadId);
+    if (!sig) return { ok: false, reason: "unpublished", canEdit };
+    return { ok: true, html: sig.html, variant: sig.variant, version: sig.version };
+  } catch (e) {
+    return { ok: false, reason: "error", message: errMessage(e), canEdit };
   }
 }

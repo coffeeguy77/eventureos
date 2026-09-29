@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { flushSync } from "react-dom";
-import { Bell, Check, ChevronDown, Plus, Search, LogOut, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Plus, Search, LogOut, PenLine, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Personalise } from "./personalise";
 import { relative } from "@/lib/format";
@@ -334,12 +334,15 @@ function UserMenu({ user }: { user: TopbarProps["user"] }) {
         </button>
       )}
     >
-      {() => (
+      {(close) => (
         <div>
           <div className="px-3 py-2">
             <div className="text-[0.8125rem] font-medium text-ink">{user.name}</div>
             <div className="truncate text-[0.75rem] text-ink-muted">{user.email}</div>
           </div>
+          <Link href="/my-signature" onClick={close} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[0.8125rem] text-ink-muted hover:bg-zinc-50 hover:text-ink">
+            <PenLine className="h-4 w-4" /> My email signature
+          </Link>
           <form action={signOut}>
             <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[0.8125rem] text-ink-muted hover:bg-zinc-50 hover:text-ink">
               <LogOut className="h-4 w-4" /> Sign out

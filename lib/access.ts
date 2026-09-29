@@ -8,7 +8,7 @@ import type { OrgRole } from "@/lib/types";
  *  - staff (field staff): only My jobs
  */
 const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings"];
-const STAFF_ALLOWED = ["/my-jobs"];
+const STAFF_ALLOWED = ["/my-jobs", "/my-signature"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
 

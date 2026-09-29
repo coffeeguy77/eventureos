@@ -10,7 +10,7 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { draftReplyAction, sendReply, type ReplyState } from "@/app/(app)/inbox-actions";
+import { draftReplyAction, replySignaturePreview, sendReply, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected }: {
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
@@ -72,8 +72,17 @@ function ReplyBox({ threadId }: { threadId: string }) {
   const [draftNotes, setDraftNotes] = useState<string[]>([]);
   const [draftError, setDraftError] = useState<string | null>(null);
   useEffect(() => {
-    if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); }
+    if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); setSig(null); }
   }, [state]);
+  // The signature this reply will get (loaded when the box opens)
+  const [sig, setSig] = useState<SignaturePreviewState | null>(null);
+  const [withSig, setWithSig] = useState(true);
+  useEffect(() => {
+    if (!open || sig) return;
+    let live = true;
+    replySignaturePreview(threadId).then((r) => { if (live) setSig(r); }).catch(() => {});
+    return () => { live = false; };
+  }, [open, sig, threadId]);
   async function draft() {
     setDrafting(true); setDraftError(null);
     const r = await draftReplyAction(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
@@ -107,6 +116,7 @@ function ReplyBox({ threadId }: { threadId: string }) {
       )}
       <textarea name="body" rows={body ? 14 : 4} autoFocus required placeholder="Write a reply…" value={body} onChange={(e) => setBody(e.target.value)}
         className="w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+      <SignatureStrip sig={sig} on={withSig} onChange={setWithSig} />
       {state?.error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-700 ring-1 ring-inset ring-rose-100">{state.error}</p>}
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className="text-[0.75rem] text-ink-faint">Sent through your Gmail account, in the same Gmail thread.</span>
@@ -116,6 +126,35 @@ function ReplyBox({ threadId }: { threadId: string }) {
         </div>
       </div>
     </form>
+  );
+}
+
+function SignatureStrip({ sig, on, onChange }: { sig: SignaturePreviewState | null; on: boolean; onChange: (v: boolean) => void }) {
+  const [show, setShow] = useState(false);
+  if (!sig) return <p className="mt-2 text-[0.75rem] text-ink-faint">Checking your signature…</p>;
+  if (!sig.ok) {
+    return (
+      <p className="mt-2 text-[0.75rem] text-ink-faint">
+        {sig.reason === "unpublished" ? "No email signature yet — this reply goes without one. " : `Signature unavailable: ${sig.message}. `}
+        {sig.canEdit ? <Link href="/settings/signatures" className="font-medium text-brand-600 hover:text-brand-700">Set up signatures</Link>
+          : sig.reason === "unpublished" ? "Ask an admin to publish the company signature." : null}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <input type="hidden" name="signature" value={on ? "on" : "off"} />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.75rem]">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-ink">
+          <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 rounded border-line-strong accent-brand-500" />
+          Add my signature <span className="text-ink-faint">({sig.variant === "full" ? "full" : "short reply version"})</span>
+        </label>
+        {on && <button type="button" onClick={() => setShow((x) => !x)} className="font-medium text-brand-600 hover:text-brand-700">{show ? "Hide" : "Preview"}</button>}
+        <Link href="/my-signature" className="text-ink-faint hover:text-ink">Edit my details</Link>
+      </div>
+      {/* Our renderer escapes every value and only allows https/mailto/tel links */}
+      {on && show && <div className="mt-2 overflow-x-auto rounded-lg border border-line bg-white p-3 [color-scheme:light]" dangerouslySetInnerHTML={{ __html: sig.html }} />}
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  MoreHorizontal, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
+  MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -140,7 +140,12 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
               </div>
             </div>}
 
-            <div className="border-t border-line px-3 py-2"><Personalise variant="row" /></div>
+            <div className="border-t border-line px-3 py-2">
+              <Link href="/my-signature" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
+                <PenLine className="h-5 w-5 text-ink-muted" /> My email signature
+              </Link>
+              <Personalise variant="row" />
+            </div>
 
             <div className="border-t border-line px-5 py-4">
               <div className="mb-2 text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint">Organisation</div>

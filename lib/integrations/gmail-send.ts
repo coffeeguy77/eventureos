@@ -41,10 +41,14 @@ export interface ReplyInput {
   inReplyTo?: string | null;
   references?: string[];
   text: string;
+  /** Optional HTML version. When present the message is multipart/alternative (plain text + HTML). */
+  html?: string | null;
 }
 
+const b64body = (s: string) => Buffer.from(s.replace(/\r?\n/g, "\r\n"), "utf8").toString("base64").replace(/.{76}/g, "$&\r\n");
+
 /** RFC 2822 message, base64url-encoded for the Gmail API `raw` field. */
-export function buildRawMessage(m: ReplyInput): string {
+export function buildRawMessage(m: ReplyInput, boundary = `eos-${crypto.randomUUID()}`): string {
   if (!m.to.length) throw new Error("A reply needs at least one recipient");
   const lines = [
     `From: ${mailbox(m.from, m.fromName)}`,
@@ -54,11 +58,31 @@ export function buildRawMessage(m: ReplyInput): string {
     ...(m.inReplyTo ? [`In-Reply-To: ${clean(m.inReplyTo)}`] : []),
     ...(m.references?.length ? [`References: ${m.references.map(clean).filter(Boolean).join(" ")}`] : []),
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
   ];
-  const body = Buffer.from(m.text.replace(/\r?\n/g, "\r\n"), "utf8").toString("base64").replace(/.{76}/g, "$&\r\n");
-  return Buffer.from(lines.join("\r\n") + "\r\n\r\n" + body, "utf8").toString("base64url");
+  let out: string;
+  if (m.html) {
+    const b = clean(boundary);
+    out = [
+      ...lines,
+      `Content-Type: multipart/alternative; boundary="${b}"`,
+      "",
+      `--${b}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64body(m.text),
+      `--${b}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64body(m.html),
+      `--${b}--`,
+      "",
+    ].join("\r\n");
+  } else {
+    out = [...lines, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64"].join("\r\n") + "\r\n\r\n" + b64body(m.text);
+  }
+  return Buffer.from(out, "utf8").toString("base64url");
 }
 
 export async function sendGmail(ctx: SyncContext, raw: string, threadId?: string | null) {
