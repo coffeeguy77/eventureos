@@ -33,7 +33,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex items-center gap-2"><Logo size={28} /><Wordmark height={19} /></Link>
+        <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex items-center gap-2"><Logo size={34} /><Wordmark height={20} /></Link>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {items.map((item) => {
@@ -71,9 +71,10 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
   );
 }
 
-/** The EventureOS mascot mark (the early bird), as a small rounded tile. */
+/** The EventureOS mascot (the early bird) — the whole bird, no tile. `size` is its height in px. */
 export function Logo({ size = 26 }: { size?: number }) {
-  return <Image src="/brand/mascot-mark.png" width={size} height={size} alt="" aria-hidden="true" priority className="shrink-0 rounded-[22%] ring-1 ring-black/5" />;
+  const width = Math.round((size * 900) / 759);
+  return <Image src="/brand/mascot.png" width={width} height={size} alt="" aria-hidden="true" priority className="shrink-0 drop-shadow-[0_2px_4px_rgba(76,29,149,0.25)]" />;
 }
 
 /** The EventureOS slogan — shown only to the event business's own team, never to their clients. */

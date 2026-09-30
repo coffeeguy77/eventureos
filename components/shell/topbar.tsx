@@ -37,8 +37,8 @@ export function Topbar(props: TopbarProps) {
     <header className="pt-safe sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
       <div className="relative flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
         {/* Phones: the bird and the wordmark; tablets: the bird (room for the search box); desktop: the sidebar has the logo */}
-        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex shrink-0 items-center gap-1.5 sm:hidden"><Logo size={26} /><Wordmark height={17} /></Link>
-        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="hidden shrink-0 sm:block lg:hidden"><Logo size={30} /></Link>
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex shrink-0 items-center gap-1.5 sm:hidden"><Logo size={34} /><Wordmark height={19} /></Link>
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="hidden shrink-0 sm:block lg:hidden"><Logo size={38} /></Link>
         {!staff && <GlobalSearch />}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           {!staff && <QuickCreate canInvoice={props.role !== "sales"} />}

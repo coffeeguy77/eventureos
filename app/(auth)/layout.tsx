@@ -68,7 +68,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           </div>
           <div className="auth-card rounded-2xl p-6 sm:p-7 lg:rounded-none lg:p-0">
             <div className="mb-8 hidden sm:mb-10 lg:block">
-              <a href="/" aria-label="EventureOS home" className="inline-flex items-center gap-2.5"><Logo size={40} /><Wordmark height={26} /></a>
+              <a href="/" aria-label="EventureOS home" className="inline-flex items-center gap-2.5"><Logo size={48} /><Wordmark height={26} /></a>
             </div>
             {children}
           </div>
