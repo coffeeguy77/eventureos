@@ -32,14 +32,16 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const manager = canManage(role);
   const env = envStatus();
 
-  const [intRes, pendingRes, logsRes, suggestRes] = await Promise.all([
+  const [intRes, pendingRes, logsRes, suggestRes, intakeRes] = await Promise.all([
     supabase.from("integrations").select("id, provider, status, account_label, last_sync_at, last_sync_status, last_error, connected_at, scopes").eq("organisation_id", org.id),
     supabase.from("import_candidates").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "pending"),
     supabase.from("integration_sync_logs").select("id, entity, direction, status, records_processed, message, started_at, finished_at, integration:integrations(provider)")
       .eq("organisation_id", org.id).order("started_at", { ascending: false }).limit(8),
     supabase.from("email_threads").select("id", { count: "exact", head: true }).eq("organisation_id", org.id)
       .in("classification", ["event_enquiry", "needs_review"]).is("enquiry_id", null).is("event_id", null).neq("state", "closed").is("suggestion_dismissed_at", null),
+    supabase.from("inbound_connections").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).is("revoked_at", null),
   ]);
+  const intakeCount = intakeRes.count ?? 0;
   if (intRes.error) throw new Error(`Could not load integrations: ${intRes.error.message}`);
   const rows = new Map(((intRes.data ?? []) as IntegrationRow[]).map((r) => [r.provider, r]));
   const pending = pendingRes.count ?? 0;
@@ -88,6 +90,18 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Customers pay invoices by card from a payment link or their portal. Payments are marked on the invoice and added to Xero.</p>
           {stripe?.status === "connected" && stripe.account_label && <p className="mt-2 text-[0.75rem] text-ink">{stripe.account_label}</p>}
           <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/stripe" variant={stripe?.status === "connected" ? "secondary" : "primary"}>{stripe?.status === "connected" ? "Manage" : "Set up card payments"}</ButtonLink></div>
+        </Card>
+        <Card className="flex flex-col p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[1rem] font-semibold text-brand-700" aria-hidden>Q</span>
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] font-semibold text-ink">Quote intake
+                {intakeCount > 0 ? <Badge tone="green" dot>{intakeCount} active</Badge> : <Badge tone="neutral" dot>Not set up</Badge>}</p>
+              <p className="text-[0.75rem] text-ink-faint">LeadPages · website quote builders</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[0.8125rem] text-ink-muted">Quotes built on your website arrive here as a customer, an event and a draft quote, ready to check and send.</p>
+          <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/quote-intake" variant={intakeCount > 0 ? "secondary" : "primary"}>{intakeCount > 0 ? "Manage" : "Set up"}</ButtonLink></div>
         </Card>
       </div>
 
