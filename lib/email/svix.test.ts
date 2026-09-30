@@ -1,0 +1,17 @@
+import { createHmac } from "node:crypto";
+import { verifySvix } from "./svix";
+let fail = 0;
+const c = (n: string, ok: boolean) => { if (!ok) { fail++; console.log("FAIL", n); } else console.log("ok  ", n); };
+const raw = Buffer.from("test-secret-key-1234567890").toString("base64");
+const secret = `whsec_${raw}`;
+const now = 1_790_000_000_000;
+const ts = String(now / 1000);
+const body = '{"type":"email.delivered","data":{"email_id":"abc"}}';
+const sig = createHmac("sha256", Buffer.from(raw, "base64")).update(`msg_1.${ts}.${body}`).digest("base64");
+c("valid", verifySvix(secret, { id: "msg_1", timestamp: ts, signature: `v1,${sig}` }, body, now));
+c("valid among several", verifySvix(secret, { id: "msg_1", timestamp: ts, signature: `v1,AAAA v1,${sig}` }, body, now));
+c("tampered body", !verifySvix(secret, { id: "msg_1", timestamp: ts, signature: `v1,${sig}` }, body + " ", now));
+c("wrong id", !verifySvix(secret, { id: "msg_2", timestamp: ts, signature: `v1,${sig}` }, body, now));
+c("old timestamp", !verifySvix(secret, { id: "msg_1", timestamp: ts, signature: `v1,${sig}` }, body, now + 10 * 60_000));
+c("missing header", !verifySvix(secret, { id: null, timestamp: ts, signature: `v1,${sig}` }, body, now));
+if (fail) process.exit(1);

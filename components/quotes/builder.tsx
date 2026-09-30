@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
 import {
@@ -22,6 +23,7 @@ import { PriceJobPanel, type PricingPackage } from "./price-job";
 import { MenuPicker } from "./menu-picker";
 import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "./quote-document";
+import { SendQuoteDialog } from "./send-dialog";
 import { SectionEditor, type Col, type SectionHandlers } from "./section-editor";
 import type {
   ActionResult, CatalogueItem, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, VersionInfo,
@@ -59,6 +61,7 @@ const SAVE_DELAY = 700;
 
 export function QuoteBuilder(p: BuilderProps) {
   const { quote, currency } = p;
+  const router = useRouter();
 
   // ---------------------------------------------------------------- local state
   const [sections, setSections] = useState<QSection[]>(p.sections);
@@ -415,7 +418,7 @@ export function QuoteBuilder(p: BuilderProps) {
               {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Preview as customer
             </Button>
             <Button variant="primary" onClick={() => setPanel(panel === "publish" ? null : "publish")} aria-expanded={panel === "publish"} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
-              <Send className="h-4 w-4" />{cv ? "Publish & send update" : "Publish & send"}
+              <Send className="h-4 w-4" />{cv && !dirty ? "Email quote" : cv ? "Send update" : "Send quote"}
             </Button>
           </div>
         </div>
@@ -446,19 +449,8 @@ export function QuoteBuilder(p: BuilderProps) {
         </div>
 
         {panel === "publish" && (
-          <PublishPanel
-            quoteId={quote.id} customerName={p.customer.name} nextVersion={nextVersion} currentVersion={cv}
-            total={totals.total} currency={currency} dirty={dirty} status={quote.status}
-            problems={[
-              itemCount === 0 ? "Add at least one line item." : null,
-              items.some((i) => !i.name.trim()) ? "Some line items have no name — name or remove them." : null,
-              !expiry ? "Set an expiry date." : expiry < p.today ? "The expiry date has passed — choose a new one." : null,
-            ].filter((x): x is string => !!x)}
-            gmailConnected={p.gmailConnected}
-            flushAll={flushAll}
-            onClose={() => setPanel(null)}
-            onDone={(n) => { setPanel(null); setLocalDirty(false); showToast({ message: `Version ${n} published — it’s now in ${p.customer.name}’s customer portal.`, tone: "ok" }, 7000); }}
-          />
+          <SendQuoteDialog quoteId={quote.id} flushAll={flushAll} onClose={() => setPanel(null)}
+            onDone={(m) => { setPanel(null); setLocalDirty(false); router.refresh(); showToast({ message: m, tone: "ok" }, 7000); }} />
         )}
         {panel === "respond" && cv && (
           <RespondPanel quoteId={quote.id} version={cv} signerName={p.signerName} acceptanceNote={p.acceptanceNote}
@@ -616,60 +608,6 @@ export function DuplicateButton({ quoteId, onError, variant = "chip" }: { quoteI
       )}
       {err && <span role="alert" className="text-[0.75rem] text-rose-700">{err}</span>}
     </>
-  );
-}
-
-function PublishPanel({ quoteId, customerName, nextVersion, currentVersion, total, currency, dirty, status, problems, gmailConnected, flushAll, onClose, onDone }: {
-  quoteId: string; customerName: string; nextVersion: number; currentVersion: VersionInfo | null; total: number; currency: string;
-  dirty: boolean; status: QuoteStatus; problems: string[]; gmailConnected: boolean;
-  flushAll: () => Promise<boolean>; onClose: () => void; onDone: (n: number) => void;
-}) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const nothingNew = !!currentVersion && !dirty && (status === "sent" || status === "viewed");
-
-  async function publish() {
-    setError(null);
-    setPending(true);
-    const saved = await flushAll();
-    if (!saved) { setPending(false); setError("Some changes couldn’t be saved. Fix them before publishing."); return; }
-    const res = await publishQuote(quoteId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }));
-    setPending(false);
-    if (!res.ok) { setError(res.error); return; }
-    onDone(res.data.versionNumber);
-  }
-
-  return (
-    <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4 sm:p-5" role="region" aria-label="Publish quote">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[0.875rem] font-semibold text-ink">Publish version {nextVersion} to {customerName}?</p>
-          <p className="tabular mt-0.5 text-[0.8125rem] text-ink-muted">Total {money(total, currency)} inc GST</p>
-        </div>
-        <button type="button" onClick={onClose} className="-m-1.5 rounded-md p-2.5 text-ink-faint hover:bg-surface hover:text-ink sm:m-0 sm:p-1" aria-label="Close"><X className="h-4 w-4" /></button>
-      </div>
-      <ul className="mt-3 space-y-1.5 text-[0.7812rem] text-ink-muted">
-        <li>• Creates a locked, customer-facing copy of this draft. You can keep editing the draft afterwards without the customer seeing it.</li>
-        {currentVersion && <li>• Version {currentVersion.version_number} will be marked <span className="font-medium text-ink">superseded</span>.</li>}
-        <li>• The quote appears in {customerName}’s customer portal, where they can view, accept or decline it. The issue date becomes today.</li>
-        <li>• {gmailConnected
-          ? "Emailing the quote from your Gmail account is coming soon — for now, let the customer know it’s ready in their portal."
-          : "Emailing the quote arrives once Gmail is connected (Settings → Integrations). For now, let the customer know it’s ready in their portal."}</li>
-      </ul>
-      {problems.length > 0 && (
-        <ul className="mt-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-100">
-          {problems.map((pr) => <li key={pr}>{pr}</li>)}
-        </ul>
-      )}
-      {nothingNew && <p className="mt-3 text-[0.7812rem] text-ink-muted">Nothing has changed since version {currentVersion!.version_number}, so there’s nothing new to send.</p>}
-      {error && <div className="mt-3"><FormError message={error} /></div>}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="primary" onClick={publish} disabled={pending || problems.length > 0 || nothingNew} autoFocus className="h-10 w-full sm:h-9 sm:w-auto">
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{pending ? "Publishing…" : `Publish version ${nextVersion}`}
-        </Button>
-        <Button variant="ghost" onClick={onClose} disabled={pending} className="h-10 w-full sm:h-9 sm:w-auto">Cancel</Button>
-      </div>
-    </div>
   );
 }
 

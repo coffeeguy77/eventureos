@@ -11,6 +11,7 @@ import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "@/components/quotes/quote-document";
 import { QuoteAttachments } from "@/components/quotes/attachments";
 import { VersionHistory } from "@/components/quotes/version-history";
+import { SentHistory, type SentEmail } from "@/components/quotes/sent-history";
 import { quoteNextAction } from "@/components/quotes/next-action";
 import type { CatalogueItem, QItem, QSection, QuoteDoc, QuoteSnapshotData, VersionInfo } from "@/components/quotes/types";
 import { QUOTE_STATUS } from "@/lib/status";
@@ -46,7 +47,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const q = qData as unknown as QuoteRow;
   if (!q.event || !q.customer) throw new Error("This quote's event or customer could not be loaded.");
 
-  const [sectionsRes, itemsRes, versionsRes, docsRes, catRes, members, gmailRes, ruleRes, contactRes, svcRes, pkgRes] = await Promise.all([
+  const [sectionsRes, itemsRes, versionsRes, docsRes, catRes, members, gmailRes, ruleRes, contactRes, svcRes, pkgRes, sendsRes] = await Promise.all([
     supabase.from("quote_sections").select("id, title, description, position, is_optional").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
     supabase.from("quote_items").select("id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position, service_id").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
     supabase.from("quote_versions").select(VERSION_COLS).eq("organisation_id", org.id).eq("quote_id", q.id).order("version_number", { ascending: false }),
@@ -60,7 +61,11 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       : Promise.resolve({ data: null, error: null }),
     supabase.from("services").select("id, code, name, description, unit, unit_price, tax_rate, category").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
     supabase.from("service_packages").select("id, name, summary, rules").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
+    supabase.from("email_sends")
+      .select("id, version_number, subject, message, sent_at, sent_by, recipients:email_send_recipients(id, email, name, role, token, status, status_at, error, email_opened_at, first_viewed_at, last_viewed_at, view_count, views:document_link_views(viewed_at, city, region, country, user_agent))")
+      .eq("organisation_id", org.id).eq("quote_id", q.id).order("sent_at", { ascending: false }).limit(50),
   ]);
+  if (sendsRes.error) throw new Error(`Could not load sent emails: ${sendsRes.error.message}`);
   for (const r of [sectionsRes, itemsRes, versionsRes, docsRes, catRes, svcRes, pkgRes]) {
     if (r.error) throw new Error(`Could not load the quote: ${r.error.message}`);
   }
@@ -105,9 +110,15 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const viewN = sp.version ? Number(sp.version) : null;
   const viewing = viewN != null && Number.isInteger(viewN) ? versions.find((v) => v.version_number === viewN) ?? null : null;
 
+  const sends = ((sendsRes.data ?? []) as unknown as SentEmail[]).map((s) => ({
+    ...s, recipients: s.recipients.map((r) => ({ ...r, views: [...(r.views ?? [])].sort((a, b) => b.viewed_at.localeCompare(a.viewed_at)) })),
+  }));
   const history = (
-    <VersionHistory quoteId={q.id} versions={versions} currentVersionId={q.current_version_id} activeNumber={viewing?.version_number ?? null}
-      currency={cur} tz={tz} names={names} />
+    <>
+      <SentHistory sends={sends} tz={tz} names={names} trackingOn={Boolean(process.env.RESEND_WEBHOOK_SECRET?.trim())} />
+      <VersionHistory quoteId={q.id} versions={versions} currentVersionId={q.current_version_id} activeNumber={viewing?.version_number ?? null}
+        currency={cur} tz={tz} names={names} />
+    </>
   );
 
   // ------------------------------------------------------------------ read-only: a specific version, or an accepted (locked) quote
