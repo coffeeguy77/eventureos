@@ -30,7 +30,18 @@ const MOBILE_CSS = `
   .auth-card form.space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 14px; }
   .auth-card input::placeholder, .auth-card textarea::placeholder { color: rgba(255, 158, 207, 0.6); opacity: 1; }
   .auth-card input:focus, .auth-card select:focus, .auth-card textarea:focus { border-color: #FF5FA8; box-shadow: 0 0 0 3px rgba(255, 61, 139, 0.28); outline: none; }
-  .auth-card input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #2A1260 inset; -webkit-text-fill-color: #FF9ECF; caret-color: #FF5FA8; }
+  /* Browser autofill (Safari/Chrome paint filled fields yellow or white): cover it with the glass colour.
+     These must outrank the input rule above, which sets box-shadow: none. */
+  .auth-card input:not([type=hidden]):-webkit-autofill,
+  .auth-card input:not([type=hidden]):-webkit-autofill:hover,
+  .auth-card input:not([type=hidden]):-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #2A1260 inset !important; box-shadow: 0 0 0 1000px #2A1260 inset !important;
+    -webkit-text-fill-color: #FF9ECF !important; caret-color: #FF5FA8; background-color: #2A1260 !important;
+    border: 1px solid #FF3D8B; transition: background-color 99999s ease-out 0s;
+  }
+  .auth-card input:not([type=hidden]):autofill {
+    box-shadow: 0 0 0 1000px #2A1260 inset !important; -webkit-text-fill-color: #FF9ECF !important; background-color: #2A1260 !important;
+  }
   .auth-card button[class*="bg-brand-500"] { background: #FF3D8B; color: #ffffff; box-shadow: 0 10px 24px -10px rgba(255, 61, 139, 0.8); }
   .auth-card button[class*="bg-brand-500"]:disabled { opacity: 0.7; }
 }
