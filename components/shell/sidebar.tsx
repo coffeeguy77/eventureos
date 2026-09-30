@@ -33,7 +33,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home"><Wordmark height={21} /></Link>
+        <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex items-center gap-2"><Logo size={28} /><Wordmark height={19} /></Link>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {items.map((item) => {
@@ -64,16 +64,20 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
         )}
       </nav>
       <div className="border-t border-line px-5 py-3 text-[0.7188rem] text-ink-faint">
-        <span className="font-medium text-ink-muted">{orgName}</span>
+        <span className="block truncate font-medium text-ink-muted">{orgName}</span>
+        <span className="mt-0.5 block italic">{SLOGAN}</span>
       </div>
     </aside>
   );
 }
 
-/** The EventureOS "E" mark (app icon). */
+/** The EventureOS mascot mark (the early bird), as a small rounded tile. */
 export function Logo({ size = 26 }: { size?: number }) {
-  return <Image src="/brand/eventureos-mark.png" width={size} height={size} alt="" aria-hidden="true" priority className="shrink-0 rounded-[22%]" />;
+  return <Image src="/brand/mascot-mark.png" width={size} height={size} alt="" aria-hidden="true" priority className="shrink-0 rounded-[22%] ring-1 ring-black/5" />;
 }
+
+/** The EventureOS slogan — shown only to the event business's own team, never to their clients. */
+export const SLOGAN = "The early bird gets the booking.";
 
 /** The EventureOS wordmark. `tone="light"` is for dark backgrounds. */
 export function Wordmark({ height = 22, tone = "auto", className }: { height?: number; tone?: "auto" | "dark" | "light"; className?: string }) {

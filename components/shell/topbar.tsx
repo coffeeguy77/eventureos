@@ -36,8 +36,8 @@ export function Topbar(props: TopbarProps) {
   return (
     <header className="pt-safe sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
       <div className="relative flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
-        {/* Phones: the full wordmark; tablets: the E mark (room for the search box); desktop: the sidebar has the logo */}
-        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="shrink-0 sm:hidden"><Wordmark height={20} /></Link>
+        {/* Phones: the bird and the wordmark; tablets: the bird (room for the search box); desktop: the sidebar has the logo */}
+        <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex shrink-0 items-center gap-1.5 sm:hidden"><Logo size={26} /><Wordmark height={17} /></Link>
         <Link href={staff ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="hidden shrink-0 sm:block lg:hidden"><Logo size={30} /></Link>
         {!staff && <GlobalSearch />}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">

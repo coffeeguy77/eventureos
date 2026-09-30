@@ -1,4 +1,5 @@
-import { Wordmark } from "@/components/shell/sidebar";
+import Image from "next/image";
+import { Logo, SLOGAN, Wordmark } from "@/components/shell/sidebar";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -6,7 +7,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <div className="pt-safe pb-safe flex flex-col justify-center px-5 py-10 sm:px-12 sm:py-12 lg:px-20">
         <div className="mx-auto w-full max-w-[380px]">
           <div className="mb-8 sm:mb-10">
-            <a href="/" aria-label="EventureOS home"><Wordmark height={30} /></a>
+            <a href="/" aria-label="EventureOS home" className="inline-flex items-center gap-2.5"><Logo size={40} /><Wordmark height={26} /></a>
+            <p className="mt-2 text-[0.8125rem] italic text-ink-muted lg:hidden">{SLOGAN}</p>
           </div>
           {children}
         </div>
@@ -19,7 +21,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <p className="mt-3 text-[0.8125rem] tracking-[0.18em] text-white/60">The operating system for event businesses.</p>
           </div>
           <div>
-          <p className="max-w-md text-[1.75rem] font-semibold leading-tight tracking-tight">
+          <Image src="/brand/mascot.png" alt="The EventureOS early bird" width={900} height={759} priority
+            className="-ml-4 mb-6 h-auto w-[300px] drop-shadow-[0_24px_40px_rgba(96,40,236,0.45)] xl:w-[360px]" />
+          <p className="max-w-md text-[2rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
+          <p className="mt-3 max-w-md text-[1.0625rem] leading-snug text-white/80">
             Every enquiry, event, quote and invoice — finally in one place.
           </p>
           <p className="mt-4 max-w-md text-[0.875rem] text-white/70">
