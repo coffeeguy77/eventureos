@@ -14,7 +14,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         {org ? "Create your account with the email your invitation was sent to — you'll go straight in." : "You’ll set up your organisation next."}
       </p>
       <SignupForm defaultEmail={email} />
-      <p className="mt-4 text-[0.8125rem] text-ink-muted lg:mt-6">
+      <p className="mt-5 text-[0.8125rem] text-ink-muted lg:mt-6">
         Already have an account?{" "}
         <Link href="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</Link>
       </p>

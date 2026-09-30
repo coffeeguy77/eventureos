@@ -27,7 +27,7 @@ const MOBILE_CSS = `
   /* Field names sit inside the fields (as placeholders); the labels stay for screen readers */
   .auth-card label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .auth-card input:not([type=hidden]):not([type=checkbox]) { height: 46px; padding-left: 14px; padding-right: 14px; }
-  .auth-card form.space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 10px; }
+  .auth-card form.space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 14px; }
   .auth-card input::placeholder, .auth-card textarea::placeholder { color: rgba(255, 158, 207, 0.6); opacity: 1; }
   .auth-card input:focus, .auth-card select:focus, .auth-card textarea:focus { border-color: #FF5FA8; box-shadow: 0 0 0 3px rgba(255, 61, 139, 0.28); outline: none; }
   .auth-card input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #2A1260 inset; -webkit-text-fill-color: #FF9ECF; caret-color: #FF5FA8; }
@@ -55,7 +55,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               className="mx-auto mt-2 h-auto w-[170px] drop-shadow-[0_20px_36px_rgba(96,40,236,0.5)] sm:w-[250px]" />
             <p className="mt-2 text-[1.5rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
           </div>
-          <div className="auth-card rounded-2xl p-4 sm:p-7 lg:rounded-none lg:p-0">
+          <div className="auth-card rounded-2xl p-6 sm:p-7 lg:rounded-none lg:p-0">
             <div className="mb-8 hidden sm:mb-10 lg:block">
               <a href="/" aria-label="EventureOS home" className="inline-flex items-center gap-2.5"><Logo size={40} /><Wordmark height={26} /></a>
             </div>

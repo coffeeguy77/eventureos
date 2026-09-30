@@ -8,7 +8,7 @@ import { FormError, Input, Label } from "@/components/ui/form";
 export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
   const [state, action, pending] = useActionState(signIn, initialError ? { error: initialError } : undefined);
   return (
-    <form action={action} className="mt-3 space-y-4 lg:mt-8">
+    <form action={action} className="mt-5 space-y-4 lg:mt-8">
       <input type="hidden" name="next" value={next} />
       <div>
         <Label htmlFor="email">Email</Label>
