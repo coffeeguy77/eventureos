@@ -36,7 +36,7 @@ export default async function SignaturesPage({ searchParams }: { searchParams: P
       <Tabs baseHref="/settings/signatures" active={tab} tabs={[{ key: "design", label: "Design" }, { key: "people", label: "People", count: missing }]} />
       {tab === "design" ? (
         <SignatureStudio
-          initial={setup.draft} saved={setup.saved} branding={setup.branding}
+          orgId={org.id} initial={setup.draft} saved={setup.saved} branding={setup.branding}
           published={setup.published?.design ?? null} publishedVersion={setup.published?.version ?? null}
           people={people.map((p) => ({ userId: p.userId, name: p.person.display_name ?? p.accountEmail, person: p.person }))}
           meId={user.id} versions={versions}

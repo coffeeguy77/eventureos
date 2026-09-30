@@ -13,6 +13,7 @@ import {
 } from "@/lib/signatures/render";
 import { publishSignature, restoreSignatureVersion, saveSignatureDraft, sendSignatureTest } from "@/app/(app)/signature-actions";
 import { DEFAULT_PREVIEW, SignaturePreview, SignatureThumb, previewVariant, type PreviewOptions } from "./preview";
+import { LogoPicker } from "./logo-picker";
 import { cn } from "@/lib/cn";
 
 export interface StudioPerson { userId: string; name: string; person: SignaturePerson }
@@ -85,7 +86,8 @@ function Seg<T extends string | number>({ value, options, onChange, label }: { v
  * The master signature studio: edit rail · live preview · publish and versions.
  * Drafts autosave; nothing reaches anyone's emails until it's published.
  */
-export function SignatureStudio({ initial, published, publishedVersion, branding, people, meId, versions, saved: initiallySaved }: {
+export function SignatureStudio({ orgId, initial, published, publishedVersion, branding, people, meId, versions, saved: initiallySaved }: {
+  orgId: string;
   initial: SignatureDesign; published: SignatureDesign | null; publishedVersion: number | null; branding: OrgBranding;
   people: StudioPerson[]; meId: string; versions: StudioVersion[]; saved: boolean;
 }) {
@@ -252,7 +254,6 @@ export function SignatureStudio({ initial, published, publishedVersion, branding
             </Select>
           </div>
           <div><Label>Text size</Label><Seg label="Text size" value={design.tokens.size} options={[[13, "Small"], [14, "Standard"], [15, "Large"]]} onChange={(v) => tok({ size: v })} /></div>
-          <Range label="Logo width" value={design.tokens.logoWidth} min={60} max={200} onChange={(v) => tok({ logoWidth: v })} />
           <Range label="Photo size" value={design.tokens.photoSize} min={48} max={96} step={4} onChange={(v) => tok({ photoSize: v })} />
           <div><Label>Photo shape</Label><Seg label="Photo shape" value={design.tokens.photoShape} options={[["circle", "Circle"], ["rounded", "Rounded"], ["square", "Square"]]} onChange={(v) => tok({ photoShape: v })} /></div>
           <Toggle on={design.tokens.divider} onChange={(v) => tok({ divider: v })} label="Accent divider" hint="A thin line in your accent colour between the logo and the details" />
@@ -260,15 +261,9 @@ export function SignatureStudio({ initial, published, publishedVersion, branding
       );
       case "company": return (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
-            <div className="grid h-12 w-20 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-line">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {design.company.logoUrl ? <img src={design.company.logoUrl} alt="" className="max-h-10 max-w-[72px] object-contain" /> : <span className="text-[0.6875rem] text-ink-faint">No logo</span>}
-            </div>
-            <p className="text-[0.75rem] text-ink-muted">Your logo comes from <Link href="/settings/branding" className="font-medium text-brand-700 hover:underline">Branding & portal</Link>.
-              {branding.logo_url && design.company.logoUrl !== branding.logo_url && <> <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => co({ logoUrl: branding.logo_url ?? "" })}>Use the latest logo</button></>}
-            </p>
-          </div>
+          <LogoPicker orgId={orgId} brandLogo={branding.logo_url ?? null} company={design.company} width={design.tokens.logoWidth}
+            onCompany={(c, w) => update((d) => ({ ...d, show: { ...d.show, logo: true }, company: { ...d.company, ...c }, tokens: w ? { ...d.tokens, logoWidth: w } : d.tokens }))}
+            onWidth={(w) => tok({ logoWidth: w })} />
           <div><Label hint="Read aloud by screen readers; shown if images are blocked">Logo description</Label><Input value={design.company.logoAlt} maxLength={80} onChange={(e) => co({ logoAlt: e.target.value })} className="text-base sm:text-[0.8438rem]" /></div>
           <div><Label>Company name</Label><Input value={design.company.name} maxLength={80} onChange={(e) => co({ name: e.target.value })} className="text-base sm:text-[0.8438rem]" /></div>
           <div><Label>Website</Label><Input value={design.company.website} maxLength={300} onChange={(e) => co({ website: e.target.value })} placeholder="beanculture.com.au" className="text-base sm:text-[0.8438rem]" />

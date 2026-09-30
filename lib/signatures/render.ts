@@ -64,7 +64,7 @@ export interface SignatureDesign {
     link: string;      // link colour
     font: FontId;
     size: 13 | 14 | 15;
-    logoWidth: number; // px, 60–200
+    logoWidth: number; // px, 40–200
     photoSize: number; // px, 48–96
     photoShape: "circle" | "rounded" | "square";
     divider: boolean;  // accent rule between logo/photo and details
@@ -74,7 +74,15 @@ export interface SignatureDesign {
     website: boolean; address: boolean; logo: boolean; photo: boolean; social: boolean; cta: boolean;
     tagline: boolean; extra: boolean; disclaimer: boolean;
   };
-  company: { name: string; website: string; address: string; phone: string; logoUrl: string; logoAlt: string; tagline: string };
+  company: {
+    name: string; website: string; address: string; phone: string; logoUrl: string; logoAlt: string; tagline: string;
+    /** "brand" = the logo from Branding & portal; "custom" = a logo uploaded just for signatures */
+    logoSource: "brand" | "custom";
+    /** The uploaded signature-only logo, remembered even while the Branding logo is chosen */
+    customLogoUrl: string;
+    /** The logo image's natural size (px), so emails get fixed width AND height; 0 if unknown */
+    logoW: number; logoH: number;
+  };
   social: { network: SocialNetwork; url: string }[];
   cta: { label: string; url: string; personal: boolean };
   disclaimer: string;
@@ -155,7 +163,7 @@ export function defaultDesign(org: OrgBranding): SignatureDesign {
     },
     company: {
       name: trim(org.name, 80), website: trim(org.website, 300), address: trim(org.address, 200), phone: trim(org.contact_phone, 40),
-      logoUrl: trim(org.logo_url, 500), logoAlt: trim(org.name, 80), tagline: "",
+      logoUrl: trim(org.logo_url, 500), logoAlt: trim(org.name, 80), tagline: "", logoSource: "brand", customLogoUrl: "", logoW: 0, logoH: 0,
     },
     social: [],
     cta: { label: "Request a quote", url: trim(org.website, 300), personal: true },
@@ -192,7 +200,7 @@ export function normaliseDesign(raw: unknown, org: OrgBranding): SignatureDesign
       link: colour(t.link as string, d.tokens.link),
       font: oneOf(t.font, FONTS.map((f) => f.id), d.tokens.font),
       size: oneOf(t.size as never, [13, 14, 15] as never[], d.tokens.size as never),
-      logoWidth: num(t.logoWidth, 60, 200, d.tokens.logoWidth),
+      logoWidth: num(t.logoWidth, 40, 200, d.tokens.logoWidth),
       photoSize: num(t.photoSize, 48, 96, d.tokens.photoSize),
       photoShape: oneOf(t.photoShape, ["circle", "rounded", "square"] as const, d.tokens.photoShape),
       divider: bool(t.divider, d.tokens.divider),
@@ -202,6 +210,9 @@ export function normaliseDesign(raw: unknown, org: OrgBranding): SignatureDesign
       name: str(c.name, 80, d.company.name), website: str(c.website, 300, d.company.website), address: str(c.address, 200, d.company.address),
       phone: str(c.phone, 40, d.company.phone), logoUrl: str(c.logoUrl, 500, d.company.logoUrl), logoAlt: str(c.logoAlt, 80, d.company.logoAlt),
       tagline: str(c.tagline, 120),
+      logoSource: oneOf(c.logoSource, ["brand", "custom"] as const, "brand"),
+      customLogoUrl: str(c.customLogoUrl, 500),
+      logoW: num(c.logoW, 0, 10000, 0), logoH: num(c.logoH, 0, 10000, 0),
     },
     social: Array.isArray(r.social)
       ? r.social.slice(0, 8).map((x: any) => ({ network: oneOf(x?.network, SOCIAL_NETWORKS.map((n) => n.id), "instagram"), url: str(x?.url, 300) })).filter((x: { url: string }) => x.url)
@@ -303,7 +314,10 @@ export function renderSignature(design: SignatureDesign, person: SignaturePerson
 
   if (variant === "compact") {
     const bits = [r.phone ?? r.mobile, r.website].filter(Boolean) as { label: string; href: string }[];
-    const logo = d.reply.compactLogo && r.logo ? `<div style="padding-top:6px;"><img src="${esc(r.logo)}" alt="${esc(r.logoAlt)}" width="64" style="display:block;width:64px;height:auto;border:0;" /></div>` : "";
+    // Short signature: the logo at most 48px tall / 64px wide
+    const cw = d.company.logoW > 0 && d.company.logoH > 0 ? Math.min(64, Math.round((48 * d.company.logoW) / d.company.logoH)) : 64;
+    const ch = d.company.logoW > 0 && d.company.logoH > 0 ? Math.round((cw * d.company.logoH) / d.company.logoW) : null;
+    const logo = d.reply.compactLogo && r.logo ? `<div style="padding-top:6px;"><img src="${esc(r.logo)}" alt="${esc(r.logoAlt)}" width="${cw}"${ch ? ` height="${ch}"` : ""} style="display:block;width:${cw}px;height:${ch ? `${ch}px` : "auto"};border:0;" /></div>` : "";
     const html = `<table cellpadding="0" cellspacing="0" border="0" role="presentation" style="border-collapse:collapse;${base}"><tr><td style="${base}">`
       + (r.name ? `<div style="font-weight:bold;color:${T.primary};">${esc(r.name)}</div>` : "")
       + roleLine
@@ -334,7 +348,12 @@ export function renderSignature(design: SignatureDesign, person: SignaturePerson
     : "";
   const details = nameLine + roleLine + (contact ? `<div style="padding-top:6px;">${contact}</div>` : "") + extra + tagline + social + cta;
 
-  const logoImg = (w: number) => r.logo ? `<img src="${esc(r.logo)}" alt="${esc(r.logoAlt)}" width="${w}" style="display:block;width:${w}px;max-width:${w}px;height:auto;border:0;" />` : "";
+  const logoH = (w: number) => (d.company.logoW > 0 && d.company.logoH > 0 ? Math.round((w * d.company.logoH) / d.company.logoW) : null);
+  const logoImg = (w: number) => {
+    if (!r.logo) return "";
+    const h = logoH(w);
+    return `<img src="${esc(r.logo)}" alt="${esc(r.logoAlt)}" width="${w}"${h ? ` height="${h}"` : ""} style="display:block;width:${w}px;max-width:${w}px;height:${h ? `${h}px` : "auto"};border:0;" />`;
+  };
   const radius = T.photoShape === "circle" ? "50%" : T.photoShape === "rounded" ? "12px" : "0";
   const photoImg = r.photo ? `<img src="${esc(r.photo)}" alt="${esc(r.name || "Photo")}" width="${T.photoSize}" height="${T.photoSize}" style="display:block;width:${T.photoSize}px;height:${T.photoSize}px;border:0;border-radius:${radius};" />` : "";
   const rule = T.divider ? `border-left:2px solid ${T.primary};padding-left:14px;` : "padding-left:4px;";

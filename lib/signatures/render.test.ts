@@ -92,3 +92,14 @@ import { contrastRatio, darkenFor } from "./render";
   c("darkened keeps it reddish", parseInt(d.slice(1, 3), 16) > parseInt(d.slice(3, 5), 16), d);
   if (f) process.exit(1);
 }
+{
+  const dd = defaultDesign, rs = renderSignature;
+  const d = dd({ name: "Bean Culture", logo_url: "https://a.com/b.png" });
+  const tall = { ...d, tokens: { ...d.tokens, logoWidth: 108 }, company: { ...d.company, logoSource: "custom" as const, logoW: 426, logoH: 557 } };
+  const html = rs(tall, { display_name: "Shaun" }).html;
+  const ok1 = html.includes('width="108" height="141"');
+  const ok2 = rs({ ...tall, reply: { ...tall.reply, compactLogo: true } }, { display_name: "Shaun" }, "compact").html.includes('width="37" height="48"');
+  console.log(ok1 ? "ok   tall logo gets fixed height" : "FAIL tall logo height");
+  console.log(ok2 ? "ok   compact logo capped at 48px tall" : "FAIL compact logo");
+  if (!ok1 || !ok2) process.exit(1);
+}
