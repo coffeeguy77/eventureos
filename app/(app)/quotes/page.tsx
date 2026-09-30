@@ -23,7 +23,8 @@ interface Row {
   event: { id: string; number: number; name: string; event_date: string | null } | null;
   version: { version_number: number; total: number; published_at: string } | null;
   sections: { id: string; is_optional: boolean }[];
-  items: { section_id: string; quantity: number; unit_price: number; discount_percent: number; tax_rate: number; is_optional: boolean }[];
+  items: { section_id: string; quantity: number; unit_price: number; discount_percent: number; discount_amount: number; tax_rate: number; is_optional: boolean }[];
+  discount_type: "percent" | "amount" | null; discount_value: number;
 }
 
 export default async function QuotesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
@@ -35,7 +36,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
 
   const { data, error } = await supabase
     .from("quotes")
-    .select("id, number, title, status, expiry_date, created_at, has_unpublished_changes, current_version_id, customer:customers(id, name), event:events(id, number, name, event_date), version:quote_versions!quotes_current_version_id_organisation_id_fkey(version_number, total, published_at), sections:quote_sections!quote_sections_quote_id_organisation_id_fkey(id, is_optional), items:quote_items!quote_items_quote_id_organisation_id_fkey(section_id, quantity, unit_price, discount_percent, tax_rate, is_optional)")
+    .select("id, number, title, status, expiry_date, created_at, has_unpublished_changes, current_version_id, discount_type, discount_value, customer:customers(id, name), event:events(id, number, name, event_date), version:quote_versions!quotes_current_version_id_organisation_id_fkey(version_number, total, published_at), sections:quote_sections!quote_sections_quote_id_organisation_id_fkey(id, is_optional), items:quote_items!quote_items_quote_id_organisation_id_fkey(section_id, quantity, unit_price, discount_percent, discount_amount, tax_rate, is_optional)")
     .eq("organisation_id", org.id)
     .order("created_at", { ascending: false })
     .limit(2000);
@@ -94,8 +95,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
             {rows.map((r) => {
               const s = QUOTE_STATUS[r.status];
               const draftTotal = r.version ? null : quoteTotals(
-                r.items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount_percent: Number(i.discount_percent), tax_rate: Number(i.tax_rate) })),
-                new Set(r.sections.filter((x) => x.is_optional).map((x) => x.id))
+                r.items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0), tax_rate: Number(i.tax_rate) })),
+                new Set(r.sections.filter((x) => x.is_optional).map((x) => x.id)),
+                { type: r.discount_type, value: Number(r.discount_value ?? 0) }
               ).total;
               return (
                 <li key={r.id}>
@@ -131,8 +133,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Promi
                   const s = QUOTE_STATUS[r.status];
                   const na = quoteNextAction({ ...r, itemCount: r.items.length }, r.version?.published_at ?? null, today, followUp);
                   const draftTotal = r.version ? null : quoteTotals(
-                    r.items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount_percent: Number(i.discount_percent), tax_rate: Number(i.tax_rate) })),
-                    new Set(r.sections.filter((x) => x.is_optional).map((x) => x.id))
+                    r.items.map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0), tax_rate: Number(i.tax_rate) })),
+                    new Set(r.sections.filter((x) => x.is_optional).map((x) => x.id)),
+                { type: r.discount_type, value: Number(r.discount_value ?? 0) }
                   ).total;
                   const expiring = r.expiry_date && ["sent", "viewed"].includes(r.status) ? r.expiry_date : null;
                   return (

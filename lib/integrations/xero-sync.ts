@@ -390,13 +390,15 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
  */
 async function quoteLines(ctx: SyncContext, quoteId: string, invoiceTotal: number, s: XeroSettings) {
   const { data, error } = await ctx.db.from("quote_items")
-    .select("name, description, quantity, unit_price, tax_rate, discount_percent, is_optional, line_total, position, section:quote_sections(position, is_optional), service:services(code, xero_account_code)")
+    .select("name, description, quantity, unit_price, tax_rate, discount_percent, discount_amount, is_optional, line_total, position, section:quote_sections(position, is_optional), service:services(code, xero_account_code)")
     .eq("organisation_id", ctx.org.id).eq("quote_id", quoteId);
   if (error || !data?.length) return null;
-  type L = { name: string; description: string | null; quantity: number; unit_price: number; tax_rate: number; discount_percent: number; is_optional: boolean; line_total: number; position: number;
+  type L = { name: string; description: string | null; quantity: number; unit_price: number; tax_rate: number; discount_percent: number; discount_amount: number; is_optional: boolean; line_total: number; position: number;
     section: { position: number; is_optional: boolean } | null; service: { code: string | null; xero_account_code: string | null } | null };
   const lines = (data as unknown as L[]).filter((l) => l.name.trim());
   if (lines.some((l) => l.is_optional || l.section?.is_optional)) return null;
+  // Dollar discounts on a line can't be expressed as a Xero DiscountRate — send the invoice as one line instead
+  if (lines.some((l) => Number(l.discount_amount) > 0)) return null;
   const incl = lines.reduce((sum, l) => sum + Number(l.line_total) * (1 + Number(l.tax_rate) / 100), 0);
   if (Math.abs(incl - invoiceTotal) > 0.05 * Math.max(1, lines.length)) return null;
   return lines

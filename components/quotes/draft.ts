@@ -2,18 +2,19 @@ import { numStr, parseNum, priceStr } from "./calc";
 import type { ItemPatch, QItem } from "./types";
 
 /** A line item as edited in the browser: numeric fields are kept as the text the user typed. */
-export interface ItemDraft extends Omit<QItem, "quantity" | "unit_price" | "tax_rate" | "discount_percent"> {
+export interface ItemDraft extends Omit<QItem, "quantity" | "unit_price" | "tax_rate" | "discount_percent" | "discount_amount"> {
   quantity: string;
   unit_price: string;
   tax_rate: string;
   discount_percent: string;
+  discount_amount: string;
 }
 
-export type NumField = "quantity" | "unit_price" | "tax_rate" | "discount_percent";
+export type NumField = "quantity" | "unit_price" | "tax_rate" | "discount_percent" | "discount_amount";
 export type TextField = "name" | "description" | "unit" | "image_url";
 export type BoolField = "is_optional" | "is_package";
 
-export const NUM_FIELDS: NumField[] = ["quantity", "unit_price", "tax_rate", "discount_percent"];
+export const NUM_FIELDS: NumField[] = ["quantity", "unit_price", "tax_rate", "discount_percent", "discount_amount"];
 
 export function toDraft(i: QItem): ItemDraft {
   return {
@@ -22,6 +23,7 @@ export function toDraft(i: QItem): ItemDraft {
     unit_price: priceStr(i.unit_price),
     tax_rate: numStr(i.tax_rate),
     discount_percent: numStr(i.discount_percent),
+    discount_amount: Number(i.discount_amount ?? 0) ? priceStr(i.discount_amount) : "0",
   };
 }
 
@@ -34,6 +36,7 @@ export function draftNums(d: ItemDraft) {
     unit_price: parseNum(d.unit_price) ?? 0,
     tax_rate: parseNum(d.tax_rate) ?? 0,
     discount_percent: parseNum(d.discount_percent) ?? 0,
+    discount_amount: parseNum(d.discount_amount) ?? 0,
   };
 }
 

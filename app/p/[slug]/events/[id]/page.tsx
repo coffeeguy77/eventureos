@@ -409,6 +409,7 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
                       <p className="tabular mt-1 text-[0.7812rem] text-ink-faint">
                         {qty % 1 === 0 ? qty : qty.toFixed(2)}{it.unit ? ` ${it.unit}${qty === 1 ? "" : "s"}` : ""} × {money(it.unit_price, cur)}
                         {Number(it.discount_percent ?? 0) > 0 && ` · ${Number(it.discount_percent)}% off`}
+                        {Number(it.discount_amount ?? 0) > 0 && ` · ${money(Number(it.discount_amount), cur)} off`}
                       </p>
                     </div>
                     <p className={cn("tabular shrink-0 text-[0.8438rem] font-medium", optional ? "text-ink-muted" : "text-ink")}>{money(it.line_total, cur)}</p>
@@ -422,6 +423,10 @@ function QuoteDocument({ snap, version, cur }: { snap: QuoteSnapshot; version: P
 
       <div className="flex justify-end border-t border-line bg-zinc-50/60 px-4 py-5 sm:px-6">
         <dl className="tabular w-full space-y-1.5 text-[0.875rem] sm:max-w-xs sm:text-[0.8438rem]">
+          {snap.discount && snap.discount.amount > 0 && <>
+            <div className="flex justify-between text-ink-muted"><dt>Items</dt><dd>{money(snap.lines_subtotal ?? Number(version.subtotal) + snap.discount.amount, cur)}</dd></div>
+            <div className="flex justify-between gap-3 text-emerald-700"><dt>{snap.discount.label || "Discount"}{snap.discount.type === "percent" ? ` (${Number(snap.discount.value)}%)` : ""}</dt><dd>−{money(snap.discount.amount, cur)}</dd></div>
+          </>}
           <div className="flex justify-between text-ink-muted"><dt>Subtotal</dt><dd>{money(version.subtotal, cur)}</dd></div>
           <div className="flex justify-between text-ink-muted"><dt>GST</dt><dd>{money(version.tax_total, cur)}</dd></div>
           <div className="flex items-baseline justify-between gap-3 border-t border-line pt-2 font-semibold text-ink"><dt className="text-[1rem]">Total <span className="text-[0.75rem] font-normal text-ink-faint">inc GST</span></dt><dd className="text-[1.5rem] tracking-tight sm:text-[1.125rem]">{money(version.total, cur)}</dd></div>

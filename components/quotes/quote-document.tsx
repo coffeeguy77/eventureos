@@ -71,6 +71,7 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
                     <p className="tabular mt-0.5 text-[0.75rem] text-ink-faint">
                       {Number(it.quantity)}{it.unit ? ` ${it.unit}` : ""} × {money(it.unit_price, currency)}
                       {Number(it.discount_percent ?? 0) > 0 && <span className="text-emerald-700"> · {Number(it.discount_percent)}% off</span>}
+                      {Number(it.discount_amount ?? 0) > 0 && <span className="text-emerald-700"> · {money(Number(it.discount_amount), currency)} off</span>}
                     </p>
                   </div>
                   <p className={cn("tabular shrink-0 text-right text-[0.8438rem]", it.optional ? "text-ink-muted" : "font-medium")}>{money(it.line_total, currency)}</p>
@@ -81,6 +82,10 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
         ))}
 
         <dl className="ml-auto mt-4 w-full space-y-1.5 sm:max-w-[300px] border-t border-line pt-3 text-[0.8125rem]">
+          {snap.discount && snap.discount.amount > 0 && <>
+            <div className="flex justify-between"><dt className="text-ink-muted">Items (ex GST)</dt><dd className="tabular">{money(snap.lines_subtotal ?? Number(snap.subtotal ?? 0) + snap.discount.amount, currency)}</dd></div>
+            <div className="flex justify-between gap-3 text-emerald-700"><dt>{snap.discount.label || "Discount"}{snap.discount.type === "percent" ? ` (${Number(snap.discount.value)}%)` : ""}</dt><dd className="tabular">−{money(snap.discount.amount, currency)}</dd></div>
+          </>}
           <div className="flex justify-between"><dt className="text-ink-muted">Subtotal (ex GST)</dt><dd className="tabular">{money(snap.subtotal, currency)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">GST</dt><dd className="tabular">{money(snap.tax_total, currency)}</dd></div>
           <div className="flex justify-between border-t border-line pt-1.5 text-[0.9375rem] font-semibold"><dt>Total (inc GST)</dt><dd className="tabular">{money(snap.total, currency)}</dd></div>

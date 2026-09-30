@@ -23,6 +23,7 @@ export const metadata = { title: "Quote" };
 interface QuoteRow {
   id: string; number: number; title: string; status: QuoteStatus; issue_date: string; expiry_date: string | null;
   notes: string | null; terms: string | null; has_unpublished_changes: boolean; current_version_id: string | null;
+  discount_type: "percent" | "amount" | null; discount_value: number; discount_label: string | null;
   event: { id: string; number: number; name: string; event_date: string | null; start_time: string | null; finish_time: string | null; guest_count: number | null; status: EventStatus; primary_contact_id: string | null } | null;
   customer: { id: string; name: string } | null;
 }
@@ -40,7 +41,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   const { data: qData, error } = await supabase
     .from("quotes")
-    .select("id, number, title, status, issue_date, expiry_date, notes, terms, has_unpublished_changes, current_version_id, event:events(id, number, name, event_date, start_time, finish_time, guest_count, status, primary_contact_id), customer:customers(id, name)")
+    .select("id, number, title, status, issue_date, expiry_date, notes, terms, has_unpublished_changes, current_version_id, discount_type, discount_value, discount_label, event:events(id, number, name, event_date, start_time, finish_time, guest_count, status, primary_contact_id), customer:customers(id, name)")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (error) throw new Error(`Could not load the quote: ${error.message}`);
   if (!qData) notFound();
@@ -49,7 +50,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   const [sectionsRes, itemsRes, versionsRes, docsRes, catRes, members, gmailRes, ruleRes, contactRes, svcRes, pkgRes, sendsRes] = await Promise.all([
     supabase.from("quote_sections").select("id, title, description, position, is_optional").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
-    supabase.from("quote_items").select("id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position, service_id").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
+    supabase.from("quote_items").select("id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, discount_amount, is_optional, is_package, image_url, position, service_id").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
     supabase.from("quote_versions").select(VERSION_COLS).eq("organisation_id", org.id).eq("quote_id", q.id).order("version_number", { ascending: false }),
     supabase.from("documents").select("id, name, storage_path, mime_type, size_bytes, created_at").eq("organisation_id", org.id).eq("quote_id", q.id).order("created_at", { ascending: false }),
     supabase.from("quote_items").select("name, description, unit, unit_price, tax_rate, is_package, image_url, updated_at").eq("organisation_id", org.id).neq("name", "").order("updated_at", { ascending: false }).limit(1000),
@@ -72,7 +73,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   const sections = (sectionsRes.data ?? []) as QSection[];
   const items = ((itemsRes.data ?? []) as QItem[]).map((i) => ({
-    ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent),
+    ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0),
   }));
   const versions = ((versionsRes.data ?? []) as VersionInfo[]).map((v) => ({ ...v, total: Number(v.total), subtotal: Number(v.subtotal), tax_total: Number(v.tax_total) }));
   const docs = (docsRes.data ?? []) as QuoteDoc[];
@@ -207,6 +208,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       quote={{
         id: q.id, number: q.number, title: q.title, status: q.status, issue_date: q.issue_date, expiry_date: q.expiry_date,
         notes: q.notes, terms: q.terms, has_unpublished_changes: q.has_unpublished_changes, current_version_id: q.current_version_id,
+        discount_type: q.discount_type, discount_value: Number(q.discount_value ?? 0), discount_label: q.discount_label,
       }}
       currentVersion={currentVersion}
       sections={sections}

@@ -17,7 +17,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, is_optional, is_package, image_url, position, service_id";
+const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, discount_amount, is_optional, is_package, image_url, position, service_id";
 const SECTION_COLS = "id, title, description, position, is_optional";
 
 class UserError extends Error {}
@@ -48,13 +48,14 @@ interface QuoteHead {
   id: string; number: number; title: string; event_id: string; customer_id: string; status: QuoteStatus;
   expiry_date: string | null; notes: string | null; terms: string | null; current_version_id: string | null;
   has_unpublished_changes: boolean;
+  discount_type: "percent" | "amount" | null; discount_value: number; discount_label: string | null;
 }
 
 async function loadQuote(supabase: SupabaseClient, orgId: string, quoteId: string): Promise<QuoteHead> {
   assertId(quoteId, "quote");
   const { data, error } = await supabase
     .from("quotes")
-    .select("id, number, title, event_id, customer_id, status, expiry_date, notes, terms, current_version_id, has_unpublished_changes")
+    .select("id, number, title, event_id, customer_id, status, expiry_date, notes, terms, current_version_id, has_unpublished_changes, discount_type, discount_value, discount_label")
     .eq("id", quoteId).eq("organisation_id", orgId).maybeSingle();
   if (error) fail(`Couldn't load the quote: ${error.message}`);
   if (!data) fail("That quote no longer exists, or you don't have access to it.");
@@ -188,6 +189,16 @@ export async function updateQuoteHeader(quoteId: string, patch: HeaderPatch): Pr
       if (col in patch) {
         const v = clean(patch[col], 20000);
         if (v !== q[col]) { next[col] = v; changes[col === "notes" ? "notes" : "terms & conditions"] = [q[col] ? "previous text" : null, v ? "updated" : null]; }
+      }
+    }
+    if ("discount_type" in patch || "discount_value" in patch || "discount_label" in patch) {
+      const type = "discount_type" in patch ? (patch.discount_type === "percent" || patch.discount_type === "amount" ? patch.discount_type : null) : q.discount_type;
+      const value = "discount_value" in patch ? checkNumber(patch.discount_value, "Discount", 0, type === "percent" ? 100 : 10_000_000) : Number(q.discount_value);
+      const label = "discount_label" in patch ? clean(patch.discount_label, 80) : q.discount_label;
+      const show = (t: string | null, v: number) => (!t || !v ? "none" : t === "percent" ? `${v}%` : money(v, org.currency));
+      if (type !== q.discount_type || value !== Number(q.discount_value) || label !== q.discount_label) {
+        next.discount_type = type; next.discount_value = type ? value : 0; next.discount_label = label;
+        changes["quote discount"] = [show(q.discount_type, Number(q.discount_value)), show(type, type ? value : 0)];
       }
     }
     if (!Object.keys(next).length) return null;
@@ -349,6 +360,7 @@ function validateItemPatch(patch: ItemPatch) {
   if ("unit_price" in patch) next.unit_price = checkNumber(patch.unit_price, "Unit price", -10_000_000, 10_000_000);
   if ("tax_rate" in patch) next.tax_rate = checkNumber(patch.tax_rate, "Tax rate", 0, 100);
   if ("discount_percent" in patch) next.discount_percent = checkNumber(patch.discount_percent, "Discount", 0, 100);
+  if ("discount_amount" in patch) next.discount_amount = checkNumber(patch.discount_amount, "Discount", 0, 10_000_000);
   if ("is_optional" in patch) next.is_optional = !!patch.is_optional;
   if ("is_package" in patch) next.is_package = !!patch.is_package;
   if ("image_url" in patch) next.image_url = checkImageUrl(patch.image_url);
@@ -402,7 +414,7 @@ export async function addItem(quoteId: string, sectionId: string, init: ItemPatc
 
 const ITEM_LABELS: Record<string, string> = {
   name: "name", description: "description", quantity: "quantity", unit: "unit", unit_price: "unit price",
-  tax_rate: "tax", discount_percent: "discount", is_optional: "optional", is_package: "package", image_url: "image",
+  tax_rate: "tax", discount_percent: "discount", discount_amount: "discount ($)", is_optional: "optional", is_package: "package", image_url: "image",
 };
 
 export async function updateItem(itemId: string, patch: ItemPatch): Promise<ActionResult<QItem>> {
@@ -423,6 +435,7 @@ export async function updateItem(itemId: string, patch: ItemPatch): Promise<Acti
       const show = (x: unknown) =>
         k === "unit_price" ? money(Number(x ?? 0), org.currency)
           : k === "tax_rate" || k === "discount_percent" ? `${Number(x ?? 0)}%`
+          : k === "discount_amount" ? money(Number(x ?? 0), org.currency)
             : k === "is_optional" || k === "is_package" ? (x ? "Yes" : "No")
               : k === "description" || k === "image_url" ? (x ? "set" : null)
                 : x;
@@ -682,7 +695,7 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       metadata: { package_id: pkg.id, ...input, subtotal: result.subtotal, total: result.total },
     });
     refresh(q);
-    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent) }))
+    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0) }))
       .sort((a, b) => a.position - b.position);
     return { section: sec as QSection, items: out };
   });
@@ -727,7 +740,7 @@ export async function addMenuItems(quoteId: string, sectionTitle: string, picks:
       summary: `${actorName(profile)} added ${rows.length} item${rows.length === 1 ? "" : "s"} from the menu to Quote Q-${q.number} (‘${title}’)`,
     });
     refresh(q);
-    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent) }))
+    const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0) }))
       .sort((a, b) => a.position - b.position);
     return { section: sec as QSection, items: out };
   });

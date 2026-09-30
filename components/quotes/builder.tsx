@@ -33,6 +33,7 @@ export interface BuilderProps {
   quote: {
     id: string; number: number; title: string; status: QuoteStatus; issue_date: string; expiry_date: string | null;
     notes: string | null; terms: string | null; has_unpublished_changes: boolean; current_version_id: string | null;
+    discount_type: "percent" | "amount" | null; discount_value: number; discount_label: string | null;
   };
   currentVersion: VersionInfo | null;
   sections: QSection[];
@@ -69,6 +70,10 @@ export function QuoteBuilder(p: BuilderProps) {
   const [title, setTitle] = useState(quote.title);
   const [expiry, setExpiry] = useState(quote.expiry_date ?? "");
   const [notes, setNotes] = useState(quote.notes ?? "");
+  // Whole-quote discount
+  const [discType, setDiscType] = useState<"percent" | "amount" | null>(quote.discount_type ?? null);
+  const [discValue, setDiscValue] = useState(quote.discount_type ? numStr(quote.discount_value) : "");
+  const [discLabel, setDiscLabel] = useState(quote.discount_label ?? "");
   const [terms, setTerms] = useState(quote.terms ?? "");
   const [localDirty, setLocalDirty] = useState(false);
 
@@ -124,7 +129,11 @@ export function QuoteBuilder(p: BuilderProps) {
     if (!patch || !send) return chains.current.get(key) ?? Promise.resolve();
     patches.current.delete(key);
     const prev = chains.current.get(key) ?? Promise.resolve();
-    const next = prev.then(() => track(send(patch)));
+    // Count the save as busy from the moment it's queued, not when it starts: otherwise, between the previous save
+    // finishing and this one starting, the builder looks idle and adopts the server's (older) copy — which
+    // rewrites the text being typed and throws the cursor to the end.
+    setBusy((b) => b + 1);
+    const next = prev.then(() => track(send(patch))).finally(() => setBusy((b) => b - 1));
     chains.current.set(key, next);
     void next.finally(() => { if (chains.current.get(key) === next) chains.current.delete(key); });
     return next;
@@ -163,8 +172,12 @@ export function QuoteBuilder(p: BuilderProps) {
     const a = applied.current;
     if (a && a.items === p.items && a.sections === p.sections) return;
     applied.current = { items: p.items, sections: p.sections };
-    setItems(p.items.map(toDraft));
-    setSections(p.sections);
+    // Never overwrite the line or section someone is typing in right now
+    const el = document.activeElement as HTMLElement | null;
+    const typingItem = el?.dataset?.item ?? null;
+    const typingSection = el?.dataset?.section ?? null;
+    setItems((cur) => p.items.map((i) => (i.id === typingItem ? cur.find((c) => c.id === i.id) ?? toDraft(i) : toDraft(i))));
+    setSections((cur) => p.sections.map((sct) => (sct.id === typingSection ? cur.find((c) => c.id === sct.id) ?? sct : sct)));
   }, [p.items, p.sections, busy]);
 
   useEffect(() => {
@@ -193,7 +206,8 @@ export function QuoteBuilder(p: BuilderProps) {
 
   // ---------------------------------------------------------------- derived
   const optionalSections = useMemo(() => new Set(sections.filter((s) => s.is_optional).map((s) => s.id)), [sections]);
-  const totals = useMemo(() => quoteTotals(items.map(draftNums), optionalSections), [items, optionalSections]);
+  const totals = useMemo(() => quoteTotals(items.map(draftNums), optionalSections, { type: discType, value: parseNum(discValue) ?? 0 }),
+    [items, optionalSections, discType, discValue]);
   const bySection = useMemo(() => {
     const m = new Map<string, ItemDraft[]>();
     for (const s of sections) m.set(s.id, []);
@@ -264,10 +278,10 @@ export function QuoteBuilder(p: BuilderProps) {
         if (n == null) {
           // Restore the last saved value rather than leave an invalid number behind
           const s = serverItems.get(id);
-          const restored = s ? (f === "unit_price" ? priceStr(s[f]) : numStr(s[f])) : "0";
+          const restored = s ? (f === "unit_price" || f === "discount_amount" ? priceStr(s[f]) : numStr(s[f])) : "0";
           setItems((all) => all.map((i) => (i.id === id ? { ...i, [f]: restored } : i)));
-        } else if (f === "unit_price") {
-          setItems((all) => all.map((i) => (i.id === id ? { ...i, unit_price: priceStr(n) } : i)));
+        } else if (f === "unit_price" || f === "discount_amount") {
+          setItems((all) => all.map((i) => (i.id === id ? { ...i, [f]: priceStr(n) } : i)));
         }
       }
       void flush(`i:${id}`);
@@ -525,8 +539,12 @@ export function QuoteBuilder(p: BuilderProps) {
           <Card>
             <CardHeader title="Draft total" subtitle={`${itemCount} line item${itemCount === 1 ? "" : "s"}`} />
             <dl className="space-y-1.5 px-5 pb-4 text-[0.8125rem]">
+              {totals.quoteDiscount > 0 && <>
+                <div className="flex justify-between"><dt className="text-ink-muted">Items (ex GST)</dt><dd className="tabular text-ink">{money(totals.linesSubtotal, currency)}</dd></div>
+                <div className="flex justify-between"><dt className="text-emerald-800">{discLabel.trim() || "Discount"}{discType === "percent" ? ` (${parseNum(discValue) ?? 0}%)` : ""}</dt><dd className="tabular text-emerald-700">−{money(totals.quoteDiscount, currency)}</dd></div>
+              </>}
               <div className="flex justify-between"><dt className="text-ink-muted">Subtotal (ex GST)</dt><dd className="tabular text-ink">{money(totals.subtotal, currency)}</dd></div>
-              {totals.discount > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Includes discounts</dt><dd className="tabular text-emerald-700">−{money(totals.discount, currency)}</dd></div>}
+              {totals.discount > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Includes line discounts</dt><dd className="tabular text-emerald-700">−{money(totals.discount, currency)}</dd></div>}
               <div className="flex justify-between"><dt className="text-ink-muted">GST</dt><dd className="tabular text-ink">{money(totals.tax, currency)}</dd></div>
               <div className="flex items-baseline justify-between border-t border-line pt-2"><dt className="font-semibold text-ink">Total</dt><dd className="tabular text-[1.125rem] font-semibold text-ink">{money(totals.total, currency)}</dd></div>
               <div className="flex justify-between pt-1 text-[0.7812rem]">
@@ -535,6 +553,43 @@ export function QuoteBuilder(p: BuilderProps) {
               </div>
               <p className="text-[0.7188rem] text-ink-faint">Optional extras (inc GST) are offered to the customer but not included in the total.</p>
             </dl>
+            <div className="border-t border-line px-5 py-3">
+              <p className="mb-2 text-[0.7812rem] font-medium text-ink">Discount on the whole quote</p>
+              <div role="radiogroup" aria-label="Whole-quote discount" className="grid grid-cols-3 gap-1 rounded-lg bg-zinc-100 p-0.5 text-[0.75rem] font-medium">
+                {([[null, "None"], ["percent", "%"], ["amount", "$ amount"]] as const).map(([v, l]) => (
+                  <button key={String(v)} type="button" role="radio" aria-checked={discType === v}
+                    onClick={() => {
+                      setDiscType(v);
+                      const val = v ? parseNum(discValue) ?? 0 : 0;
+                      if (!v) setDiscValue("");
+                      queue("h", { discount_type: v, discount_value: val }, sendHeader, 0);
+                    }}
+                    className={cn("h-8 rounded-md", discType === v ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>{l}</button>
+                ))}
+              </div>
+              {discType && (
+                <div className="mt-2 grid grid-cols-[1fr_1.4fr] gap-2">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[0.8125rem] text-ink-faint">{discType === "amount" ? "$" : "%"}</span>
+                    <input value={discValue} inputMode="decimal" aria-label={discType === "amount" ? "Discount in dollars (ex GST)" : "Discount percent"}
+                      onChange={(e) => {
+                        setDiscValue(e.target.value);
+                        const n = parseNum(e.target.value);
+                        if (n != null && n >= 0 && (discType === "amount" || n <= 100)) queue("h", { discount_type: discType, discount_value: n }, sendHeader);
+                      }}
+                      onBlur={() => void flush("h")}
+                      className={cn(inputClass, "tabular pl-6 text-right text-base sm:text-[0.8125rem]")} />
+                  </div>
+                  <input value={discLabel} maxLength={80} placeholder="Discount" aria-label="Discount label shown to the customer"
+                    onChange={(e) => { setDiscLabel(e.target.value); queue("h", { discount_label: e.target.value }, sendHeader); }}
+                    onBlur={() => void flush("h")}
+                    className={cn(inputClass, "text-base sm:text-[0.8125rem]")} />
+                  <p className="col-span-2 text-[0.7188rem] text-ink-faint">
+                    {discType === "amount" ? "Dollars off the subtotal, before GST — GST comes down to match." : "Percentage off the subtotal, before GST."} The customer sees it as its own line.
+                  </p>
+                </div>
+              )}
+            </div>
             {cv && (
               <div className="border-t border-line px-5 py-3 text-[0.7812rem]">
                 <div className="flex justify-between text-ink-muted">

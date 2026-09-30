@@ -169,12 +169,13 @@ export const VERSION_COLUMNS =
   "id, quote_id, version_number, snapshot, subtotal, tax_total, total, status, published_at, viewed_at, responded_at, accepted_by_name, decline_reason";
 export interface SnapshotItem {
   name: string; description?: string | null; quantity: number; unit?: string | null; unit_price: number;
-  tax_rate?: number; discount_percent?: number; optional?: boolean; package?: boolean; image_url?: string | null; line_total: number;
+  tax_rate?: number; discount_percent?: number; discount_amount?: number; optional?: boolean; package?: boolean; image_url?: string | null; line_total: number;
 }
 export interface SnapshotSection { title: string; description?: string | null; optional?: boolean; items: SnapshotItem[] }
 export interface QuoteSnapshot {
   title?: string; notes?: string | null; terms?: string | null; issue_date?: string | null; expiry_date?: string | null;
   sections?: SnapshotSection[]; subtotal?: number; tax_total?: number; total?: number;
+  lines_subtotal?: number; discount?: { type: "percent" | "amount"; value: number; label: string; amount: number } | null;
 }
 export interface PortalVersion {
   id: string; quote_id: string; version_number: number; snapshot: QuoteSnapshot; subtotal: number; tax_total: number;

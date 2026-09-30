@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, ImageIcon, Loader2, Package, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { money } from "@/lib/format";
-import { lineTotal } from "./calc";
+import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
@@ -12,7 +12,7 @@ import type { CatalogueItem, QSection } from "./types";
 export type Col = NumField | TextField;
 
 /** Desktop (md+) column template — shared by the header row and every item row. */
-const GRID_MD = "md:grid-cols-[minmax(250px,1fr)_72px_84px_112px_68px_68px_112px_84px] md:items-start md:gap-x-1.5 md:gap-y-0";
+const GRID_MD = "md:grid-cols-[minmax(250px,1fr)_72px_84px_112px_68px_92px_112px_84px] md:items-start md:gap-x-1.5 md:gap-y-0";
 const GRID = cn("grid", GRID_MD);
 /** Phones (< md): each item is a stacked card — name full width, then 3-up rows of numbers. */
 const ROW = cn("grid grid-cols-3 gap-x-2 gap-y-2.5", GRID_MD);
@@ -58,6 +58,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
       {/* section header */}
       <div className="flex flex-wrap items-center gap-2 px-3 pt-3 sm:px-4">
         <input
+          data-section={section.id}
           value={section.title}
           onChange={(e) => h.onSectionTitle(section.id, e.target.value)}
           onBlur={() => h.onSectionBlur(section.id)}
@@ -98,7 +99,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
             <span className="px-2">Unit</span>
             <span className="px-2 text-right">Unit price</span>
             <span className="px-2 text-right">Tax %</span>
-            <span className="px-2 text-right">Disc %</span>
+            <span className="px-2 text-right">Discount</span>
             <span className="px-2 text-right">Total</span>
             <span className="sr-only">Actions</span>
           </div>
@@ -137,6 +138,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
   it: ItemDraft; first: boolean; last: boolean; currency: string; h: SectionHandlers; optionalSection: boolean;
 }) {
   const [showImage, setShowImage] = useState(!!it.image_url);
+  const [discMode, setDiscMode] = useState<"percent" | "amount">((parseNum(it.discount_amount) ?? 0) > 0 ? "amount" : "percent");
   const total = lineTotal(draftNums(it));
   const excluded = it.is_optional || optionalSection;
 
@@ -206,7 +208,26 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
         </div>
       </div>
       <div><span className={mLabel} aria-hidden>Tax %</span>{input("tax_rate", { className: numCell, inputMode: "decimal", "aria-label": "Tax rate percent" })}</div>
-      <div><span className={mLabel} aria-hidden>Disc %</span>{input("discount_percent", { className: numCell, inputMode: "decimal", "aria-label": "Discount percent" })}</div>
+      <div>
+        <span className={mLabel} aria-hidden>Discount</span>
+        <div className="relative">
+          {/* % or $ — a line takes one kind of discount; switching clears the other */}
+          <button type="button" onClick={() => {
+              const next = discMode === "percent" ? "amount" : "percent";
+              setDiscMode(next);
+              if (next === "amount" && (parseNum(it.discount_percent) ?? 0) !== 0) h.onField(it.id, "discount_percent", "0");
+              if (next === "percent" && (parseNum(it.discount_amount) ?? 0) !== 0) h.onField(it.id, "discount_amount", "0");
+            }}
+            title={discMode === "percent" ? "Discount as a percentage — click for a dollar amount" : "Discount as a dollar amount (ex GST) — click for a percentage"}
+            aria-label={discMode === "percent" ? "Discount is a percentage; switch to dollars" : "Discount is in dollars; switch to percentage"}
+            className="absolute left-1 top-1/2 z-10 inline-flex h-6 min-w-6 -translate-y-1/2 items-center justify-center rounded px-1 text-[0.6875rem] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-50 max-md:h-7 max-md:min-w-7">
+            {discMode === "percent" ? "%" : "$"}
+          </button>
+          {discMode === "percent"
+            ? input("discount_percent", { className: cn(numCell, "pl-8"), inputMode: "decimal", "aria-label": "Discount percent" })
+            : input("discount_amount", { className: cn(numCell, "pl-8"), inputMode: "decimal", "aria-label": "Discount in dollars" })}
+        </div>
+      </div>
       <div>
         <span className={cn(mLabel, "text-right")} aria-hidden>Total</span>
         <div className="flex h-10 flex-col items-end justify-center px-2 md:h-8">

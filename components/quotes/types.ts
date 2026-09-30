@@ -20,6 +20,8 @@ export interface QItem {
   unit_price: number;
   tax_rate: number;
   discount_percent: number;
+  /** Dollars off the line (ex GST). A line uses a percentage or an amount, not both. */
+  discount_amount: number;
   is_optional: boolean;
   is_package: boolean;
   image_url: string | null;
@@ -28,7 +30,7 @@ export interface QItem {
 }
 
 export type ItemPatch = Partial<Pick<QItem,
-  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "is_optional" | "is_package" | "image_url" | "service_id">>;
+  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "discount_amount" | "is_optional" | "is_package" | "image_url" | "service_id">>;
 
 export type SectionPatch = Partial<Pick<QSection, "title" | "description" | "is_optional">>;
 
@@ -37,7 +39,13 @@ export interface HeaderPatch {
   expiry_date?: string | null;
   notes?: string | null;
   terms?: string | null;
+  /** Whole-quote discount: a percentage or a dollar amount (ex GST) off the subtotal; null type = none */
+  discount_type?: QuoteDiscountType | null;
+  discount_value?: number;
+  discount_label?: string | null;
 }
+
+export type QuoteDiscountType = "percent" | "amount";
 
 export interface CatalogueItem {
   service_id?: string | null;
@@ -59,6 +67,7 @@ export interface SnapshotItem {
   unit_price: number;
   tax_rate?: number;
   discount_percent?: number;
+  discount_amount?: number;
   optional: boolean;
   package?: boolean;
   image_url?: string | null;
@@ -72,6 +81,9 @@ export interface QuoteSnapshotData {
   issue_date?: string | null;
   expiry_date?: string | null;
   sections: { title: string; description?: string | null; optional?: boolean; items: SnapshotItem[] }[];
+  /** Sum of the lines before the whole-quote discount (ex GST) */
+  lines_subtotal?: number;
+  discount?: { type: QuoteDiscountType; value: number; label: string; amount: number } | null;
   subtotal?: number;
   tax_total?: number;
   total?: number;
