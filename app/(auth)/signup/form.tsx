@@ -11,7 +11,7 @@ export function SignupForm({ defaultEmail = "" }: { defaultEmail?: string }) {
     return <p className="mt-8 rounded-lg bg-brand-50 px-4 py-3 text-[0.8438rem] text-brand-800 ring-1 ring-inset ring-brand-100">{state.message}</p>;
   }
   return (
-    <form action={action} className="mt-5 space-y-4 lg:mt-8">
+    <form action={action} className="mt-3 space-y-4 lg:mt-8">
       <div>
         <Label htmlFor="full_name">Your name</Label>
         <Input id="full_name" placeholder="Your name" name="full_name" autoComplete="name" required autoFocus />
