@@ -12,11 +12,11 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
       <input type="hidden" name="next" value={next} />
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required autoFocus />
+        <Input id="email" placeholder="Email" name="email" type="email" autoComplete="email" required autoFocus />
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+        <Input id="password" placeholder="Password" name="password" type="password" autoComplete="current-password" required />
       </div>
       <FormError message={state?.error} />
       <Button variant="primary" className="h-11 w-full sm:h-9" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</Button>

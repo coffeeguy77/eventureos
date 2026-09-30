@@ -24,11 +24,19 @@ const MOBILE_CSS = `
     background: rgba(255, 255, 255, 0.06); color: #ffffff; border: 1px solid #FF3D8B; box-shadow: none;
     font-size: 16px; /* no zoom-in on iPhone */
   }
-  .auth-card input::placeholder, .auth-card textarea::placeholder { color: rgba(255, 158, 207, 0.55); }
+  /* Field names sit inside the fields (as placeholders); the labels stay for screen readers */
+  .auth-card label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .auth-card input:not([type=hidden]):not([type=checkbox]) { height: 52px; padding-left: 16px; padding-right: 16px; }
+  .auth-card form.space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 12px; }
+  .auth-card input::placeholder, .auth-card textarea::placeholder { color: #FF9ECF; opacity: 1; }
   .auth-card input:focus, .auth-card select:focus, .auth-card textarea:focus { border-color: #FF5FA8; box-shadow: 0 0 0 3px rgba(255, 61, 139, 0.28); outline: none; }
   .auth-card input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #2A1260 inset; -webkit-text-fill-color: #ffffff; caret-color: #ffffff; }
   .auth-card button[class*="bg-brand-500"] { background: #FF3D8B; color: #ffffff; box-shadow: 0 10px 24px -10px rgba(255, 61, 139, 0.8); }
   .auth-card button[class*="bg-brand-500"]:disabled { opacity: 0.7; }
+}
+/* Desktop keeps its labels above the fields, so no placeholders there */
+@media (min-width: 1024px) {
+  .auth-card input::placeholder { color: transparent; }
 }`;
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -42,6 +50,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="relative mx-auto w-full max-w-[420px] lg:max-w-[380px]">
           <div className="mb-5 mt-4 px-1 text-white lg:hidden">
             <a href="/" aria-label="EventureOS home"><Wordmark height={28} tone="light" /></a>
+            <p className="mt-1.5 text-[0.6875rem] tracking-[0.14em] text-white/60">The operating system for event businesses.</p>
             <Image src="/brand/mascot.png" alt="The EventureOS early bird" width={900} height={759} priority
               className="mx-auto mt-3 h-auto w-[180px] drop-shadow-[0_20px_36px_rgba(96,40,236,0.5)] sm:w-[250px]" />
             <p className="mt-3 text-[1.5rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
