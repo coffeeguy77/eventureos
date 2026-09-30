@@ -62,7 +62,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
     supabase.from("services").select("id, code, name, description, unit, unit_price, tax_rate, category").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
     supabase.from("service_packages").select("id, name, summary, rules").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
     supabase.from("email_sends")
-      .select("id, version_number, subject, message, sent_at, sent_by, recipients:email_send_recipients(id, email, name, role, token, status, status_at, error, email_opened_at, first_viewed_at, last_viewed_at, view_count, views:document_link_views(viewed_at, city, region, country, user_agent))")
+      .select("id, version_number, subject, message, sent_at, sent_by, channel, from_email, recipients:email_send_recipients(id, email, name, role, token, status, status_at, error, email_opened_at, first_viewed_at, last_viewed_at, view_count, views:document_link_views(viewed_at, city, region, country, user_agent))")
       .eq("organisation_id", org.id).eq("quote_id", q.id).order("sent_at", { ascending: false }).limit(50),
   ]);
   if (sendsRes.error) throw new Error(`Could not load sent emails: ${sendsRes.error.message}`);

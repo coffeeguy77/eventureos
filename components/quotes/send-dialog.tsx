@@ -31,6 +31,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
   const [message, setMessage] = useState("");
   const [withSig, setWithSig] = useState(true);
   const [copyMe, setCopyMe] = useState(false);
+  const [via, setVia] = useState<"gmail" | "resend">("gmail");
   const [saveContacts, setSaveContacts] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "send" | "publish">(null);
@@ -45,7 +46,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
     let live = true;
     if (initialSetup) {
       setSetup(initialSetup); setTo(initialSetup.defaultTo.map((x) => ({ email: x.email, name: x.name })));
-      setSubject(initialSetup.subject); setMessage(initialSetup.message); setWithSig(Boolean(initialSetup.signature));
+      setSubject(initialSetup.subject); setMessage(initialSetup.message); setWithSig(Boolean(initialSetup.signature)); setVia(initialSetup.gmail ? "gmail" : "resend");
       return;
     }
     (async () => {
@@ -56,7 +57,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
       if (!live) return;
       if (!r.ok) { setLoadErr(r.error); return; }
       setSetup(r.data); setTo(r.data.defaultTo.map((x) => ({ email: x.email, name: x.name })));
-      setSubject(r.data.subject); setMessage(r.data.message); setWithSig(Boolean(r.data.signature));
+      setSubject(r.data.subject); setMessage(r.data.message); setWithSig(Boolean(r.data.signature)); setVia(r.data.gmail ? "gmail" : "resend");
     })();
     return () => { live = false; };
   }, [quoteId, initialSetup]);
@@ -96,7 +97,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
     if (draft.trim()) { add(draft); return; }
     if (!to.length) { setError("Add at least one email address."); input.current?.focus(); return; }
     setError(null); setBusy("send");
-    const r = await sendQuoteEmail(quoteId, { recipients: to, subject, message, includeSignature: withSig, copyMe, saveContacts })
+    const r = await sendQuoteEmail(quoteId, { recipients: to, subject, message, includeSignature: withSig, copyMe, saveContacts, via })
       .catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection before trying again — it may have sent." }));
     setBusy(null);
     if (!r.ok) { setError(r.error); return; }
@@ -150,7 +151,18 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:overflow-hidden">
               {/* Compose */}
               <div className="min-w-0 space-y-4 p-4 sm:p-5 lg:overflow-y-auto">
-                {!setup.emailReady && <FormError message="Email sending isn't set up — RESEND_API_KEY is missing in Vercel." />}
+                {!setup.emailReady && <FormError message="Email can't be sent yet — connect Gmail in Settings → Integrations." />}
+                <div>
+                  <p className="mb-1.5 text-[0.7812rem] font-medium text-ink">From</p>
+                  <div role="radiogroup" aria-label="Send from" className="grid gap-2 sm:grid-cols-2">
+                    <FromOption on={via === "gmail"} disabled={!setup.gmail} onPick={() => setVia("gmail")}
+                      title={setup.gmail ? setup.gmail : "Your Gmail"}
+                      hint={setup.gmail ? "From your own address · saved in Gmail's Sent folder · replies come straight back" : <>Not connected. <Link href="/settings/integrations" className="font-medium text-brand-700 hover:underline">Connect Gmail</Link></>} />
+                    <FromOption on={via === "resend"} disabled={!setup.resendReady} onPick={() => setVia("resend")}
+                      title="EventureOS"
+                      hint={`Sent for ${setup.businessName} from EventureOS's address · replies go to ${setup.senderEmail}`} />
+                  </div>
+                </div>
                 <div>
                   <Label htmlFor="send-to">To</Label>
                   <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2 py-1.5 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100" onClick={() => input.current?.focus()}>
@@ -195,13 +207,17 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                   ) : (
                     <p className="text-ink-muted">No email signature yet. <Link href="/my-signature" className="font-medium text-brand-700 hover:underline">Set one up</Link></p>
                   )}
-                  <Check2 on={copyMe} onChange={setCopyMe}>Send me a copy ({setup.senderEmail})</Check2>
+                  {via === "resend" && <Check2 on={copyMe} onChange={setCopyMe}>Send me a copy ({setup.senderEmail})</Check2>}
                   {newAddresses.length > 0 && <Check2 on={saveContacts} onChange={setSaveContacts}>Save {newAddresses.map((a) => a.email).join(", ")} as {newAddresses.length === 1 ? "a contact" : "contacts"} on this client</Check2>}
                 </div>
                 <p className="flex items-start gap-2 rounded-lg bg-canvas px-3 py-2 text-[0.75rem] text-ink-muted ring-1 ring-inset ring-line">
                   <Mail className="mt-px h-3.5 w-3.5 shrink-0" />
-                  <span>Sent from {setup.businessName} by EventureOS. Replies go to <b className="text-ink">{setup.replyTo}</b>. Each person gets their own link, so you can see who opened it.
-                    {!setup.deliveryTracking && " Delivery tracking (delivered/bounced) isn't switched on yet."}</span>
+                  {via === "gmail" ? (
+                    <span>Each person gets their own email and personal link, so you can see who opened it. If an address bounces, Gmail&apos;s notice is picked up on the next sync and shown under Sent emails.</span>
+                  ) : (
+                    <span>Sent from {setup.businessName} by EventureOS. Replies go to <b className="text-ink">{setup.senderEmail}</b>. Each person gets their own link, so you can see who opened it.
+                      {!setup.deliveryTracking && " Delivery tracking (delivered/bounced) isn't switched on yet."}</span>
+                  )}
                 </p>
                 <button type="button" onClick={() => setShowPreview((s) => !s)} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 lg:hidden">
                   <Eye className="h-4 w-4" />{showPreview ? "Hide preview" : "Preview the email"}
@@ -225,7 +241,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                     {busy === "publish" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Publish without emailing
                   </Button>
                 )}
-                <Button type="button" variant="primary" onClick={send} disabled={Boolean(busy) || !setup.emailReady || !subject.trim() || !message.trim()} className="h-10 sm:h-9">
+                <Button type="button" variant="primary" onClick={send} disabled={Boolean(busy) || (via === "gmail" ? !setup.gmail : !setup.resendReady) || !subject.trim() || !message.trim()} className="h-10 sm:h-9">
                   {busy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {busy === "send" ? "Sending…" : `Send to ${to.length || "…"} ${to.length === 1 ? "person" : "people"}`}
                 </Button>
@@ -237,6 +253,17 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
     </div>
   );
   return mounted ? createPortal(body, document.body) : null;
+}
+
+function FromOption({ on, disabled, onPick, title, hint }: { on: boolean; disabled: boolean; onPick: () => void; title: string; hint: React.ReactNode }) {
+  return (
+    <div role="radio" aria-checked={on} aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
+      onClick={() => !disabled && onPick()} onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onPick(); } }}
+      className={cn("flex items-start gap-2.5 rounded-xl p-3 ring-1 ring-inset", on ? "bg-brand-50/60 ring-2 ring-brand-500" : disabled ? "opacity-70 ring-line" : "cursor-pointer ring-line-strong hover:bg-zinc-50")}>
+      <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full ring-1", on ? "bg-brand-500 ring-brand-500" : "ring-line-strong")}>{on && <span className="h-1.5 w-1.5 rounded-full bg-white" />}</span>
+      <span className="min-w-0"><span className="block truncate text-[0.8125rem] font-medium text-ink">{title}</span><span className="block text-[0.72rem] leading-snug text-ink-muted">{hint}</span></span>
+    </div>
+  );
 }
 
 function Check2({ on, onChange, children }: { on: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {

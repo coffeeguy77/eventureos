@@ -10,6 +10,10 @@ import { appBaseUrl } from "@/lib/integrations/registry";
 import { signatureForSend } from "@/lib/signatures/server";
 import { fmtDate, money } from "@/lib/format";
 import { publishQuote } from "./actions";
+import { buildContext } from "@/lib/integrations/sync-runner";
+import { buildRawMessage, sendGmail } from "@/lib/integrations/gmail-send";
+import { errMessage } from "@/lib/integrations/runtime";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActionResult } from "@/components/quotes/types";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +41,9 @@ export interface QuoteSendSetup {
   title: string;
   quoteNumber: number;
   emailReady: boolean;
+  /** The connected Gmail address quotes are sent from, or null when Gmail isn't connected */
+  gmail: string | null;
+  resendReady: boolean;
   deliveryTracking: boolean;
   previouslySentTo: string[];
 }
@@ -57,6 +64,15 @@ async function load(quoteId: string) {
     event: { id: string; name: string; event_date: string | null; primary_contact_id: string | null } | null;
     customer: { id: string; name: string; email: string | null; kind: string | null } | null;
   } };
+}
+
+/** The organisation's connected Gmail, ready to send — or null. */
+async function gmailSender(supabase: SupabaseClient, orgId: string, userId: string) {
+  try {
+    const ctx = await buildContext(supabase, "user", orgId, "gmail", userId);
+    const address = (ctx.integration.account_label ?? ctx.integration.external_account_id ?? "").toLowerCase();
+    return address && EMAIL.test(address) ? { ctx, address } : null;
+  } catch { return null; }
 }
 
 const needsPublishing = (q: { current_version_id: string | null; has_unpublished_changes: boolean; status: string }) =>
@@ -100,6 +116,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
       if (snap && typeof (snap as { total?: unknown }).total !== "undefined") total = Number((snap as { total: number }).total);
     }
 
+    const gm = await gmailSender(supabase, org.id, user.id);
     let signature: QuoteSendSetup["signature"] = null;
     try { const s = await signatureForSend(supabase, org.id, user.id, null); if (s) signature = { html: s.html, text: s.text }; } catch { /* no signature */ }
 
@@ -119,7 +136,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
           isUpdate: needsPublish && (prev ?? []).length > 0,
         }),
         senderEmail: profile.email,
-        replyTo: profile.email,
+        replyTo: gm?.address ?? profile.email,
         businessName: org.name,
         brand: orgRow?.brand_colour ?? null,
         logoUrl: orgRow?.logo_url ?? null,
@@ -132,7 +149,9 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
         eventLine: q.event ? [q.event.name, eventDate].filter(Boolean).join(" · ") : null,
         title: q.title,
         quoteNumber: q.number,
-        emailReady: emailConfigured(),
+        emailReady: Boolean(gm) || emailConfigured(),
+        gmail: gm?.address ?? null,
+        resendReady: emailConfigured(),
         deliveryTracking: Boolean(process.env.RESEND_WEBHOOK_SECRET?.trim()),
         previouslySentTo: [...new Set(((prev ?? []) as { email: string }[]).map((r) => r.email))],
       },
@@ -149,6 +168,8 @@ export interface SendQuoteInput {
   includeSignature: boolean;
   copyMe: boolean;
   saveContacts: boolean;
+  /** "gmail" = from the connected Gmail account (preferred); "resend" = from EventureOS's address */
+  via: "gmail" | "resend";
 }
 export interface SendQuoteResult { versionNumber: number; published: boolean; sent: string[]; failed: { email: string; error: string }[] }
 
@@ -158,7 +179,8 @@ export interface SendQuoteResult { versionNumber: number; published: boolean; se
  */
 export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Promise<ActionResult<SendQuoteResult>> {
   try {
-    if (!emailConfigured()) throw new Error("Email sending isn't set up (RESEND_API_KEY is missing in Vercel).");
+    const via = input.via === "gmail" ? "gmail" : "resend";
+    if (via === "resend" && !emailConfigured()) throw new Error("Email sending isn't set up (RESEND_API_KEY is missing in Vercel).");
     // Validate before anything is published
     const seen = new Set<string>();
     const recipients: { email: string; name: string | null }[] = [];
@@ -181,6 +203,9 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
 
     const { supabase, org, user, profile, q } = await load(quoteId);
     if (q.status === "accepted") throw new Error(`Quote Q-${q.number} has already been accepted.`);
+    // Check Gmail before anything is published
+    const gm = via === "gmail" ? await gmailSender(supabase, org.id, user.id) : null;
+    if (via === "gmail" && !gm) throw new Error("Gmail isn't connected (or needs reconnecting in Settings → Integrations). Choose “EventureOS” to send without it.");
 
     // 1. Publish if needed (publishQuote runs all the checks: items, names, expiry)
     let published = false;
@@ -204,20 +229,24 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
     }
     const { data: o } = await supabase.from("organisations").select("brand_colour, logo_url, contact_email").eq("id", org.id).single();
     const orgRow = o as { brand_colour: string | null; logo_url: string | null; contact_email: string | null } | null;
-    const replyTo = profile.email || orgRow?.contact_email || null;
+    const replyTo = gm ? null : profile.email || orgRow?.contact_email || null;
+    // From Gmail the message comes from the connected mailbox with the sender's name, like replies do
+    const gmailFromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;
 
     // 3. Record the send and each recipient (with their own link)
     const { data: send, error: sErr } = await supabase.from("email_sends").insert({
       organisation_id: org.id, kind: "quote", quote_id: q.id, quote_version_id: cur.id, version_number: cur.version_number,
-      subject, message, from_name: org.name, reply_to: replyTo, signature_version: sig?.version ?? null, sent_by: user.id,
+      subject, message, from_name: gm ? gmailFromName : org.name, reply_to: replyTo, signature_version: sig?.version ?? null, sent_by: user.id,
+      channel: via, from_email: gm?.address ?? null,
     }).select("id").single();
     if (sErr) throw new Error(`Couldn't record the email: ${sErr.message}`);
     const all = [
       ...recipients.map((r) => ({ ...r, role: "to" as const })),
-      ...(input.copyMe && !seen.has(profile.email.toLowerCase()) ? [{ email: profile.email.toLowerCase(), name: profile.full_name, role: "copy" as const }] : []),
+      // Gmail keeps its own copy in Sent, so "send me a copy" only applies to EventureOS sends
+      ...(!gm && input.copyMe && !seen.has(profile.email.toLowerCase()) ? [{ email: profile.email.toLowerCase(), name: profile.full_name, role: "copy" as const }] : []),
     ];
     const rows = all.map((r) => ({
-      organisation_id: org.id, send_id: send.id, quote_id: q.id, email: r.email, name: r.name, role: r.role, token: randomBytes(32).toString("hex"),
+      organisation_id: org.id, send_id: send.id, quote_id: q.id, email: r.email, name: r.name, role: r.role, token: randomBytes(32).toString("hex"), channel: via,
     }));
     const { data: inserted, error: rErr } = await supabase.from("email_send_recipients").insert(rows).select("id, email, role, token");
     if (rErr) throw new Error(`Couldn't record the recipients: ${rErr.message}`);
@@ -239,11 +268,18 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
         footer: r.role === "copy" ? `Your copy. Opening this link isn't counted as the customer viewing it.` : undefined,
       });
       try {
-        const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${subject}` : subject, html: m.html, text: m.text, replyTo, fromName: org.name });
-        await supabase.from("email_send_recipients").update({ resend_id: res.id, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
+        if (gm) {
+          // One message per person (each link is personal), each starting its own Gmail conversation
+          const raw = buildRawMessage({ from: gm.address, fromName: gmailFromName, to: [r.email], subject, text: m.text, html: m.html });
+          const res = await sendGmail(gm.ctx, raw, null);
+          await supabase.from("email_send_recipients").update({ gmail_message_id: res.id, gmail_thread_id: res.threadId, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
+        } else {
+          const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${subject}` : subject, html: m.html, text: m.text, replyTo, fromName: org.name });
+          await supabase.from("email_send_recipients").update({ resend_id: res.id, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
+        }
         if (r.role === "to") sent.push(r.email);
       } catch (e) {
-        const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+        const msg = (gm ? `Gmail: ${errMessage(e)}` : e instanceof Error ? e.message : String(e)).slice(0, 500);
         await supabase.from("email_send_recipients").update({ status: "failed", status_at: new Date().toISOString(), error: msg }).eq("id", r.id);
         failed.push({ email: r.email, error: msg });
       }
@@ -265,7 +301,7 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       orgId: org.id, actorId: user.id, action: "quote.emailed", entityType: "quote", entityId: q.id,
       customerId: q.customer_id, eventId: q.event_id,
       summary: sent.length
-        ? `${actorName(profile)} emailed Quote Q-${q.number} (version ${cur.version_number}) to ${sent.join(", ")}${failed.length ? ` — failed for ${failed.map((f) => f.email).join(", ")}` : ""}`
+        ? `${actorName(profile)} emailed Quote Q-${q.number} (version ${cur.version_number}) to ${sent.join(", ")}${gm ? ` from ${gm.address}` : ""}${failed.length ? ` — failed for ${failed.map((f) => f.email).join(", ")}` : ""}`
         : `${actorName(profile)} tried to email Quote Q-${q.number} — it failed for ${failed.map((f) => f.email).join(", ")}`,
       metadata: { send_id: send.id, version: cur.version_number },
     });

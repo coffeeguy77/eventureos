@@ -317,6 +317,16 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
     }
   }
 
+  // A bounce notice for a quote emailed from this Gmail: mark that recipient Bounced/Delayed in Sent emails
+  if (!outbound) {
+    const { parseBounce } = await import("@/lib/integrations/gmail-bounce");
+    const b = parseBounce(pm.from.email, pm.subject, pm.text);
+    if (b) {
+      const what = await recordQuoteBounce(ctx, pm.threadId, b);
+      if (what) return { ...res, filtered: true, filterReason: what };
+    }
+  }
+
   // Blocked senders and your own team are never imported (not even into Spam)
   if (!outbound) {
     const why = await gateCheck(ctx, [pm.from.email, pm.replyTo && !own.includes(pm.replyTo.email) ? pm.replyTo.email : null]);
@@ -574,4 +584,33 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
     });
   }
   return { thread: data as ThreadRow, enquiryCreated, review: c.classification === "needs_review" };
+}
+
+
+/** Match a bounce notice to the quote email it's about (same Gmail thread, else a recent send to that address). */
+async function recordQuoteBounce(ctx: SyncContext, gmailThreadId: string, b: import("@/lib/integrations/gmail-bounce").Bounce): Promise<string | null> {
+  const db = ctx.db;
+  const cols = "id, email, status, quote_id, send_id";
+  let { data: rows } = await db.from("email_send_recipients").select(cols)
+    .eq("organisation_id", ctx.org.id).eq("channel", "gmail").eq("gmail_thread_id", gmailThreadId);
+  if (!rows?.length && b.addresses.length) {
+    const since = new Date(Date.now() - 14 * 86400_000).toISOString();
+    ({ data: rows } = await db.from("email_send_recipients").select(cols)
+      .eq("organisation_id", ctx.org.id).eq("channel", "gmail").in("email", b.addresses).gte("created_at", since)
+      .order("created_at", { ascending: false }).limit(1));
+  }
+  const r = rows?.[0] as { id: string; email: string; status: string; quote_id: string | null } | undefined;
+  if (!r) return null;
+  if (b.kind === "delayed" && r.status === "bounced") return `Delivery delay notice for ${r.email} (already bounced)`;
+  await db.from("email_send_recipients").update({ status: b.kind, status_at: new Date().toISOString(), error: b.reason || null }).eq("id", r.id);
+  if (b.kind === "bounced" && r.quote_id) {
+    const { data: q } = await db.from("quotes").select("number, event_id").eq("id", r.quote_id).maybeSingle();
+    if (q) {
+      await db.from("notifications").insert({
+        organisation_id: ctx.org.id, type: "quote.bounced", title: `Quote Q-${q.number} didn't reach ${r.email}`,
+        body: b.reason || "The email bounced. Check the address and send it again.", link: `/quotes/${r.quote_id}`, entity_type: "quote", entity_id: r.quote_id,
+      });
+    }
+  }
+  return `${b.kind === "bounced" ? "Bounce" : "Delivery delay"} notice for ${r.email} — recorded on the quote`;
 }

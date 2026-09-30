@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { createClient } from "@/lib/supabase/server";
 
 const TOKEN = /^[0-9a-f]{64}$/;
 
@@ -22,8 +23,21 @@ async function requestInfo() {
 /** Called by the page once it has loaded in a real browser — link scanners that only fetch the page don't count. */
 export async function recordQuoteLinkView(token: string): Promise<void> {
   if (!TOKEN.test(token)) return;
+  const db = createServiceClient();
+  // Someone from the business opening the link (e.g. from Gmail's Sent folder) isn't the customer viewing it
+  try {
+    const { data: { user } } = await (await createClient()).auth.getUser();
+    if (user) {
+      const { data: r } = await db.from("email_send_recipients").select("organisation_id").eq("token", token).maybeSingle();
+      if (r) {
+        const { data: m } = await db.from("organisation_users").select("id").eq("organisation_id", r.organisation_id)
+          .eq("user_id", user.id).neq("role", "customer").limit(1);
+        if (m?.length) return;
+      }
+    }
+  } catch { /* not signed in */ }
   const i = await requestInfo();
-  const { error } = await createServiceClient().rpc("quote_link_viewed", {
+  const { error } = await db.rpc("quote_link_viewed", {
     p_token: token, p_ip: i.ip, p_user_agent: i.ua, p_city: i.city, p_region: i.region, p_country: i.country,
   });
   if (error) console.error("quote_link_viewed failed", error.message);

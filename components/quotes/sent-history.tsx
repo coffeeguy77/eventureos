@@ -11,7 +11,7 @@ export interface SentRecipient {
   id: string; email: string; name: string | null; role: "to" | "copy"; token: string; status: string; status_at: string | null; error: string | null;
   email_opened_at: string | null; first_viewed_at: string | null; last_viewed_at: string | null; view_count: number; views: SentView[];
 }
-export interface SentEmail { id: string; version_number: number | null; subject: string; message: string; sent_at: string; sent_by: string | null; recipients: SentRecipient[] }
+export interface SentEmail { id: string; version_number: number | null; subject: string; message: string; sent_at: string; sent_by: string | null; channel: "gmail" | "resend"; from_email: string | null; recipients: SentRecipient[] }
 
 /** "iPhone · Safari", "Windows · Chrome" — a rough, honest label from the browser's user agent. */
 export function deviceLabel(ua: string | null) {
@@ -105,7 +105,7 @@ export function SentHistory({ sends, tz, names, trackingOn }: { sends: SentEmail
             <li key={s.id} className="px-5 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="text-[0.8125rem] font-medium text-ink">{fmtDateTime(s.sent_at, tz)}</p>
-                <p className="text-[0.75rem] text-ink-muted">{s.version_number ? `Version ${s.version_number}` : ""}{s.sent_by && names[s.sent_by] ? ` · ${names[s.sent_by]}` : ""}</p>
+                <p className="text-[0.75rem] text-ink-muted">{s.version_number ? `Version ${s.version_number}` : ""}{s.sent_by && names[s.sent_by] ? ` · ${names[s.sent_by]}` : ""}{s.channel === "gmail" ? ` · from ${s.from_email ?? "Gmail"}` : " · via EventureOS"}</p>
               </div>
               <button type="button" onClick={() => setOpenMsg((m) => (m === s.id ? null : s.id))} className="mt-0.5 block w-full truncate text-left text-[0.75rem] text-ink-muted hover:text-ink" aria-expanded={openMsg === s.id}>
                 {s.subject}
@@ -120,7 +120,8 @@ export function SentHistory({ sends, tz, names, trackingOn }: { sends: SentEmail
       )}
       <p className="border-t border-line px-5 py-2.5 text-[0.6875rem] leading-relaxed text-ink-faint">
         “Viewed” means the person opened their quote link in a browser. Location is approximate (from their internet connection).
-        {trackingOn ? " Delivery status comes from Resend." : " Delivered/bounced status appears once the Resend webhook is set up."}
+        {" Emails sent from Gmail show Bounced when Gmail's bounce notice arrives (checked every 10 minutes)."}
+        {trackingOn ? " EventureOS sends show delivery status from Resend." : ""}
       </p>
     </Card>
   );
