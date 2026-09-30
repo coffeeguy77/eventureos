@@ -5,8 +5,36 @@ import { Logo, SLOGAN, Wordmark } from "@/components/shell/sidebar";
 /** Dark status bar on phones, to run into the dark hero */
 export const viewport: Viewport = { themeColor: "#070B1F" };
 
+/*
+ * Phones and tablets: the page is dark all the way to the edges (Safari tints its top and bottom bars from the
+ * page background), and the form sits on purple glass with hot-pink outlines and pink text. Desktop is untouched.
+ */
+const MOBILE_CSS = `
+@media (max-width: 1023.98px) {
+  html, body { background: #070B1F; }
+  .auth-card {
+    background: linear-gradient(160deg, rgba(139, 92, 246, 0.26), rgba(76, 29, 149, 0.20) 60%, rgba(236, 72, 153, 0.10));
+    -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid rgba(255, 122, 184, 0.28);
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  }
+  .auth-card h1, .auth-card label, .auth-card p:not([role=alert]) { color: #FF9ECF; }
+  .auth-card a { color: #FF5FA8; font-weight: 600; }
+  .auth-card input:not([type=hidden]):not([type=checkbox]), .auth-card select, .auth-card textarea {
+    background: rgba(255, 255, 255, 0.06); color: #ffffff; border: 1px solid #FF3D8B; box-shadow: none;
+    font-size: 16px; /* no zoom-in on iPhone */
+  }
+  .auth-card input::placeholder, .auth-card textarea::placeholder { color: rgba(255, 158, 207, 0.55); }
+  .auth-card input:focus, .auth-card select:focus, .auth-card textarea:focus { border-color: #FF5FA8; box-shadow: 0 0 0 3px rgba(255, 61, 139, 0.28); outline: none; }
+  .auth-card input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #2A1260 inset; -webkit-text-fill-color: #ffffff; caret-color: #ffffff; }
+  .auth-card button[class*="bg-brand-500"] { background: #FF3D8B; color: #ffffff; box-shadow: 0 10px 24px -10px rgba(255, 61, 139, 0.8); }
+  .auth-card button[class*="bg-brand-500"]:disabled { opacity: 0.7; }
+}`;
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
+    <>
+    <style>{MOBILE_CSS}</style>
     <div className="grid min-h-screen bg-[#070B1F] lg:grid-cols-[1fr_1.05fr] lg:bg-transparent">
       <div className="pt-safe pb-safe relative flex flex-col justify-start overflow-hidden px-4 py-5 sm:justify-center sm:px-12 sm:py-12 lg:overflow-visible lg:px-20">
         {/* Phones and tablets: the dark hero with the bird, then the form on a card */}
@@ -18,7 +46,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               className="mx-auto mt-3 h-auto w-[180px] drop-shadow-[0_20px_36px_rgba(96,40,236,0.5)] sm:w-[250px]" />
             <p className="mt-3 text-[1.5rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
           </div>
-          <div className="rounded-2xl bg-surface p-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)] sm:p-7 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none">
+          <div className="auth-card rounded-2xl p-5 sm:p-7 lg:rounded-none lg:p-0">
             <div className="mb-8 hidden sm:mb-10 lg:block">
               <a href="/" aria-label="EventureOS home" className="inline-flex items-center gap-2.5"><Logo size={40} /><Wordmark height={26} /></a>
             </div>
@@ -52,5 +80,6 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
       </div>
     </div>
+    </>
   );
 }
