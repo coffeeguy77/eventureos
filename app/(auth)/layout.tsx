@@ -8,17 +8,15 @@ export const viewport: Viewport = { themeColor: "#070B1F" };
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen bg-[#070B1F] lg:grid-cols-[1fr_1.05fr] lg:bg-transparent">
-      <div className="pt-safe pb-safe relative flex flex-col justify-center overflow-hidden px-4 py-8 sm:px-12 sm:py-12 lg:overflow-visible lg:px-20">
+      <div className="pt-safe pb-safe relative flex flex-col justify-start overflow-hidden px-4 py-5 sm:justify-center sm:px-12 sm:py-12 lg:overflow-visible lg:px-20">
         {/* Phones and tablets: the dark hero with the bird, then the form on a card */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(96,40,236,0.6),transparent_62%)] lg:hidden" />
         <div className="relative mx-auto w-full max-w-[420px] lg:max-w-[380px]">
-          <div className="mb-6 px-1 text-white lg:hidden">
+          <div className="mb-5 mt-4 px-1 text-white lg:hidden">
             <a href="/" aria-label="EventureOS home"><Wordmark height={28} tone="light" /></a>
-            <p className="mt-2 text-[0.6875rem] tracking-[0.16em] text-white/60">The operating system for event businesses.</p>
             <Image src="/brand/mascot.png" alt="The EventureOS early bird" width={900} height={759} priority
-              className="mx-auto mt-5 h-auto w-[210px] drop-shadow-[0_20px_36px_rgba(96,40,236,0.5)] sm:w-[250px]" />
-            <p className="mt-4 text-[1.625rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
-            <p className="mt-1.5 text-[0.9375rem] leading-snug text-white/75">Every enquiry, event, quote and invoice — finally in one place.</p>
+              className="mx-auto mt-3 h-auto w-[180px] drop-shadow-[0_20px_36px_rgba(96,40,236,0.5)] sm:w-[250px]" />
+            <p className="mt-3 text-[1.5rem] font-semibold leading-tight tracking-tight">{SLOGAN}</p>
           </div>
           <div className="rounded-2xl bg-surface p-5 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)] sm:p-7 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none">
             <div className="mb-8 hidden sm:mb-10 lg:block">
