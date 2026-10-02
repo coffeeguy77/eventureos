@@ -10,7 +10,7 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { draftReplyAction, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { discardSavedDraft, draftReplyAction, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
 import { useRouter } from "next/navigation";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
@@ -61,7 +61,7 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected, o
               {t.state === "needs_reply" && <Badge tone="red" dot>Needs reply</Badge>}
               {t.state === "awaiting_customer" && <Badge tone="neutral">Awaiting customer</Badge>}
             </header>
-            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} />}
+            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} saved={savedDraft(t)} />}
             <ol className="divide-y divide-line">
               {msgs.map((m, i) => {
                 const out = m.direction === "outbound";
@@ -97,8 +97,22 @@ function lastAt(t: EmailThread, messages: EmailMessage[]) {
   return messages.reduce((a, m) => (m.thread_id === t.id && m.sent_at > a ? m.sent_at : a), "");
 }
 
-function ReplyBox({ threadId }: { threadId: string }) {
+export interface SavedDraft { body: string; notes: string[]; drafted_at: string | null; by: string | null; quote_url: string | null }
+
+/** A reply draft saved on the conversation (e.g. prepared overnight), if there is one. */
+function savedDraft(t: EmailThread): SavedDraft | null {
+  const d = (t.extracted?.reply_draft ?? null) as Record<string, unknown> | null;
+  if (!d || typeof d.body !== "string" || !d.body.trim()) return null;
+  return {
+    body: d.body, notes: Array.isArray(d.notes) ? d.notes.map(String).slice(0, 8) : [],
+    drafted_at: typeof d.drafted_at === "string" ? d.drafted_at : null, by: typeof d.by === "string" ? d.by : null,
+    quote_url: typeof d.quote_url === "string" && d.quote_url.startsWith("/quotes/") ? d.quote_url : null,
+  };
+}
+
+function ReplyBox({ threadId, saved }: { threadId: string; saved?: SavedDraft | null }) {
   const [open, setOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState<ReplyState, FormData>(sendReply.bind(null, threadId), undefined);
   const [body, setBody] = useState("");
@@ -135,6 +149,21 @@ function ReplyBox({ threadId }: { threadId: string }) {
 
   if (!open) {
     return (<>
+      {saved && !state?.ok && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[0.7812rem] text-amber-900">
+          <span className="min-w-0"><b className="font-semibold">Draft reply ready</b>{saved.by ? ` — prepared by ${saved.by}` : ""}{saved.drafted_at ? `, ${relative(saved.drafted_at)}` : ""}. Check it before sending.
+            {saved.quote_url && <> A <Link href={saved.quote_url} className="font-medium underline underline-offset-2">draft quote</Link> is ready too.</>}</span>
+          <span className="flex shrink-0 gap-2">
+            <Button size="sm" variant="primary" className="h-10 sm:h-8" onClick={() => { setBody(saved.body); setDraftNotes(saved.notes); setOpen(true); }}>Open draft</Button>
+            <Button size="sm" variant="ghost" className="h-10 sm:h-8" disabled={discarding} onClick={async () => {
+              setDiscarding(true);
+              const r = await discardSavedDraft(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+              setDiscarding(false);
+              if (!r.ok) setDraftError(r.error); else router.refresh();
+            }}>{discarding ? "Discarding…" : "Discard"}</Button>
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
         <span className="min-w-0 text-[0.75rem] text-ink-faint">
           {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}

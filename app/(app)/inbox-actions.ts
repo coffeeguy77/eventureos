@@ -72,8 +72,12 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
     sent_at: now, is_read: true, sent_by: user.id,
   });
   if (mErr) return { error: `Sent from Gmail, but couldn't save it here: ${mErr.message}. It will appear after the next sync.` };
+  // A saved draft has now been used (or replaced by what was sent) — clear it
+  const { data: exRow } = await supabase.from("email_threads").select("extracted").eq("id", thread.id).maybeSingle();
+  const ex = (exRow?.extracted ?? null) as Record<string, unknown> | null;
   const { error: uErr } = await supabase.from("email_threads").update({
     gmail_thread_id: gmailThreadId, state: "awaiting_customer", last_message_at: now, message_count: thread.message_count + 1,
+    ...(ex && "reply_draft" in ex ? { extracted: Object.fromEntries(Object.entries(ex).filter(([k]) => k !== "reply_draft")) } : {}),
   }).eq("id", thread.id);
   if (uErr) return { error: `Sent, but couldn't update the conversation: ${uErr.message}` };
 
@@ -106,6 +110,24 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
 }
 
 export type DraftState = { ok: true; body: string; notes: string[] } | { ok: false; error: string };
+
+/** Throw away a saved reply draft (e.g. one prepared overnight) without sending it. */
+export async function discardSavedDraft(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!/^[0-9a-f-]{36}$/i.test(threadId)) return { ok: false, error: "That conversation link isn't valid." };
+  const { supabase, org, user, profile } = await requireOrg();
+  const { data: t } = await supabase.from("email_threads").select("id, extracted, enquiry_id, event_id, customer_id").eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
+  if (!t) return { ok: false, error: "That conversation couldn't be found." };
+  const ex = (t.extracted ?? {}) as Record<string, unknown>;
+  if (!("reply_draft" in ex)) return { ok: true };
+  const { error } = await supabase.from("email_threads").update({ extracted: Object.fromEntries(Object.entries(ex).filter(([k]) => k !== "reply_draft")) }).eq("id", t.id);
+  if (error) return { ok: false, error: `Couldn't discard the draft: ${error.message}` };
+  await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "email.draft_discarded", entityType: "email_thread", entityId: t.id,
+    enquiryId: t.enquiry_id, eventId: t.event_id, customerId: t.customer_id, summary: `${actorName(profile)} discarded a saved reply draft` });
+  if (t.enquiry_id) revalidatePath(`/enquiries/${t.enquiry_id}`);
+  if (t.event_id) revalidatePath(`/events/${t.event_id}`);
+  revalidatePath("/enquiries");
+  return { ok: true };
+}
 
 /** AI draft for the reply box — never sent automatically. */
 export async function draftReplyAction(threadId: string): Promise<DraftState> {

@@ -178,6 +178,8 @@ export interface EmailThread {
   customer_id: string | null;
   event_id: string | null;
   enquiry_id: string | null;
+  /** What was picked out of the email, plus a saved reply draft (`reply_draft`) waiting to be checked */
+  extracted?: Record<string, unknown> | null;
 }
 
 export interface EmailMessage {

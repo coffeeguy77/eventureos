@@ -158,6 +158,13 @@ export default async function EnquiriesPage({ searchParams }: {
     return s ? `/enquiries?${s}` : "/enquiries";
   };
   const now = new Date().toISOString();
+  // Enquiries with a reply draft waiting to be checked
+  const drafted = new Set<string>();
+  if (rows.length) {
+    const { data: dr } = await supabase.from("email_threads").select("enquiry_id").eq("organisation_id", org.id)
+      .in("enquiry_id", rows.map((r) => r.id)).not("extracted->reply_draft", "is", null);
+    for (const d of dr ?? []) if (d.enquiry_id) drafted.add(d.enquiry_id as string);
+  }
 
   return (
     <div>
@@ -217,6 +224,7 @@ export default async function EnquiriesPage({ searchParams }: {
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <Badge tone={s.tone} dot>{s.label}</Badge>
+                      {drafted.has(e.id) && <Badge tone="amber">Draft ready</Badge>}
                       {e.budget ? <span className="tabular text-[0.7812rem] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
                     </div>
                   </Link>
@@ -261,7 +269,7 @@ export default async function EnquiriesPage({ searchParams }: {
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted" title={e.received_at}>{relative(e.received_at)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{ENQUIRY_SOURCE[e.source as EnquirySource]}</td>
                       <td className="tabular whitespace-nowrap px-4 py-3 text-right text-ink">{e.budget ? money(e.budget, org.currency, { cents: false }) : "—"}</td>
-                      <td className="px-4 py-3"><Badge tone={s.tone} dot>{s.label}</Badge></td>
+                      <td className="px-4 py-3"><span className="flex flex-col items-start gap-1"><Badge tone={s.tone} dot>{s.label}</Badge>{drafted.has(e.id) && <Badge tone="amber">Draft ready</Badge>}</span></td>
                       <td className="px-4 py-3">
                         {e.assigned_to ? (
                           <span className="flex items-center gap-2 whitespace-nowrap text-ink-muted"><Avatar name={names[e.assigned_to]} size={20} />{names[e.assigned_to]?.split(" ")[0]}</span>
