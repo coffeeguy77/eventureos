@@ -8,6 +8,7 @@ import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing,
 } from "@/app/(app)/quotes/actions";
+import { updateEventDetails } from "@/app/(app)/events/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -482,7 +483,8 @@ export function QuoteBuilder(p: BuilderProps) {
             <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[0.8125rem] text-ink-muted">
               <Badge tone={status.tone} dot>{status.label}</Badge>
               <Link href={`/clients/${p.customer.id}`} className="font-medium text-ink hover:text-brand-700">{p.customer.name}</Link>
-              <Link href={`/events/${p.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{p.event.number} · {p.event.name}{p.event.event_date ? ` · ${fmtDate(p.event.event_date)}` : ""}</Link>
+              <Link href={`/events/${p.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{p.event.number} · {p.event.name}</Link>
+              <EventDateField eventId={p.event.id} date={p.event.event_date} onError={(m) => showToast({ message: m, tone: "error" })} />
               <span title="Set to the publish date each time you send">Issued {fmtDate(quote.issue_date)}</span>
               <label className="flex items-center gap-1.5">
                 <span>Expires</span>
@@ -709,7 +711,7 @@ export function QuoteBuilder(p: BuilderProps) {
       {preview && (
         <PreviewModal onClose={() => setPreview(null)}>
           <QuoteDocument snap={preview} currency={currency} orgName={p.orgName} logoUrl={p.orgLogo} quoteNumber={quote.number} customerName={p.customer.name}
-            eventLabel={`${p.event.name}${p.event.event_date ? ` · ${fmtDate(p.event.event_date, "long")}` : ""}`}
+            eventLabel={`${p.event.name}${p.event.event_date ? ` · ${fmtDate(p.event.event_date, "long")}` : ""}`} eventDate={p.event.event_date ?? null}
             versionLabel={`${nextVersion} (preview)`} />
         </PreviewModal>
       )}
@@ -863,5 +865,36 @@ function CustomerPricingNote({ quoteId, terms, customerName, editable, onDone }:
         </button>
       )}
     </div>
+  );
+}
+
+/** The event's date, set from the quote (blank = TBC). Saved on the event, so the calendar and job stay in step. */
+function EventDateField({ eventId, date, onError }: { eventId: string; date: string | null; onError: (m: string) => void }) {
+  const router = useRouter();
+  const [value, setValue] = useState(date ?? "");
+  const [pending, start] = useTransition();
+  useEffect(() => { setValue(date ?? ""); }, [date]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const save = (next: string) => {
+    setValue(next);
+    if (timer.current) clearTimeout(timer.current);
+    if (next && !/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+    if (next && next < "2000-01-01") return; // still typing the year
+    timer.current = setTimeout(() => start(async () => {
+      const fd = new FormData();
+      fd.set("event_date", next);
+      const r = await updateEventDetails(eventId, undefined, fd).catch(() => ({ error: "Couldn't reach the server." }));
+      if (r?.error) { onError(r.error); setValue(date ?? ""); return; }
+      router.refresh();
+    }), 700);
+  };
+  return (
+    <label className="flex items-center gap-1.5">
+      <span>Event date</span>
+      <input type="date" value={value} onChange={(e) => save(e.target.value)} aria-label="Event date (leave blank for TBC)"
+        className="h-9 rounded-md border border-line bg-surface px-1.5 text-[0.7812rem] text-ink sm:h-7 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60" />
+      {!value && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">TBC</span>}
+      {value && <button type="button" onClick={() => save("")} disabled={pending} className="text-[0.75rem] text-ink-faint hover:text-ink hover:underline">Set to TBC</button>}
+    </label>
   );
 }

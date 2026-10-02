@@ -316,7 +316,7 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       const snap = (v?.snapshot ?? { sections: [] }) as QuoteSnapshotData;
       pdfFor = (url: string) => buildQuotePdf({
         snap, orgName: org.name, quoteNumber: q.number, versionNumber: cur.version_number, customerName: q.customer?.name ?? null,
-        eventLabel: common.eventLine, currency: org.currency, brand: orgRow?.brand_colour, logo, acceptUrl: url,
+        eventLabel: common.eventLine, eventDate: q.event ? q.event.event_date ?? null : undefined, currency: org.currency, brand: orgRow?.brand_colour, logo, acceptUrl: url,
       });
     }
     const pdfName = `Quote Q-${q.number} - ${org.name}.pdf`;

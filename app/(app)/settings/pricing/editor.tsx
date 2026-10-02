@@ -50,7 +50,7 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
                   </div>
                   <div className="text-right">
                     <div className="text-[0.8438rem] font-semibold text-ink">{money(s.unit_price, currency, { cents: true })}{s.unit ? <span className="font-normal text-ink-muted"> /{s.unit}</span> : null}</div>
-                    <div className="text-[0.7188rem] text-ink-faint">+{s.tax_rate}% GST = {money(s.unit_price * (1 + s.tax_rate / 100), currency, { cents: true })}</div>
+                    <div className="text-[0.7188rem] text-ink-faint">{s.tax_rate > 0 ? <>+ GST = {money(s.unit_price * (1 + s.tax_rate / 100), currency, { cents: true })}</> : "No GST"}</div>
                   </div>
                   {canEdit && <button onClick={() => setEditing(s.id)} className="rounded-md p-1.5 text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label={`Edit ${s.name}`}><Pencil className="h-4 w-4" /></button>}
                 </div>
@@ -92,7 +92,7 @@ export function PricingEditor({ services, packages, canEdit, currency }: { servi
 
 function describeRules(r: PackageRules, byId: Map<string, Service>, currency: string): string[] {
   const nm = (id?: string) => (id && byId.get(id)) || null;
-  const p = (s: Service | null, per = true) => s ? `${s.name} ${money(s.unit_price, currency, { cents: true })}${per && s.unit ? "/" + s.unit : ""} + GST` : "⚠ missing service";
+  const p = (s: Service | null, per = true) => s ? `${s.name} ${money(s.unit_price, currency, { cents: true })}${per && s.unit ? "/" + s.unit : ""}${s.tax_rate > 0 ? " + GST" : " (no GST)"}` : "⚠ missing service";
   const out: string[] = [];
   if (r.hire) out.push(`Hire: ${p(nm(r.hire.service_id), false)}`);
   out.push(r.delivery ? `Delivery: ${p(nm(r.delivery.service_id), false)}` : "No delivery charge");
@@ -143,8 +143,11 @@ function ServiceForm({ initial, onDone }: { initial: ServiceInput & { id?: strin
       <div><Label htmlFor="sv-desc">Description on the quote</Label><textarea id="sv-desc" value={v.description ?? ""} onChange={set("description")} className={cn(inputClass, "min-h-[70px]")} maxLength={4000} /></div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div><Label htmlFor="sv-price" hint="ex GST">Price</Label><input id="sv-price" type="number" step="0.01" min={0} value={v.unit_price} onChange={set("unit_price")} className={inputClass} required /></div>
-        <div><Label htmlFor="sv-unit" hint="hour, cup…">Per</Label><input id="sv-unit" value={v.unit ?? ""} onChange={set("unit")} className={inputClass} maxLength={40} /></div>
-        <div><Label htmlFor="sv-tax">GST %</Label><input id="sv-tax" type="number" step="0.01" min={0} max={100} value={v.tax_rate} onChange={set("tax_rate")} className={inputClass} /></div>
+        <div><Label htmlFor="sv-unit" hint="day, cart, hour…">Per</Label><input id="sv-unit" value={v.unit ?? ""} onChange={set("unit")} className={inputClass} maxLength={40} /></div>
+        <div><Label htmlFor="sv-tax">GST</Label>
+          <select id="sv-tax" value={Number(v.tax_rate) > 0 ? "gst" : "none"} onChange={(e) => setV({ ...v, tax_rate: e.target.value === "gst" ? "10" : "0" })} className={inputClass}>
+            <option value="gst">GST</option><option value="none">No GST</option>
+          </select></div>
         <div><Label htmlFor="sv-cat">Group</Label><input id="sv-cat" value={v.category ?? ""} onChange={set("category")} className={inputClass} maxLength={80} /></div>
         <div><Label htmlFor="sv-acc" hint="Xero">Account</Label><input id="sv-acc" value={v.xero_account_code ?? ""} onChange={set("xero_account_code")} className={inputClass} maxLength={20} /></div>
       </div>

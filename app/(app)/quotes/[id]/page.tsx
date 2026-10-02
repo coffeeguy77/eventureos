@@ -196,7 +196,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
           <div className="min-w-0 space-y-6">
             {snap ? (
               <QuoteDocument snap={snap} currency={cur} orgName={org.name} logoUrl={org.logo_url} quoteNumber={q.number} customerName={q.customer.name}
-                eventLabel={`${q.event.name}${q.event.event_date ? ` · ${fmtDate(q.event.event_date, "long")}` : ""}`}
+                eventLabel={`${q.event.name}${q.event.event_date ? ` · ${fmtDate(q.event.event_date, "long")}` : ""}`} eventDate={q.event.event_date ?? null}
                 versionLabel={shown ? String(shown.version_number) : undefined} />
             ) : (
               <Card><p className="px-5 py-6 text-[0.8125rem] text-ink-muted">This version could not be found.</p></Card>

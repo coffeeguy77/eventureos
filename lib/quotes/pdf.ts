@@ -1,5 +1,6 @@
 import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import type { QuoteSnapshotData } from "@/components/quotes/types";
+import { qtyUnit } from "@/lib/quotes/units";
 
 /**
  * A printable PDF of a published quote version — attached to quote emails.
@@ -15,6 +16,8 @@ export interface QuotePdfInput {
   versionNumber?: number | null;
   customerName?: string | null;
   eventLabel?: string | null;
+  /** The event's date (YYYY-MM-DD); null shows "TBC", undefined leaves the row out. */
+  eventDate?: string | null;
   currency?: string;
   brand?: string | null;
   /** PNG or JPEG bytes. Other formats are skipped. */
@@ -48,8 +51,6 @@ const fmtDay = (iso: string | null | undefined) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 };
 
-/** "3 day" → "3 days" for simple units */
-const unitLabel = (u: string, q: number) => (q !== 1 && /^(day|hour|hr|cup|person|unit|event|week|night|serve|item|km)$/i.test(u.trim()) ? `${u.trim()}s` : u);
 
 export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
@@ -132,6 +133,7 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
     ...(input.versionNumber ? [["Version", String(input.versionNumber)] as [string, string]] : []),
     ["Issued", fmtDay(input.snap.issue_date)],
     ["Valid until", fmtDay(input.snap.expiry_date)],
+    ...(input.eventDate !== undefined ? [["Event date", input.eventDate ? fmtDay(input.eventDate) : "TBC"] as [string, string]] : []),
   ];
   let dy = headTop - 12;
   for (const [k, v] of details) {
@@ -169,11 +171,12 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
       const disc = [
         Number(it.discount_percent ?? 0) > 0 ? `${Number(it.discount_percent)}% off` : null,
         Number(it.discount_amount ?? 0) > 0 ? `${money(Number(it.discount_amount))} off` : null,
+        it.tax_rate != null && Number(it.tax_rate) === 0 ? "No GST" : null,
       ].filter(Boolean).join(" · ");
       need(14 + nameLines.length * 13 + descLines.length * 11 + (disc ? 11 : 0));
       const top = y;
       nameLines.forEach((l, i) => { text(l, M, 10, { font: bold, color: it.optional ? MUTED : INK }); if (i < nameLines.length - 1) y -= 13; });
-      const qty = `${Number(it.quantity)}${it.unit ? ` ${unitLabel(it.unit, Number(it.quantity))}` : ""}`;
+      const qty = qtyUnit(Number(it.quantity), it.unit);
       const sy = y; y = top;
       text(qty, COL_QTY, 9.5, { right: true, color: MUTED });
       text(money(it.unit_price), COL_PRICE, 9.5, { right: true, color: MUTED });

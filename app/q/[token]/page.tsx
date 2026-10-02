@@ -71,6 +71,7 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
 
         <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} logoUrl={d.org.logo_url} quoteNumber={d.quote.number} customerName={d.customer?.name}
           eventLabel={d.event ? `${d.event.name}${d.event.event_date ? ` · ${fmtDate(d.event.event_date, "long")}` : ""}${d.event.venue ? ` · ${d.event.venue}` : ""}` : undefined}
+          eventDate={d.event ? d.event.event_date ?? null : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />
 
         {open && !isCopy && (

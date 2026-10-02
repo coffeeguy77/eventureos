@@ -18,6 +18,7 @@ export type Col = NumField | TextField;
 const GRID_MD = "md:grid-cols-[minmax(250px,1fr)_72px_84px_112px_68px_92px_112px_84px] md:items-start md:gap-x-1.5 md:gap-y-0";
 const GRID = cn("grid", GRID_MD);
 /** Phones (< md): each item is a stacked card — name full width, then 3-up rows of numbers. */
+export const GST_RATE = 10;
 const ROW = cn("grid grid-cols-3 gap-x-2 gap-y-2.5", GRID_MD);
 const cell =
   "h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-[0.8125rem] text-ink placeholder:text-ink-faint transition-colors hover:border-line focus:border-brand-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:hover:border-transparent max-md:h-10 max-md:border-line max-md:bg-surface";
@@ -109,7 +110,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
             <span className="px-2 text-right">Qty</span>
             <span className="px-2">Unit</span>
             <span className="px-2 text-right">Unit price</span>
-            <span className="px-2 text-right">Tax %</span>
+            <span className="px-2 text-right">GST</span>
             <span className="px-2 text-right">Discount</span>
             <span className="px-2 text-right">Total</span>
             <span className="sr-only">Actions</span>
@@ -220,7 +221,22 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
           {input("unit_price", { className: cn(numCell, "pl-5"), inputMode: "decimal", "aria-label": "Unit price" })}
         </div>
       </div>
-      <div><span className={mLabel} aria-hidden>Tax %</span>{input("tax_rate", { className: numCell, inputMode: "decimal", "aria-label": "Tax rate percent" })}</div>
+      <div>
+        <span className={mLabel} aria-hidden>GST</span>
+        {/* GST comes from the price-list item; one-off lines can be switched between GST and No GST */}
+        {(() => {
+          const gst = (parseNum(it.tax_rate) ?? 0) > 0;
+          const label = gst ? "GST" : "No GST";
+          if (it.service_id) return (
+            <span title="Set on the item in Settings → Services & pricing" className={cn("flex h-8 items-center justify-end px-2 text-[0.75rem] font-medium md:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</span>
+          );
+          return (
+            <button type="button" aria-label={`${label} — click to change`} title="Click to switch between GST and No GST"
+              onClick={() => { h.onField(it.id, "tax_rate", gst ? "0" : String(GST_RATE)); h.onBlurField(it.id, "tax_rate"); }}
+              className={cn("flex h-8 w-full items-center justify-end rounded-md px-2 text-[0.75rem] font-medium hover:bg-zinc-100 md:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</button>
+          );
+        })()}
+      </div>
       <div>
         <span className={mLabel} aria-hidden>Discount</span>
         <div className="relative">

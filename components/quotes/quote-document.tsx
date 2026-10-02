@@ -2,12 +2,13 @@ import { Package } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { fmtDate, money } from "@/lib/format";
 import type { QuoteSnapshotData } from "./types";
+import { qtyUnit } from "@/lib/quotes/units";
 
 /**
  * The quote exactly as the customer sees it. Renders a build_quote_snapshot() / quote_versions.snapshot
  * payload, so the preview, the version history and the portal all show the same thing.
  */
-export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteNumber, customerName, eventLabel, versionLabel, compact = false }: {
+export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteNumber, customerName, eventLabel, eventDate, versionLabel, compact = false }: {
   snap: QuoteSnapshotData;
   currency?: string;
   orgName?: string;
@@ -16,6 +17,8 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
   quoteNumber?: number;
   customerName?: string;
   eventLabel?: string;
+  /** The event's date; null shows "TBC", undefined leaves the row out. */
+  eventDate?: string | null;
   versionLabel?: string;
   compact?: boolean;
 }) {
@@ -42,6 +45,7 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
               {versionLabel && <><dt className="text-ink-faint">Version</dt><dd className="text-right">{versionLabel}</dd></>}
               <dt className="text-ink-faint">Issued</dt><dd className="text-right">{fmtDate(snap.issue_date)}</dd>
               <dt className="text-ink-faint">Valid until</dt><dd className="text-right">{fmtDate(snap.expiry_date)}</dd>
+              {eventDate !== undefined && <><dt className="text-ink-faint">Event date</dt><dd className={cn("text-right font-medium", !eventDate && "text-amber-700")}>{eventDate ? fmtDate(eventDate) : "TBC"}</dd></>}
             </dl>
           </div>
           {customerName && (
@@ -74,9 +78,10 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
                     </p>
                     {it.description && <p className="mt-0.5 whitespace-pre-line break-words text-[0.7812rem] text-ink-muted">{it.description}</p>}
                     <p className="tabular mt-0.5 text-[0.75rem] text-ink-faint">
-                      {Number(it.quantity)}{it.unit ? ` ${it.unit}` : ""} × {money(it.unit_price, currency)}
+                      {qtyUnit(Number(it.quantity), it.unit)} × {money(it.unit_price, currency)}
                       {Number(it.discount_percent ?? 0) > 0 && <span className="text-emerald-700"> · {Number(it.discount_percent)}% off</span>}
                       {Number(it.discount_amount ?? 0) > 0 && <span className="text-emerald-700"> · {money(Number(it.discount_amount), currency)} off</span>}
+                      {it.tax_rate != null && Number(it.tax_rate) === 0 && <span> · No GST</span>}
                     </p>
                   </div>
                   <p className={cn("tabular shrink-0 text-right text-[0.8438rem]", it.optional ? "text-ink-muted" : "font-medium")}>{money(it.line_total, currency)}</p>
