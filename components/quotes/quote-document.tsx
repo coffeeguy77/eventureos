@@ -32,7 +32,7 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
             <div className="min-w-0">
               {logoUrl && /^https:\/\//.test(logoUrl)
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={logoUrl} alt={orgName ?? "Logo"} className="h-12 max-w-[220px] object-contain object-left dark:box-content dark:rounded-lg dark:bg-white dark:p-1.5" />
+                ? <img src={logoUrl} alt={orgName ?? "Logo"} className="h-12 max-w-[220px] object-contain object-left" />
                 : orgName && <p className="text-[0.8125rem] font-semibold text-ink">{orgName}</p>}
               <h2 className="mt-3 break-words text-[1.25rem] font-semibold tracking-tight sm:text-[1.375rem]">{snap.title}</h2>
               {eventLabel && <p className="mt-1 text-[0.8125rem] text-ink-muted">{eventLabel}</p>}
