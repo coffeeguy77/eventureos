@@ -254,6 +254,12 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
           }} />
         ) : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can change invoicing settings.</p>}
       </Card>
+      {manager && (
+        <Card>
+          <CardHeader title="Recode invoices by item" subtitle="Move every line for an item (e.g. CartHire) to the right revenue account in Xero — including paid invoices. Only the account changes."
+            action={<ButtonLink href="/settings/integrations/xero/recode" size="sm">Open</ButtonLink>} />
+        </Card>
+      )}
       <Card>
         <CardHeader title="Xero invoice history" subtitle="Synced from Xero — no need to open Xero." />
         {(invoices ?? []).length === 0 ? <EmptyState title="No Xero invoices yet">Press Sync now to import your invoice history.</EmptyState> : (
