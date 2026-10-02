@@ -93,7 +93,7 @@ async function jobInfo(ctx: SyncContext, eventIds: string[]): Promise<Map<string
   const [{ data: evs }, { data: quotes }, { data: pkgs }, { data: crew }, { data: staff }] = await Promise.all([
     ctx.db.from("events").select("id, name, event_date, setup_time, start_time, finish_time, serves, venue, address, customer:customers(name, company, kind)")
       .eq("organisation_id", ctx.org.id).in("id", ids),
-    ctx.db.from("quotes").select("id, event_id, status, created_at, quote_items(service_id, quantity, is_optional)")
+    ctx.db.from("quotes").select("id, event_id, status, created_at, quote_items(service_id, quantity, is_optional, details)")
       .eq("organisation_id", ctx.org.id).in("event_id", ids).not("status", "in", "(superseded,declined)"),
     ctx.db.from("service_packages").select("name, rules").eq("organisation_id", ctx.org.id).eq("active", true).order("position"),
     ctx.db.from("event_crew").select("event_id").eq("organisation_id", ctx.org.id).in("event_id", ids),
@@ -103,24 +103,34 @@ async function jobInfo(ctx: SyncContext, eventIds: string[]): Promise<Map<string
   const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
   const people = new Map<string, number>();
   for (const r of [...(crew ?? []), ...(staff ?? [])] as { event_id: string }[]) people.set(r.event_id, (people.get(r.event_id) ?? 0) + 1);
-  type Q = { event_id: string; status: string; created_at: string; quote_items: { service_id: string | null; quantity: number; is_optional: boolean }[] };
+  type Q = { event_id: string; status: string; created_at: string; quote_items: { service_id: string | null; quantity: number; is_optional: boolean; details: { kind?: string; start?: string | null; end?: string | null; setup_minutes?: number; hot?: number; cold?: number } | null }[] };
   for (const e of (evs ?? []) as unknown as { id: string; name: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; serves: number | null; venue: string | null; address: string | null; customer: { name: string; company: string | null; kind: string | null } | null }[]) {
     // The accepted quote, otherwise the newest one still in play
     const qs = ((quotes ?? []) as Q[]).filter((q) => q.event_id === e.id).sort((a, b) => (a.status === "accepted" ? -1 : b.status === "accepted" ? 1 : b.created_at.localeCompare(a.created_at)));
     const items = (qs[0]?.quote_items ?? []).filter((i) => !i.is_optional && i.service_id);
     const pkg = packages.find((p) => p.rules?.hire && items.some((i) => i.service_id === p.rules.hire!.service_id));
     const servesFromQuote = pkg?.rules.per_serve ? items.filter((i) => i.service_id === pkg.rules.per_serve!.service_id).reduce((a, i) => a + Number(i.quantity), 0) : 0;
+    // Times and drinks worked out on the quote fill any gaps in the event's own details
+    const staffD = items.map((i) => i.details).find((d) => d?.kind === "staff" && d.start && d.end);
+    const servesD = items.map((i) => i.details).filter((d) => d?.kind === "serves");
+    const qSetup = staffD?.start ? (() => { const [h, m] = staffD.start!.split(":").map(Number); const t = h * 60 + m - (staffD.setup_minutes ?? 0); const x = ((t % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; })() : null;
+    const setupT = e.setup_time ?? (e.start_time ? null : qSetup);
+    const startT = e.start_time ?? staffD?.start ?? null;
+    const finishT = e.finish_time ?? staffD?.end ?? null;
+    const hot = servesD.reduce((a, d) => a + (d?.hot ?? 0), 0), cold = servesD.reduce((a, d) => a + (d?.cold ?? 0), 0);
     const input = {
       label: pkg ? (pkg.rules.calendar_label?.trim() || title(pkg.name)) : null, eventName: e.name, customer: e.customer,
-      date: e.event_date, setupTime: e.setup_time, startTime: e.start_time, finishTime: e.finish_time,
-      serves: e.serves ?? (servesFromQuote || null), servesLabel: pkg?.rules.serves_label ?? null,
+      date: e.event_date, setupTime: setupT, startTime: startT, finishTime: finishT,
+      serves: e.serves ?? (servesFromQuote || null), servesLabel: (pkg?.rules.serves_label ?? null) as string | null,
       staffCount: people.get(e.id) ?? null, staffLabel: pkg?.rules.staff?.label ?? null, venue: e.venue, address: e.address,
     };
     const hhmm = (t: string | null) => (t ? t.slice(0, 5) : null);
+    // "250 coffees (200 hot + 50 cold)" when the quote split them
+    if (cold > 0 && e.serves == null) input.servesLabel = `${input.servesLabel ?? "serves"} (${hot} hot + ${cold} cold)`;
     out.set(e.id, {
       title: jobTitle(input), description: jobDescription(input), date: e.event_date,
-      startLocal: e.event_date && (hhmm(e.setup_time) ?? hhmm(e.start_time)) ? `${e.event_date}T${hhmm(e.setup_time) ?? hhmm(e.start_time)}:00` : null,
-      endLocal: e.event_date && hhmm(e.finish_time) ? `${e.event_date}T${hhmm(e.finish_time)}:00` : null,
+      startLocal: e.event_date && (hhmm(setupT) ?? hhmm(startT)) ? `${e.event_date}T${hhmm(setupT) ?? hhmm(startT)}:00` : null,
+      endLocal: e.event_date && hhmm(finishT) ? `${e.event_date}T${hhmm(finishT)}:00` : null,
     });
   }
   return out;

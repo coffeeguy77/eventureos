@@ -8,6 +8,7 @@ import { actorName, logActivity } from "@/lib/activity";
 import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
 import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
+import { cleanDetails, servesLine, staffLine } from "@/lib/quotes/line-helpers";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -17,7 +18,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, discount_amount, is_optional, is_package, image_url, position, service_id";
+const ITEM_COLS = "id, section_id, name, description, quantity, unit, unit_price, tax_rate, discount_percent, discount_amount, is_optional, is_package, image_url, position, service_id, details";
 const SECTION_COLS = "id, title, description, position, is_optional";
 
 class UserError extends Error {}
@@ -365,6 +366,7 @@ function validateItemPatch(patch: ItemPatch) {
   if ("is_package" in patch) next.is_package = !!patch.is_package;
   if ("image_url" in patch) next.image_url = checkImageUrl(patch.image_url);
   if ("service_id" in patch) next.service_id = patch.service_id && UUID.test(patch.service_id) ? patch.service_id : null;
+  if ("details" in patch) next.details = cleanDetails(patch.details);
   return next;
 }
 
@@ -693,6 +695,16 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: l.name, description: l.description,
       quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i, service_id: l.service_id,
       is_optional: !!l.optional,
+      // Remember how the line was worked out so its helper (times / hot+cold) opens filled in
+      ...(l.kind === "staff" && timed ? (() => {
+        const det = { kind: "staff" as const, start: input.start, end: input.end, staff: Math.max(1, staff), setup_minutes: rules.staff?.setup_minutes ?? 0 };
+        const calc = staffLine(det, rules.staff ?? null, rules.staff?.label ?? "staff");
+        return { details: det, ...(calc ? { description: calc.description } : {}) };
+      })() : {}),
+      ...(l.kind === "per_serve" ? (() => {
+        const det = { kind: "serves" as const, hot: Math.round(l.quantity), cold: 0 };
+        return { details: det, description: servesLine(det, l.description).description };
+      })() : {}),
     }))).select(ITEM_COLS);
     if (iErr) {
       await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id);
@@ -753,5 +765,82 @@ export async function addMenuItems(quoteId: string, sectionTitle: string, picks:
     const out = ((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0) }))
       .sort((a, b) => a.position - b.position);
     return { section: sec as QSection, items: out };
+  });
+}
+
+/** Add a saved quote template's sections to this quote. Prices come from the current price list. */
+export async function applyQuoteTemplate(quoteId: string, templateId: string): Promise<ActionResult<{ sections: QSection[]; items: QItem[]; missing: number }>> {
+  return run(async () => {
+    const { supabase, org, user, profile } = await requireOrg();
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    assertId(templateId, "template");
+    const [{ data: tpl, error: tErr }, { data: svc, error: sErr }] = await Promise.all([
+      supabase.from("quote_templates").select("id, name, sections").eq("organisation_id", org.id).eq("id", templateId).eq("active", true).maybeSingle(),
+      supabase.from("services").select("id, name, description, unit, unit_price, tax_rate").eq("organisation_id", org.id).eq("active", true),
+    ]);
+    if (tErr || sErr) fail(`Couldn't load the template: ${(tErr ?? sErr)!.message}`);
+    if (!tpl) fail("That template no longer exists or is switched off.");
+    const { resolveTemplate, cleanSections } = await import("@/lib/quotes/templates");
+    const { sections, missing } = resolveTemplate(cleanSections(tpl!.sections), (svc ?? []).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })));
+    if (!sections.length) fail("Nothing to add — the template's items are no longer on your price list.");
+
+    const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id).order("position", { ascending: false }).limit(1).maybeSingle();
+    let pos = (last?.position ?? -1) + 1;
+    const outSections: QSection[] = [];
+    const outItems: QItem[] = [];
+    for (const s of sections) {
+      const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({ organisation_id: org.id, quote_id: q.id, title: s.title, position: pos++ }).select(SECTION_COLS).single();
+      if (secErr) fail(`Couldn't add the section: ${secErr.message}`);
+      const { data: items, error: iErr } = await supabase.from("quote_items").insert(s.lines.map((l, i) => ({
+        organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: l.name, description: l.description,
+        quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i, service_id: l.service_id, is_optional: l.optional,
+      }))).select(ITEM_COLS);
+      if (iErr) { await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id); fail(`Couldn't add the lines: ${iErr.message}`); }
+      outSections.push(sec as QSection);
+      outItems.push(...((items ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0) })));
+    }
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote.template_used", entityType: "quote", entityId: q.id, eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} added the ‘${tpl!.name}’ template to Quote Q-${q.number}`,
+    });
+    refresh(q);
+    return { sections: outSections, items: outItems, missing };
+  });
+}
+
+/** Save this quote's sections and lines as a new template (price-list lines keep their link, so prices stay current). */
+export async function saveQuoteAsTemplate(quoteId: string, name: string): Promise<ActionResult<{ id: string }>> {
+  return run(async () => {
+    const { supabase, org, role, user, profile } = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(role)) fail("Only owners, admins and managers can save templates.");
+    const q = await loadQuote(supabase, org.id, quoteId);
+    const title = String(name ?? "").trim().slice(0, 120);
+    if (!title) fail("Give the template a name.");
+    const [{ data: secs }, { data: items }] = await Promise.all([
+      supabase.from("quote_sections").select("id, title, position").eq("quote_id", q.id).order("position"),
+      supabase.from("quote_items").select("section_id, service_id, name, description, unit, unit_price, tax_rate, quantity, is_optional, position").eq("quote_id", q.id).order("position"),
+    ]);
+    const { data: svc } = await supabase.from("services").select("id, description").eq("organisation_id", org.id);
+    const svcDesc = new Map((svc ?? []).map((s) => [s.id as string, s.description as string | null]));
+    const { cleanSections } = await import("@/lib/quotes/templates");
+    const sections = cleanSections((secs ?? []).map((s) => ({
+      title: s.title,
+      items: (items ?? []).filter((i) => i.section_id === s.id).map((i) => i.service_id
+        ? { service_id: i.service_id, quantity: Number(i.quantity), optional: i.is_optional, ...(i.description && i.description !== svcDesc.get(i.service_id) ? { description: i.description } : {}) }
+        : { name: i.name, description: i.description, unit: i.unit, unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), quantity: Number(i.quantity), optional: i.is_optional }),
+    })));
+    if (!sections.length) fail("This quote has no lines to save yet.");
+    const { data: last } = await supabase.from("quote_templates").select("position").eq("organisation_id", org.id).order("position", { ascending: false }).limit(1).maybeSingle();
+    const { data, error } = await supabase.from("quote_templates").insert({
+      organisation_id: org.id, name: title, sections, position: (last?.position ?? -1) + 1, created_by: user.id,
+    }).select("id").single();
+    if (error) fail(error.message.includes("quote_templates") && error.message.includes("does not exist") ? "Quote templates aren't set up yet — the database update still needs to be run." : `Couldn't save the template: ${error.message}`);
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote_template.created", entityType: "quote", entityId: q.id, eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} saved Quote Q-${q.number} as the template ‘${title}’`,
+    });
+    revalidatePath("/settings/pricing");
+    return { id: (data as { id: string }).id };
   });
 }

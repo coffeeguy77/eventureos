@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, Loader2, Plus, Reply, Send, X } from "lucide-react";
+import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection,
@@ -24,7 +24,11 @@ import { MenuPicker } from "./menu-picker";
 import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "./quote-document";
 import { SendQuoteDialog } from "./send-dialog";
-import { SectionEditor, type Col, type SectionHandlers } from "./section-editor";
+import { SectionEditor, type Col, type LineHelper, type SectionHandlers } from "./section-editor";
+import { SaveAsTemplateButton, TemplatePicker, type TemplateChoice } from "./template-picker";
+import { EmailDrawer, type DrawerThread } from "./email-drawer";
+import { servesFromQuantity, servesLine } from "@/lib/quotes/line-helpers";
+import type { StaffRule } from "@/lib/pricing/engine";
 import type {
   ActionResult, CatalogueItem, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, VersionInfo,
 } from "./types";
@@ -53,6 +57,10 @@ export interface BuilderProps {
   nextAction: React.ReactNode;
   history: React.ReactNode;
   pricing: { packages: PricingPackage[]; services: (PricedService & { category: string | null })[]; defaults: { start: string | null; end: string | null; guests: number | null } };
+  /** The job's email conversations, shown beside the quote */
+  emails?: DrawerThread[];
+  /** Saved templates to start from (null = templates not set up yet) */
+  templates?: TemplateChoice[] | null;
   /** Opened from "Reply with quote" on an email: sending replies in that conversation. */
   replyTo?: { threadId: string; subject: string; backHref: string } | null;
 }
@@ -83,6 +91,9 @@ export function QuoteBuilder(p: BuilderProps) {
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
   const [toast, setToast] = useState<Toast | null>(null);
   const [addingIn, setAddingIn] = useState<string | null>(null);
+  // Opened from "Reply with quote" → show their email straight away
+  const [emailOpen, setEmailOpen] = useState(!!p.replyTo && !!p.emails?.length);
+  const [tplOpen, setTplOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [preview, setPreview] = useState<QuoteSnapshotData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -230,7 +241,34 @@ export function QuoteBuilder(p: BuilderProps) {
   // ---------------------------------------------------------------- item edits
   const sendItem = (id: string) => (patch: Record<string, unknown>) => updateItem(id, patch as ItemPatch);
 
+  // Line helpers: hourly staff lines (barista times) and per-serve lines (hot/cold drinks)
+  const helperMap = useMemo(() => {
+    const staff = new Map<string, { rule: StaffRule; label: string }>();
+    const serves = new Set<string>();
+    for (const pk of p.pricing.packages) {
+      if (pk.rules.staff?.service_id) staff.set(pk.rules.staff.service_id, { rule: pk.rules.staff, label: pk.rules.staff.label ?? "staff" });
+      if (pk.rules.per_serve?.service_id) serves.add(pk.rules.per_serve.service_id);
+    }
+    return { staff, serves, desc: new Map(p.pricing.services.map((x) => [x.id, x.description])) };
+  }, [p.pricing.packages, p.pricing.services]);
+  const helperFor = (it: ItemDraft): LineHelper | null => {
+    const sid = it.service_id ?? null;
+    const st = sid ? helperMap.staff.get(sid) : undefined;
+    const unit = (it.unit ?? "").trim().toLowerCase();
+    if (st || it.details?.kind === "staff" || (!sid && /^(hour|hours|hr|hrs)$/.test(unit) && /barista|staff|hire/i.test(it.name)))
+      return { kind: "staff", rule: st?.rule ?? null, label: st?.label ?? "staff", defaultStart: p.pricing.defaults.start, defaultEnd: p.pricing.defaults.end };
+    if ((sid && helperMap.serves.has(sid)) || it.details?.kind === "serves")
+      return { kind: "serves", base: sid ? helperMap.desc.get(sid) ?? null : null };
+    return null;
+  };
+
   const h: SectionHandlers = {
+    helperFor,
+    onDetails(id, details, derived) {
+      const q = numStr(derived.quantity);
+      setItems((all) => all.map((i) => (i.id === id ? { ...i, details, quantity: q, description: derived.description } : i)));
+      queue(`i:${id}`, { details, quantity: derived.quantity, description: derived.description }, sendItem(id), SAVE_DELAY);
+    },
     onSectionTitle(id, value) {
       setSections((all) => all.map((s) => (s.id === id ? { ...s, title: value } : s)));
       if (value.trim()) queue(`s:${id}`, { title: value }, (patch) => updateSection(id, patch));
@@ -270,6 +308,17 @@ export function QuoteBuilder(p: BuilderProps) {
       setItems((all) => all.map((i) => (i.id === id ? { ...i, [field]: value } : i)));
       const patch = fieldPatch(field, value);
       if (!patch) { setLocalDirty(true); return; } // not a valid number yet — wait for the user
+      // A drinks total typed straight into Qty: it all goes on hot drinks (any cold drinks stay)
+      const cur = items.find((i) => i.id === id);
+      const hp = cur && field === "quantity" ? helperFor(cur) : null;
+      if (cur && hp?.kind === "serves" && typeof patch.quantity === "number") {
+        const prev = cur.details?.kind === "serves" ? cur.details : { kind: "serves" as const, hot: 0, cold: 0 };
+        const next = servesFromQuantity(prev, patch.quantity);
+        const r = servesLine(next, hp.base);
+        setItems((all) => all.map((i) => (i.id === id ? { ...i, details: next, description: r.description } : i)));
+        queue(`i:${id}`, { quantity: patch.quantity, details: next, description: r.description }, sendItem(id), SAVE_DELAY);
+        return;
+      }
       queue(`i:${id}`, patch as Record<string, unknown>, sendItem(id), typeof value === "boolean" ? 0 : SAVE_DELAY);
     },
     onBlurField(id, field) {
@@ -364,6 +413,13 @@ export function QuoteBuilder(p: BuilderProps) {
 
   const [pricing, setPricing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  function onTemplate(secs: QSection[], added: QItem[], name: string, missing: number) {
+    setTplOpen(false);
+    setSections((all) => [...all, ...secs.filter((x) => !all.some((y) => y.id === x.id))]);
+    setItems((all) => [...all, ...added.filter((a) => !all.some((i) => i.id === a.id)).map(toDraft)]);
+    showToast({ message: `Added the ‘${name}’ template${missing ? ` — ${missing} item${missing === 1 ? " is" : "s are"} no longer on your price list and ${missing === 1 ? "was" : "were"} left out` : ""}`, tone: missing ? "error" : "ok" }, missing ? 9000 : 5000);
+  }
+
   function onPriced(section: QSection, added: QItem[]) {
     setPricing(false); setMenuOpen(false);
     setSections((all) => all.some((x) => x.id === section.id) ? all : [...all, section]);
@@ -392,7 +448,7 @@ export function QuoteBuilder(p: BuilderProps) {
   const itemCount = items.length;
 
   return (
-    <div>
+    <div className={cn("transition-[padding] duration-200", emailOpen && "lg:pr-[456px]")}>
       {/* ------------------------------------------------------------ header */}
       <div className="mb-5">
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[0.75rem] text-ink-faint">
@@ -430,6 +486,11 @@ export function QuoteBuilder(p: BuilderProps) {
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <SaveIndicator busy={busy > 0} state={saveState} />
+            {!!p.emails?.length && (
+              <Button onClick={() => setEmailOpen((o) => !o)} aria-pressed={emailOpen} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
+                <Mail className="h-4 w-4" />{emailOpen ? "Hide email" : "Show email"}
+              </Button>
+            )}
             <Button onClick={openPreview} disabled={previewLoading} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
               {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Preview as customer
             </Button>
@@ -462,6 +523,7 @@ export function QuoteBuilder(p: BuilderProps) {
             </button>
           )}
           <DuplicateButton quoteId={quote.id} onError={(m) => showToast({ message: m, tone: "error" })} />
+          {p.templates && <SaveAsTemplateButton quoteId={quote.id} defaultName={quote.title} onDone={(m, ok) => showToast({ message: m, tone: ok ? "ok" : "error" }, 7000)} />}
         </div>
 
         {p.replyTo && (
@@ -482,6 +544,7 @@ export function QuoteBuilder(p: BuilderProps) {
       </div>
 
       {p.nextAction}
+      {!!p.emails?.length && <EmailDrawer threads={p.emails} tz={p.tz} open={emailOpen} onClose={() => setEmailOpen(false)} highlightThread={p.replyTo?.threadId ?? null} />}
 
       {/* ------------------------------------------------------------ body */}
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -496,16 +559,25 @@ export function QuoteBuilder(p: BuilderProps) {
             <PriceJobPanel quoteId={quote.id} packages={p.pricing.packages} services={p.pricing.services} defaults={p.pricing.defaults}
               currency={currency} onClose={() => setPricing(false)} onAdded={onPriced} />
           )}
+          {tplOpen && (
+            <TemplatePicker quoteId={quote.id} templates={p.templates ?? []} currency={currency} onClose={() => setTplOpen(false)} onAdded={onTemplate} />
+          )}
           {menuOpen && (
             <MenuPicker quoteId={quote.id} services={p.pricing.services} guests={p.pricing.defaults.guests}
               currency={currency} onClose={() => setMenuOpen(false)} onAdded={onPriced} />
           )}
-          <div className="grid gap-2 sm:grid-cols-3">
-            <button type="button" onClick={() => { setMenuOpen(true); setPricing(false); }}
+          <div className={cn("grid gap-2", p.templates ? "grid-cols-2 sm:grid-cols-4" : "sm:grid-cols-3")}>
+            {p.templates && (
+              <button type="button" onClick={() => { setTplOpen(true); setMenuOpen(false); setPricing(false); }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">
+                <LayoutTemplate className="h-4 w-4" />Use a template
+              </button>
+            )}
+            <button type="button" onClick={() => { setMenuOpen(true); setPricing(false); setTplOpen(false); }}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">
               <UtensilsCrossed className="h-4 w-4" />Add from menu
             </button>
-            <button type="button" onClick={() => { setPricing(true); setMenuOpen(false); }}
+            <button type="button" onClick={() => { setPricing(true); setMenuOpen(false); setTplOpen(false); }}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50">
               <Calculator className="h-4 w-4" />Price a job
             </button>

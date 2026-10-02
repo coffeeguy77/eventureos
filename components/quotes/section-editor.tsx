@@ -8,6 +8,9 @@ import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
+import { servesLine, setupTime, staffLine, type LineDetails, type ServesDetails, type StaffDetails } from "@/lib/quotes/line-helpers";
+import { shortTime } from "@/lib/calendar/job-invite";
+import type { StaffRule } from "@/lib/pricing/engine";
 
 export type Col = NumField | TextField;
 
@@ -37,7 +40,15 @@ export interface SectionHandlers {
   onQuickAdd: (sectionId: string, c: CatalogueItem) => void;
   onMoveItem: (itemId: string, dir: -1 | 1) => void;
   onDeleteItem: (itemId: string) => void;
+  /** A line helper changed: save how the quantity was worked out, plus the new quantity and description. */
+  onDetails: (itemId: string, details: LineDetails, derived: { quantity: number; description: string }) => void;
+  /** Which helper (if any) applies to a line. */
+  helperFor: (it: ItemDraft) => LineHelper | null;
 }
+
+export type LineHelper =
+  | { kind: "staff"; rule: StaffRule | null; label: string; defaultStart: string | null; defaultEnd: string | null }
+  | { kind: "serves"; base: string | null };
 
 export function SectionEditor({ section, items, index, count, currency, catalogue, adding, h }: {
   section: QSection;
@@ -141,6 +152,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
   const [discMode, setDiscMode] = useState<"percent" | "amount">((parseNum(it.discount_amount) ?? 0) > 0 ? "amount" : "percent");
   const total = lineTotal(draftNums(it));
   const excluded = it.is_optional || optionalSection;
+  const helper = h.helperFor(it);
 
   const input = (col: Col, props: React.InputHTMLAttributes<HTMLInputElement> & { className: string }) => (
     <input
@@ -188,6 +200,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
             <ImageIcon className="h-3 w-3" />Image
           </button>
         </div>
+        {helper && <LineHelperPanel it={it} helper={helper} h={h} />}
         {(showImage || it.image_url) && (
           <div className="mt-1.5 flex items-center gap-2 px-1">
             {it.image_url && /^https?:\/\//.test(it.image_url) && (
@@ -264,4 +277,66 @@ function AutoGrow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
     return () => ro.disconnect();
   }, []);
   return <textarea ref={ref} {...props} className={cn(props.className, "overflow-hidden")} />;
+}
+
+const helperInput = "h-8 w-full rounded-md border border-line bg-surface px-2 text-[0.8125rem] text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 max-md:h-10";
+
+/** Barista times or hot/cold drinks, worked into the line's quantity and description. */
+function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper; h: SectionHandlers }) {
+  if (helper.kind === "serves") {
+    const d: ServesDetails = it.details?.kind === "serves" ? it.details : { kind: "serves", hot: Number(it.quantity) || 0, cold: 0 };
+    const set = (k: "hot" | "cold", v: string) => {
+      const next: ServesDetails = { ...d, [k]: Math.max(0, Math.round(Number(v) || 0)) };
+      const r = servesLine(next, helper.base);
+      h.onDetails(it.id, next, r);
+    };
+    return (
+      <div className="mt-1.5 flex flex-wrap items-end gap-2 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
+        <label className="w-24"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Hot drinks</span>
+          <input type="number" min={0} inputMode="numeric" value={d.hot} onChange={(e) => set("hot", e.target.value)} className={cn(helperInput, "tabular text-right")} aria-label="Hot drinks" /></label>
+        <span className="pb-2 text-ink-faint">+</span>
+        <label className="w-24"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Cold drinks</span>
+          <input type="number" min={0} inputMode="numeric" value={d.cold} onChange={(e) => set("cold", e.target.value)} className={cn(helperInput, "tabular text-right")} aria-label="Cold drinks" /></label>
+        <span className="pb-2 text-[0.75rem] text-ink-muted">= <b className="text-ink">{d.hot + d.cold}</b> drinks{d.cold === 0 ? " · add cold drinks to offer iced options" : ""}</span>
+      </div>
+    );
+  }
+  const saved: StaffDetails | null = it.details?.kind === "staff" ? it.details : null;
+  return <StaffHelper key={it.id} it={it} helper={helper} saved={saved} h={h} />;
+}
+
+function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<LineHelper, { kind: "staff" }>; saved: StaffDetails | null; h: SectionHandlers }) {
+  const [d, setD] = useState<StaffDetails>(saved ?? {
+    kind: "staff", start: helper.defaultStart?.slice(0, 5) ?? null, end: helper.defaultEnd?.slice(0, 5) ?? null, staff: 1,
+    setup_minutes: helper.rule?.setup_minutes ?? 30,
+  });
+  const r = staffLine(d, helper.rule, helper.label);
+  const update = (patch: Partial<StaffDetails>) => {
+    const next = { ...d, ...patch };
+    setD(next);
+    const calc = staffLine(next, helper.rule, helper.label);
+    if (calc) h.onDetails(it.id, next, { quantity: calc.quantity, description: calc.description });
+  };
+  const setup = setupTime(d);
+  const label = helper.label.charAt(0).toUpperCase() + helper.label.slice(1);
+  return (
+    <div className="mt-1.5 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="w-[7.5rem]"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Service starts</span>
+          <input type="time" value={d.start ?? ""} onChange={(e) => update({ start: e.target.value || null })} className={helperInput} aria-label="Service starts" /></label>
+        <label className="w-[7.5rem]"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Service ends</span>
+          <input type="time" value={d.end ?? ""} onChange={(e) => update({ end: e.target.value || null })} className={helperInput} aria-label="Service ends" /></label>
+        <label className="w-20"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">{label}s</span>
+          <input type="number" min={1} max={50} inputMode="numeric" value={d.staff} onChange={(e) => update({ staff: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Number of ${helper.label}s`} /></label>
+        <label className="w-20"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Setup min</span>
+          <input type="number" min={0} max={600} step={5} inputMode="numeric" value={d.setup_minutes} onChange={(e) => update({ setup_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className={cn(helperInput, "tabular text-right")} aria-label="Setup minutes before service" /></label>
+      </div>
+      <p className="mt-1.5 text-[0.75rem] text-ink-muted">
+        {r ? <>
+          {shortTime(setup ?? d.start)}{setup && d.setup_minutes > 0 ? " (setup)" : ""} – {shortTime(d.end)} = <b className="text-ink">{r.perStaff[0]} hrs</b>{d.staff > 1 ? <> × {d.staff} = <b className="text-ink">{r.quantity} hrs</b></> : null}
+          {helper.rule?.min_hours ? <span className="text-ink-faint"> · {helper.rule.min_hours} hr minimum</span> : null}
+        </> : "Enter the service start and end — setup time and hours are worked out for you."}
+      </p>
+    </div>
+  );
 }

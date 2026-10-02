@@ -134,3 +134,50 @@ export async function syncFromXeroItems(accountsCsv: string): Promise<Result<{ u
     return r;
   });
 }
+
+export interface TemplateInput { id?: string; name: string; summary: string | null; sections: unknown; active: boolean }
+
+/** Create or update a quote template (named set of price-list items + quantities). */
+export async function saveQuoteTemplate(input: TemplateInput): Promise<Result<{ id: string }>> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await manager();
+    const name = t(input.name, 120);
+    if (!name) throw new Error("Give the template a name.");
+    const { cleanSections } = await import("@/lib/quotes/templates");
+    const sections = cleanSections(input.sections);
+    if (!sections.length) throw new Error("Add at least one item to the template.");
+    const ids = [...new Set(sections.flatMap((s) => s.items.map((i) => i.service_id).filter((x): x is string => !!x)))];
+    if (ids.length) {
+      const { data: svc } = await supabase.from("services").select("id").eq("organisation_id", org.id).in("id", ids);
+      if ((svc ?? []).length !== ids.length) throw new Error("Some items are no longer on your price list. Refresh and try again.");
+    }
+    const row = { name, summary: t(input.summary, 300), sections, active: !!input.active };
+    let id = input.id;
+    if (id) {
+      if (!UUID.test(id)) throw new Error("Refresh and try again.");
+      const { error } = await supabase.from("quote_templates").update(row).eq("id", id).eq("organisation_id", org.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: last } = await supabase.from("quote_templates").select("position").eq("organisation_id", org.id).order("position", { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabase.from("quote_templates").insert({ organisation_id: org.id, ...row, position: (last?.position ?? -1) + 1, created_by: user.id }).select("id").single();
+      if (error) throw new Error(error.message.includes("does not exist") ? "Quote templates aren't set up yet — the database update still needs to be run." : error.message);
+      id = (data as { id: string }).id;
+    }
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: input.id ? "quote_template.updated" : "quote_template.created", entityType: "organisation", entityId: org.id,
+      summary: `${actorName(profile)} ${input.id ? "updated" : "created"} the quote template ‘${name}’` });
+    revalidatePath("/settings/pricing");
+    return { id: id! };
+  });
+}
+
+export async function deleteQuoteTemplate(id: string): Promise<Result> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await manager();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const { data } = await supabase.from("quote_templates").delete().eq("id", id).eq("organisation_id", org.id).select("name").maybeSingle();
+    if (data) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "quote_template.deleted", entityType: "organisation", entityId: org.id,
+      summary: `${actorName(profile)} deleted the quote template ‘${data.name}’` });
+    revalidatePath("/settings/pricing");
+    return null;
+  });
+}

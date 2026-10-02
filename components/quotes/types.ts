@@ -1,3 +1,4 @@
+import type { LineDetails } from "@/lib/quotes/line-helpers";
 import type { QuoteStatus } from "@/lib/types";
 
 /** Shared (client + server) shapes for the quote builder. */
@@ -27,10 +28,12 @@ export interface QItem {
   image_url: string | null;
   position: number;
   service_id?: string | null;
+  /** How the quantity was worked out (barista times, hot/cold drinks) — see lib/quotes/line-helpers */
+  details?: LineDetails | null;
 }
 
 export type ItemPatch = Partial<Pick<QItem,
-  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "discount_amount" | "is_optional" | "is_package" | "image_url" | "service_id">>;
+  "name" | "description" | "quantity" | "unit" | "unit_price" | "tax_rate" | "discount_percent" | "discount_amount" | "is_optional" | "is_package" | "image_url" | "service_id" | "details">>;
 
 export type SectionPatch = Partial<Pick<QSection, "title" | "description" | "is_optional">>;
 
