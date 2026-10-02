@@ -18,12 +18,14 @@ export interface RecodePreview {
 
 const sel = "h-9 w-full rounded-md border border-line bg-surface px-2 text-[0.8125rem] text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 sm:h-8";
 
-export function RecodeTool({ accounts, items, map, preview, currency }: {
+export function RecodeTool({ accounts, items, map, preview, currency, alreadyTested = false }: {
   accounts: { code: string; name: string }[];
   items: Record<string, { name: string; account: string | null }>;
   map: Record<string, string>;
   preview: RecodePreview;
   currency: string;
+  /** A recode has already worked for this business — no need to test again */
+  alreadyTested?: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<string, string>>(map);
@@ -37,7 +39,7 @@ export function RecodeTool({ accounts, items, map, preview, currency }: {
 
   // Running
   const [running, setRunning] = useState<null | "test" | "all">(null);
-  const [tested, setTested] = useState(false);
+  const [tested, setTested] = useState(alreadyTested);
   const [done, setDone] = useState<RecodeBatchResult["updated"]>([]);
   const [skipped, setSkipped] = useState<RecodeBatchResult["skipped"]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -49,7 +51,8 @@ export function RecodeTool({ accounts, items, map, preview, currency }: {
     const skip = skipped.map((s) => s.id);
     try {
       for (;;) {
-        const r = await runRecodeBatch(mode === "test" ? { only: preview.next?.id } : { limit: 5, skip });
+        const t0 = Date.now();
+        const r = await runRecodeBatch(mode === "test" ? { only: preview.next?.id } : { limit: 4, skip });
         if (!r.ok) { setError(r.error); break; }
         setDone((d) => [...d, ...r.data.updated]);
         setSkipped((s) => [...s, ...r.data.skipped]);
@@ -58,6 +61,10 @@ export function RecodeTool({ accounts, items, map, preview, currency }: {
         if (r.data.stopped) { setStopped(r.data.stopped); break; }
         if (mode === "test") { if (r.data.updated.length) setTested(true); break; }
         if (!r.data.remaining || stopRef.current || (!r.data.updated.length && !r.data.skipped.length)) break;
+        // Stay well under Xero's limit of 60 requests a minute (each invoice is 2): at most one batch every 15 seconds
+        const wait = 15_000 - (Date.now() - t0);
+        if (wait > 0) await new Promise((res) => setTimeout(res, wait));
+        if (stopRef.current) break;
       }
     } catch { setError("Lost connection to the server — press the button again to carry on from where it stopped."); }
     setRunning(null);
@@ -126,7 +133,7 @@ export function RecodeTool({ accounts, items, map, preview, currency }: {
       </Card>
 
       <Card>
-        <CardHeader title="3. Recode in Xero" subtitle="Start with one invoice and check it in Xero. Then run the rest — about 5 invoices every few seconds, newest first. You can stop at any time." />
+        <CardHeader title="3. Recode in Xero" subtitle="Start with one invoice and check it in Xero. Then run the rest — about 4 invoices every 15 seconds (Xero's speed limit), newest first. You can stop at any time." />
         <div className="space-y-3 px-5 pb-5">
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" disabled={!preview.next || !!running || dirty} onClick={() => run("test")}>

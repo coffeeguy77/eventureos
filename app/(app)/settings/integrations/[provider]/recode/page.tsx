@@ -40,6 +40,8 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
     byItem.set(k, row);
   }
   for (const r of byItem.values()) r.invoices = cands.filter((c) => c.lines.some((l) => l.item === r.item && (l.from ?? "") === (r.from ?? ""))).length;
+  const { count: recodedBefore } = await supabase.from("activity_logs").select("id", { count: "exact", head: true })
+    .eq("organisation_id", org.id).eq("action", "xero.recode");
   const preview: RecodePreview = {
     invoices: cands.length,
     paid: cands.filter((c) => c.status === "paid").length,
@@ -54,7 +56,7 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
         subtitle="Move every invoice line for an item to the revenue account you choose — including paid invoices. Only the account changes: descriptions, amounts and GST stay exactly as they are." />
       {problem
         ? <Card className="p-5 text-[0.8125rem] text-rose-700">Couldn&apos;t reach Xero: {problem}</Card>
-        : <RecodeTool accounts={accounts} items={items} map={map} preview={preview} currency={org.currency} />}
+        : <RecodeTool accounts={accounts} items={items} map={map} preview={preview} currency={org.currency} alreadyTested={!!recodedBefore} />}
       <Card className="mt-6">
         <CardHeader title="Good to know" />
         <ul className="list-disc space-y-1.5 px-5 pb-5 pl-9 text-[0.7812rem] text-ink-muted">

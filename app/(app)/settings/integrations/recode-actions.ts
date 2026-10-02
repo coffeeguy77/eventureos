@@ -58,11 +58,17 @@ export async function runRecodeBatch(opts: { limit?: number; skip?: string[]; on
     const all = await recodeCandidates(supabase, org.id, map);
     const queue = (opts.only ? all.filter((r) => r.id === opts.only) : all.filter((r) => !skip.has(r.id))).slice(0, opts.only ? 1 : Math.min(8, Math.max(1, opts.limit ?? 5)));
     const out: RecodeBatchResult = { updated: [], skipped: [], remaining: 0 };
+    const started = Date.now();
     for (const inv of queue) {
+      if (Date.now() - started > 30_000) break; // leave time to finish well inside the page's time limit
       let r;
       try { r = await recodeInvoice(sctx, inv.xero_invoice_id, map); }
       catch (e) {
-        if (e instanceof RateLimited) { out.stopped = e.message; break; }
+        if (e instanceof RateLimited) {
+          const mins = Math.max(1, Math.ceil(e.retryAfterSec / 60));
+          out.stopped = `Xero has asked EventureOS to pause (it limits how many changes an app can make). Everything done so far is saved. Wait about ${mins} minute${mins === 1 ? "" : "s"}, then press Recode again — it carries on from where it stopped.`;
+          break;
+        }
         out.skipped.push({ id: inv.id, number: inv.number, reason: errMessage(e) }); continue;
       }
       if (r.kind === "skipped") { out.skipped.push({ id: inv.id, number: r.number, reason: r.reason }); continue; }

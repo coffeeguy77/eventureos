@@ -153,16 +153,21 @@ function isRateLimit(status: number, body: string) {
 /** fetch() with the integration's bearer token; refreshes once on 401 and backs off on rate limits. */
 export async function apiFetch(ctx: SyncContext, url: string, init: RequestInit & { headers?: Record<string, string> } = {}, label = "API"): Promise<Response> {
   let refreshed = false;
-  const waits = [2, 5, 12]; // seconds between retries when rate limited (plus Retry-After when given)
+  // Someone is waiting on the page: retry a rate limit once, briefly, then say so — never hang the page.
+  // Background syncs can afford to wait longer.
+  const interactive = ctx.mode === "user";
+  const waits = interactive ? [2] : [2, 5, 12]; // seconds between retries when rate limited (plus Retry-After when given)
+  const maxWait = interactive ? 3 : 20;
   for (let attempt = 0; ; attempt++) {
     const token = await getAccessToken(ctx, refreshed && attempt > 0);
-    const res = await fetch(url, { ...init, cache: "no-store", headers: { accept: "application/json", ...(init.headers ?? {}), authorization: `Bearer ${token}` } });
+    const res = await fetch(url, { ...init, cache: "no-store", signal: init.signal ?? AbortSignal.timeout(interactive ? 20_000 : 45_000),
+      headers: { accept: "application/json", ...(init.headers ?? {}), authorization: `Bearer ${token}` } });
     if (res.status === 401 && !refreshed) { refreshed = true; continue; }
     if (res.ok) return res;
     const body = await res.text();
     if (isRateLimit(res.status, body)) {
       const retryAfter = Number(res.headers.get("retry-after")) || 0;
-      if (attempt < waits.length) { await sleep(Math.min(20, Math.max(retryAfter, waits[attempt])) * 1000); continue; }
+      if (attempt < waits.length && retryAfter <= maxWait * 2) { await sleep(Math.min(maxWait, Math.max(retryAfter, waits[attempt])) * 1000); continue; }
       throw new RateLimited(ctx.integration.provider === "xero" ? "Xero" : "Google", Math.max(retryAfter, 60));
     }
     if (res.status === 401) throw new ApiError(`${label}: unauthorised after refreshing the token`, 401, body);
