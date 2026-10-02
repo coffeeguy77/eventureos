@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CustomerPricingCard, type CustomerPriceRow } from "./pricing-card";
 import { Building2, CalendarDays, Link2, Mail, MapPin, Phone, User } from "lucide-react";
 import { requireOrg, getMembers, canManage } from "@/lib/context";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
@@ -74,6 +75,15 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   if (error) throw new Error(`Could not load client: ${error.message}`);
   if (!cRow) notFound();
   const c = cRow as CustomerRow;
+
+  // Special pricing for this client (the table arrives with a database update)
+  const [cpRes, plRes] = await Promise.all([
+    supabase.from("customer_prices").select("id, service_id, kind, value, note").eq("organisation_id", org.id).eq("customer_id", id),
+    supabase.from("services").select("id, name, category, unit, unit_price").eq("organisation_id", org.id).eq("active", true).order("position"),
+  ]);
+  const pricingReady = !cpRes.error;
+  const customerPrices = ((cpRes.data ?? []) as CustomerPriceRow[]).map((r) => ({ ...r, value: Number(r.value) }));
+  const priceList = (plRes.data ?? []).map((s) => ({ ...s, unit_price: Number(s.unit_price) })) as { id: string; name: string; category: string | null; unit: string | null; unit_price: number }[];
 
   // Events and enquiries first — their ids scope emails, documents and activity.
   const [eventsRes, enquiriesRes] = await Promise.all([
@@ -382,6 +392,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <Card>
                 <CardHeader title="Contacts" subtitle={contacts.length > 1 ? `${contacts.length} people` : undefined} />
                 <ContactsManager customerId={c.id} contacts={contacts} canRemove={canManage(role)} />
+              </Card>
+              <Card>
+                <CardHeader title="Customer pricing" subtitle="Special terms for this client" />
+                <CustomerPricingCard customerId={c.id} rows={customerPrices} services={priceList} currency={cur} canEdit={canManage(role)} ready={pricingReady} />
               </Card>
               <Card>
                 <CardHeader title="Relationship at a glance" />

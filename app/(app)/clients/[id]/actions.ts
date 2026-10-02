@@ -172,3 +172,47 @@ export async function removeContact(customerId: string, contactId: string): Prom
   refresh(customerId);
   return undefined;
 }
+
+// ------------------------------------------------------------------------------------------------
+// Customer pricing: special terms on chosen price-list items (applied to new quote lines automatically)
+
+export type PriceResult = { ok: true } | { ok: false; error: string };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function saveCustomerPrice(customerId: string, input: { serviceId: string; kind: "percent" | "price"; value: number; note: string | null }): Promise<PriceResult> {
+  try {
+    const { supabase, org, role, user, profile } = await requireOrg();
+    if (!canManage(role)) return { ok: false, error: "Only owners, admins and managers can set customer pricing." };
+    if (!UUID.test(customerId) || !UUID.test(input.serviceId)) return { ok: false, error: "Choose an item from your price list." };
+    const kind = input.kind === "price" ? "price" : "percent";
+    const value = Math.round(Number(input.value) * 100) / 100;
+    if (!Number.isFinite(value) || value < 0) return { ok: false, error: "Enter a number." };
+    if (kind === "percent" && (value <= 0 || value > 100)) return { ok: false, error: "A discount must be between 0 and 100%." };
+    const { data: svc } = await supabase.from("services").select("name, unit_price").eq("id", input.serviceId).eq("organisation_id", org.id).maybeSingle();
+    if (!svc) return { ok: false, error: "That item is no longer on your price list." };
+    if (kind === "price" && value >= Number(svc.unit_price)) return { ok: false, error: `Their price needs to be less than the normal ${Number(svc.unit_price).toFixed(2)}.` };
+    const note = String(input.note ?? "").trim().slice(0, 120) || null;
+    const { error } = await supabase.from("customer_prices").upsert(
+      { organisation_id: org.id, customer_id: customerId, service_id: input.serviceId, kind, value, note },
+      { onConflict: "customer_id,service_id" });
+    if (error) return { ok: false, error: error.message.includes("does not exist") ? "Customer pricing needs its database update first." : error.message };
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.pricing", entityType: "customer", entityId: customerId, customerId,
+      summary: `${actorName(profile)} set ${kind === "percent" ? `${value}% off` : `a special price of $${value.toFixed(2)}`} on ${svc.name}` });
+    refresh(customerId);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't save." }; }
+}
+
+export async function removeCustomerPrice(customerId: string, id: string): Promise<PriceResult> {
+  try {
+    const { supabase, org, role, user, profile } = await requireOrg();
+    if (!canManage(role)) return { ok: false, error: "Only owners, admins and managers can change customer pricing." };
+    if (!UUID.test(id)) return { ok: false, error: "Refresh and try again." };
+    const { data } = await supabase.from("customer_prices").delete().eq("id", id).eq("organisation_id", org.id).eq("customer_id", customerId)
+      .select("service:services(name)").maybeSingle();
+    if (data) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.pricing", entityType: "customer", entityId: customerId, customerId,
+      summary: `${actorName(profile)} removed the special pricing on ${(data as unknown as { service: { name: string } | null }).service?.name ?? "an item"}` });
+    refresh(customerId);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't remove." }; }
+}

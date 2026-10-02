@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
-  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection,
+  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing,
 } from "@/app/(app)/quotes/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,8 @@ export interface BuilderProps {
   nextAction: React.ReactNode;
   history: React.ReactNode;
   pricing: { packages: PricingPackage[]; services: (PricedService & { category: string | null })[]; defaults: { start: string | null; end: string | null; guests: number | null } };
+  /** The client's special pricing, e.g. ["10% off Coffee Individual"] */
+  customerPricing?: string[];
   /** The job's email conversations, shown beside the quote */
   emails?: DrawerThread[];
   /** Saved templates to start from (null = templates not set up yet) */
@@ -538,6 +540,8 @@ export function QuoteBuilder(p: BuilderProps) {
           {p.templates && <SaveAsTemplateButton quoteId={quote.id} defaultName={quote.title} onDone={(m, ok) => showToast({ message: m, tone: ok ? "ok" : "error" }, 7000)} />}
         </div>
 
+        {!!p.customerPricing?.length && <CustomerPricingNote quoteId={quote.id} terms={p.customerPricing} customerName={p.customer.name} editable
+          onDone={(m, ok) => { showToast({ message: m, tone: ok ? "ok" : "error" }); if (ok) router.refresh(); }} />}
         {p.replyTo && (
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-brand-50/70 px-4 py-3 text-[0.8125rem] text-brand-900 ring-1 ring-inset ring-brand-200">
             <Reply className="h-4 w-4 shrink-0 text-brand-600" />
@@ -839,6 +843,25 @@ function PreviewModal({ children, onClose }: { children: React.ReactNode; onClos
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+/** "Special pricing for this client" with a button to apply it to lines added before it was set. */
+function CustomerPricingNote({ quoteId, terms, customerName, editable, onDone }: { quoteId: string; terms: string[]; customerName: string; editable: boolean; onDone: (m: string, ok: boolean) => void }) {
+  const [pending, start] = useTransition();
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-emerald-50/70 px-4 py-2.5 text-[0.8125rem] text-emerald-900 ring-1 ring-inset ring-emerald-200">
+      <span className="min-w-0 flex-1"><b className="font-semibold">Special pricing for {customerName}:</b> {terms.join(" · ")}. New lines get it automatically.</span>
+      {editable && (
+        <button type="button" disabled={pending} onClick={() => start(async () => {
+          const r = await applyCustomerPricing(quoteId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+          if (!r.ok) onDone(r.error, false);
+          else onDone(r.data.updated ? `Applied to ${r.data.updated} line${r.data.updated === 1 ? "" : "s"}.` : "Every line already has it (or was priced by hand).", true);
+        })} className="shrink-0 font-medium text-emerald-800 underline-offset-2 hover:underline disabled:opacity-60">
+          {pending ? "Applying…" : "Apply to lines already on this quote"}
+        </button>
+      )}
     </div>
   );
 }

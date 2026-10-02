@@ -845,3 +845,41 @@ export async function saveQuoteAsTemplate(quoteId: string, name: string): Promis
     return { id: (data as { id: string }).id };
   });
 }
+
+/** Apply the client's special pricing to lines already on this quote (new lines get it automatically). */
+export async function applyCustomerPricing(quoteId: string): Promise<ActionResult<{ updated: number }>> {
+  return run(async () => {
+    const { supabase, org, user, profile } = await requireOrg();
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    const [{ data: prices, error: pErr }, { data: items }, { data: svc }] = await Promise.all([
+      supabase.from("customer_prices").select("service_id, kind, value, note").eq("organisation_id", org.id).eq("customer_id", q.customer_id),
+      supabase.from("quote_items").select("id, service_id, unit_price, discount_percent, discount_amount, description").eq("quote_id", q.id).not("service_id", "is", null),
+      supabase.from("services").select("id, unit_price").eq("organisation_id", org.id),
+    ]);
+    if (pErr) fail(`Couldn't load the client's pricing: ${pErr.message}`);
+    const list = new Map((svc ?? []).map((s) => [s.id as string, Number(s.unit_price)]));
+    let updated = 0;
+    for (const it of (items ?? []) as { id: string; service_id: string; unit_price: number; discount_percent: number; discount_amount: number; description: string | null }[]) {
+      const cp = (prices ?? []).find((p) => p.service_id === it.service_id) as { kind: "percent" | "price"; value: number; note: string | null } | undefined;
+      if (!cp) continue;
+      const listPrice = list.get(it.service_id);
+      let patch: Record<string, unknown> | null = null;
+      if (cp.kind === "percent" && Number(it.discount_percent) === 0 && Number(it.discount_amount) === 0) patch = { discount_percent: Number(cp.value) };
+      if (cp.kind === "price" && listPrice != null && Number(it.unit_price) === listPrice && Number(cp.value) < listPrice) {
+        const label = cp.note?.trim() || "Loyal customer price";
+        patch = { unit_price: Number(cp.value), description: `${(it.description ?? "").trim()}\n${label} (usually ${money(listPrice)})`.trim() };
+      }
+      if (!patch) continue;
+      const { error } = await supabase.from("quote_items").update(patch).eq("id", it.id);
+      if (error) fail(`Couldn't update a line: ${error.message}`);
+      updated++;
+    }
+    if (updated) {
+      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "quote.customer_pricing", entityType: "quote", entityId: q.id, eventId: q.event_id, customerId: q.customer_id,
+        summary: `${actorName(profile)} applied the client's special pricing to ${updated} line${updated === 1 ? "" : "s"} on Quote Q-${q.number}` });
+      refresh(q);
+    }
+    return { updated };
+  });
+}

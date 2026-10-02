@@ -18,7 +18,7 @@ import { SentHistory, type SentEmail } from "@/components/quotes/sent-history";
 import { quoteNextAction } from "@/components/quotes/next-action";
 import type { CatalogueItem, QItem, QSection, QuoteDoc, QuoteSnapshotData, VersionInfo } from "@/components/quotes/types";
 import { QUOTE_STATUS } from "@/lib/status";
-import { fmtDate, fmtDateTime, todayISO } from "@/lib/format";
+import { fmtDate, fmtDateTime, money, todayISO } from "@/lib/format";
 import type { EventStatus, QuoteStatus } from "@/lib/types";
 
 export const metadata = { title: "Quote" };
@@ -215,6 +215,11 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   }
 
   // ------------------------------------------------------------------ editable draft
+  // The client's special pricing (shown as a note, with "apply" for lines added before it was set)
+  const { data: cpRows } = await supabase.from("customer_prices").select("service_id, kind, value, service:services(name)").eq("organisation_id", org.id).eq("customer_id", q.customer.id);
+  const customerPricing = ((cpRows ?? []) as unknown as { service_id: string; kind: "percent" | "price"; value: number; service: { name: string } | null }[])
+    .map((r) => `${r.kind === "percent" ? `${Number(r.value)}% off` : `${money(Number(r.value), cur)}`} ${r.service?.name ?? "item"}`);
+
   // The job's email conversations (event + its original enquiry), shown beside the quote while pricing
   const { data: evLink } = await supabase.from("events").select("enquiry_id").eq("id", q.event.id).maybeSingle();
   const threadFilter = [`event_id.eq.${q.event.id}`, evLink?.enquiry_id ? `enquiry_id.eq.${evLink.enquiry_id}` : null].filter(Boolean).join(",");
@@ -248,6 +253,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       replyTo={replyTo}
       templates={templates}
       emails={emailThreads}
+      customerPricing={customerPricing}
       quote={{
         id: q.id, number: q.number, title: q.title, status: q.status, issue_date: q.issue_date, expiry_date: q.expiry_date,
         notes: q.notes, terms: q.terms, has_unpublished_changes: q.has_unpublished_changes, current_version_id: q.current_version_id,
