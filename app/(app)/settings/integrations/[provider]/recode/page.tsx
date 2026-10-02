@@ -4,8 +4,8 @@ import { requireOrg } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildContext } from "@/lib/integrations/sync-runner";
-import { errMessage, saveIntegrationSettings } from "@/lib/integrations/runtime";
-import { cleanRecodeMap } from "@/lib/integrations/xero-recode-plan";
+import { createServiceClient, errMessage, saveIntegrationSettings } from "@/lib/integrations/runtime";
+import { cleanRecodeMap, cleanRecodeRules, type RecodeRule } from "@/lib/integrations/xero-recode-plan";
 import { itemDefaults, recodeCandidates, revenueAccounts } from "@/lib/integrations/xero-recode";
 import { RecodeTool, type RecodePreview } from "./recode-tool";
 
@@ -22,10 +22,11 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
   }
 
   let accounts: { code: string; name: string }[] = [], items: Record<string, { name: string; account: string | null }> = {};
-  let map = {} as ReturnType<typeof cleanRecodeMap>, problem: string | null = null;
+  let map = {} as ReturnType<typeof cleanRecodeMap>, rules: RecodeRule[] = [], problem: string | null = null;
   try {
     const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
     map = cleanRecodeMap(ctx.integration.settings?.recode_map);
+    rules = cleanRecodeRules(ctx.integration.settings?.recode_rules);
     [accounts, items] = await Promise.all([revenueAccounts(ctx), itemDefaults(ctx)]);
     // Keep the account names for the dashboard's revenue figures (so it never has to call Xero)
     const names = Object.fromEntries(accounts.map((a) => [a.code, a.name]));
@@ -35,7 +36,7 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
   } catch (e) { problem = errMessage(e); }
 
   let cands: Awaited<ReturnType<typeof recodeCandidates>> = [];
-  if (!problem) { try { cands = await recodeCandidates(supabase, org.id, map); } catch (e) { problem = errMessage(e); } }
+  if (!problem) { try { cands = await recodeCandidates(createServiceClient(), org.id, map, rules); } catch (e) { problem = errMessage(e); } }
   const byItem = new Map<string, RecodePreview["items"][number]>();
   for (const c of cands) for (const l of c.lines) {
     const k = `${l.item}|${l.from ?? ""}`;
@@ -61,7 +62,7 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
         subtitle="Move every invoice line for an item to the revenue account you choose — including paid invoices. Only the account changes: descriptions, amounts and GST stay exactly as they are." />
       {problem
         ? <Card className="p-5 text-[0.8125rem] text-rose-700">Couldn&apos;t reach Xero: {problem}</Card>
-        : <RecodeTool accounts={accounts} items={items} map={map} preview={preview} currency={org.currency} alreadyTested={!!recodedBefore} />}
+        : <RecodeTool accounts={accounts} items={items} map={map} preview={preview} rules={rules} currency={org.currency} alreadyTested={!!recodedBefore} />}
       <Card className="mt-6">
         <CardHeader title="Good to know" />
         <ul className="list-disc space-y-1.5 px-5 pb-5 pl-9 text-[0.7812rem] text-ink-muted">

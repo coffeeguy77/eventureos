@@ -2,7 +2,7 @@ import "server-only";
 import { ApiError, apiJSON, type SyncContext } from "@/lib/integrations/runtime";
 import { XERO_API, compactLines, tenantId } from "@/lib/integrations/xero";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { recodeLines, sameExceptAccounts, targetAccount, type RecodeMap, type XLine } from "@/lib/integrations/xero-recode-plan";
+import { recodeLines, sameExceptAccounts, targetAccount, type RecodeMap, type RecodeRule, type XLine } from "@/lib/integrations/xero-recode-plan";
 
 /**
  * Recode by item — the Xero side.
@@ -52,7 +52,7 @@ export type RecodeOutcome =
   | { kind: "mismatch"; number: string; reason: string };
 
 /** Recode one invoice. Never changes anything but line accounts; checks Xero's copy afterwards. */
-export async function recodeInvoice(ctx: SyncContext, xeroInvoiceId: string, map: RecodeMap): Promise<RecodeOutcome> {
+export async function recodeInvoice(ctx: SyncContext, xeroInvoiceId: string, map: RecodeMap, rules: RecodeRule[] = []): Promise<RecodeOutcome> {
   const got = await xget<{ Invoices?: XInvoice[] }>(ctx, `/Invoices/${encodeURIComponent(xeroInvoiceId)}`);
   const inv = got.Invoices?.[0];
   if (!inv) return { kind: "skipped", number: xeroInvoiceId, reason: "Not found in Xero" };
@@ -60,7 +60,8 @@ export async function recodeInvoice(ctx: SyncContext, xeroInvoiceId: string, map
   if (inv.Type !== "ACCREC") return { kind: "skipped", number, reason: "Not a sales invoice" };
   if (inv.Status === "VOIDED" || inv.Status === "DELETED") return { kind: "skipped", number, reason: `Invoice is ${inv.Status.toLowerCase()}` };
 
-  const plan = recodeLines(inv.LineItems ?? [], map);
+  const opts = { rules, invoice: inv.InvoiceNumber ?? null };
+  const plan = recodeLines(inv.LineItems ?? [], map, opts);
   if (!plan) return { kind: "nothing", number, lines: compactLines(inv.LineItems) };
 
   let after: XInvoice | undefined;
@@ -77,36 +78,37 @@ export async function recodeInvoice(ctx: SyncContext, xeroInvoiceId: string, map
   // Check Xero's saved copy (returned by the update) against the original
   const check = after;
   if (!check) return { kind: "mismatch", number, reason: "Xero didn't return the invoice after the update" };
-  const diff = sameExceptAccounts(inv, check, map);
+  const diff = sameExceptAccounts(inv, check, map, opts);
   if (diff) return { kind: "mismatch", number, reason: diff };
   return { kind: "updated", number, changes: plan.changes, lines: compactLines(check.LineItems as never) };
 }
 
-type LocalLine = { item_code: string | null; account_code: string | null; line_amount: number | null };
+type LocalLine = { item_code: string | null; account_code: string | null; line_amount: number | null; description?: string | null };
 type LocalInvoice = { id: string; number: string; status: string; issue_date: string | null; xero_invoice_id: string; line_items: LocalLine[] | null };
 
-/** Invoices (from EventureOS's copy of Xero) with at least one line not yet on its mapped account. */
-export async function recodeCandidates(db: SupabaseClient, orgId: string, map: RecodeMap) {
-  const items = Object.keys(map);
-  if (!items.length) return [] as (LocalInvoice & { lines: { item: string; from: string | null; to: string; amount: number }[] })[];
-  const byId = new Map<string, LocalInvoice>();
-  for (const code of items) {
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await db.from("invoices").select("id, number, status, issue_date, xero_invoice_id, line_items")
-        .eq("organisation_id", orgId).not("xero_invoice_id", "is", null).neq("status", "void").contains("line_items", JSON.stringify([{ item_code: code }]))
-        .order("issue_date", { ascending: false }).range(from, from + 999);
-      if (error) throw new Error(`Couldn't read invoices: ${error.message}`);
-      for (const r of (data ?? []) as LocalInvoice[]) byId.set(r.id, r);
-      if (!data || data.length < 1000) break;
-    }
+/** Every synced Xero invoice (not voided) for an organisation, newest first — read in pages. */
+export async function syncedInvoices(db: SupabaseClient, orgId: string): Promise<LocalInvoice[]> {
+  const rows: LocalInvoice[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("invoices").select("id, number, status, issue_date, xero_invoice_id, line_items")
+      .eq("organisation_id", orgId).not("xero_invoice_id", "is", null).neq("status", "void")
+      .order("issue_date", { ascending: false }).order("id").range(from, from + 999);
+    if (error) throw new Error(`Couldn't read invoices: ${error.message}`);
+    rows.push(...((data ?? []) as LocalInvoice[]));
+    if (!data || data.length < 1000) break;
   }
-  const rows = [...byId.values()].sort((a, b) => (b.issue_date ?? "").localeCompare(a.issue_date ?? "") || b.number.localeCompare(a.number));
+  return rows;
+}
+
+/** Invoices (from EventureOS's copy of Xero) with at least one line not yet on the account it belongs on. */
+export async function recodeCandidates(db: SupabaseClient, orgId: string, map: RecodeMap, rules: RecodeRule[] = []) {
+  if (!Object.keys(map).length && !rules.length) return [] as (LocalInvoice & { lines: { item: string; from: string | null; to: string; amount: number }[] })[];
+  const rows = await syncedInvoices(db, orgId);
   return rows.map((r) => ({
     ...r,
     lines: (r.line_items ?? []).flatMap((l) => {
-      const to = targetAccount({ ItemCode: l.item_code, AccountCode: l.account_code }, map);
+      const to = targetAccount({ ItemCode: l.item_code, AccountCode: l.account_code, Description: l.description }, map, { rules, invoice: r.number });
       return to ? [{ item: l.item_code!, from: l.account_code, to, amount: Number(l.line_amount ?? 0) }] : [];
     }),
   })).filter((r) => r.lines.length);
 }
-

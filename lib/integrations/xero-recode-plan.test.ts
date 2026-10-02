@@ -1,4 +1,4 @@
-import { cleanRecodeMap, recodeLines, sameExceptAccounts, targetAccount } from "./xero-recode-plan";
+import { cleanRecodeMap, cleanRecodeRules, recodeLines, sameExceptAccounts, targetAccount } from "./xero-recode-plan";
 let fail = 0;
 const eq = (n: string, got: unknown, want: unknown) => { const ok = JSON.stringify(got) === JSON.stringify(want); if (!ok) fail++; console.log(ok ? "ok  " : "FAIL", n, ok ? "" : `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`); };
 
@@ -29,4 +29,16 @@ eq("verified", sameExceptAccounts(before, { ...before, LineItems: r.lines }, map
 eq("total changed", sameExceptAccounts(before, { ...before, Total: 1700, LineItems: r.lines }, map), "totals changed (1705 → 1700)");
 eq("wrong account", sameExceptAccounts(before, { ...before, LineItems: lines }, map), `line "Coffee Cart Hire" is on 773, expected 209`);
 eq("description changed", sameExceptAccounts(before, { ...before, LineItems: r.lines.map((l, i) => (i === 2 ? { ...l, Description: "x" } : l)) }, map), `line "Coffees" changed`);
+// Special rules: caravan jobs invoiced as cart or van hire
+const rules = cleanRecodeRules([
+  { account: "208", items: ["CartHire", "vanhire", "Misc"], contains: "caravan" },
+  { account: "208", items: ["CartHire"], invoices: ["INV-2976"] },
+  { account: "208", items: [], contains: "x" }, // no items → dropped
+]);
+eq("rules cleaned", rules.length, 2);
+eq("caravan in description", targetAccount({ ItemCode: "vanhire", AccountCode: "773", Description: "Coffee Caravan Hire 21 Sept" }, { vanhire: "210" }, { rules }), "208");
+eq("plain van hire → map", targetAccount({ ItemCode: "vanhire", AccountCode: "773", Description: "Coffee Van Hire" }, { vanhire: "210" }, { rules }), "210");
+eq("caravan transport keeps its item account", targetAccount({ ItemCode: "CartSetup", AccountCode: "776", Description: "Coffee Caravan Transport" }, map, { rules }), "207");
+eq("named invoice", targetAccount({ ItemCode: "CartHire", AccountCode: "209", Description: "Coffee Cart Hire / Day" }, map, { rules, invoice: "INV-2976" }), "208");
+eq("other invoice unaffected", targetAccount({ ItemCode: "CartHire", AccountCode: "209", Description: "Coffee Cart Hire / Day" }, map, { rules, invoice: "INV-1" }), null);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }

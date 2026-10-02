@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   const cur = org.currency;
   // Revenue by stream (owners and managers only) — never let it break the dashboard
   const fyStart = Number((org.settings as Record<string, unknown> | null)?.fy_start_month) || 7;
-  const streams = canManage(role) ? await loadRevenueStreams(supabase, org.id, today, fyStart).catch(() => null) : null;
+  const streams = canManage(role) ? await loadRevenueStreams(supabase, org.id, today, fyStart).catch((e) => { console.error("revenue streams:", e); return null; }) : null;
 
   const [eventsRes, enquiriesRes, quotesRes, invoicesRes, paymentsRes, threadsRes, tasksRes, activityRes, calRes, messagesRes, members, confirmedRes, overdueEventsRes] =
     await Promise.all([

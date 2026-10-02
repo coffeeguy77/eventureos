@@ -7,8 +7,10 @@
  * and whole-invoice discounts). Drafts and voided invoices aren't revenue and are left out.
  * Pure — used by the dashboard and tested with `npx tsx`.
  */
-export interface StreamLine { item_code?: string | null; account_code?: string | null; quantity?: number | null; line_amount?: number | null }
-export interface StreamInvoice { id: string; status: string; issue_date: string | null; subtotal: number | null; line_items: StreamLine[] | null }
+import { intendedAccount, type RecodeRule } from "@/lib/integrations/xero-recode-plan";
+
+export interface StreamLine { item_code?: string | null; account_code?: string | null; quantity?: number | null; line_amount?: number | null; description?: string | null }
+export interface StreamInvoice { id: string; number?: string | null; status: string; issue_date: string | null; subtotal: number | null; line_items: StreamLine[] | null }
 export interface StreamRow { account: string; amount: number; units: number; invoices: number }
 export interface StreamPeriod { key: string; label: string; from: string | null; to: string | null }
 
@@ -16,14 +18,14 @@ const NOT_REVENUE = new Set(["draft", "void"]);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Which stream (account) a line belongs to, or null if it isn't one of the streams. */
-export function streamFor(line: StreamLine, map: Record<string, string>, streams: Set<string>): string | null {
-  const item = line.item_code?.trim();
-  if (item && map[item]) return map[item];
+export function streamFor(line: StreamLine, map: Record<string, string>, streams: Set<string>, rules: RecodeRule[] = [], invoice: string | null = null): string | null {
+  const to = intendedAccount({ ItemCode: line.item_code, Description: line.description }, map, { rules, invoice });
+  if (to) return to;
   return line.account_code && streams.has(line.account_code) ? line.account_code : null;
 }
 
-export function revenueByStream(invoices: StreamInvoice[], map: Record<string, string>, period: { from: string | null; to: string | null }): StreamRow[] {
-  const streams = new Set(Object.values(map));
+export function revenueByStream(invoices: StreamInvoice[], map: Record<string, string>, period: { from: string | null; to: string | null }, rules: RecodeRule[] = []): StreamRow[] {
+  const streams = new Set([...Object.values(map), ...rules.map((r) => r.account)]);
   const rows = new Map<string, StreamRow & { ids: Set<string> }>();
   for (const inv of invoices) {
     if (NOT_REVENUE.has(inv.status)) continue;
@@ -34,7 +36,7 @@ export function revenueByStream(invoices: StreamInvoice[], map: Record<string, s
     const sum = lines.reduce((a, l) => a + Number(l.line_amount ?? 0), 0);
     const scale = inv.subtotal != null && sum !== 0 ? Number(inv.subtotal) / sum : 1;
     for (const l of lines) {
-      const acct = streamFor(l, map, streams);
+      const acct = streamFor(l, map, streams, rules, inv.number ?? null);
       if (!acct) continue;
       const row = rows.get(acct) ?? { account: acct, amount: 0, units: 0, invoices: 0, ids: new Set<string>() };
       row.amount += Number(l.line_amount ?? 0) * scale;
