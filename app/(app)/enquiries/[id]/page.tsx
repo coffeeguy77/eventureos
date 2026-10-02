@@ -123,7 +123,8 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">
         <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
-          {e.message && (
+          {/* Emailed enquiries already show in the thread below (badged), so only show this for forms and other sources */}
+          {e.message && !(msgs ?? []).length && (
             <Card>
               <CardHeader title="Original enquiry" subtitle={`${ENQUIRY_SOURCE[e.source]} · ${fmtDateTime(e.received_at, tz)}`} />
               <p className="whitespace-pre-line break-words px-5 pb-5 text-[0.8438rem] leading-relaxed text-ink">{e.message}</p>
@@ -131,7 +132,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           )}
           <Card>
             <CardHeader title="Email conversation" subtitle={threads.length ? `${threads.length} thread${threads.length > 1 ? "s" : ""}` : undefined} />
-            <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={gmailConnected} />
+            <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={gmailConnected} originalLabel="Original enquiry" />
           </Card>
           <Card>
             <CardHeader title="Notes" />

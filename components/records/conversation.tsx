@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { ArrowDown, Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,12 @@ import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { draftReplyAction, replySignaturePreview, sendReply, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
 
-export function Conversation({ threads, messages, tz, orgName, gmailConnected }: {
+export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
+  /** Badge on the earliest email (e.g. "Original enquiry"). */
+  originalLabel?: string;
 }) {
+  const [flash, setFlash] = useState(false);
   if (threads.length === 0) {
     return (
       <div className="px-5 pb-5">
@@ -23,10 +26,31 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
       </div>
     );
   }
+  // The very first email across every linked thread is the one that started it all
+  const original = messages.reduce<EmailMessage | null>((a, m) => (!a || m.sent_at < a.sent_at ? m : a), null);
+  const anchor = original ? `email-${original.id}` : null;
+  const jump = () => {
+    if (!anchor) return;
+    document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setFlash(true);
+    setTimeout(() => setFlash(false), 1600);
+  };
+  // Threads with the latest activity first
+  const ordered = [...threads].sort((a, b) => lastAt(b, messages).localeCompare(lastAt(a, messages)));
   return (
-    <div className="space-y-5 px-5 pb-5">
-      {threads.map((t) => {
-        const msgs = messages.filter((m) => m.thread_id === t.id).sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+    <div className="space-y-3 px-5 pb-5">
+      {messages.length > 1 && (
+        <div className="flex items-center justify-between gap-3 text-[0.75rem] text-ink-faint">
+          <span>{messages.length} emails · newest first</span>
+          <button type="button" onClick={jump} className="inline-flex items-center gap-1 font-medium text-brand-600 hover:text-brand-700">
+            <ArrowDown className="h-3.5 w-3.5" />Jump to {originalLabel.toLowerCase()}
+          </button>
+        </div>
+      )}
+      <div className="space-y-5">
+      {ordered.map((t) => {
+        // Newest at the top — scroll down to go back in time
+        const msgs = messages.filter((m) => m.thread_id === t.id).sort((a, b) => b.sent_at.localeCompare(a.sent_at));
         const c = CLASSIFICATION[t.classification];
         return (
           <section key={t.id} className="rounded-xl border border-line">
@@ -36,16 +60,21 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
               {t.state === "needs_reply" && <Badge tone="red" dot>Needs reply</Badge>}
               {t.state === "awaiting_customer" && <Badge tone="neutral">Awaiting customer</Badge>}
             </header>
+            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} />}
             <ol className="divide-y divide-line">
-              {msgs.map((m) => {
+              {msgs.map((m, i) => {
                 const out = m.direction === "outbound";
+                const isOriginal = m.id === original?.id;
                 return (
-                  <li key={m.id} className={cn("flex gap-3 px-4 py-3.5", out && "bg-brand-50/30")}>
+                  <li key={m.id} id={`email-${m.id}`}
+                    className={cn("flex scroll-mt-24 gap-3 px-4 py-3.5 transition-colors duration-700", out && "bg-brand-50/30", isOriginal && flash && "bg-amber-50")}>
                     <Avatar name={out ? orgName : m.from_name ?? m.from_email} size={28} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2">
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <span className={cn("min-w-0 break-words text-[0.8125rem] text-ink", !m.is_read && "font-semibold")}>{m.from_name ?? m.from_email}</span>
                         <span className="min-w-0 break-all text-[0.75rem] text-ink-faint">{out ? `to ${m.to_emails.join(", ")}` : m.from_email}</span>
+                        {i === 0 && msgs.length > 1 && <Badge tone="blue">Latest</Badge>}
+                        {isOriginal && <Badge tone="brand">{originalLabel}</Badge>}
                         <span suppressHydrationWarning className="ml-auto text-[0.7188rem] text-ink-faint" title={fmtDateTime(m.sent_at, tz)}>{relative(m.sent_at)}</span>
                       </div>
                       <p className="mt-1 whitespace-pre-line break-words text-[0.8125rem] leading-relaxed text-ink-muted">{m.body_text ?? m.snippet}</p>
@@ -54,13 +83,17 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected }:
                 );
               })}
             </ol>
-            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} />}
           </section>
         );
       })}
+      </div>
       {!gmailConnected && <NotConnectedHint connected={false} />}
     </div>
   );
+}
+
+function lastAt(t: EmailThread, messages: EmailMessage[]) {
+  return messages.reduce((a, m) => (m.thread_id === t.id && m.sent_at > a ? m.sent_at : a), "");
 }
 
 function ReplyBox({ threadId }: { threadId: string }) {
@@ -93,7 +126,7 @@ function ReplyBox({ threadId }: { threadId: string }) {
 
   if (!open) {
     return (<>
-      <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
         <span className="min-w-0 text-[0.75rem] text-ink-faint">
           {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
         </span>
@@ -108,7 +141,7 @@ function ReplyBox({ threadId }: { threadId: string }) {
     </>);
   }
   return (
-    <form ref={formRef} action={action} className="border-t border-line px-4 py-3">
+    <form ref={formRef} action={action} className="border-b border-line px-4 py-3">
       {draftNotes.length > 0 && (
         <ul className="mb-2 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-900 ring-1 ring-inset ring-amber-100">
           {draftNotes.map((n, i) => <li key={i}>• {n}</li>)}
