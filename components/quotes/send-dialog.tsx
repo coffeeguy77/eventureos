@@ -15,8 +15,10 @@ const EMAIL = /^[^\s@<>"',;:()]+@[^\s@<>"',;:()]+\.[^\s@<>"',;:()]{2,}$/;
 interface Recipient { email: string; name: string | null }
 
 /** "Send quote" pop-up: who it goes to, the message, a live preview of the email, then send (publishing first if needed). */
-export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup }: {
+export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup, replyThreadId }: {
   quoteId: string;
+  /** Start in "reply in this email conversation" mode (e.g. from "Reply with quote" on a thread) */
+  replyThreadId?: string | null;
   /** Already-loaded setup (skips the server round trip) */
   initialSetup?: QuoteSendSetup;
   flushAll: () => Promise<boolean>;
@@ -33,6 +35,8 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
   const [copyMe, setCopyMe] = useState(false);
   const [via, setVia] = useState<"gmail" | "resend">("gmail");
   const [saveContacts, setSaveContacts] = useState(true);
+  const [threadId, setThreadId] = useState<string | null>(null); // null = a new email
+  const [attachPdf, setAttachPdf] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "send" | "publish">(null);
   const [result, setResult] = useState<SendQuoteResult | null>(null);
@@ -45,8 +49,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
   useEffect(() => {
     let live = true;
     if (initialSetup) {
-      setSetup(initialSetup); setTo(initialSetup.defaultTo.map((x) => ({ email: x.email, name: x.name })));
-      setSubject(initialSetup.subject); setMessage(initialSetup.message); setWithSig(Boolean(initialSetup.signature)); setVia(initialSetup.gmail ? "gmail" : "resend");
+      apply(initialSetup);
       return;
     }
     (async () => {
@@ -56,11 +59,18 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
       const r = await quoteSendSetup(quoteId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }));
       if (!live) return;
       if (!r.ok) { setLoadErr(r.error); return; }
-      setSetup(r.data); setTo(r.data.defaultTo.map((x) => ({ email: x.email, name: x.name })));
-      setSubject(r.data.subject); setMessage(r.data.message); setWithSig(Boolean(r.data.signature)); setVia(r.data.gmail ? "gmail" : "resend");
+      apply(r.data);
     })();
     return () => { live = false; };
-  }, [quoteId, initialSetup]);
+    function apply(d: QuoteSendSetup) {
+      setSetup(d);
+      setSubject(d.subject); setMessage(d.message); setWithSig(Boolean(d.signature)); setVia(d.gmail ? "gmail" : "resend");
+      // Reply in the customer's conversation when there is one (the one asked for, else the latest)
+      const t = d.gmail ? d.threads.find((x) => x.id === replyThreadId) ?? d.threads[0] ?? null : null;
+      setThreadId(t?.id ?? null);
+      setTo(t ? [{ email: t.to, name: d.defaultTo.find((x) => x.email === t.to)?.name ?? null }] : d.defaultTo.map((x) => ({ email: x.email, name: x.name })));
+    }
+  }, [quoteId, initialSetup, replyThreadId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); };
@@ -83,6 +93,14 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
 
   const unused = (setup?.suggestions ?? []).filter((s) => !to.some((t) => t.email === s.email));
   const newAddresses = to.filter((t) => !(setup?.suggestions ?? []).some((s) => s.email === t.email));
+  const replying = via === "gmail" && !!threadId;
+  /** Choosing a conversation also addresses the email to the customer in it */
+  function pickThread(id: string) {
+    const t = setup?.threads.find((x) => x.id === id);
+    if (!t) return;
+    setThreadId(id);
+    if (!to.some((r) => r.email === t.to)) setTo((cur) => [{ email: t.to, name: setup?.suggestions.find((x) => x.email === t.to)?.name ?? null }, ...cur]);
+  }
 
   const preview = useMemo(() => {
     if (!setup) return "";
@@ -97,7 +115,11 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
     if (draft.trim()) { add(draft); return; }
     if (!to.length) { setError("Add at least one email address."); input.current?.focus(); return; }
     setError(null); setBusy("send");
-    const r = await sendQuoteEmail(quoteId, { recipients: to, subject, message, includeSignature: withSig, copyMe, saveContacts, via })
+    const reply = via === "gmail" ? threadId : null;
+    const r = await sendQuoteEmail(quoteId, {
+      recipients: to, subject, message, includeSignature: withSig, copyMe, saveContacts, via,
+      replyThreadId: reply, attachPdf: via === "gmail" && attachPdf,
+    })
       .catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection before trying again — it may have sent." }));
     setBusy(null);
     if (!r.ok) { setError(r.error); return; }
@@ -163,6 +185,24 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                       hint={`Sent for ${setup.businessName} from EventureOS's address · replies go to ${setup.senderEmail}`} />
                   </div>
                 </div>
+                {via === "gmail" && setup.threads.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-[0.7812rem] font-medium text-ink">Send as</p>
+                    <div role="radiogroup" aria-label="Send as" className="grid gap-2 sm:grid-cols-2">
+                      <FromOption on={!!threadId} disabled={false} onPick={() => pickThread(threadId ?? setup.threads[0].id)}
+                        title="A reply in their email"
+                        hint={setup.threads.length === 1 ? <>Joins “{setup.threads[0].subject}” · to {setup.threads[0].to}</> : "Joins the conversation you choose below"} />
+                      <FromOption on={!threadId} disabled={false} onPick={() => setThreadId(null)}
+                        title="A new email" hint="Starts a new conversation with your own subject" />
+                    </div>
+                    {threadId && setup.threads.length > 1 && (
+                      <select aria-label="Conversation" value={threadId} onChange={(e) => pickThread(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-base text-ink sm:text-[0.8438rem]">
+                        {setup.threads.map((t) => <option key={t.id} value={t.id}>{t.subject} — {t.to}</option>)}
+                      </select>
+                    )}
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="send-to">To</Label>
                   <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-2 py-1.5 focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-100" onClick={() => input.current?.focus()}>
@@ -194,8 +234,10 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                   {setup.previouslySentTo.length > 0 && <p className="mt-1.5 text-[0.75rem] text-ink-faint">Sent before to {setup.previouslySentTo.join(", ")}.</p>}
                 </div>
                 <div>
-                  <Label htmlFor="send-subject">Subject</Label>
-                  <Input id="send-subject" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} className="text-base sm:text-[0.8438rem]" />
+                  <Label htmlFor="send-subject" hint={replying ? "kept the same so it stays in their conversation" : undefined}>Subject</Label>
+                  {replying
+                    ? <Input id="send-subject" value={setup.threads.find((t) => t.id === threadId)?.subject ?? ""} readOnly className="bg-canvas text-base text-ink-muted sm:text-[0.8438rem]" />
+                    : <Input id="send-subject" value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} className="text-base sm:text-[0.8438rem]" />}
                 </div>
                 <div>
                   <Label htmlFor="send-message" hint="The quote, total and button are added below it">Message</Label>
@@ -207,6 +249,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                   ) : (
                     <p className="text-ink-muted">No email signature yet. <Link href="/my-signature" className="font-medium text-brand-700 hover:underline">Set one up</Link></p>
                   )}
+                  {via === "gmail" && <Check2 on={attachPdf} onChange={setAttachPdf}>Attach a PDF of the quote <span className="text-ink-faint">(with their accept link inside)</span></Check2>}
                   {via === "resend" && <Check2 on={copyMe} onChange={setCopyMe}>Send me a copy ({setup.senderEmail})</Check2>}
                   {newAddresses.length > 0 && <Check2 on={saveContacts} onChange={setSaveContacts}>Save {newAddresses.map((a) => a.email).join(", ")} as {newAddresses.length === 1 ? "a contact" : "contacts"} on this client</Check2>}
                 </div>
@@ -241,7 +284,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                     {busy === "publish" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Publish without emailing
                   </Button>
                 )}
-                <Button type="button" variant="primary" onClick={send} disabled={Boolean(busy) || (via === "gmail" ? !setup.gmail : !setup.resendReady) || !subject.trim() || !message.trim()} className="h-10 sm:h-9">
+                <Button type="button" variant="primary" onClick={send} disabled={Boolean(busy) || (via === "gmail" ? !setup.gmail : !setup.resendReady) || (!replying && !subject.trim()) || !message.trim()} className="h-10 sm:h-9">
                   {busy === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {busy === "send" ? "Sending…" : `Send to ${to.length || "…"} ${to.length === 1 ? "person" : "people"}`}
                 </Button>

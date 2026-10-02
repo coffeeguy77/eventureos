@@ -7,7 +7,7 @@ import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
-import { priceJob, type PackageRules } from "@/lib/pricing/engine";
+import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -642,6 +642,10 @@ export interface PriceJobInput {
   serves: number;
   staff: number;
   includeDelivery: boolean;
+  /** Hire days, for packages whose hire is charged per day. */
+  days?: number;
+  /** Delivery left off but shown as an optional extra the customer can ask for. */
+  offerDelivery?: boolean;
   sectionTitle?: string;
 }
 
@@ -665,15 +669,20 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     if (pErr || sErr) fail(`Couldn't load your price list: ${(pErr ?? sErr)!.message}`);
     if (!pkg) fail("That package no longer exists or is switched off.");
     const services = (svc ?? []).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) }));
-    const serves = checkNumber(input.serves, "Number of serves", 0, 100_000) as number;
-    const staff = checkNumber(input.staff, "Number of staff", 0, 20) as number;
-    const result = priceJob((pkg.rules ?? {}) as PackageRules, services, {
-      start_minutes: hhmm(input.start, "Start time"), end_minutes: hhmm(input.end, "Finish time"),
-      serves, staff_count: staff, include_delivery: !!input.includeDelivery,
+    const rules = (pkg.rules ?? {}) as PackageRules;
+    const timed = needsTimes(rules);
+    const serves = timed ? checkNumber(input.serves, "Number of serves", 0, 100_000) as number : 0;
+    const staff = timed ? checkNumber(input.staff, "Number of staff", 0, 20) as number : 0;
+    const days = checkNumber(input.days ?? 1, "Hire days", 1, 365) as number;
+    const result = priceJob(rules, services, {
+      start_minutes: timed ? hhmm(input.start, "Start time") : 0, end_minutes: timed ? hhmm(input.end, "Finish time") : 0,
+      serves, staff_count: staff, include_delivery: !!input.includeDelivery, days, offer_delivery: !input.includeDelivery && !!input.offerDelivery,
     });
     if (!result.lines.length) fail("Nothing to add — check the times, serves and staff.");
+    const hireSvc = rules.hire ? services.find((x) => x.id === rules.hire!.service_id) : undefined;
+    const daily = isDaily(hireSvc?.unit);
 
-    const title = clean(input.sectionTitle, 120) ?? `${pkg.name} — ${input.start}–${input.end}`;
+    const title = clean(input.sectionTitle, 120) ?? (timed ? `${pkg.name} — ${input.start}–${input.end}` : daily ? `${pkg.name} — ${Math.round(days)} day${Math.round(days) === 1 ? "" : "s"}` : pkg.name);
     const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id)
       .order("position", { ascending: false }).limit(1).maybeSingle();
     const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({
@@ -683,6 +692,7 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     const { data: items, error: iErr } = await supabase.from("quote_items").insert(result.lines.map((l, i) => ({
       organisation_id: org.id, quote_id: q.id, section_id: (sec as QSection).id, name: l.name, description: l.description,
       quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, position: i, service_id: l.service_id,
+      is_optional: !!l.optional,
     }))).select(ITEM_COLS);
     if (iErr) {
       await supabase.from("quote_sections").delete().eq("id", (sec as QSection).id);

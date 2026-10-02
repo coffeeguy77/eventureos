@@ -44,7 +44,8 @@ export interface ExtraStaffRule {
 
 export interface PackageRules {
   hire?: { service_id: string } | null;
-  delivery?: { service_id: string } | null;
+  /** no_delivery_label: when delivery is left off, add a $0 line with this text (e.g. "Free pickup & return"). */
+  delivery?: { service_id: string; no_delivery_label?: string } | null;
   staff?: StaffRule | null;
   per_serve?: { service_id: string } | null;
   extra_staff?: ExtraStaffRule | null;
@@ -57,6 +58,10 @@ export interface PriceInput {
   serves: number;
   staff_count: number;
   include_delivery?: boolean;
+  /** Hire days — used when the hire service is charged per day. */
+  days?: number;
+  /** With delivery left off: still show delivery as an optional extra, so the customer can choose it. */
+  offer_delivery?: boolean;
 }
 
 export interface PriceLine {
@@ -69,6 +74,8 @@ export interface PriceLine {
   tax_rate: number;
   line_total: number; // ex tax
   kind: "hire" | "delivery" | "staff" | "per_serve";
+  /** Shown on the quote but not included in the total */
+  optional?: boolean;
 }
 
 export interface PriceResult {
@@ -84,6 +91,12 @@ export interface PriceResult {
 
 const money = (n: number) => Math.round(n * 100) / 100;
 const roundUp = (h: number, step: number) => (step > 0 ? Math.ceil(h / step - 1e-9) * step : h);
+
+/** A hire charged by the day (unit "day"/"days"/"daily") — quantity is the number of days. */
+export const isDaily = (unit: string | null | undefined) => /^(day|days|daily|per day)$/i.test((unit ?? "").trim());
+
+/** Does this package need service times (staff or per-serve pricing)? Equipment-only hires don't. */
+export const needsTimes = (rules: PackageRules) => !!(rules.staff || rules.per_serve);
 
 export function serviceHours(start: number, end: number): number {
   let mins = end - start;
@@ -130,8 +143,23 @@ export function priceJob(rules: PackageRules, services: PricedService[], input: 
   const staffCount = Math.max(0, Math.floor(input.staff_count));
   const serves = Math.max(0, Math.floor(input.serves));
 
-  if (rules.hire) add(need(rules.hire.service_id, "hire"), 1, "hire");
+  if (rules.hire) {
+    const h = need(rules.hire.service_id, "hire");
+    const days = Math.max(1, Math.round(input.days ?? 1));
+    add(h, isDaily(h.unit) ? days : 1, "hire");
+  }
   if (rules.delivery && input.include_delivery !== false) add(need(rules.delivery.service_id, "delivery"), 1, "delivery");
+  else if (rules.delivery) {
+    const d = need(rules.delivery.service_id, "delivery");
+    if (rules.delivery.no_delivery_label) {
+      lines.push({ service_id: d.id, name: rules.delivery.no_delivery_label, description: null, quantity: 1, unit: null,
+        unit_price: 0, tax_rate: d.tax_rate, line_total: 0, kind: "delivery" });
+    }
+    if (input.offer_delivery) {
+      lines.push({ service_id: d.id, name: d.name, description: d.description, quantity: 1, unit: d.unit,
+        unit_price: d.unit_price, tax_rate: d.tax_rate, line_total: money(d.unit_price), kind: "delivery", optional: true });
+    }
+  }
 
   let paidTotal = 0;
   if (rules.staff && staffCount > 0) {
@@ -161,8 +189,9 @@ export function priceJob(rules: PackageRules, services: PricedService[], input: 
     notes.push(rules.extra_staff?.reason ?? `${suggest} staff recommended for ${serves} serves in ${fmtH(hrs)}.`);
   }
 
-  const subtotal = money(lines.reduce((a, l) => a + l.line_total, 0));
-  const tax_total = money(lines.reduce((a, l) => a + l.line_total * (l.tax_rate / 100), 0));
+  const counted = lines.filter((l) => !l.optional);
+  const subtotal = money(counted.reduce((a, l) => a + l.line_total, 0));
+  const tax_total = money(counted.reduce((a, l) => a + l.line_total * (l.tax_rate / 100), 0));
   return { lines, subtotal, tax_total, total: money(subtotal + tax_total), service_hours: hrs, paid_staff_hours: paidTotal, suggested_staff: suggest, notes };
 }
 

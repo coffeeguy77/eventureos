@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
-import { buildRawMessage, replySubject, sendGmail } from "@/lib/integrations/gmail-send";
+import { buildRawMessage, sendGmail } from "@/lib/integrations/gmail-send";
+import { replyTarget } from "@/lib/email/thread-reply";
 import { ApiError, errMessage } from "@/lib/integrations/runtime";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { ownAddresses } from "@/lib/integrations/gmail-sync";
@@ -23,40 +24,16 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   if (text.length > 20000) return { error: "That message is too long to send from here — use Gmail." };
 
   const { supabase, org, user, profile } = await requireOrg();
-  const { data: thread, error: tErr } = await supabase.from("email_threads")
-    .select("id, subject, gmail_thread_id, customer_id, event_id, enquiry_id, message_count, extracted, participants")
-    .eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
-  if (tErr || !thread) return { error: "That conversation couldn't be found." };
-
   let ctx;
   try { ctx = await buildContext(supabase, "user", org.id, "gmail", user.id); }
   catch { return { error: "Gmail isn't connected. Connect it in Settings → Integrations to reply from EventureOS." }; }
-  const own = ownAddresses(ctx);
   const from = ctx.integration.account_label ?? ctx.integration.external_account_id;
   if (!from) return { error: "The connected Gmail account has no address — reconnect Gmail." };
 
-  const { data: msgs } = await supabase.from("email_messages")
-    .select("direction, from_email, reply_to, rfc_message_id, sent_at")
-    .eq("thread_id", thread.id).order("sent_at", { ascending: true });
-  const all = (msgs ?? []) as { direction: string; from_email: string; reply_to: string | null; rfc_message_id: string | null; sent_at: string }[];
-  const lastInbound = [...all].reverse().find((m) => m.direction === "inbound");
-
-  // Who to reply to: website form notifications → the customer in the form; otherwise Reply-To / sender.
-  const extracted = (thread.extracted ?? {}) as { website_form?: boolean; email?: string | null };
-  let to: string | null = null;
-  if (extracted.website_form) {
-    to = extracted.email ?? null;
-    if (!to && thread.enquiry_id) {
-      const { data: enq } = await supabase.from("enquiries").select("contact_email").eq("id", thread.enquiry_id).maybeSingle();
-      to = enq?.contact_email ?? null;
-    }
-  }
-  to ??= lastInbound?.reply_to ?? lastInbound?.from_email ?? (thread.participants as string[]).find((p) => !own.includes(p)) ?? null;
-  if (!to || own.includes(to.toLowerCase())) return { error: "Couldn't work out who to reply to — reply from Gmail for this one." };
-
-  const references = all.map((m) => m.rfc_message_id).filter((x): x is string => !!x).slice(-10);
-  const inReplyTo = [...all].reverse().find((m) => m.rfc_message_id)?.rfc_message_id ?? null;
-  const subject = replySubject(thread.subject);
+  const target = await replyTarget(supabase, org.id, threadId, ownAddresses(ctx));
+  if (!target) return { error: "That conversation couldn't be found." };
+  const { thread, to, subject, inReplyTo, references } = target;
+  if (!to) return { error: "Couldn't work out who to reply to — reply from Gmail for this one." };
   const fromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;
 
   // The company signature (once published): full on our first signed email in this conversation, short after that.
@@ -157,5 +134,65 @@ export async function replySignaturePreview(threadId: string): Promise<Signature
     return { ok: true, html: sig.html, variant: sig.variant, version: sig.version };
   } catch (e) {
     return { ok: false, reason: "error", message: errMessage(e), canEdit };
+  }
+}
+
+export type QuoteFromThreadState = { ok: true; url: string } | { ok: false; error: string };
+
+/**
+ * "Reply with quote": find (or create) the quote for this conversation's event — converting the enquiry
+ * into an event first if needed — and return the quote builder link, set to send as a reply in this thread.
+ */
+export async function startQuoteFromThread(threadId: string): Promise<QuoteFromThreadState> {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(threadId)) return { ok: false, error: "That conversation link isn't valid." };
+    const { supabase, org, user, profile, role } = await requireOrg();
+    if (role === "staff" || role === "customer") return { ok: false, error: "You don't have permission to create quotes." };
+    const { data: thread } = await supabase.from("email_threads").select("id, subject, event_id, enquiry_id, classification")
+      .eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
+    if (!thread) return { ok: false, error: "That conversation couldn't be found." };
+    if (thread.classification === "spam") return { ok: false, error: "This conversation is marked as spam." };
+
+    // 1. The event: the thread's own, or convert its enquiry (which moves the thread onto the new event)
+    let eventId = thread.event_id as string | null;
+    if (!eventId && thread.enquiry_id) {
+      const { data: enq } = await supabase.from("enquiries").select("event_id").eq("id", thread.enquiry_id).maybeSingle();
+      eventId = enq?.event_id ?? null;
+      if (!eventId) {
+        const { data, error } = await supabase.rpc("convert_enquiry_to_event", { p_enquiry_id: thread.enquiry_id, p_event_name: null });
+        if (error) return { ok: false, error: `Couldn't turn the enquiry into an event: ${error.message}` };
+        eventId = data as string;
+      }
+    }
+    if (!eventId) return { ok: false, error: "Link this email to an enquiry or event first, then you can reply with a quote." };
+
+    // 2. The quote: the newest one still being worked on, or a fresh draft
+    const { data: ev } = await supabase.from("events").select("id, number, name, customer_id, status, enquiry_id").eq("id", eventId).maybeSingle();
+    if (!ev) return { ok: false, error: "The event couldn't be found." };
+    if (ev.status === "cancelled") return { ok: false, error: "This event is cancelled. Reopen it before quoting." };
+    const { data: open } = await supabase.from("quotes").select("id").eq("event_id", ev.id).in("status", ["draft", "sent", "viewed"])
+      .order("created_at", { ascending: false }).limit(1);
+    let quoteId = open?.[0]?.id as string | undefined;
+    if (!quoteId) {
+      const { todayISO, addDaysISO } = await import("@/lib/format");
+      const today = todayISO(org.timezone);
+      const { data: q, error } = await supabase.from("quotes").insert({
+        organisation_id: org.id, event_id: ev.id, customer_id: ev.customer_id, title: ev.name,
+        status: "draft", issue_date: today, expiry_date: addDaysISO(today, 14), created_by: user.id,
+      }).select("id, number").single();
+      if (error) return { ok: false, error: `Couldn't create the quote: ${error.message}` };
+      quoteId = q.id;
+      await supabase.from("quote_sections").insert({ organisation_id: org.id, quote_id: q.id, title: "Services", position: 0 });
+      await logActivity(supabase, {
+        orgId: org.id, actorId: user.id, action: "quote.created", entityType: "quote", entityId: q.id,
+        eventId: ev.id, customerId: ev.customer_id, enquiryId: ev.enquiry_id,
+        summary: `${actorName(profile)} created Quote Q-${q.number} for EV-${ev.number} to reply to “${(thread.subject ?? "").slice(0, 60)}”`,
+      });
+    }
+    if (thread.enquiry_id) revalidatePath(`/enquiries/${thread.enquiry_id}`);
+    revalidatePath(`/events/${ev.id}`);
+    return { ok: true, url: `/quotes/${quoteId}?reply=${thread.id}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
   }
 }

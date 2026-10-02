@@ -43,7 +43,12 @@ export interface ReplyInput {
   text: string;
   /** Optional HTML version. When present the message is multipart/alternative (plain text + HTML). */
   html?: string | null;
+  /** Files to attach — the message becomes multipart/mixed. */
+  attachments?: { filename: string; contentType: string; data: Uint8Array }[];
 }
+
+/** Safe attachment filename for a MIME header (no quotes, slashes or control characters). */
+const fileName = (s: string) => clean(s).replace(/["\/]+/g, "-").slice(0, 120) || "attachment";
 
 const b64body = (s: string) => Buffer.from(s.replace(/\r?\n/g, "\r\n"), "utf8").toString("base64").replace(/.{76}/g, "$&\r\n");
 
@@ -60,7 +65,36 @@ export function buildRawMessage(m: ReplyInput, boundary = `eos-${crypto.randomUU
     "MIME-Version: 1.0",
   ];
   let out: string;
-  if (m.html) {
+  const files = m.attachments ?? [];
+  if (files.length) {
+    // multipart/mixed: [the readable body] + each file
+    const mixed = `${clean(boundary)}-mix`;
+    const alt = clean(boundary);
+    const bodyPart = m.html
+      ? [`Content-Type: multipart/alternative; boundary="${alt}"`, "", `--${alt}`, 'Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", b64body(m.text),
+         `--${alt}`, 'Content-Type: text/html; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", b64body(m.html), `--${alt}--`]
+      : ['Content-Type: text/plain; charset="UTF-8"', "Content-Transfer-Encoding: base64", "", b64body(m.text)];
+    out = [
+      ...lines,
+      `Content-Type: multipart/mixed; boundary="${mixed}"`,
+      "",
+      `--${mixed}`,
+      ...bodyPart,
+      ...files.flatMap((f) => {
+        const n = encodeHeader(fileName(f.filename));
+        return [
+          `--${mixed}`,
+          `Content-Type: ${clean(f.contentType)}; name="${n}"`,
+          `Content-Disposition: attachment; filename="${n}"`,
+          "Content-Transfer-Encoding: base64",
+          "",
+          Buffer.from(f.data).toString("base64").replace(/.{76}/g, "$&\r\n"),
+        ];
+      }),
+      `--${mixed}--`,
+      "",
+    ].join("\r\n");
+  } else if (m.html) {
     const b = clean(boundary);
     out = [
       ...lines,

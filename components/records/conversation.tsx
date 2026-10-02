@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ArrowDown, Sparkles } from "lucide-react";
+import { ArrowDown, FileText, Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { draftReplyAction, replySignaturePreview, sendReply, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { draftReplyAction, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { useRouter } from "next/navigation";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
@@ -104,6 +105,14 @@ function ReplyBox({ threadId }: { threadId: string }) {
   const [drafting, setDrafting] = useState(false);
   const [draftNotes, setDraftNotes] = useState<string[]>([]);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const router = useRouter();
+  const [quoting, setQuoting] = useState(false);
+  async function replyWithQuote() {
+    setQuoting(true); setDraftError(null);
+    const r = await startQuoteFromThread(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
+    if (!r.ok) { setQuoting(false); setDraftError(r.error); return; }
+    router.push(r.url);
+  }
   useEffect(() => {
     if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); setSig(null); }
   }, [state]);
@@ -130,7 +139,10 @@ function ReplyBox({ threadId }: { threadId: string }) {
         <span className="min-w-0 text-[0.75rem] text-ink-faint">
           {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
         </span>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={replyWithQuote} disabled={quoting}>
+            <FileText className="h-3.5 w-3.5 text-brand-600" />{quoting ? "Opening…" : "Reply with quote"}
+          </Button>
           <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={draft} disabled={drafting}>
             <Sparkles className="h-3.5 w-3.5 text-brand-600" />{drafting ? "Drafting…" : "Draft with AI"}
           </Button>

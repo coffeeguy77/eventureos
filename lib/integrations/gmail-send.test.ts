@@ -19,4 +19,15 @@ check("html part (utf-8)", part(multi, "text/html") === "<p>Hi Emma</p><table><t
 check("closing boundary", multi.includes("--B1--"));
 check("CRLF only", !/[^\r]\n/.test(multi));
 check("header injection stripped", !dec(buildRawMessage({ ...base, subject: "Hi\r\nBcc: x@y.com" })).includes("\r\nBcc:"));
+
+const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0, 255]);
+const att = dec(buildRawMessage({ ...base, html: "<p>Hi</p>", attachments: [{ filename: 'Quote "Q-1005".pdf', contentType: "application/pdf", data: pdf }] }, "B2"));
+check("mixed wraps alternative", att.includes('Content-Type: multipart/mixed; boundary="B2-mix"') && att.includes('Content-Type: multipart/alternative; boundary="B2"'));
+const attPart = att.split("\r\n--B2-mix").find((p) => p.includes("application/pdf"));
+check("attachment headers", !!attPart && attPart.includes('Content-Disposition: attachment; filename="Quote -Q-1005-.pdf"'), attPart?.slice(0, 200));
+check("attachment bytes intact", !!attPart && Buffer.from(attPart.split("\r\n\r\n")[1].replace(/\r\n|--B2-mix--/g, ""), "base64").equals(Buffer.from(pdf)));
+check("html still readable", att.includes("--B2--") && att.includes("text/html"));
+check("mixed CRLF only", !/[^\r]\n/.test(att));
+const attPlain = dec(buildRawMessage({ ...base, attachments: [{ filename: "a.pdf", contentType: "application/pdf", data: pdf }] }, "B3"));
+check("plain + attachment", attPlain.includes("multipart/mixed") && !attPlain.includes("multipart/alternative") && attPlain.includes('filename="a.pdf"'));
 if (fail) process.exit(1);

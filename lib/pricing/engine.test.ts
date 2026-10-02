@@ -32,4 +32,19 @@ eq("all day 1 barista", r.suggested_staff, 1); eq("all day hrs", r.paid_staff_ho
 // Rounding up to half hours: 3h40 service + 30 min = 4h10 → 4.5
 r = priceJob(cart, services, { start_minutes: 600, end_minutes: 820, serves: 0, staff_count: 1 });
 eq("cart 4h10 → 4.5h", r.paid_staff_hours, 4.5);
+
+// Equipment-only daily hire (DIY): days × daily rate, delivery optional, free pickup line when off
+const eqSvcs = [...services, S("EquipHire", 100, "day"), S("EquipDelivery", 250)];
+const equip: PackageRules = { hire: { service_id: "EquipHire" }, delivery: { service_id: "EquipDelivery", no_delivery_label: "Free pickup & return" } };
+r = priceJob(equip, eqSvcs, { start_minutes: 0, end_minutes: 0, serves: 0, staff_count: 0, days: 3, include_delivery: true });
+eq("equip 3 days qty", r.lines[0].quantity, 3); eq("equip 3 days + delivery", r.subtotal, 550);
+r = priceJob(equip, eqSvcs, { start_minutes: 0, end_minutes: 0, serves: 0, staff_count: 0, days: 3, include_delivery: false });
+eq("equip pickup line", r.lines.map((l) => [l.name, l.line_total]), [["EquipHire", 300], ["Free pickup & return", 0]]);
+eq("equip pickup total", r.total, 330);
+r = priceJob(equip, eqSvcs, { start_minutes: 0, end_minutes: 0, serves: 0, staff_count: 0, days: 2, include_delivery: false, offer_delivery: true });
+eq("customer choice lines", r.lines.map((l) => [l.name, l.line_total, !!l.optional]), [["EquipHire", 200, false], ["Free pickup & return", 0, false], ["EquipDelivery", 250, true]]);
+eq("customer choice total excludes optional", r.total, 220);
+// Non-daily hire ignores days
+r = priceJob(cart, services, { start_minutes: 600, end_minutes: 780, serves: 0, staff_count: 1, days: 3 });
+eq("cart hire stays 1", r.lines[0].quantity, 1);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }

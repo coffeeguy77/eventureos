@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, Loader2, Plus, Send, X } from "lucide-react";
+import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, Loader2, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection,
@@ -53,6 +53,8 @@ export interface BuilderProps {
   nextAction: React.ReactNode;
   history: React.ReactNode;
   pricing: { packages: PricingPackage[]; services: (PricedService & { category: string | null })[]; defaults: { start: string | null; end: string | null; guests: number | null } };
+  /** Opened from "Reply with quote" on an email: sending replies in that conversation. */
+  replyTo?: { threadId: string; subject: string; backHref: string } | null;
 }
 
 type Panel = null | "publish" | "respond";
@@ -432,7 +434,7 @@ export function QuoteBuilder(p: BuilderProps) {
               {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Preview as customer
             </Button>
             <Button variant="primary" onClick={() => setPanel(panel === "publish" ? null : "publish")} aria-expanded={panel === "publish"} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
-              <Send className="h-4 w-4" />{cv && !dirty ? "Email quote" : cv ? "Send update" : "Send quote"}
+              {p.replyTo ? <><Reply className="h-4 w-4" />Send as reply</> : <><Send className="h-4 w-4" />{cv && !dirty ? "Email quote" : cv ? "Send update" : "Send quote"}</>}
             </Button>
           </div>
         </div>
@@ -462,8 +464,15 @@ export function QuoteBuilder(p: BuilderProps) {
           <DuplicateButton quoteId={quote.id} onError={(m) => showToast({ message: m, tone: "error" })} />
         </div>
 
+        {p.replyTo && (
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-brand-50/70 px-4 py-3 text-[0.8125rem] text-brand-900 ring-1 ring-inset ring-brand-200">
+            <Reply className="h-4 w-4 shrink-0 text-brand-600" />
+            <span className="min-w-0 flex-1">Replying to <b className="font-semibold">“{p.replyTo.subject}”</b>. Build the quote, then press <b>Send as reply</b> — it goes into that email conversation with a PDF of the quote attached.</span>
+            <Link href={p.replyTo.backHref} className="shrink-0 font-medium text-brand-700 hover:underline">Back to the email</Link>
+          </div>
+        )}
         {panel === "publish" && (
-          <SendQuoteDialog quoteId={quote.id} flushAll={flushAll} onClose={() => setPanel(null)}
+          <SendQuoteDialog quoteId={quote.id} flushAll={flushAll} onClose={() => setPanel(null)} replyThreadId={p.replyTo?.threadId ?? null}
             onDone={(m) => { setPanel(null); setLocalDirty(false); router.refresh(); showToast({ message: m, tone: "ok" }, 7000); }} />
         )}
         {panel === "respond" && cv && (

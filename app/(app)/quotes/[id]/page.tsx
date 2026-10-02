@@ -30,7 +30,7 @@ interface QuoteRow {
 
 const VERSION_COLS = "id, version_number, status, subtotal, tax_total, total, published_at, published_by, viewed_at, responded_at, accepted_by_name, acceptance_ip, decline_reason";
 
-export default async function QuotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ version?: string }> }) {
+export default async function QuotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ version?: string; reply?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -202,9 +202,21 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   }
 
   // ------------------------------------------------------------------ editable draft
+  // Opened from "Reply with quote" on an email conversation linked to this event (or its enquiry)
+  let replyTo: { threadId: string; subject: string; backHref: string } | null = null;
+  if (sp.reply && /^[0-9a-f-]{36}$/i.test(sp.reply)) {
+    const { data: ev } = await supabase.from("events").select("enquiry_id").eq("id", q.event.id).maybeSingle();
+    const { data: t } = await supabase.from("email_threads").select("id, subject, event_id, enquiry_id")
+      .eq("organisation_id", org.id).eq("id", sp.reply).maybeSingle();
+    if (t && (t.event_id === q.event.id || (ev?.enquiry_id && t.enquiry_id === ev.enquiry_id))) {
+      replyTo = { threadId: t.id, subject: t.subject ?? "(no subject)", backHref: t.enquiry_id ? `/enquiries/${t.enquiry_id}` : `/events/${q.event.id}` };
+    }
+  }
+
   return (
     <QuoteBuilder
       key={q.id}
+      replyTo={replyTo}
       quote={{
         id: q.id, number: q.number, title: q.title, status: q.status, issue_date: q.issue_date, expiry_date: q.expiry_date,
         notes: q.notes, terms: q.terms, has_unpublished_changes: q.has_unpublished_changes, current_version_id: q.current_version_id,

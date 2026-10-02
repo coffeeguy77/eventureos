@@ -180,6 +180,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
   const r = initial.rules;
   const [hire, setHire] = useState(r.hire?.service_id ?? "");
   const [delivery, setDelivery] = useState(r.delivery?.service_id ?? "");
+  const [noDelivery, setNoDelivery] = useState(r.delivery?.no_delivery_label ?? "");
   const [perServe, setPerServe] = useState(r.per_serve?.service_id ?? "");
   const [staffSvc, setStaffSvc] = useState(r.staff?.service_id ?? "");
   const [label, setLabel] = useState(r.staff?.label ?? "barista");
@@ -200,7 +201,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
     e.preventDefault(); setPending(true); setError(null);
     const rules: PackageRules = {
       hire: hire ? { service_id: hire } : null,
-      delivery: delivery ? { service_id: delivery } : null,
+      delivery: delivery ? { service_id: delivery, ...(noDelivery.trim() ? { no_delivery_label: noDelivery.trim().slice(0, 120) } : {}) } : null,
       per_serve: perServe ? { service_id: perServe } : null,
       staff: staffSvc ? {
         service_id: staffSvc, label: label.trim() || "staff", setup_minutes: Number(setup) || 0, packdown_minutes: Number(packdown) || 0,
@@ -236,6 +237,12 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
         <ServicePick id="pk-del" label="Delivery / setup" value={delivery} onChange={setDelivery} services={services} optional="None (no delivery charge)" />
         <ServicePick id="pk-serve" label="Per serve" value={perServe} onChange={setPerServe} services={services} />
       </div>
+      {delivery && (
+        <div className="sm:max-w-md">
+          <Label htmlFor="pk-nodel" hint="optional — shown as a $0 line">When delivery is left off, show</Label>
+          <input id="pk-nodel" value={noDelivery} onChange={(e) => setNoDelivery(e.target.value)} placeholder="e.g. Free pickup & return" className={inputClass} maxLength={120} />
+        </div>
+      )}
       <fieldset className="rounded-lg p-3 ring-1 ring-inset ring-line">
         <legend className="px-1 text-[0.7812rem] font-semibold text-ink">Staff</legend>
         <div className="grid gap-3 sm:grid-cols-4">

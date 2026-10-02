@@ -12,7 +12,11 @@ import { fmtDate, money } from "@/lib/format";
 import { publishQuote } from "./actions";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { buildRawMessage, sendGmail } from "@/lib/integrations/gmail-send";
-import { errMessage } from "@/lib/integrations/runtime";
+import { ownAddresses } from "@/lib/integrations/gmail-sync";
+import { replyTarget } from "@/lib/email/thread-reply";
+import { buildQuotePdf } from "@/lib/quotes/pdf";
+import type { QuoteSnapshotData } from "@/components/quotes/types";
+import { ApiError, errMessage } from "@/lib/integrations/runtime";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActionResult } from "@/components/quotes/types";
 
@@ -46,6 +50,8 @@ export interface QuoteSendSetup {
   resendReady: boolean;
   deliveryTracking: boolean;
   previouslySentTo: string[];
+  /** Email conversations with this customer that the quote can be sent into as a reply (newest first). */
+  threads: { id: string; subject: string; to: string; lastAt: string | null }[];
 }
 
 async function load(quoteId: string) {
@@ -72,6 +78,31 @@ async function gmailSender(supabase: SupabaseClient, orgId: string, userId: stri
     const ctx = await buildContext(supabase, "user", orgId, "gmail", userId);
     const address = (ctx.integration.account_label ?? ctx.integration.external_account_id ?? "").toLowerCase();
     return address && EMAIL.test(address) ? { ctx, address } : null;
+  } catch { return null; }
+}
+
+/** The event's (and its original enquiry's) email conversations that a quote can be sent into as a reply. */
+async function replyThreads(supabase: SupabaseClient, orgId: string, q: { event_id: string }, own: string[]) {
+  const { data: ev } = await supabase.from("events").select("enquiry_id").eq("id", q.event_id).maybeSingle();
+  const filter = [`event_id.eq.${q.event_id}`, ev?.enquiry_id ? `enquiry_id.eq.${ev.enquiry_id}` : null].filter(Boolean).join(",");
+  const { data } = await supabase.from("email_threads").select("id, last_message_at, classification")
+    .eq("organisation_id", orgId).or(filter).neq("classification", "spam").order("last_message_at", { ascending: false }).limit(5);
+  const out: QuoteSendSetup["threads"] = [];
+  for (const t of (data ?? []) as { id: string; last_message_at: string | null }[]) {
+    const r = await replyTarget(supabase, orgId, t.id, own);
+    if (r?.to) out.push({ id: t.id, subject: r.subject, to: r.to, lastAt: t.last_message_at });
+  }
+  return out;
+}
+
+/** The logo for the PDF (PNG or JPEG only; anything else, or a slow server, means no logo). */
+async function logoBytes(url: string | null | undefined): Promise<Uint8Array | null> {
+  if (!url || !/^https:\/\//.test(url)) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const b = new Uint8Array(await res.arrayBuffer());
+    return b.length < 3_000_000 && ((b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0xff && b[1] === 0xd8)) ? b : null;
   } catch { return null; }
 }
 
@@ -117,6 +148,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
     }
 
     const gm = await gmailSender(supabase, org.id, user.id);
+    const threads = gm ? await replyThreads(supabase, org.id, q, ownAddresses(gm.ctx)) : [];
     let signature: QuoteSendSetup["signature"] = null;
     try { const s = await signatureForSend(supabase, org.id, user.id, null); if (s) signature = { html: s.html, text: s.text }; } catch { /* no signature */ }
 
@@ -154,6 +186,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
         resendReady: emailConfigured(),
         deliveryTracking: Boolean(process.env.RESEND_WEBHOOK_SECRET?.trim()),
         previouslySentTo: [...new Set(((prev ?? []) as { email: string }[]).map((r) => r.email))],
+        threads,
       },
     };
   } catch (e) {
@@ -170,6 +203,10 @@ export interface SendQuoteInput {
   saveContacts: boolean;
   /** "gmail" = from the connected Gmail account (preferred); "resend" = from EventureOS's address */
   via: "gmail" | "resend";
+  /** Send as a reply in this email conversation (Gmail only). */
+  replyThreadId?: string | null;
+  /** Attach a PDF of the quote (Gmail only). */
+  attachPdf?: boolean;
 }
 export interface SendQuoteResult { versionNumber: number; published: boolean; sent: string[]; failed: { email: string; error: string }[] }
 
@@ -206,6 +243,17 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
     // Check Gmail before anything is published
     const gm = via === "gmail" ? await gmailSender(supabase, org.id, user.id) : null;
     if (via === "gmail" && !gm) throw new Error("Gmail isn't connected (or needs reconnecting in Settings → Integrations). Choose “EventureOS” to send without it.");
+    // Replying into an email conversation: the thread must belong to this quote's event (or its enquiry)
+    let target: Awaited<ReturnType<typeof replyTarget>> = null;
+    if (input.replyThreadId) {
+      if (!gm) throw new Error("Replying in an email conversation needs Gmail connected.");
+      if (!UUID.test(input.replyThreadId)) throw new Error("That email conversation isn't valid.");
+      const allowed = await replyThreads(supabase, org.id, q, ownAddresses(gm.ctx));
+      if (!allowed.some((t) => t.id === input.replyThreadId)) throw new Error("That email conversation isn't linked to this quote's event.");
+      target = await replyTarget(supabase, org.id, input.replyThreadId, ownAddresses(gm.ctx));
+      if (!target) throw new Error("That email conversation couldn't be found.");
+    }
+    const sendSubject = target ? target.subject : subject;
 
     // 1. Publish if needed (publishQuote runs all the checks: items, names, expiry)
     let published = false;
@@ -236,7 +284,7 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
     // 3. Record the send and each recipient (with their own link)
     const { data: send, error: sErr } = await supabase.from("email_sends").insert({
       organisation_id: org.id, kind: "quote", quote_id: q.id, quote_version_id: cur.id, version_number: cur.version_number,
-      subject, message, from_name: gm ? gmailFromName : org.name, reply_to: replyTo, signature_version: sig?.version ?? null, sent_by: user.id,
+      subject: sendSubject, message, from_name: gm ? gmailFromName : org.name, reply_to: replyTo, signature_version: sig?.version ?? null, sent_by: user.id,
       channel: via, from_email: gm?.address ?? null,
     }).select("id").single();
     if (sErr) throw new Error(`Couldn't record the email: ${sErr.message}`);
@@ -260,6 +308,21 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       validUntil: (qv as { expiry_date: string | null }).expiry_date ? fmtDate((qv as { expiry_date: string }).expiry_date, "long") : null,
       message, signatureHtml: sig?.html ?? null, signatureText: sig?.text ?? null,
     };
+    // PDF attachment (Gmail only): the published version, with each person's own accept link
+    let pdfFor: ((url: string) => Promise<Uint8Array>) | null = null;
+    if (gm && input.attachPdf) {
+      const { data: v } = await supabase.from("quote_versions").select("snapshot").eq("id", cur.id).single();
+      const logo = await logoBytes(orgRow?.logo_url);
+      const snap = (v?.snapshot ?? { sections: [] }) as QuoteSnapshotData;
+      pdfFor = (url: string) => buildQuotePdf({
+        snap, orgName: org.name, quoteNumber: q.number, versionNumber: cur.version_number, customerName: q.customer?.name ?? null,
+        eventLabel: common.eventLine, currency: org.currency, brand: orgRow?.brand_colour, logo, acceptUrl: url,
+      });
+    }
+    const pdfName = `Quote Q-${q.number} - ${org.name}.pdf`;
+    const threadMessages: { gmail_message_id: string; rfc_message_id: string | null; to: string; text: string; html: string }[] = [];
+    let gmailThreadId = target?.thread.gmail_thread_id ?? null;
+
     const sent: string[] = [];
     const failed: { email: string; error: string }[] = [];
     for (const r of (inserted ?? []) as { id: string; email: string; role: "to" | "copy"; token: string }[]) {
@@ -269,12 +332,29 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       });
       try {
         if (gm) {
-          // One message per person (each link is personal), each starting its own Gmail conversation
-          const raw = buildRawMessage({ from: gm.address, fromName: gmailFromName, to: [r.email], subject, text: m.text, html: m.html });
-          const res = await sendGmail(gm.ctx, raw, null);
+          const url = `${base}/q/${r.token}`;
+          const attachments = pdfFor ? [{ filename: pdfName, contentType: "application/pdf", data: await pdfFor(url) }] : undefined;
+          // One message per person (each link is personal). As a reply they join the customer's conversation;
+          // otherwise each starts its own.
+          const raw = buildRawMessage({
+            from: gm.address, fromName: gmailFromName, to: [r.email], subject: sendSubject, text: m.text, html: m.html, attachments,
+            ...(target ? { inReplyTo: target.inReplyTo, references: target.references } : {}),
+          });
+          let res: Awaited<ReturnType<typeof sendGmail>>;
+          try {
+            res = await sendGmail(gm.ctx, raw, target ? gmailThreadId : null);
+          } catch (e) {
+            // The conversation may not exist in this Gmail account → start a new one rather than fail
+            if (target && gmailThreadId && e instanceof ApiError && (e.status === 404 || e.status === 400)) res = await sendGmail(gm.ctx, raw, null);
+            else throw e;
+          }
+          if (target) {
+            gmailThreadId = res.threadId;
+            threadMessages.push({ gmail_message_id: res.id, rfc_message_id: res.messageId ?? null, to: r.email, text: m.text, html: m.html });
+          }
           await supabase.from("email_send_recipients").update({ gmail_message_id: res.id, gmail_thread_id: res.threadId, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
         } else {
-          const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${subject}` : subject, html: m.html, text: m.text, replyTo, fromName: org.name });
+          const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${sendSubject}` : sendSubject, html: m.html, text: m.text, replyTo, fromName: org.name });
           await supabase.from("email_send_recipients").update({ resend_id: res.id, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
         }
         if (r.role === "to") sent.push(r.email);
@@ -282,6 +362,27 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
         const msg = (gm ? `Gmail: ${errMessage(e)}` : e instanceof Error ? e.message : String(e)).slice(0, 500);
         await supabase.from("email_send_recipients").update({ status: "failed", status_at: new Date().toISOString(), error: msg }).eq("id", r.id);
         failed.push({ email: r.email, error: msg });
+      }
+    }
+
+    // 4b. Show the quote email in the conversation (Gmail sync would add it later anyway; this is immediate)
+    if (target && threadMessages.length) {
+      const now = new Date().toISOString();
+      await supabase.from("email_messages").insert(threadMessages.map((t) => ({
+        organisation_id: org.id, thread_id: target!.thread.id, gmail_message_id: t.gmail_message_id, rfc_message_id: t.rfc_message_id,
+        direction: "outbound", from_email: gm!.address, from_name: gmailFromName, to_emails: [t.to], subject: sendSubject,
+        snippet: message.replace(/\s+/g, " ").slice(0, 280), body_text: t.text, body_html: t.html, signature_version: sig?.version ?? null,
+        sent_at: now, is_read: true, sent_by: user.id,
+      })));
+      await supabase.from("email_threads").update({
+        gmail_thread_id: gmailThreadId, state: "awaiting_customer", last_message_at: now, message_count: target.thread.message_count + threadMessages.length,
+      }).eq("id", target.thread.id);
+      if (target.thread.enquiry_id) {
+        const { data: enq } = await supabase.from("enquiries").select("status").eq("id", target.thread.enquiry_id).maybeSingle();
+        const patch: Record<string, unknown> = { last_contact_at: now };
+        if (enq?.status === "new" || enq?.status === "needs_review") patch.status = "contacted";
+        await supabase.from("enquiries").update(patch).eq("id", target.thread.enquiry_id).eq("organisation_id", org.id);
+        revalidatePath(`/enquiries/${target.thread.enquiry_id}`);
       }
     }
 
@@ -301,7 +402,7 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       orgId: org.id, actorId: user.id, action: "quote.emailed", entityType: "quote", entityId: q.id,
       customerId: q.customer_id, eventId: q.event_id,
       summary: sent.length
-        ? `${actorName(profile)} emailed Quote Q-${q.number} (version ${cur.version_number}) to ${sent.join(", ")}${gm ? ` from ${gm.address}` : ""}${failed.length ? ` — failed for ${failed.map((f) => f.email).join(", ")}` : ""}`
+        ? `${actorName(profile)} emailed Quote Q-${q.number} (version ${cur.version_number}) to ${sent.join(", ")}${gm ? ` from ${gm.address}` : ""}${target ? ` as a reply to “${(target.thread.subject ?? "").slice(0, 60)}”` : ""}${pdfFor ? " with the PDF attached" : ""}${failed.length ? ` — failed for ${failed.map((f) => f.email).join(", ")}` : ""}`
         : `${actorName(profile)} tried to email Quote Q-${q.number} — it failed for ${failed.map((f) => f.email).join(", ")}`,
       metadata: { send_id: send.id, version: cur.version_number },
     });
