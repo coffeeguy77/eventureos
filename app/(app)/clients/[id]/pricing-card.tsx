@@ -69,10 +69,10 @@ export function CustomerPricingCard({ customerId, rows, services, currency, canE
           </select>
           {svc && (<>
             <div className="flex flex-wrap items-center gap-2">
-              <div role="radiogroup" aria-label="Kind of discount" className="inline-flex rounded-lg bg-white p-0.5 ring-1 ring-inset ring-line text-[0.75rem] font-medium">
+              <div role="radiogroup" aria-label="Kind of discount" className="inline-flex rounded-lg bg-zinc-100 p-0.5 text-[0.75rem] font-medium">
                 {([["percent", "% off"], ["price", "Special price"]] as const).map(([k, l]) => (
                   <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
-                    className={cn("h-8 rounded-md px-3", kind === k ? "bg-brand-50 text-brand-800" : "text-ink-muted hover:text-ink")}>{l}</button>
+                    className={cn("h-8 rounded-md px-3", kind === k ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>{l}</button>
                 ))}
               </div>
               <div className="relative w-28">
