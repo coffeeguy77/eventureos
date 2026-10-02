@@ -29,7 +29,8 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
     [accounts, items] = await Promise.all([revenueAccounts(ctx), itemDefaults(ctx)]);
   } catch (e) { problem = errMessage(e); }
 
-  const cands = problem ? [] : await recodeCandidates(supabase, org.id, map);
+  let cands: Awaited<ReturnType<typeof recodeCandidates>> = [];
+  if (!problem) { try { cands = await recodeCandidates(supabase, org.id, map); } catch (e) { problem = errMessage(e); } }
   const byItem = new Map<string, RecodePreview["items"][number]>();
   for (const c of cands) for (const l of c.lines) {
     const k = `${l.item}|${l.from ?? ""}`;

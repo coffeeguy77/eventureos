@@ -93,7 +93,7 @@ export async function recodeCandidates(db: SupabaseClient, orgId: string, map: R
   for (const code of items) {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await db.from("invoices").select("id, number, status, issue_date, xero_invoice_id, line_items")
-        .eq("organisation_id", orgId).not("xero_invoice_id", "is", null).neq("status", "void").contains("line_items", [{ item_code: code }])
+        .eq("organisation_id", orgId).not("xero_invoice_id", "is", null).neq("status", "void").contains("line_items", JSON.stringify([{ item_code: code }]))
         .order("issue_date", { ascending: false }).range(from, from + 999);
       if (error) throw new Error(`Couldn't read invoices: ${error.message}`);
       for (const r of (data ?? []) as LocalInvoice[]) byId.set(r.id, r);
