@@ -4,7 +4,7 @@ import { requireOrg } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { buildContext } from "@/lib/integrations/sync-runner";
-import { errMessage } from "@/lib/integrations/runtime";
+import { errMessage, saveIntegrationSettings } from "@/lib/integrations/runtime";
 import { cleanRecodeMap } from "@/lib/integrations/xero-recode-plan";
 import { itemDefaults, recodeCandidates, revenueAccounts } from "@/lib/integrations/xero-recode";
 import { RecodeTool, type RecodePreview } from "./recode-tool";
@@ -27,6 +27,11 @@ export default async function RecodePage({ params }: { params: Promise<{ provide
     const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
     map = cleanRecodeMap(ctx.integration.settings?.recode_map);
     [accounts, items] = await Promise.all([revenueAccounts(ctx), itemDefaults(ctx)]);
+    // Keep the account names for the dashboard's revenue figures (so it never has to call Xero)
+    const names = Object.fromEntries(accounts.map((a) => [a.code, a.name]));
+    if (JSON.stringify(names) !== JSON.stringify(ctx.integration.settings?.account_names ?? {})) {
+      await saveIntegrationSettings(ctx, { account_names: names }).catch(() => undefined);
+    }
   } catch (e) { problem = errMessage(e); }
 
   let cands: Awaited<ReturnType<typeof recodeCandidates>> = [];

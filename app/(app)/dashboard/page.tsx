@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { requireOrg, getMembers } from "@/lib/context";
+import { canManage, requireOrg, getMembers } from "@/lib/context";
+import { loadRevenueStreams } from "@/lib/revenue/load";
+import { RevenueStreams } from "@/components/dashboard/revenue-streams";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,7 +28,7 @@ function must<T>(res: { data: T | null; error: { message: string } | null }, wha
 }
 
 export default async function DashboardPage() {
-  const { supabase, org, profile } = await requireOrg();
+  const { supabase, org, profile, role } = await requireOrg();
   const tz = org.timezone;
   const today = todayISO(tz);
   const in7 = addDaysISO(today, 6);
@@ -34,6 +36,9 @@ export default async function DashboardPage() {
   const month = monthBoundsUTC(tz);
   const nowIso = new Date().toISOString();
   const cur = org.currency;
+  // Revenue by stream (owners and managers only) — never let it break the dashboard
+  const fyStart = Number((org.settings as Record<string, unknown> | null)?.fy_start_month) || 7;
+  const streams = canManage(role) ? await loadRevenueStreams(supabase, org.id, today, fyStart).catch(() => null) : null;
 
   const [eventsRes, enquiriesRes, quotesRes, invoicesRes, paymentsRes, threadsRes, tasksRes, activityRes, calRes, messagesRes, members, confirmedRes, overdueEventsRes] =
     await Promise.all([
@@ -288,6 +293,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-6">
+          {streams && <RevenueStreams data={streams} currency={cur} />}
           <Card>
             <CardHeader title="Tasks requiring attention" subtitle={`${tasks.filter((t) => t.due_at && t.due_at < nowIso).length} overdue`} />
             {tasks.length === 0 ? <EmptyState title="No open tasks" /> : (
