@@ -195,7 +195,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-6">
             {snap ? (
-              <QuoteDocument snap={snap} currency={cur} orgName={org.name} quoteNumber={q.number} customerName={q.customer.name}
+              <QuoteDocument snap={snap} currency={cur} orgName={org.name} logoUrl={org.logo_url} quoteNumber={q.number} customerName={q.customer.name}
                 eventLabel={`${q.event.name}${q.event.event_date ? ` · ${fmtDate(q.event.event_date, "long")}` : ""}`}
                 versionLabel={shown ? String(shown.version_number) : undefined} />
             ) : (
@@ -260,6 +260,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       docs={docs}
       orgId={org.id}
       orgName={org.name}
+      orgLogo={org.logo_url}
       currency={cur}
       tz={tz}
       today={today}

@@ -46,6 +46,8 @@ export interface BuilderProps {
   docs: QuoteDoc[];
   orgId: string;
   orgName: string;
+  /** Branding logo, shown on the customer preview */
+  orgLogo?: string | null;
   currency: string;
   tz: string;
   today: string;
@@ -702,7 +704,7 @@ export function QuoteBuilder(p: BuilderProps) {
       {/* ------------------------------------------------------------ overlays */}
       {preview && (
         <PreviewModal onClose={() => setPreview(null)}>
-          <QuoteDocument snap={preview} currency={currency} orgName={p.orgName} quoteNumber={quote.number} customerName={p.customer.name}
+          <QuoteDocument snap={preview} currency={currency} orgName={p.orgName} logoUrl={p.orgLogo} quoteNumber={quote.number} customerName={p.customer.name}
             eventLabel={`${p.event.name}${p.event.event_date ? ` · ${fmtDate(p.event.event_date, "long")}` : ""}`}
             versionLabel={`${nextVersion} (preview)`} />
         </PreviewModal>

@@ -7,10 +7,12 @@ import type { QuoteSnapshotData } from "./types";
  * The quote exactly as the customer sees it. Renders a build_quote_snapshot() / quote_versions.snapshot
  * payload, so the preview, the version history and the portal all show the same thing.
  */
-export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, customerName, eventLabel, versionLabel, compact = false }: {
+export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteNumber, customerName, eventLabel, versionLabel, compact = false }: {
   snap: QuoteSnapshotData;
   currency?: string;
   orgName?: string;
+  /** The business's logo (from Branding) — shown instead of the name when set */
+  logoUrl?: string | null;
   quoteNumber?: number;
   customerName?: string;
   eventLabel?: string;
@@ -28,7 +30,10 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, quoteNumber, cu
         <header className={cn(pad, "border-b border-line pb-5 pt-6 sm:pb-6 sm:pt-8")}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              {orgName && <p className="text-[0.8125rem] font-semibold text-ink">{orgName}</p>}
+              {logoUrl && /^https:\/\//.test(logoUrl)
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={logoUrl} alt={orgName ?? "Logo"} className="h-12 max-w-[220px] object-contain object-left dark:box-content dark:rounded-lg dark:bg-white dark:p-1.5" />
+                : orgName && <p className="text-[0.8125rem] font-semibold text-ink">{orgName}</p>}
               <h2 className="mt-3 break-words text-[1.25rem] font-semibold tracking-tight sm:text-[1.375rem]">{snap.title}</h2>
               {eventLabel && <p className="mt-1 text-[0.8125rem] text-ink-muted">{eventLabel}</p>}
             </div>

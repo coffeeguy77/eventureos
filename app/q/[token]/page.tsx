@@ -43,11 +43,8 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
       <div className="h-1 bg-[var(--portal-brand)] print:hidden" />
       {!isCopy && <ViewBeacon token={token} />}
       <div className="mx-auto max-w-4xl px-4 py-6 sm:py-10">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          {d.org.logo_url && /^https:\/\//.test(d.org.logo_url)
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={d.org.logo_url} alt={d.org.name} className="h-11 max-w-[220px] object-contain" />
-            : <p className="text-[1.25rem] font-semibold text-ink">{d.org.name}</p>}
+        {/* The logo is at the top of the quote itself (so it prints); just the print button up here */}
+        <header className="mb-4 flex justify-end print:hidden">
           <PrintButton />
         </header>
 
@@ -72,7 +69,7 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
           </Banner>
         )}
 
-        <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} quoteNumber={d.quote.number} customerName={d.customer?.name}
+        <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} logoUrl={d.org.logo_url} quoteNumber={d.quote.number} customerName={d.customer?.name}
           eventLabel={d.event ? `${d.event.name}${d.event.event_date ? ` · ${fmtDate(d.event.event_date, "long")}` : ""}${d.event.venue ? ` · ${d.event.venue}` : ""}` : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />
 
