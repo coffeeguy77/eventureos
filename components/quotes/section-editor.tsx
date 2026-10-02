@@ -319,6 +319,9 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
   const setDay = (i: number, patch: Partial<ShiftDay>) => commit({ ...d, days: d.days.map((x, n) => (n === i ? { ...x, ...patch } : x)) });
   const label = helper.label.charAt(0).toUpperCase() + helper.label.slice(1);
   const unit = d.unit_label || "cart";
+  // Setup is always charged: never less than the package's setup time
+  const minSetup = helper.rule?.setup_minutes ?? 0;
+  const minH = helper.rule?.min_hours ?? 0;
   const lab = "mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint";
   return (
     <div className="mt-1.5 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
@@ -333,14 +336,18 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
                 <input type="time" value={day.start ?? ""} onChange={(e) => setDay(i, { start: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} service starts`} /></label>
               <label className="w-[7rem]"><span className={lab}>Service ends</span>
                 <input type="time" value={day.end ?? ""} onChange={(e) => setDay(i, { end: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} service ends`} /></label>
-              <label className="w-16"><span className={lab}>Setup min</span>
-                <input type="number" min={0} max={600} step={5} inputMode="numeric" value={day.setup_minutes} onChange={(e) => setDay(i, { setup_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} setup minutes`} /></label>
+              <label className="w-16" title={minSetup ? `Setup is always charged — at least ${minSetup} min` : undefined}><span className={lab}>Setup min</span>
+                <input type="number" min={minSetup} max={600} step={5} inputMode="numeric" value={day.setup_minutes}
+                  onChange={(e) => setDay(i, { setup_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                  onBlur={() => { if (day.setup_minutes < minSetup) setDay(i, { setup_minutes: minSetup }); }}
+                  className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} setup minutes`} /></label>
               <label className="w-16"><span className={lab}>{unit}s</span>
                 <input type="number" min={1} max={50} inputMode="numeric" value={day.units} onChange={(e) => setDay(i, { units: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} number of ${unit}s`} /></label>
               <label className="w-20"><span className={lab}>{label}s{day.units > 1 ? `/${unit}` : ""}</span>
                 <input type="number" min={1} max={50} inputMode="numeric" value={day.per_unit} onChange={(e) => setDay(i, { per_unit: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} ${helper.label}s per ${unit}`} /></label>
               <span className="pb-2 text-[0.75rem] text-ink-muted">
-                {calc ? <>{setupTime(day) && day.setup_minutes > 0 ? `${shortTime(setupTime(day))} setup · ` : ""}<b className="text-ink">{calc.perPerson} hrs</b>{calc.staff > 1 ? <> × {calc.staff} = <b className="text-ink">{calc.hours} hrs</b></> : null}</> : "Add the service times"}
+                {calc ? <>{setupTime(day) && day.setup_minutes > 0 ? `${shortTime(setupTime(day))} setup · ` : ""}<b className="text-ink">{calc.perPerson} hrs</b>{calc.staff > 1 ? <> × {calc.staff} = <b className="text-ink">{calc.hours} hrs</b></> : null}
+                  {minH > 0 && calc.perPerson === minH && workedHours(day) < minH ? <span className="text-amber-700"> · {minH} hr minimum</span> : null}</> : "Add the service times"}
               </span>
               {d.days.length > 1 && (
                 <button type="button" onClick={() => commit({ ...d, days: d.days.filter((_, n) => n !== i) })} className="mb-1 rounded-md p-1.5 text-ink-faint hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove day ${i + 1}`}><Trash2 className="h-3.5 w-3.5" /></button>
@@ -360,9 +367,17 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
         )}
         <span className="ml-auto text-[0.75rem] text-ink-muted">
           {r ? <>Total <b className="text-ink">{r.quantity} hrs</b>{d.days.length > 1 ? ` over ${d.days.length} days` : ""}</> : "Enter service times — setup and hours are worked out for you."}
-          {helper.rule?.min_hours ? <span className="text-ink-faint"> · {helper.rule.min_hours} hr minimum per {helper.label}</span> : null}
+          {minH ? <span className="text-ink-faint"> · {minH} hr minimum per {helper.label}{minSetup ? `, incl. ${minSetup} min setup` : ""}</span> : null}
         </span>
       </div>
     </div>
   );
+}
+
+/** Setup + service hours actually worked on a day (before any minimum or rounding). */
+function workedHours(day: ShiftDay) {
+  const m = (t: string | null) => { const x = /^(\d{1,2}):(\d{2})/.exec(t ?? ""); return x ? Number(x[1]) * 60 + Number(x[2]) : null; };
+  const s = m(day.start), e = m(day.end);
+  if (s == null || e == null) return 0;
+  return ((e - s + 1440) % 1440 || 1440) / 60 + day.setup_minutes / 60;
 }
