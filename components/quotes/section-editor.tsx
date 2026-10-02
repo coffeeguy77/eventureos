@@ -317,6 +317,12 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
     if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}) }, { quantity: calc.quantity, description: calc.description });
   };
   const setDay = (i: number, patch: Partial<ShiftDay>) => commit({ ...d, days: d.days.map((x, n) => (n === i ? { ...x, ...patch } : x)) });
+  // Keep the line in step with the rules: if the hours worked out now differ from what's saved, update the line
+  const savedQty = Number(it.quantity);
+  useEffect(() => {
+    if (saved && r && Math.abs(r.quantity - savedQty) > 0.001) commit(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [helper.rule]);
   const label = helper.label.charAt(0).toUpperCase() + helper.label.slice(1);
   const unit = d.unit_label || "cart";
   // Setup is always charged: never less than the package's setup time

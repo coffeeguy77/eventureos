@@ -243,17 +243,27 @@ export function QuoteBuilder(p: BuilderProps) {
 
   // Line helpers: hourly staff lines (barista times) and per-serve lines (hot/cold drinks)
   const helperMap = useMemo(() => {
-    const staff = new Map<string, { rule: StaffRule; label: string }>();
+    // Several packages can share one staff item (e.g. cart and van both use "Barista hire") with different rules
+    const staff = new Map<string, { rule: StaffRule; label: string; hire: string | null }[]>();
     const serves = new Set<string>();
     for (const pk of p.pricing.packages) {
-      if (pk.rules.staff?.service_id) staff.set(pk.rules.staff.service_id, { rule: pk.rules.staff, label: pk.rules.staff.label ?? "staff" });
+      const sid = pk.rules.staff?.service_id;
+      if (sid) staff.set(sid, [...(staff.get(sid) ?? []), { rule: pk.rules.staff!, label: pk.rules.staff!.label ?? "staff", hire: pk.rules.hire?.service_id ?? null }]);
       if (pk.rules.per_serve?.service_id) serves.add(pk.rules.per_serve.service_id);
     }
     return { staff, serves, desc: new Map(p.pricing.services.map((x) => [x.id, x.description])) };
   }, [p.pricing.packages, p.pricing.services]);
+  /** The staff rule for a line: the package whose hire item is in the same section (cart → cart rule), else the first package. */
+  const staffRuleFor = (it: ItemDraft) => {
+    const options = it.service_id ? helperMap.staff.get(it.service_id) : undefined;
+    if (!options?.length) return undefined;
+    const sameSection = new Set(items.filter((x) => x.section_id === it.section_id && x.service_id).map((x) => x.service_id!));
+    const onQuote = new Set(items.filter((x) => x.service_id).map((x) => x.service_id!));
+    return options.find((o) => o.hire && sameSection.has(o.hire)) ?? options.find((o) => o.hire && onQuote.has(o.hire)) ?? options[0];
+  };
   const helperFor = (it: ItemDraft): LineHelper | null => {
     const sid = it.service_id ?? null;
-    const st = sid ? helperMap.staff.get(sid) : undefined;
+    const st = staffRuleFor(it);
     const unit = (it.unit ?? "").trim().toLowerCase();
     if (st || it.details?.kind === "staff" || (!sid && /^(hour|hours|hr|hrs)$/.test(unit) && /barista|staff|hire/i.test(it.name)))
       return { kind: "staff", rule: st?.rule ?? null, label: st?.label ?? "staff", defaultStart: p.pricing.defaults.start, defaultEnd: p.pricing.defaults.end };
