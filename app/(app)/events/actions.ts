@@ -83,7 +83,8 @@ export async function setEventStatus(id: string, status: EventStatus) {
 type Kind = "text" | "num" | "list" | "date" | "time" | "user";
 const FIELDS: [col: string, label: string, kind: Kind][] = [
   ["name", "name", "text"], ["event_type", "event type", "text"], ["event_date", "event date", "date"],
-  ["start_time", "start time", "time"], ["finish_time", "finish time", "time"], ["venue", "venue", "text"],
+  ["setup_time", "setup time", "time"], ["start_time", "start time", "time"], ["finish_time", "finish time", "time"], ["venue", "venue", "text"],
+  ["serves", "serves", "num"],
   ["address", "address", "text"], ["guest_count", "guest count", "num"], ["budget", "budget", "num"],
   ["assigned_to", "lead", "user"], ["requirements", "requirements", "text"], ["services", "services", "list"],
   ["equipment", "equipment", "list"], ["customer_notes", "customer notes", "text"], ["internal_notes", "internal notes", "text"],
@@ -137,15 +138,17 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
       orgId: org.id, actorId: user.id, action: "event.updated", entityType: "event", entityId: id, eventId: id,
       customerId: before.customer_id, enquiryId: before.enquiry_id, summary: `${actorName(profile)} ${summary}`, changes,
     });
-    if (changes["event date"] || changes["start time"] || changes["finish time"] || changes["venue"]) {
+    // The calendar entry's title and description come from the job — re-send it after any change
+    await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("organisation_id", org.id).eq("event_id", id).eq("kind", "event").neq("sync_status", "local");
+    if (changes["event date"] || changes["setup time"] || changes["start time"] || changes["finish time"] || changes["venue"]) {
       // Keep linked calendar entries in step with the event
       const after = { ...before, ...patch } as { event_date: string | null; start_time: string | null; finish_time: string | null; venue: string | null; name: string };
       if (after.event_date) {
-        const start = zonedTimeUTC(after.event_date, (after.start_time ?? "09:00").slice(0, 5), org.timezone);
+        const start = zonedTimeUTC(after.event_date, ((after as { setup_time?: string | null }).setup_time ?? after.start_time ?? "09:00").slice(0, 5), org.timezone);
         const endRaw = zonedTimeUTC(after.event_date, (after.finish_time ?? after.start_time ?? "17:00").slice(0, 5), org.timezone);
         const end = endRaw < start ? start : endRaw;
         const { data: moved, error: calErr } = await supabase.from("calendar_events")
-          .update({ starts_at: start, ends_at: end, location: after.venue, title: after.name, sync_status: "local" })
+          .update({ starts_at: start, ends_at: end, location: after.venue, title: after.name })
           .eq("organisation_id", org.id).eq("event_id", id).eq("kind", "event").select("id");
         if (calErr) return { error: `Saved the event, but couldn't update the calendar: ${calErr.message}` };
         if (moved?.length) {

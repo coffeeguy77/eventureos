@@ -8,7 +8,7 @@ import { ButtonLink, buttonClass } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { envStatus, getProvider, isLiveProvider, missingEnv, appBaseUrl, redirectUri } from "@/lib/integrations/registry";
 import { scopesFor } from "@/lib/integrations/oauth";
-import { DEFAULT_SYNC_KINDS, type GoogleCalendar } from "@/lib/integrations/google-calendar";
+import { DEFAULT_FREE_WEEKDAYS, DEFAULT_SYNC_KINDS, type GoogleCalendar } from "@/lib/integrations/google-calendar";
 import { listCreditNotes, xeroDate, type XeroCreditNote } from "@/lib/integrations/xero";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { DEFAULT_BLOCK, DEFAULT_KEYWORDS } from "@/lib/integrations/email-filter";
@@ -213,7 +213,7 @@ async function CalendarSection({ orgId, settings, manager }: { orgId: string; se
       {errors > 0 && <p className="mx-4 mb-3 sm:mx-5 rounded-lg bg-amber-50 px-3 py-2 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-100">{errors} entr{errors === 1 ? "y" : "ies"} failed to sync last time — see Sync history.</p>}
       {calendars.length === 0 && <p className="mx-4 mb-3 sm:mx-5 text-[0.7812rem] text-ink-muted">No Google calendars loaded yet — press Sync now to fetch the list.</p>}
       {manager
-        ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} inviteClients={settings.invite_clients !== false} />
+        ? <CalendarSettingsForm rows={rows} calendars={calendars} kinds={((settings.sync_kinds as string[] | undefined)?.length ? settings.sync_kinds as string[] : DEFAULT_SYNC_KINDS)} pullBusy={!!settings.pull_busy} inviteClients={settings.invite_clients !== false} freeDays={Array.isArray(settings.free_weekdays) ? settings.free_weekdays as number[] : DEFAULT_FREE_WEEKDAYS} />
         : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Managers can change calendar sync.</p>}
     </Card>
   );

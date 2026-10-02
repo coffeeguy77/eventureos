@@ -181,6 +181,8 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
   const [hire, setHire] = useState(r.hire?.service_id ?? "");
   const [delivery, setDelivery] = useState(r.delivery?.service_id ?? "");
   const [noDelivery, setNoDelivery] = useState(r.delivery?.no_delivery_label ?? "");
+  const [calLabel, setCalLabel] = useState(r.calendar_label ?? "");
+  const [servesLabel, setServesLabel] = useState(r.serves_label ?? "");
   const [perServe, setPerServe] = useState(r.per_serve?.service_id ?? "");
   const [staffSvc, setStaffSvc] = useState(r.staff?.service_id ?? "");
   const [label, setLabel] = useState(r.staff?.label ?? "barista");
@@ -207,6 +209,8 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
         service_id: staffSvc, label: label.trim() || "staff", setup_minutes: Number(setup) || 0, packdown_minutes: Number(packdown) || 0,
         min_hours: Number(minH) || 0, included_hours: Number(incl) || 0, included_applies_to: inclTo, round_to_hours: Number(round) || 0,
       } : null,
+      ...(calLabel.trim() ? { calendar_label: calLabel.trim().slice(0, 60) } : {}),
+      ...(servesLabel.trim() ? { serves_label: servesLabel.trim().slice(0, 30) } : {}),
       extra_staff: staffSvc && extraOn ? { serves_over: Number(extraServes) || 0, max_service_hours: Number(extraHours) || 0, reason: extraReason.trim() || undefined } : null,
     };
     const res = await savePackage({ id: initial.id || undefined, name, summary: summary || null, rules, active });
@@ -236,6 +240,12 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
         <ServicePick id="pk-hire" label="Hire" value={hire} onChange={setHire} services={services} />
         <ServicePick id="pk-del" label="Delivery / setup" value={delivery} onChange={setDelivery} services={services} optional="None (no delivery charge)" />
         <ServicePick id="pk-serve" label="Per serve" value={perServe} onChange={setPerServe} services={services} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label htmlFor="pk-cal" hint="calendar title, before the client's name">Shows in the calendar as</Label>
+          <input id="pk-cal" value={calLabel} onChange={(e) => setCalLabel(e.target.value)} placeholder={name || "e.g. Coffee Cart"} className={inputClass} maxLength={60} /></div>
+        <div><Label htmlFor="pk-serves" hint="e.g. 100 coffees">Serves are called</Label>
+          <input id="pk-serves" value={servesLabel} onChange={(e) => setServesLabel(e.target.value)} placeholder="serves" className={inputClass} maxLength={30} /></div>
       </div>
       {delivery && (
         <div className="sm:max-w-md">

@@ -202,7 +202,13 @@ export async function saveCalendarSettings(_prev: ActionState, form: FormData): 
   try {
     const { supabase, org, user, profile, sctx } = await withIntegration("google_calendar");
     const kinds = ["event", "site_visit", "setup", "hold"].filter((k) => form.get(`kind_${k}`) === "on");
-    await saveIntegrationSettings(sctx, { sync_kinds: kinds, pull_busy: form.get("pull_busy") === "on", invite_clients: form.get("invite_clients") === "on" });
+    const freeDays = [0, 1, 2, 3, 4, 5, 6].filter((d) => form.get(`free_${d}`) === "on");
+    const prevFree = JSON.stringify((sctx.integration.settings as { free_weekdays?: number[] }).free_weekdays ?? [6]);
+    await saveIntegrationSettings(sctx, { sync_kinds: kinds, pull_busy: form.get("pull_busy") === "on", invite_clients: form.get("invite_clients") === "on", free_weekdays: freeDays });
+    // Free/busy changed → re-send upcoming bookings
+    if (JSON.stringify(freeDays) !== prevFree) {
+      await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("organisation_id", org.id).in("kind", ["event", "setup"]).neq("sync_status", "local").gte("ends_at", new Date().toISOString());
+    }
     const cals = new Set(((sctx.integration.settings.calendars ?? []) as { id: string }[]).map((c) => c.id));
     const { data: conns } = await supabase.from("calendar_connections").select("id, name, external_calendar_id, sync_enabled, provider").eq("organisation_id", org.id);
     const changes: string[] = [];

@@ -201,8 +201,8 @@ export function ImportForm({ months, inProgress }: { months: number; inProgress:
 
 export interface CalendarRow { id: string; name: string; colour: string; external_calendar_id: string | null; sync_enabled: boolean; entries: number }
 
-export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteClients }: {
-  rows: CalendarRow[]; calendars: { id: string; summary: string; primary?: boolean }[]; kinds: string[]; pullBusy: boolean; inviteClients: boolean;
+export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteClients, freeDays }: {
+  rows: CalendarRow[]; calendars: { id: string; summary: string; primary?: boolean }[]; kinds: string[]; pullBusy: boolean; inviteClients: boolean; freeDays: number[];
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveCalendarSettings, undefined);
   const KINDS: [string, string][] = [["event", "Events"], ["site_visit", "Site visits"], ["setup", "Setups"], ["hold", "Holds"]];
@@ -256,6 +256,15 @@ export function CalendarSettingsForm({ rows, calendars, kinds, pullBusy, inviteC
           <input type="checkbox" name="invite_clients" defaultChecked={inviteClients} className="mt-0.5" />
           <span>Invite the client’s people on the job to the calendar event. Rostered staff (and anyone set to “add to every event”) are always invited. Google emails guests only when the guest list changes.</span>
         </label>
+        <fieldset className="sm:col-span-2">
+          <legend className="mb-1 text-[0.7812rem] font-medium text-ink">Show bookings as “Free” on</legend>
+          <p className="mb-1.5 text-[0.75rem] text-ink-muted">For days another booking system shares this calendar (e.g. a website booking plugin) — a Free entry won&apos;t block those days there. Other days show as Busy.</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+              <label key={d} className="flex items-center gap-1.5 text-[0.8125rem]"><input type="checkbox" name={`free_${i}`} defaultChecked={freeDays.includes(i)} /> {d}</label>
+            ))}
+          </div>
+        </fieldset>
       </div>
       <div className="mt-4"><Result state={state} /></div>
       <div className="mt-3 flex justify-end"><Button size="sm" variant="primary" disabled={pending} className="h-10 w-full sm:h-8 sm:w-auto">{pending ? "Saving…" : "Save calendar sync"}</Button></div>

@@ -10,6 +10,7 @@ import { ActionButton, ActionForm, SubmitButton } from "../forms";
 import { changeMemberRole, inviteMember, removeMember, resendInvitation, revokeInvitation } from "../actions";
 import { PERMISSIONS, ROLE_HINT, ROLE_LABEL } from "../constants";
 import { RosterToggle } from "./roster-toggle";
+import { CrewList, type CrewMember } from "./crew-list";
 
 export const metadata = { title: "Team" };
 
@@ -24,7 +25,7 @@ export default async function TeamPage() {
   const { supabase, org, role, user } = await requireOrg();
   const canAdmin = role === "owner" || role === "admin";
 
-  const [membersRes, invitesRes] = await Promise.all([
+  const [membersRes, invitesRes, crewRes] = await Promise.all([
     supabase
       .from("organisation_users")
       .select("id, user_id, role, title, created_at, expires_at, auto_add_to_events, sees_job_details, user:users!organisation_users_user_id_fkey(full_name, email)")
@@ -40,7 +41,9 @@ export default async function TeamPage() {
           .is("accepted_at", null)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
+    supabase.from("crew_members").select("id, name, email, phone, role, always_invite, active").eq("organisation_id", org.id).order("name"),
   ]);
+  const crew = (crewRes.data ?? []) as CrewMember[];
   if (membersRes.error) throw new Error(`Could not load team: ${membersRes.error.message}`);
   if (invitesRes.error) throw new Error(`Could not load invitations: ${invitesRes.error.message}`);
 
@@ -62,6 +65,10 @@ export default async function TeamPage() {
 
   return (
     <>
+      <Card className="mb-6">
+        <CardHeader title="Staff list" subtitle="People who work your jobs without logging in. Add them to a job and they get the Google Calendar invite." />
+        <CrewList rows={crew} canEdit={role === "owner" || role === "admin" || role === "manager"} />
+      </Card>
       <Card>
         <CardHeader
           title="Team"

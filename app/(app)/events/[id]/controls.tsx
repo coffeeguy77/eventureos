@@ -52,8 +52,10 @@ export function EventDetailsEditor({ event, members, view }: {
         <Select id="event_type" name="event_type" defaultValue={event.event_type ?? ""}><option value="">—</option>{types.map((t) => <option key={t}>{t}</option>)}</Select>
       </div>
       <div className="sm:col-span-2"><Label htmlFor="event_date">Date</Label><Input id="event_date" name="event_date" type="date" defaultValue={event.event_date ?? ""} /></div>
-      <div className="sm:col-span-2"><Label htmlFor="start_time">Start</Label><Input id="start_time" name="start_time" type="time" defaultValue={event.start_time?.slice(0, 5) ?? ""} /></div>
-      <div className="sm:col-span-2"><Label htmlFor="finish_time">Finish</Label><Input id="finish_time" name="finish_time" type="time" defaultValue={event.finish_time?.slice(0, 5) ?? ""} /></div>
+      <div className="sm:col-span-2"><Label htmlFor="setup_time" hint="team arrives">Setup</Label><Input id="setup_time" name="setup_time" type="time" defaultValue={event.setup_time?.slice(0, 5) ?? ""} /></div>
+      <div className="sm:col-span-2"><Label htmlFor="start_time" hint="service starts">Start</Label><Input id="start_time" name="start_time" type="time" defaultValue={event.start_time?.slice(0, 5) ?? ""} /></div>
+      <div className="sm:col-span-2"><Label htmlFor="finish_time" hint="service ends">Finish</Label><Input id="finish_time" name="finish_time" type="time" defaultValue={event.finish_time?.slice(0, 5) ?? ""} /></div>
+      <div className="sm:col-span-2"><Label htmlFor="serves" hint="e.g. coffees">Serves</Label><Input id="serves" name="serves" inputMode="numeric" defaultValue={event.serves ?? ""} /></div>
       <div className="sm:col-span-3"><Label htmlFor="venue">Venue</Label><Input id="venue" name="venue" defaultValue={event.venue ?? ""} /></div>
       <div className="sm:col-span-3"><Label htmlFor="address">Address</Label><Input id="address" name="address" defaultValue={event.address ?? ""} /></div>
       <div className="sm:col-span-2"><Label htmlFor="guest_count">Guests</Label><Input id="guest_count" name="guest_count" inputMode="numeric" defaultValue={event.guest_count ?? ""} /></div>

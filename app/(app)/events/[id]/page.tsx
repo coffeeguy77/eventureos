@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Mail, Phone, MapPin, Clock, Users } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
 import { StaffCard, type StaffRow } from "./staff-card";
+import { CrewCard, type CrewOption, type CrewRow } from "./crew-card";
 import { PeopleCard, type PersonRow } from "./people-card";
 import { ApprovalBanner } from "./approval-banner";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
@@ -21,7 +22,7 @@ import { StaffPortalMessages } from "@/components/portal/staff-messages";
 import { addNote, createTask } from "@/app/(app)/record-actions";
 import { eventNextAction } from "@/lib/next-action";
 import { EVENT_STATUS, INVOICE_STATUS, QUOTE_STATUS } from "@/lib/status";
-import { addDaysISO, daysBetween, fmtDate, fmtDateTime, money, relative, relativeDay, timeRange, todayISO, zonedMidnightUTC } from "@/lib/format";
+import { addDaysISO, daysBetween, fmtDate, fmtDateTime, fmtTime, money, relative, relativeDay, timeRange, todayISO, zonedMidnightUTC } from "@/lib/format";
 import type { ActivityLog, EmailMessage, EmailThread, EventRecord, InvoiceStatus, QuoteStatus, Task } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -62,13 +63,18 @@ export default async function EventPage({ params, searchParams }: { params: Prom
     contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null; position: string | null } | null;
   };
 
-  const [{ data: staffRows }, { data: teamRows }, { data: peopleRows }, { data: clientContacts }] = await Promise.all([
+  const [{ data: staffRows }, { data: teamRows }, { data: peopleRows }, { data: clientContacts }, { data: crewRows }, { data: crewOpts }] = await Promise.all([
     supabase.from("event_staff").select("id, user_id, role, sees_details, auto_added, created_at").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("organisation_users").select("user_id, role, sees_job_details, user:users!organisation_users_user_id_fkey(full_name, email)")
       .eq("organisation_id", org.id).eq("status", "active").neq("role", "customer").is("expires_at", null),
     supabase.from("event_contacts").select("id, contact_id, role, created_at, invited_at, contact:contacts(first_name, last_name, email, phone)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("contacts").select("id, first_name, last_name, email").eq("organisation_id", org.id).eq("customer_id", e.customer_id).order("first_name"),
+    supabase.from("event_crew").select("id, crew_member_id, role, member:crew_members(name, email)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
+    supabase.from("crew_members").select("id, name, email, role, always_invite").eq("organisation_id", org.id).eq("active", true).order("name"),
   ]);
+  const crewList: CrewRow[] = ((crewRows ?? []) as unknown as { id: string; crew_member_id: string; role: string | null; member: { name: string; email: string | null } | null }[])
+    .map((r) => ({ id: r.id, crew_member_id: r.crew_member_id, name: r.member?.name ?? "Removed", email: r.member?.email ?? null, role: r.role }));
+  const crewOptions = (crewOpts ?? []) as CrewOption[];
   const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; invited_at: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
     .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id, invited_at: r.invited_at }))
     .sort((a, b) => Number(b.primary) - Number(a.primary));
@@ -194,10 +200,11 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                     <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <Field label="Event type">{e.event_type ?? "—"}</Field>
                       <Field label="Date">{fmtDate(e.event_date)}</Field>
-                      <Field label="Time">{timeRange(e.start_time, e.finish_time) || "—"}</Field>
+                      <Field label="Time">{e.setup_time ? <span className="block">Setup {fmtTime(e.setup_time)}</span> : null}{timeRange(e.start_time, e.finish_time) ? `${e.setup_time ? "Service " : ""}${timeRange(e.start_time, e.finish_time)}` : e.setup_time ? null : "—"}</Field>
                       <Field label="Venue">{e.venue ?? "—"}</Field>
                       <Field label="Address">{e.address ?? "—"}</Field>
                       <Field label="Guests">{e.guest_count ?? "—"}</Field>
+                      {e.serves != null && <Field label="Serves">{e.serves}</Field>}
                       <Field label="Budget">{e.budget ? money(e.budget, cur, { cents: false }) : "—"}</Field>
                       <Field label="Lead">{e.assigned_to ? names[e.assigned_to] : "Unassigned"}</Field>
                       <Field label="Staff">
@@ -248,8 +255,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 <PeopleCard eventId={e.id} rows={people} others={contactOptions} canEdit={role !== "staff"} />
               </Card>
               <Card>
-                <CardHeader title="Team on this job" subtitle={`${staffList.length} rostered`} />
+                <CardHeader title="Team on this job" subtitle={`${staffList.length + crewList.length} rostered`} />
                 <StaffCard eventId={e.id} rows={staffList} team={teamList.map((t) => ({ id: t.id, name: t.name, role: t.role }))} canEdit={role !== "staff"} />
+                <CrewCard eventId={e.id} rows={crewList} options={crewOptions} canEdit={role === "owner" || role === "admin" || role === "manager"} />
               </Card>
               <Card>
                 <CardHeader title="Money" action={<span className="text-right text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />

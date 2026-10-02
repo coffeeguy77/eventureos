@@ -89,6 +89,8 @@ export interface EventRecord {
   event_type: string | null;
   event_date: string | null;
   start_time: string | null;
+  setup_time: string | null;
+  serves: number | null;
   finish_time: string | null;
   venue: string | null;
   address: string | null;

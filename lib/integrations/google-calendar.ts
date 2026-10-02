@@ -1,4 +1,5 @@
 import "server-only";
+import { isFreeDay, jobDescription, jobTitle } from "@/lib/calendar/job-invite";
 import { localDate } from "@/lib/ai/classify";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { ApiError, apiJSON, errMessage, finishSyncLog, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext } from "@/lib/integrations/runtime";
@@ -68,6 +69,8 @@ export interface CalendarSettings {
   pull_cursor?: { conn: string; page: string } | null;
   /** Add the client's people on the job as guests (default on). Rostered staff are always added. */
   invite_clients?: boolean;
+  /** Days (0 = Sunday … 6 = Saturday) on which bookings show as Free, not Busy. Default: Saturday. */
+  free_weekdays?: number[];
 }
 const PULL_BUDGET_MS = 40_000;
 export const DEFAULT_SYNC_KINDS = ["event", "site_visit", "setup", "hold"];
@@ -78,8 +81,66 @@ interface CalRow {
   last_synced_at: string | null; updated_at: string; attendees: string[] | null;
 }
 
-function eventBody(ctx: SyncContext, ce: CalRow) {
+export const DEFAULT_FREE_WEEKDAYS = [6];
+
+/** The job details shown on a booking's calendar entry, by event id. */
+interface JobInfo { title: string; description: string; date: string | null; startLocal: string | null; endLocal: string | null }
+
+async function jobInfo(ctx: SyncContext, eventIds: string[]): Promise<Map<string, JobInfo>> {
+  const out = new Map<string, JobInfo>();
+  const ids = [...new Set(eventIds)];
+  if (!ids.length) return out;
+  const [{ data: evs }, { data: quotes }, { data: pkgs }, { data: crew }, { data: staff }] = await Promise.all([
+    ctx.db.from("events").select("id, name, event_date, setup_time, start_time, finish_time, serves, venue, address, customer:customers(name, company, kind)")
+      .eq("organisation_id", ctx.org.id).in("id", ids),
+    ctx.db.from("quotes").select("id, event_id, status, created_at, quote_items(service_id, quantity, is_optional)")
+      .eq("organisation_id", ctx.org.id).in("event_id", ids).not("status", "in", "(superseded,declined)"),
+    ctx.db.from("service_packages").select("name, rules").eq("organisation_id", ctx.org.id).eq("active", true).order("position"),
+    ctx.db.from("event_crew").select("event_id").eq("organisation_id", ctx.org.id).in("event_id", ids),
+    ctx.db.from("event_staff").select("event_id").eq("organisation_id", ctx.org.id).in("event_id", ids),
+  ]);
+  const packages = (pkgs ?? []) as { name: string; rules: { hire?: { service_id: string } | null; per_serve?: { service_id: string } | null; staff?: { label?: string } | null; calendar_label?: string; serves_label?: string } }[];
+  const title = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+  const people = new Map<string, number>();
+  for (const r of [...(crew ?? []), ...(staff ?? [])] as { event_id: string }[]) people.set(r.event_id, (people.get(r.event_id) ?? 0) + 1);
+  type Q = { event_id: string; status: string; created_at: string; quote_items: { service_id: string | null; quantity: number; is_optional: boolean }[] };
+  for (const e of (evs ?? []) as unknown as { id: string; name: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; serves: number | null; venue: string | null; address: string | null; customer: { name: string; company: string | null; kind: string | null } | null }[]) {
+    // The accepted quote, otherwise the newest one still in play
+    const qs = ((quotes ?? []) as Q[]).filter((q) => q.event_id === e.id).sort((a, b) => (a.status === "accepted" ? -1 : b.status === "accepted" ? 1 : b.created_at.localeCompare(a.created_at)));
+    const items = (qs[0]?.quote_items ?? []).filter((i) => !i.is_optional && i.service_id);
+    const pkg = packages.find((p) => p.rules?.hire && items.some((i) => i.service_id === p.rules.hire!.service_id));
+    const servesFromQuote = pkg?.rules.per_serve ? items.filter((i) => i.service_id === pkg.rules.per_serve!.service_id).reduce((a, i) => a + Number(i.quantity), 0) : 0;
+    const input = {
+      label: pkg ? (pkg.rules.calendar_label?.trim() || title(pkg.name)) : null, eventName: e.name, customer: e.customer,
+      date: e.event_date, setupTime: e.setup_time, startTime: e.start_time, finishTime: e.finish_time,
+      serves: e.serves ?? (servesFromQuote || null), servesLabel: pkg?.rules.serves_label ?? null,
+      staffCount: people.get(e.id) ?? null, staffLabel: pkg?.rules.staff?.label ?? null, venue: e.venue, address: e.address,
+    };
+    const hhmm = (t: string | null) => (t ? t.slice(0, 5) : null);
+    out.set(e.id, {
+      title: jobTitle(input), description: jobDescription(input), date: e.event_date,
+      startLocal: e.event_date && (hhmm(e.setup_time) ?? hhmm(e.start_time)) ? `${e.event_date}T${hhmm(e.setup_time) ?? hhmm(e.start_time)}:00` : null,
+      endLocal: e.event_date && hhmm(e.finish_time) ? `${e.event_date}T${hhmm(e.finish_time)}:00` : null,
+    });
+  }
+  return out;
+}
+
+function eventBody(ctx: SyncContext, ce: CalRow, job?: JobInfo | null, freeDays: number[] = DEFAULT_FREE_WEEKDAYS) {
   const tz = ctx.org.timezone;
+  if (job && !ce.all_day) {
+    // A booking: titled and described from the job; arrives at setup time; Free on the chosen days
+    const startLocal = job.startLocal, endLocal = job.endLocal && job.startLocal && job.endLocal > job.startLocal ? job.endLocal : null;
+    return {
+      summary: job.title,
+      location: ce.location ?? undefined,
+      description: job.description || undefined,
+      start: startLocal ? { dateTime: startLocal, timeZone: tz } : { dateTime: ce.starts_at, timeZone: tz },
+      end: endLocal ? { dateTime: endLocal, timeZone: tz } : { dateTime: ce.ends_at, timeZone: tz },
+      transparency: isFreeDay(job.date ?? localDate(ce.starts_at, tz), freeDays) ? "transparent" : "opaque",
+      extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
+    };
+  }
   const start = ce.all_day ? { date: localDate(ce.starts_at, tz) } : { dateTime: ce.starts_at, timeZone: tz };
   const endDate = localDate(ce.ends_at, tz);
   const endExclusive = new Date(endDate + "T00:00:00Z");
@@ -91,7 +152,7 @@ function eventBody(ctx: SyncContext, ce: CalRow) {
     location: ce.location ?? undefined,
     description: ce.event_id ? `Managed in EventureOS — ${appBaseUrl()}/events/${ce.event_id}` : "Managed in EventureOS",
     start, end,
-    transparency: "opaque",
+    transparency: isFreeDay(localDate(ce.starts_at, tz), freeDays) && (ce.kind === "event" || ce.kind === "setup") ? "transparent" : "opaque",
     extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
   };
 }
@@ -118,6 +179,11 @@ async function guestLists(ctx: SyncContext, eventIds: string[], includeClients: 
   };
   const { data: staff } = await ctx.db.from("event_staff").select("event_id, user:users!event_staff_user_id_fkey(email)").eq("organisation_id", ctx.org.id).in("event_id", ids);
   for (const r of (staff ?? []) as unknown as { event_id: string; user: { email: string } | null }[]) add(r.event_id, r.user?.email);
+  // Staff list people on the job, plus anyone set to be on every job (e.g. whoever does the rosters)
+  const { data: crew } = await ctx.db.from("event_crew").select("event_id, member:crew_members(email, active)").eq("organisation_id", ctx.org.id).in("event_id", ids);
+  for (const r of (crew ?? []) as unknown as { event_id: string; member: { email: string | null; active: boolean } | null }[]) if (r.member?.active) add(r.event_id, r.member.email);
+  const { data: always } = await ctx.db.from("crew_members").select("email").eq("organisation_id", ctx.org.id).eq("active", true).eq("always_invite", true);
+  for (const ev of ids) for (const m of (always ?? []) as { email: string | null }[]) add(ev, m.email);
   if (includeClients) {
     const { data: people } = await ctx.db.from("event_contacts").select("event_id, contact:contacts(email)").eq("organisation_id", ctx.org.id).in("event_id", ids);
     for (const r of (people ?? []) as unknown as { event_id: string; contact: { email: string | null } | null }[]) add(r.event_id, r.contact?.email);
@@ -159,14 +225,18 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
       .order("starts_at").limit(1000);
     if (rErr) throw new Error(`Could not load calendar entries: ${rErr.message}`);
     const toPush = ((rows ?? []) as CalRow[]).filter(needsPush);
+    const pushIds = toPush.filter((c) => c.kind === "event").map((c) => c.event_id).filter((x): x is string => !!x);
     const guests = await guestLists(ctx, toPush.map((c) => c.event_id).filter((x): x is string => !!x), s.invite_clients !== false);
+    const jobs = await jobInfo(ctx, pushIds);
+    const freeDays = Array.isArray(s.free_weekdays) ? s.free_weekdays : DEFAULT_FREE_WEEKDAYS;
     for (const ce of toPush) {
       const calId = byId.get(ce.calendar_connection_id)!.external_calendar_id;
       try {
         const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : [];
         const had = [...(ce.attendees ?? [])].sort();
         const changed = want.join(",") !== had.join(",");
-        const body = { ...eventBody(ctx, ce), ...(want.length || had.length ? { attendees: want.map((email) => ({ email })) } : {}) };
+        const job = ce.kind === "event" && ce.event_id ? jobs.get(ce.event_id) ?? null : null;
+        const body = { ...eventBody(ctx, ce, job, freeDays), ...(want.length || had.length ? { attendees: want.map((email) => ({ email })) } : {}) };
         // Google only emails guests when the guest list changes — not on every time/venue tweak
         const notify = changed && want.length ? "all" : "none";
         let g: GEvent | null = null;

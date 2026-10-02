@@ -49,6 +49,10 @@ export interface PackageRules {
   staff?: StaffRule | null;
   per_serve?: { service_id: string } | null;
   extra_staff?: ExtraStaffRule | null;
+  /** Calendar entry title for jobs using this package, e.g. "Coffee Cart" (default: the package name) */
+  calendar_label?: string;
+  /** What a "serve" is called on the calendar, e.g. "coffees" (default "serves") */
+  serves_label?: string;
 }
 
 export interface PriceInput {
