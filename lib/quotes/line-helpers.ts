@@ -8,7 +8,23 @@
 import { serviceHours, staffHours, type StaffRule } from "@/lib/pricing/engine";
 import { shortTime } from "@/lib/calendar/job-invite";
 
-export interface StaffDetails { kind: "staff"; start: string | null; end: string | null; staff: number; setup_minutes: number }
+/** One shift day: a date (or "Day 2" when not confirmed), setup before service, and who's working. */
+export interface ShiftDay {
+  date: string | null;          // YYYY-MM-DD, or null → "Day N"
+  start: string | null;         // service start HH:MM
+  end: string | null;           // service end HH:MM
+  setup_minutes: number;        // paid setup before service
+  units: number;                // carts / stations running that day
+  per_unit: number;             // staff per cart
+}
+export interface StaffDetails {
+  kind: "staff";
+  days: ShiftDay[];
+  /** What a "unit" is called, e.g. "cart" (shown when more than one runs) */
+  unit_label?: string;
+  // Older single-day shape (still read): start, end, staff, setup_minutes
+  start?: string | null; end?: string | null; staff?: number; setup_minutes?: number;
+}
 export interface ServesDetails { kind: "serves"; hot: number; cold: number }
 export type LineDetails = StaffDetails | ServesDetails;
 
@@ -22,28 +38,68 @@ const hhmm = (mins: number) => {
 };
 const fmtH = (h: number) => `${Number.isInteger(h) ? h : h.toFixed(h * 4 % 1 === 0 ? 2 : 1).replace(/0$/, "")} hr${h === 1 ? "" : "s"}`;
 
+/** Every staff line as days (older single-day lines become one undated day). */
+export function shiftDays(d: StaffDetails): ShiftDay[] {
+  if (Array.isArray(d.days) && d.days.length) return d.days;
+  return [{ date: null, start: d.start ?? null, end: d.end ?? null, setup_minutes: d.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, d.staff ?? 1) }];
+}
+
 /** When the team arrives to set up, e.g. "07:30" for an 8am start with 30 min setup. */
-export function setupTime(d: Pick<StaffDetails, "start" | "setup_minutes">): string | null {
+export function setupTime(d: { start: string | null; setup_minutes: number }): string | null {
   const s = toMin(d.start);
   return s == null ? null : hhmm(s - (d.setup_minutes || 0));
 }
 
-/** Hours to charge across all staff, and the line's description. Null when the times aren't complete. */
+const addDays = (iso: string, n: number) => { const t = new Date(`${iso}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+/** "Monday 24th November" */
+export function longDay(iso: string) {
+  const t = new Date(`${iso}T12:00:00Z`);
+  const wd = t.toLocaleDateString("en-AU", { weekday: "long", timeZone: "UTC" });
+  const mo = t.toLocaleDateString("en-AU", { month: "long", timeZone: "UTC" });
+  return `${wd} ${ordinal(t.getUTCDate())} ${mo}`;
+}
+export const dayLabel = (day: ShiftDay, i: number) => (day.date ? longDay(day.date) : `Day ${i + 1}`);
+
+/** The next day: same hours and team as the last day, dated the day after it (or "Day N" when undated). */
+export function nextShiftDay(days: ShiftDay[]): ShiftDay {
+  const last = days[days.length - 1];
+  if (!last) return { date: null, start: null, end: null, setup_minutes: 30, units: 1, per_unit: 1 };
+  return { ...last, date: last.date ? addDays(last.date, 1) : null };
+}
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 || w.endsWith("s") ? "" : "s"}`;
+const hrsText = (h: number) => `${Number.isInteger(h) ? h : Number(h.toFixed(2))}hrs`;
+
+/** Hours to charge across every day and person, the line's description, and per-day workings. */
 export function staffLine(d: StaffDetails, rule: StaffRule | null, label = "staff") {
-  const s = toMin(d.start), e = toMin(d.end);
-  if (s == null || e == null) return null;
-  const hrs = serviceHours(s, e);
-  const r: StaffRule = { ...(rule ?? { service_id: "" }), setup_minutes: d.setup_minutes, packdown_minutes: rule?.packdown_minutes ?? 0 };
-  const n = Math.max(1, Math.floor(d.staff || 1));
-  const per = Array.from({ length: n }, (_, i) => staffHours(r, hrs, i === 0));
-  const quantity = Math.round(per.reduce((a, b) => a + b, 0) * 100) / 100;
-  const setup = setupTime(d);
-  const lines = [
-    d.setup_minutes > 0 && setup ? `Setup ${shortTime(setup)}` : null,
-    `Service ${shortTime(d.start)} – ${shortTime(d.end)}`,
-    n > 1 ? `${n} ${label.endsWith("s") ? label : `${label}s`} × ${fmtH(per[0])}` : null,
-  ].filter(Boolean);
-  return { quantity, description: lines.join("\n"), perStaff: per, serviceHours: hrs };
+  const days = shiftDays(d);
+  const unitWord = d.unit_label?.trim() || "cart";
+  const out: { day: string; staff: number; perPerson: number; hours: number }[] = [];
+  const blocks: string[] = [];
+  const multi = days.length > 1 || days.some((x) => x.date);
+  for (const [i, day] of days.entries()) {
+    const s = toMin(day.start), e = toMin(day.end);
+    if (s == null || e == null) return null;
+    const hrs = serviceHours(s, e);
+    const r: StaffRule = { ...(rule ?? { service_id: "" }), setup_minutes: day.setup_minutes, packdown_minutes: rule?.packdown_minutes ?? 0 };
+    const units = Math.max(1, Math.floor(day.units || 1)), per = Math.max(1, Math.floor(day.per_unit || 1));
+    const staff = units * per;
+    const each = Array.from({ length: staff }, (_, n) => staffHours(r, hrs, n === 0));
+    const hours = Math.round(each.reduce((a, b) => a + b, 0) * 100) / 100;
+    out.push({ day: dayLabel(day, i), staff, perPerson: each[0], hours });
+    const setup = setupTime(day);
+    const who = units > 1 ? ` – ${plural(per, label)} / per ${unitWord}` : staff > 1 && multi ? ` – ${plural(staff, label)}` : "";
+    const lines = [
+      multi ? `${dayLabel(day, i)} – ${hrsText(each[0])}${staff > 1 ? ` x${staff} (${hrsText(hours)})` : ""}` : null,
+      day.setup_minutes > 0 && setup ? `Setup ${shortTime(setup)}` : null,
+      `Service ${shortTime(day.start)} – ${shortTime(day.end)}${who}`,
+      !multi && staff > 1 ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : null,
+    ].filter(Boolean);
+    blocks.push(lines.join("\n"));
+  }
+  const quantity = Math.round(out.reduce((a, x) => a + x.hours, 0) * 100) / 100;
+  return { quantity, description: blocks.join("\n\n"), days: out, perStaff: [out[0]?.perPerson ?? 0] };
 }
 
 /** Quantity and first description line for a drinks line. */
@@ -67,7 +123,15 @@ export function cleanDetails(raw: unknown): LineDetails | null {
   const n = (v: unknown, max: number) => { const x = Number(v); return Number.isFinite(x) ? Math.min(max, Math.max(0, x)) : 0; };
   if (r.kind === "staff") {
     const t = (v: unknown) => (typeof v === "string" && /^\d{1,2}:\d{2}$/.test(v) ? v.padStart(5, "0") : null);
-    return { kind: "staff", start: t(r.start), end: t(r.end), staff: Math.max(1, Math.round(n(r.staff, 50))), setup_minutes: Math.round(n(r.setup_minutes, 600)) };
+    const date = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const rawDays = Array.isArray(r.days) ? r.days : [{ date: null, start: r.start, end: r.end, setup_minutes: r.setup_minutes, units: 1, per_unit: r.staff }];
+    const days = rawDays.slice(0, 31).map((x) => {
+      const y = (x ?? {}) as Record<string, unknown>;
+      return { date: date(y.date), start: t(y.start), end: t(y.end), setup_minutes: Math.round(n(y.setup_minutes, 600)),
+        units: Math.max(1, Math.round(n(y.units ?? 1, 50))), per_unit: Math.max(1, Math.round(n(y.per_unit ?? 1, 50))) };
+    });
+    const unit = typeof r.unit_label === "string" ? r.unit_label.trim().slice(0, 30) : "";
+    return { kind: "staff", days, ...(unit ? { unit_label: unit } : {}) };
   }
   if (r.kind === "serves") return { kind: "serves", hot: Math.round(n(r.hot, 1_000_000)), cold: Math.round(n(r.cold, 1_000_000)) };
   return null;

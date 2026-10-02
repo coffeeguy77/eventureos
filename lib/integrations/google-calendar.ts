@@ -1,5 +1,6 @@
 import "server-only";
 import { isFreeDay, jobDescription, jobTitle } from "@/lib/calendar/job-invite";
+import { shiftDays, type StaffDetails } from "@/lib/quotes/line-helpers";
 import { localDate } from "@/lib/ai/classify";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { ApiError, apiJSON, errMessage, finishSyncLog, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext } from "@/lib/integrations/runtime";
@@ -111,7 +112,11 @@ async function jobInfo(ctx: SyncContext, eventIds: string[]): Promise<Map<string
     const pkg = packages.find((p) => p.rules?.hire && items.some((i) => i.service_id === p.rules.hire!.service_id));
     const servesFromQuote = pkg?.rules.per_serve ? items.filter((i) => i.service_id === pkg.rules.per_serve!.service_id).reduce((a, i) => a + Number(i.quantity), 0) : 0;
     // Times and drinks worked out on the quote fill any gaps in the event's own details
-    const staffD = items.map((i) => i.details).find((d) => d?.kind === "staff" && d.start && d.end);
+    // The shift for the event's date (or the first one) on the quote's staff line
+    const staffRaw = items.map((i) => i.details).find((d) => d?.kind === "staff");
+    const shifts = staffRaw ? shiftDays(staffRaw as unknown as StaffDetails) : [];
+    const shift = shifts.find((x) => x.date && x.date === e.event_date) ?? shifts[0];
+    const staffD = shift && shift.start && shift.end ? { start: shift.start, end: shift.end, setup_minutes: shift.setup_minutes } : undefined;
     const servesD = items.map((i) => i.details).filter((d) => d?.kind === "serves");
     const qSetup = staffD?.start ? (() => { const [h, m] = staffD.start!.split(":").map(Number); const t = h * 60 + m - (staffD.setup_minutes ?? 0); const x = ((t % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; })() : null;
     const setupT = e.setup_time ?? (e.start_time ? null : qSetup);

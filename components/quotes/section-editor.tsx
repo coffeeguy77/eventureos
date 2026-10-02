@@ -8,7 +8,7 @@ import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
-import { servesLine, setupTime, staffLine, type LineDetails, type ServesDetails, type StaffDetails } from "@/lib/quotes/line-helpers";
+import { dayLabel, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails } from "@/lib/quotes/line-helpers";
 import { shortTime } from "@/lib/calendar/job-invite";
 import type { StaffRule } from "@/lib/pricing/engine";
 
@@ -306,37 +306,63 @@ function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper;
 }
 
 function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<LineHelper, { kind: "staff" }>; saved: StaffDetails | null; h: SectionHandlers }) {
-  const [d, setD] = useState<StaffDetails>(saved ?? {
-    kind: "staff", start: helper.defaultStart?.slice(0, 5) ?? null, end: helper.defaultEnd?.slice(0, 5) ?? null, staff: 1,
-    setup_minutes: helper.rule?.setup_minutes ?? 30,
+  const [d, setD] = useState<StaffDetails>(() => saved ? { ...saved, days: shiftDays(saved) } : {
+    kind: "staff",
+    days: [{ date: null, start: helper.defaultStart?.slice(0, 5) ?? null, end: helper.defaultEnd?.slice(0, 5) ?? null, setup_minutes: helper.rule?.setup_minutes ?? 30, units: 1, per_unit: 1 }],
   });
   const r = staffLine(d, helper.rule, helper.label);
-  const update = (patch: Partial<StaffDetails>) => {
-    const next = { ...d, ...patch };
+  const commit = (next: StaffDetails) => {
     setD(next);
     const calc = staffLine(next, helper.rule, helper.label);
-    if (calc) h.onDetails(it.id, next, { quantity: calc.quantity, description: calc.description });
+    if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}) }, { quantity: calc.quantity, description: calc.description });
   };
-  const setup = setupTime(d);
+  const setDay = (i: number, patch: Partial<ShiftDay>) => commit({ ...d, days: d.days.map((x, n) => (n === i ? { ...x, ...patch } : x)) });
   const label = helper.label.charAt(0).toUpperCase() + helper.label.slice(1);
+  const unit = d.unit_label || "cart";
+  const lab = "mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint";
   return (
     <div className="mt-1.5 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="w-[7.5rem]"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Service starts</span>
-          <input type="time" value={d.start ?? ""} onChange={(e) => update({ start: e.target.value || null })} className={helperInput} aria-label="Service starts" /></label>
-        <label className="w-[7.5rem]"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Service ends</span>
-          <input type="time" value={d.end ?? ""} onChange={(e) => update({ end: e.target.value || null })} className={helperInput} aria-label="Service ends" /></label>
-        <label className="w-20"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">{label}s</span>
-          <input type="number" min={1} max={50} inputMode="numeric" value={d.staff} onChange={(e) => update({ staff: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Number of ${helper.label}s`} /></label>
-        <label className="w-20"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Setup min</span>
-          <input type="number" min={0} max={600} step={5} inputMode="numeric" value={d.setup_minutes} onChange={(e) => update({ setup_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className={cn(helperInput, "tabular text-right")} aria-label="Setup minutes before service" /></label>
+      <ol className="space-y-2">
+        {d.days.map((day, i) => {
+          const calc = r?.days[i];
+          return (
+            <li key={i} className={cn("flex flex-wrap items-end gap-2", i > 0 && "border-t border-line pt-2")}>
+              <label className="w-[8.5rem]"><span className={lab}>{day.date ? dayLabel(day, i).split(" ").slice(0, 1).join("") : `Day ${i + 1}`} · date</span>
+                <input type="date" value={day.date ?? ""} onChange={(e) => setDay(i, { date: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} date (optional)`} /></label>
+              <label className="w-[7rem]"><span className={lab}>Service starts</span>
+                <input type="time" value={day.start ?? ""} onChange={(e) => setDay(i, { start: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} service starts`} /></label>
+              <label className="w-[7rem]"><span className={lab}>Service ends</span>
+                <input type="time" value={day.end ?? ""} onChange={(e) => setDay(i, { end: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} service ends`} /></label>
+              <label className="w-16"><span className={lab}>Setup min</span>
+                <input type="number" min={0} max={600} step={5} inputMode="numeric" value={day.setup_minutes} onChange={(e) => setDay(i, { setup_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} setup minutes`} /></label>
+              <label className="w-16"><span className={lab}>{unit}s</span>
+                <input type="number" min={1} max={50} inputMode="numeric" value={day.units} onChange={(e) => setDay(i, { units: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} number of ${unit}s`} /></label>
+              <label className="w-20"><span className={lab}>{label}s{day.units > 1 ? `/${unit}` : ""}</span>
+                <input type="number" min={1} max={50} inputMode="numeric" value={day.per_unit} onChange={(e) => setDay(i, { per_unit: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} ${helper.label}s per ${unit}`} /></label>
+              <span className="pb-2 text-[0.75rem] text-ink-muted">
+                {calc ? <>{setupTime(day) && day.setup_minutes > 0 ? `${shortTime(setupTime(day))} setup · ` : ""}<b className="text-ink">{calc.perPerson} hrs</b>{calc.staff > 1 ? <> × {calc.staff} = <b className="text-ink">{calc.hours} hrs</b></> : null}</> : "Add the service times"}
+              </span>
+              {d.days.length > 1 && (
+                <button type="button" onClick={() => commit({ ...d, days: d.days.filter((_, n) => n !== i) })} className="mb-1 rounded-md p-1.5 text-ink-faint hover:bg-rose-50 hover:text-rose-700" aria-label={`Remove day ${i + 1}`}><Trash2 className="h-3.5 w-3.5" /></button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-2">
+        <button type="button" onClick={() => commit({ ...d, days: [...d.days, nextShiftDay(d.days)] })} className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline">
+          <Plus className="h-3.5 w-3.5" />Add day
+        </button>
+        {d.days.length > 1 && (
+          <button type="button" onClick={() => commit({ ...d, days: d.days.map((x) => ({ ...d.days[0], date: x.date })) })} className="text-[0.75rem] font-medium text-ink-muted hover:text-ink hover:underline">
+            Same hours &amp; team every day (copy {dayLabel(d.days[0], 0).split(" ")[0]})
+          </button>
+        )}
+        <span className="ml-auto text-[0.75rem] text-ink-muted">
+          {r ? <>Total <b className="text-ink">{r.quantity} hrs</b>{d.days.length > 1 ? ` over ${d.days.length} days` : ""}</> : "Enter service times — setup and hours are worked out for you."}
+          {helper.rule?.min_hours ? <span className="text-ink-faint"> · {helper.rule.min_hours} hr minimum per {helper.label}</span> : null}
+        </span>
       </div>
-      <p className="mt-1.5 text-[0.75rem] text-ink-muted">
-        {r ? <>
-          {shortTime(setup ?? d.start)}{setup && d.setup_minutes > 0 ? " (setup)" : ""} – {shortTime(d.end)} = <b className="text-ink">{r.perStaff[0]} hrs</b>{d.staff > 1 ? <> × {d.staff} = <b className="text-ink">{r.quantity} hrs</b></> : null}
-          {helper.rule?.min_hours ? <span className="text-ink-faint"> · {helper.rule.min_hours} hr minimum</span> : null}
-        </> : "Enter the service start and end — setup time and hours are worked out for you."}
-      </p>
     </div>
   );
 }

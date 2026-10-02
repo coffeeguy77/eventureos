@@ -684,7 +684,8 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     const hireSvc = rules.hire ? services.find((x) => x.id === rules.hire!.service_id) : undefined;
     const daily = isDaily(hireSvc?.unit);
 
-    const title = clean(input.sectionTitle, 120) ?? (timed ? `${pkg.name} — ${input.start}–${input.end}` : daily ? `${pkg.name} — ${Math.round(days)} day${Math.round(days) === 1 ? "" : "s"}` : pkg.name);
+    // Shift times live on the staff line (and its helper), not in the section heading
+    const title = clean(input.sectionTitle, 120) ?? (daily ? `${pkg.name} — ${Math.round(days)} day${Math.round(days) === 1 ? "" : "s"}` : pkg.name);
     const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id)
       .order("position", { ascending: false }).limit(1).maybeSingle();
     const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({
@@ -697,7 +698,7 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       is_optional: !!l.optional,
       // Remember how the line was worked out so its helper (times / hot+cold) opens filled in
       ...(l.kind === "staff" && timed ? (() => {
-        const det = { kind: "staff" as const, start: input.start, end: input.end, staff: Math.max(1, staff), setup_minutes: rules.staff?.setup_minutes ?? 0 };
+        const det = { kind: "staff" as const, days: [{ date: null, start: input.start, end: input.end, setup_minutes: rules.staff?.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, staff) }] };
         const calc = staffLine(det, rules.staff ?? null, rules.staff?.label ?? "staff");
         return { details: det, ...(calc ? { description: calc.description } : {}) };
       })() : {}),
