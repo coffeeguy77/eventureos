@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { requireOrg, canManage } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
+import { errMessage, logIntegration } from "@/lib/integrations/runtime";
+import { DETAIL_LABEL, type DetailField, type DetailUpdate } from "@/lib/customers/detail-change";
+import { buildContext } from "@/lib/integrations/sync-runner";
+import { xeroGet } from "@/lib/integrations/xero";
+import { applyContactFill, planContactFill, type ContactNow, type CustomerNow, type XeroContactFull } from "@/lib/integrations/xero-contact-details";
 
 export type FormState = { error?: string } | undefined;
 
@@ -215,4 +220,68 @@ export async function removeCustomerPrice(customerId: string, id: string): Promi
     refresh(customerId);
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't remove." }; }
+}
+
+
+/** Fill this client's blank address / phone / email and add missing people from their Xero contact. Never overwrites. */
+export async function fillFromXero(customerId: string): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, user } = await requireOrg();
+    const { data: c } = await supabase.from("customers").select("id, email, phone, address, xero_contact_id").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    if (!c) return { ok: false, error: "This client no longer exists." };
+    if (!c.xero_contact_id) return { ok: false, error: "This client isn't linked to a Xero contact." };
+    const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
+    const r = await xeroGet<{ Contacts?: XeroContactFull[] }>(ctx, `/Contacts/${encodeURIComponent(c.xero_contact_id)}`, {});
+    const x = r.Contacts?.[0];
+    if (!x) return { ok: false, error: "Xero didn't return that contact — it may have been deleted or merged." };
+    const { data: people } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, is_primary").eq("organisation_id", org.id).eq("customer_id", customerId);
+    const plan = planContactFill(c as CustomerNow, (people ?? []) as ContactNow[], x);
+    if (!plan.changes.length && !plan.contactPhones.length) return { ok: true, message: "Nothing missing that Xero has." };
+    await applyContactFill(supabase, org.id, customerId, plan, user.id);
+    if (plan.changes.length) await logIntegration(ctx, { action: "customer.details_from_xero", entityType: "customer", entityId: customerId, customerId, summary: `Added ${plan.changes.join(", ")} from Xero contact “${x.Name}”` });
+    refresh(customerId);
+    return { ok: true, message: plan.changes.length ? `Added ${plan.changes.join(", ")} from Xero.` : "Added the phone number to the main contact." };
+  } catch (e) {
+    return { ok: false, error: errMessage(e) };
+  }
+}
+
+/** Apply (some of) the details change a client asked for by email. */
+export async function applyDetailUpdate(threadId: string, fields: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, user, profile } = await requireOrg();
+    const { data: t } = await supabase.from("email_threads").select("id, customer_id, extracted").eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
+    const ex = (t?.extracted ?? {}) as Record<string, unknown>;
+    const upd = ex.detail_update as DetailUpdate | undefined;
+    if (!t?.customer_id || !upd) return { ok: false, error: "That suggestion has already been dealt with." };
+    const chosen = (Object.keys(upd.fields) as DetailField[]).filter((f) => fields.includes(f));
+    if (!chosen.length) return { ok: false, error: "Tick at least one change to apply." };
+    const { data: before } = await supabase.from("customers").select("name, email, phone, address, company").eq("id", t.customer_id).eq("organisation_id", org.id).maybeSingle();
+    if (!before) return { ok: false, error: "This client no longer exists." };
+    const patch = Object.fromEntries(chosen.map((f) => [f, upd.fields[f]!]));
+    const { error } = await supabase.from("customers").update(patch).eq("id", t.customer_id).eq("organisation_id", org.id);
+    if (error) return { ok: false, error: `Couldn't save: ${error.message}` };
+    await supabase.from("email_threads").update({ extracted: { ...ex, detail_update: null, detail_dismissed: [...((ex.detail_dismissed as string[]) ?? []), upd.message_id].slice(-20) } }).eq("id", t.id);
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "customer.updated", entityType: "customer", entityId: t.customer_id, customerId: t.customer_id,
+      summary: `${actorName(profile)} updated ${before.name}'s ${chosen.map((f) => DETAIL_LABEL[f].toLowerCase()).join(", ")} from ${upd.from}'s email`,
+      metadata: { changes: chosen.map((f) => ({ field: f, from: (before as Record<string, unknown>)[f] ?? null, to: upd.fields[f] })), email_thread_id: t.id },
+    });
+    refresh(t.customer_id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errMessage(e) };
+  }
+}
+
+export async function dismissDetailUpdate(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { supabase, org } = await requireOrg();
+  const { data: t } = await supabase.from("email_threads").select("id, customer_id, extracted").eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
+  const ex = (t?.extracted ?? {}) as Record<string, unknown>;
+  const upd = ex.detail_update as DetailUpdate | undefined;
+  if (!t || !upd) return { ok: true };
+  const { error } = await supabase.from("email_threads").update({ extracted: { ...ex, detail_update: null, detail_dismissed: [...((ex.detail_dismissed as string[]) ?? []), upd.message_id].slice(-20) } }).eq("id", t.id);
+  if (error) return { ok: false, error: `Couldn't dismiss: ${error.message}` };
+  if (t.customer_id) refresh(t.customer_id);
+  return { ok: true };
 }

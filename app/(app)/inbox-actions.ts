@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { fillCustomerFromEnquiry } from "@/lib/customers/from-enquiry";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { buildRawMessage, sendGmail } from "@/lib/integrations/gmail-send";
@@ -184,6 +185,7 @@ export async function startQuoteFromThread(threadId: string): Promise<QuoteFromT
         const { data, error } = await supabase.rpc("convert_enquiry_to_event", { p_enquiry_id: thread.enquiry_id, p_event_name: null });
         if (error) return { ok: false, error: `Couldn't turn the enquiry into an event: ${error.message}` };
         eventId = data as string;
+        await fillCustomerFromEnquiry(supabase, org.id, thread.enquiry_id).catch(() => []);
       }
     }
     if (!eventId) return { ok: false, error: "Link this email to an enquiry or event first, then you can reply with a quote." };

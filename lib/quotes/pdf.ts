@@ -1,6 +1,7 @@
 import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import type { QuoteSnapshotData } from "@/components/quotes/types";
 import { qtyUnit } from "@/lib/quotes/units";
+import { billToLines, type BillTo } from "@/lib/customers/bill-to";
 
 /**
  * A printable PDF of a published quote version — attached to quote emails.
@@ -15,6 +16,8 @@ export interface QuotePdfInput {
   quoteNumber: number;
   versionNumber?: number | null;
   customerName?: string | null;
+  /** The client's details — printed as "Prepared for" */
+  billTo?: BillTo | null;
   eventLabel?: string | null;
   /** The event's date (YYYY-MM-DD); null shows "TBC", undefined leaves the row out. */
   eventDate?: string | null;
@@ -149,7 +152,12 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   y -= 8;
   for (const l of wrap(input.snap.title ?? `Quote Q-${input.quoteNumber}`, bold, 18, right - M)) { need(24); text(l, M, 18, { font: bold }); y -= 23; }
   if (input.eventLabel) { for (const l of wrap(input.eventLabel, regular, 10, right - M)) { text(l, M, 10, { color: MUTED }); y -= 14; } }
-  if (input.customerName) { y -= 4; text(`Prepared for ${input.customerName}`, M, 10, { color: MUTED }); y -= 14; }
+  const bt = billToLines(input.billTo);
+  if (bt) {
+    y -= 6; text("PREPARED FOR", M, 7.5, { color: FAINT }); y -= 12;
+    text(bt.main, M, 10, { font: bold }); y -= 13;
+    for (const l of bt.sub) for (const w of wrap(l, regular, 9.5, right - M)) { need(14); text(w, M, 9.5, { color: MUTED }); y -= 12.5; }
+  } else if (input.customerName) { y -= 4; text(`Prepared for ${input.customerName}`, M, 10, { color: MUTED }); y -= 14; }
   y -= 10; rule(INK, 1); y -= 18;
 
   // ── Lines

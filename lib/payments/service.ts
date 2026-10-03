@@ -39,7 +39,7 @@ export async function loadStripe(db: SupabaseClient, orgId: string): Promise<Str
 
 export interface PayInvoice {
   id: string; number: string | null; kind: string; total: number; amount_paid: number; balance: number; status: string; due_date: string | null; issue_date: string | null;
-  currency: string; xero_invoice_id: string | null; organisation_id: string; customer: { name: string; email: string | null } | null;
+  currency: string; xero_invoice_id: string | null; organisation_id: string; customer_id: string; event_id: string | null; customer: { name: string; email: string | null } | null;
   event: { name: string; event_date: string | null } | null;
   org: { name: string; slug: string; logo_url: string | null; brand_colour: string | null; contact_email: string | null; contact_phone: string | null };
 }
@@ -49,7 +49,7 @@ export async function invoiceByToken(token: string): Promise<{ inv: PayInvoice; 
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
   const db = createServiceClient();
   const { data } = await db.from("invoices")
-    .select("id, number, kind, total, amount_paid, balance, status, due_date, issue_date, currency, xero_invoice_id, organisation_id, customer:customers(name, email), event:events(name, event_date), org:organisations(name, slug, logo_url, brand_colour, contact_email, contact_phone)")
+    .select("id, number, kind, total, amount_paid, balance, status, due_date, issue_date, currency, xero_invoice_id, organisation_id, customer_id, event_id, customer:customers(name, email), event:events(name, event_date), org:organisations(name, slug, logo_url, brand_colour, contact_email, contact_phone)")
     .eq("pay_token", token).maybeSingle();
   if (!data) return null;
   const inv = data as unknown as PayInvoice;

@@ -3,12 +3,13 @@ import { cn } from "@/lib/cn";
 import { fmtDate, money } from "@/lib/format";
 import type { QuoteSnapshotData } from "./types";
 import { qtyUnit } from "@/lib/quotes/units";
+import { billToLines, type BillTo } from "@/lib/customers/bill-to";
 
 /**
  * The quote exactly as the customer sees it. Renders a build_quote_snapshot() / quote_versions.snapshot
  * payload, so the preview, the version history and the portal all show the same thing.
  */
-export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteNumber, customerName, eventLabel, eventDate, versionLabel, compact = false }: {
+export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteNumber, customerName, billTo, eventLabel, eventDate, versionLabel, compact = false }: {
   snap: QuoteSnapshotData;
   currency?: string;
   orgName?: string;
@@ -16,6 +17,8 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
   logoUrl?: string | null;
   quoteNumber?: number;
   customerName?: string;
+  /** The client's details (contact, address, phone, email) — shown as "Prepared for" */
+  billTo?: BillTo | null;
   eventLabel?: string;
   /** The event's date; null shows "TBC", undefined leaves the row out. */
   eventDate?: string | null;
@@ -48,9 +51,17 @@ export function QuoteDocument({ snap, currency = "AUD", orgName, logoUrl, quoteN
               {eventDate !== undefined && <><dt className="text-ink-faint">Event date</dt><dd className={cn("text-right font-medium", !eventDate && "text-amber-700")}>{eventDate ? fmtDate(eventDate) : "TBC"}</dd></>}
             </dl>
           </div>
-          {customerName && (
-            <p className="mt-5 text-[0.7812rem] text-ink-muted">Prepared for <span className="font-medium text-ink">{customerName}</span></p>
-          )}
+          {(() => {
+            const b = billToLines(billTo);
+            if (b) return (
+              <div className="mt-5 text-[0.7812rem]">
+                <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint">Prepared for</p>
+                <p className="mt-0.5 font-medium text-ink">{b.main}</p>
+                {b.sub.map((l, i) => <p key={i} className="break-words text-ink-muted">{l}</p>)}
+              </div>
+            );
+            return customerName ? <p className="mt-5 text-[0.7812rem] text-ink-muted">Prepared for <span className="font-medium text-ink">{customerName}</span></p> : null;
+          })()}
         </header>
       )}
 

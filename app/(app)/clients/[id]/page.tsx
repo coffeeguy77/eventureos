@@ -16,7 +16,7 @@ import { DocumentsList, type DocRow } from "@/components/records/documents-list"
 import { NotesPanel, type NoteRow } from "@/components/records/notes-panel";
 import { NextActionBanner } from "@/components/records/next-action";
 import { addNote } from "@/app/(app)/record-actions";
-import { ContactsManager, CustomerDetailsEditor, type ContactRow } from "./controls";
+import { ContactsManager, CustomerDetailsEditor, DetailUpdateBanner, FillFromXeroButton, type ContactRow, type PendingDetailUpdate } from "./controls";
 import { enquiryNextAction, type NextAction } from "@/lib/next-action";
 import { CLASSIFICATION, ENQUIRY_SOURCE, ENQUIRY_STATUS, EVENT_STATUS, INVOICE_STATUS, OPEN_ENQUIRY_STATUSES, QUOTE_STATUS } from "@/lib/status";
 import { daysBetween, fmtDate, fmtDateTime, money, relative, relativeDay, todayISO } from "@/lib/format";
@@ -148,6 +148,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   // ---- Derived facts -----------------------------------------------------
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
   const today = todayISO(tz);
+  // Details changes clients asked for by email, waiting for someone to apply them
+  const { data: duRows } = await supabase.from("email_threads").select("id, subject, event_id, enquiry_id, extracted").eq("organisation_id", org.id).eq("customer_id", id)
+    .not("extracted->detail_update", "is", null).limit(5);
+  const LABELS: Record<string, string> = { address: "Address", phone: "Phone", email: "Email", company: "Company name" };
+  const detailUpdates = ((duRows ?? []) as { id: string; subject: string | null; event_id: string | null; enquiry_id: string | null; extracted: Record<string, unknown> | null }[])
+    .flatMap((t) => {
+      const u = t.extracted?.detail_update as { fields: Record<string, string>; from: string; at: string; quote: string | null } | null | undefined;
+      if (!u?.fields) return [];
+      const changes = Object.entries(u.fields).filter(([f]) => f in LABELS).map(([f, to]) => ({ field: f, label: LABELS[f], to, from: ((c as unknown as Record<string, string | null>)[f]) ?? null }));
+      return changes.length ? [{ threadId: t.id, subject: t.subject, from: u.from, at: u.at, quote: u.quote, changes,
+        href: t.event_id ? `/events/${t.event_id}?tab=communication` : t.enquiry_id ? `/enquiries/${t.enquiry_id}` : `/clients/${id}?tab=emails` }] : [];
+    });
   const live = invoices.filter((i) => i.status !== "void");
   const lifetime = payments.reduce((s, p) => s + Number(p.amount), 0);
   const outstanding = live.reduce((s, i) => s + Number(i.balance), 0);
@@ -254,6 +266,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </div>
           <div className="flex w-full gap-2 sm:w-auto">
             <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">New event for this client</ButtonLink>
+            {canManage(role) && <ButtonLink href={`/invoices/new?customer=${c.id}`} className="h-10 flex-1 sm:h-9 sm:flex-none">New invoice</ButtonLink>}
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-line pt-5 sm:grid-cols-4">
@@ -275,6 +288,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {tab === "overview" && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-6">
+              {detailUpdates.map((u) => <DetailUpdateBanner key={u.threadId} u={u as PendingDetailUpdate} href={u.href} when={relative(u.at)} />)}
               <Card>
                 <CardHeader title="Client details" />
                 <CustomerDetailsEditor customer={c} view={
@@ -285,11 +299,14 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                       <Field label="Type">{c.kind === "company" ? "Company" : "Individual"}</Field>
                       <Field label="Email"><span className="break-all">{c.email ?? "—"}</span></Field>
                       <Field label="Phone">{c.phone ?? "—"}</Field>
-                      <Field label="Address">{c.address ?? "—"}</Field>
+                      <Field label="Address"><span className="whitespace-pre-line">{c.address ?? "—"}</span></Field>
                       <Field label="Tags">{c.tags.length ? <span className="flex flex-wrap gap-1.5">{c.tags.map((t) => <Badge key={t}>{t}</Badge>)}</span> : "—"}</Field>
                       <Field label="Quotes accepted">{money(acceptedValue, cur)}</Field>
                       <Field label="Xero">{c.xero_contact_id ? "Linked" : xeroConnected ? "Not linked" : "Not connected"}</Field>
                     </dl>
+                    {c.xero_contact_id && xeroConnected && (!c.address || !c.phone || !c.email) && (
+                      <p className="mt-4 text-[0.75rem] text-ink-muted"><span className="mr-2">Missing {[!c.address && "address", !c.phone && "phone", !c.email && "email"].filter(Boolean).join(", ")}.</span><FillFromXeroButton customerId={c.id} /></p>
+                    )}
                     {c.notes && <p className="mt-5 whitespace-pre-line break-words rounded-lg bg-amber-50/60 px-3 py-2 text-[0.8125rem] text-ink ring-1 ring-inset ring-amber-100">{c.notes}</p>}
                   </div>
                 } />
@@ -573,7 +590,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {tab === "invoices" && (
           <Card>
             <CardHeader title="Invoices" subtitle={`${money(live.reduce((s, i) => s + Number(i.total), 0), cur)} invoiced · ${money(outstanding, cur)} outstanding`}
-              action={<span className="block max-w-[10rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{xeroConnected ? "Synced with Xero" : "Xero not connected · invoices recorded in EventureOS"}</span>} />
+              action={canManage(role) ? <ButtonLink href={`/invoices/new?customer=${c.id}`} variant="primary" size="sm" className="h-10 sm:h-8">New invoice</ButtonLink> : undefined} />
+            <p className="-mt-2 px-5 pb-3 text-[0.7188rem] text-ink-faint">{xeroConnected ? "Synced with Xero" : "Xero not connected · invoices recorded in EventureOS"}</p>
             {invoices.length === 0 ? <EmptyState title="No invoices yet">Invoices raised for this client’s events appear here.</EmptyState> : (<>
               <ul className="divide-y divide-line border-t border-line md:hidden">
                 {invoices.map((i) => (

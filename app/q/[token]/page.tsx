@@ -7,6 +7,7 @@ import { brandVars } from "@/app/p/[slug]/portal-data";
 import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { LinkResponse, PrintButton, ViewBeacon } from "./client";
 
+import { loadBillTo } from "@/lib/customers/bill-to";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your quote", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
@@ -30,6 +31,13 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
   if (error) throw new Error("This quote couldn't be loaded. Please try again shortly.");
   if (!data) notFound();
   const d = data as LinkData;
+  // The client's details for "Prepared for" (the link's token is already checked above)
+  const billTo = await (async () => {
+    const db = createServiceClient();
+    const { data: qr } = await db.from("quotes").select("organisation_id, customer_id, event:events(primary_contact_id)").eq("id", d.quote.id).maybeSingle();
+    if (!qr) return null;
+    return loadBillTo(db, qr.organisation_id, qr.customer_id, (qr.event as unknown as { primary_contact_id: string | null } | null)?.primary_contact_id ?? null).catch(() => null);
+  })();
   const cur = d.org.currency || "AUD";
   const tz = d.org.timezone || "Australia/Sydney";
   const v = d.version;
@@ -69,7 +77,7 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
           </Banner>
         )}
 
-        <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} logoUrl={d.org.logo_url} quoteNumber={d.quote.number} customerName={d.customer?.name}
+        <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} logoUrl={d.org.logo_url} quoteNumber={d.quote.number} customerName={d.customer?.name} billTo={billTo}
           eventLabel={d.event ? `${d.event.name}${d.event.event_date ? ` · ${fmtDate(d.event.event_date, "long")}` : ""}${d.event.venue ? ` · ${d.event.venue}` : ""}` : undefined}
           eventDate={d.event ? d.event.event_date ?? null : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />

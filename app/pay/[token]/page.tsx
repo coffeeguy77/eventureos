@@ -1,3 +1,5 @@
+import { billToLines, loadBillTo } from "@/lib/customers/bill-to";
+import { createServiceClient } from "@/lib/integrations/runtime";
 import { notFound } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { invoiceByToken, payable } from "@/lib/payments/service";
@@ -19,6 +21,10 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const cur = inv.currency || "AUD";
   const justPaid = sp.paid === "1";
   const canPay = payable(inv) && stripeReady && !justPaid;
+  // The client's details (the pay link's token is already checked)
+  const svc = createServiceClient();
+  const { data: evc } = inv.event_id ? await svc.from("events").select("primary_contact_id").eq("id", inv.event_id).maybeSingle() : { data: null };
+  const bill = billToLines(await loadBillTo(svc, inv.organisation_id, inv.customer_id, evc?.primary_contact_id ?? null).catch(() => null));
   const kind = inv.kind === "deposit" ? "Deposit invoice" : inv.kind === "final" ? "Final invoice" : "Invoice";
 
   return (
@@ -32,7 +38,13 @@ export default async function PayPage({ params, searchParams }: { params: Promis
         <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           <div className="p-6">
             <p className="text-[0.75rem] font-semibold uppercase tracking-wider text-ink-faint">{kind} {inv.number ?? ""}</p>
-            <p className="mt-1 text-[0.9375rem] text-ink">{inv.customer?.name ?? ""}</p>
+            {bill ? (
+              <div className="mt-2 text-[0.8125rem]">
+                <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint">Bill to</p>
+                <p className="text-[0.9375rem] font-medium text-ink">{bill.main}</p>
+                {bill.sub.map((l, i) => <p key={i} className="break-words text-ink-muted">{l}</p>)}
+              </div>
+            ) : <p className="mt-1 text-[0.9375rem] text-ink">{inv.customer?.name ?? ""}</p>}
             {inv.event && <p className="text-[0.8125rem] text-ink-muted">{inv.event.name}{inv.event.event_date ? ` · ${fmtDate(inv.event.event_date, "long")}` : ""}</p>}
 
             <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[0.875rem]">

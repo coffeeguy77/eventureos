@@ -1,4 +1,5 @@
 import "server-only";
+import { applyContactFill, planContactFill, type ContactNow, type CustomerNow, type XeroContactFull } from "./xero-contact-details";
 import { localDate } from "@/lib/ai/classify";
 import { customerRecord, loadCustomersForMatching, upsertCandidate, type CustomerForMatch } from "@/lib/integrations/gmail-import";
 import { bestMatch } from "@/lib/integrations/matching";
@@ -37,7 +38,7 @@ export interface XeroSettings {
   sales_account_code?: string;
   tax_type?: string;
 }
-type Phase = "invoices" | "quotes" | "payments";
+type Phase = "invoices" | "quotes" | "payments" | "contacts";
 
 const TIME_BUDGET_MS = 40_000;
 
@@ -169,7 +170,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
   const deadline = Date.now() + TIME_BUDGET_MS;
   if (opts.full) await saveIntegrationSettings(ctx, { invoices_synced_at: null, quotes_synced_at: null, payments_synced_at: null, cursors: {} });
   const s = xeroSettings(ctx);
-  const counts = { invoices: 0, quotes: 0, payments: 0, pushed: 0, waiting: 0 };
+  const counts = { invoices: 0, quotes: 0, payments: 0, pushed: 0, waiting: 0, details: 0 };
   const notes: string[] = [];
   let done = false, rateLimited = false;
   let R: Resolver | null = null;
@@ -200,6 +201,11 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     if (complete) complete = await pagedPhase<XeroPayment>(ctx, "payments", deadline,
       async (page, since) => (await xeroGet<{ Payments?: XeroPayment[] }>(ctx, "/Payments", { page: String(page), pageSize: "100" }, since)).Payments ?? [],
       async (list) => { counts.payments += await upsertPayments(ctx, list); });
+
+    // 3b. Contact details (address, phone, extra people) — fills blanks on linked customers
+    if (complete) complete = await pagedPhase<XeroContactFull>(ctx, "contacts", deadline,
+      async (page, since) => (await xeroGet<{ Contacts?: XeroContactFull[] }>(ctx, "/Contacts", { page: String(page), pageSize: "100", includeArchived: "true", order: "UpdatedDateUTC ASC" }, since)).Contacts ?? [],
+      async (list) => { counts.details += await fillFromContacts(ctx, list, R!.linked); });
 
     // 4. Push new EventureOS invoices
     if (complete && s.push_invoices && s.push_invoices !== "off") {
@@ -235,6 +241,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
   const parts = [
     `${pl(counts.invoices, "invoice")}, ${pl(counts.quotes, "quote")} and ${pl(counts.payments, "payment")} updated`,
     R?.created ? `${pl(R.created, "new customer")} from Xero` : null,
+    counts.details ? `${pl(counts.details, "client")} given missing details (address, phone or contacts) from Xero` : null,
     R?.linkedByEmail ? `${pl(R.linkedByEmail, "customer")} linked by email` : null,
     R?.review ? `${pl(R.review, "contact")} to check in Match review` : null,
     linkedMail.threads || linkedMail.enquiries ? `${pl(linkedMail.threads, "email conversation")} and ${pl(linkedMail.enquiries, "enquiry")} linked to customers` : null,
@@ -446,4 +453,32 @@ export async function selectTenant(ctx: SyncContext, tenantId: string) {
   await saveIntegrationSettings(ctx, { tenant_id: t.tenantId, tenant_name: t.tenantName, contacts_synced_at: null, invoices_synced_at: null, quotes_synced_at: null, payments_synced_at: null, cursors: {} });
   const { error } = await ctx.db.from("integrations").update({ account_label: t.tenantName, external_account_id: t.tenantId }).eq("id", ctx.integration.id);
   if (error) throw new Error(error.message);
+}
+
+
+/** For Xero contacts linked to customers: fill in missing address, phone and extra people. Returns customers changed. */
+async function fillFromContacts(ctx: SyncContext, list: XeroContactFull[], linked: Map<string, string>): Promise<number> {
+  const mine = list.filter((c) => linked.has(c.ContactID));
+  if (!mine.length) return 0;
+  const ids = mine.map((c) => linked.get(c.ContactID)!);
+  const [{ data: custs, error: e1 }, { data: people, error: e2 }] = await Promise.all([
+    ctx.db.from("customers").select("id, email, phone, address").eq("organisation_id", ctx.org.id).in("id", ids),
+    ctx.db.from("contacts").select("id, customer_id, first_name, last_name, email, phone, is_primary").eq("organisation_id", ctx.org.id).in("customer_id", ids),
+  ]);
+  if (e1 || e2) throw new Error(`Could not load customers for contact details: ${(e1 ?? e2)!.message}`);
+  const byId = new Map((custs ?? []).map((c) => [c.id as string, c as CustomerNow]));
+  let n = 0;
+  for (const x of mine) {
+    const cid = linked.get(x.ContactID)!;
+    const cust = byId.get(cid);
+    if (!cust) continue;
+    const plan = planContactFill(cust, ((people ?? []) as (ContactNow & { customer_id: string })[]).filter((p) => p.customer_id === cid), x);
+    if (!plan.changes.length && !plan.contactPhones.length) continue;
+    await applyContactFill(ctx.db, ctx.org.id, cid, plan, ctx.actorId);
+    if (plan.changes.length) {
+      n++;
+      await logIntegration(ctx, { action: "customer.details_from_xero", entityType: "customer", entityId: cid, customerId: cid, summary: `Added ${plan.changes.join(", ")} from Xero contact “${x.Name}”` });
+    }
+  }
+  return n;
 }

@@ -9,6 +9,7 @@ import { cleanSections, templateTotals } from "@/lib/quotes/templates";
 import type { TemplateChoice } from "@/components/quotes/template-picker";
 import type { DrawerThread } from "@/components/quotes/email-drawer";
 import { QuoteBuilder, DuplicateButton } from "@/components/quotes/builder";
+import { loadBillTo } from "@/lib/customers/bill-to";
 import type { PricingPackage } from "@/components/quotes/price-job";
 import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "@/components/quotes/quote-document";
@@ -50,6 +51,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   if (!qData) notFound();
   const q = qData as unknown as QuoteRow;
   if (!q.event || !q.customer) throw new Error("This quote's event or customer could not be loaded.");
+  const billTo = await loadBillTo(supabase, org.id, q.customer.id, q.event.primary_contact_id).catch(() => null);
 
   const [sectionsRes, itemsRes, versionsRes, docsRes, catRes, members, gmailRes, ruleRes, contactRes, svcRes, pkgRes, sendsRes, tplRes] = await Promise.all([
     supabase.from("quote_sections").select("id, title, description, position, is_optional").eq("organisation_id", org.id).eq("quote_id", q.id).order("position").order("created_at"),
@@ -195,7 +197,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-6">
             {snap ? (
-              <QuoteDocument snap={snap} currency={cur} orgName={org.name} logoUrl={org.logo_url} quoteNumber={q.number} customerName={q.customer.name}
+              <QuoteDocument snap={snap} currency={cur} orgName={org.name} logoUrl={org.logo_url} quoteNumber={q.number} customerName={q.customer.name} billTo={billTo}
                 eventLabel={`${q.event.name}${q.event.event_date ? ` · ${fmtDate(q.event.event_date, "long")}` : ""}`} eventDate={q.event.event_date ?? null}
                 versionLabel={shown ? String(shown.version_number) : undefined} />
             ) : (
@@ -277,6 +279,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       orgLogo={org.logo_url}
       onCalendar={!!onCal?.length}
       xeroQuotes={xeroQuotes}
+      billTo={billTo}
       currency={cur}
       tz={tz}
       today={today}

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { fillCustomerFromEnquiry } from "@/lib/customers/from-enquiry";
 import { requireOrg, getMembers } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { ENQUIRY_STATUS } from "@/lib/status";
@@ -156,10 +157,12 @@ export async function updateEnquiryDetails(id: string, _prev: FormState, form: F
 }
 
 export async function convertToEvent(id: string, form: FormData) {
-  const { supabase } = await requireOrg();
+  const { supabase, org } = await requireOrg();
   const name = str(form.get("event_name"));
   const { data, error } = await supabase.rpc("convert_enquiry_to_event", { p_enquiry_id: id, p_event_name: name });
   if (error) throw new Error(`Couldn't convert the enquiry: ${error.message}`);
+  // Give the client record the enquirer's phone / email / address where it has none
+  await fillCustomerFromEnquiry(supabase, org.id, id).catch(() => []);
   revalidatePath("/enquiries");
   revalidatePath("/dashboard");
   redirect(`/events/${data}`);

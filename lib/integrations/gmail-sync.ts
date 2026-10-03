@@ -1,4 +1,5 @@
 import "server-only";
+import { DETAIL_LABEL, extractDetailChange, looksLikeDetailChange, type DetailField, type DetailUpdate } from "@/lib/customers/detail-change";
 import {
   AUTO_ENQUIRY_THRESHOLD, classifyEmail, parseFormFields, stripQuoted,
   type Classification, type ClassificationResult, type ClassifyContext,
@@ -422,6 +423,12 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   const { error: tErr } = await db.from("email_threads").update(patch).eq("id", thread.id);
   if (tErr) throw new Error(`Could not update email thread: ${tErr.message}`);
 
+  // A client asking us to change their saved details → a suggestion on the conversation (someone taps Apply)
+  if (!outbound && !bulk && thread.classification !== "spam" && Date.parse(pm.sentAt) > Date.now() - 30 * 86400_000) {
+    const cid = (patch.customer_id as string | undefined) ?? thread.customer_id;
+    if (cid && looksLikeDetailChange(bodyClean)) await spotDetailChange(ctx, thread.id, cid, pm, bodyClean).catch(() => undefined);
+  }
+
   // keep the enquiry's "last contact" current when we reply from Gmail directly
   if (outbound && thread.enquiry_id) {
     await db.from("enquiries").update({ last_contact_at: pm.sentAt }).eq("id", thread.enquiry_id).or(`last_contact_at.is.null,last_contact_at.lt.${pm.sentAt}`);
@@ -613,4 +620,30 @@ async function recordQuoteBounce(ctx: SyncContext, gmailThreadId: string, b: imp
     }
   }
   return `${b.kind === "bounced" ? "Bounce" : "Delivery delay"} notice for ${r.email} — recorded on the quote`;
+}
+
+
+/** Save a "client wants their details changed" suggestion on the thread, and tell the team. */
+async function spotDetailChange(ctx: SyncContext, threadId: string, customerId: string, pm: ParsedMessage, body: string) {
+  const db = ctx.db;
+  const [{ data: t }, { data: c }] = await Promise.all([
+    db.from("email_threads").select("extracted").eq("id", threadId).maybeSingle(),
+    db.from("customers").select("name, email, phone, address, company").eq("id", customerId).eq("organisation_id", ctx.org.id).maybeSingle(),
+  ]);
+  if (!c) return;
+  const ex = (t?.extracted ?? {}) as Record<string, unknown>;
+  const prev = ex.detail_update as DetailUpdate | undefined;
+  const dismissed = Array.isArray(ex.detail_dismissed) ? (ex.detail_dismissed as string[]) : [];
+  if (prev?.message_id === pm.gmailId || dismissed.includes(pm.gmailId)) return;
+  const found = await extractDetailChange(body, c);
+  if (!found) return;
+  const update: DetailUpdate = { fields: found.fields, message_id: pm.gmailId, from: pm.from.name ?? pm.from.email, at: pm.sentAt, quote: found.quote };
+  await db.from("email_threads").update({ extracted: { ...ex, detail_update: update } }).eq("id", threadId);
+  const what = (Object.keys(found.fields) as DetailField[]).map((f) => DETAIL_LABEL[f].toLowerCase()).join(", ");
+  await db.from("notifications").insert({
+    organisation_id: ctx.org.id, type: "customer.details_change", title: `${c.name} asked to update their ${what}`,
+    body: found.quote ?? "Check the suggested change and apply it.", link: `/clients/${customerId}`, entity_type: "customer", entity_id: customerId,
+  });
+  await logIntegration(ctx, { action: "customer.details_change_spotted", entityType: "email_thread", entityId: threadId, customerId,
+    summary: `Spotted a request from ${update.from} to update ${what} — waiting for someone to apply it` });
 }

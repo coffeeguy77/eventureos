@@ -10,6 +10,7 @@ import {
 } from "@/app/(app)/quotes/actions";
 import { updateEventDetails } from "@/app/(app)/events/actions";
 import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
+import type { BillTo } from "@/lib/customers/bill-to";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -54,6 +55,8 @@ export interface BuilderProps {
   onCalendar?: boolean;
   /** The client's quotes in Xero, newest first — can be brought into this quote */
   xeroQuotes?: XeroQuoteChoice[];
+  /** The client's details for the preview's "Prepared for" */
+  billTo?: BillTo | null;
   currency: string;
   tz: string;
   today: string;
@@ -728,7 +731,7 @@ export function QuoteBuilder(p: BuilderProps) {
       {/* ------------------------------------------------------------ overlays */}
       {preview && (
         <PreviewModal onClose={() => setPreview(null)}>
-          <QuoteDocument snap={preview} currency={currency} orgName={p.orgName} logoUrl={p.orgLogo} quoteNumber={quote.number} customerName={p.customer.name}
+          <QuoteDocument snap={preview} currency={currency} orgName={p.orgName} logoUrl={p.orgLogo} quoteNumber={quote.number} customerName={p.customer.name} billTo={p.billTo}
             eventLabel={`${p.event.name}${p.event.event_date ? ` · ${fmtDate(p.event.event_date, "long")}` : ""}`} eventDate={p.event.event_date ?? null}
             versionLabel={`${nextVersion} (preview)`} />
         </PreviewModal>

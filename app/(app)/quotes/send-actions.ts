@@ -14,6 +14,7 @@ import { buildContext } from "@/lib/integrations/sync-runner";
 import { buildRawMessage, sendGmail } from "@/lib/integrations/gmail-send";
 import { ownAddresses } from "@/lib/integrations/gmail-sync";
 import { replyTarget } from "@/lib/email/thread-reply";
+import { loadBillTo } from "@/lib/customers/bill-to";
 import { buildQuotePdf } from "@/lib/quotes/pdf";
 import type { QuoteSnapshotData } from "@/components/quotes/types";
 import { ApiError, errMessage } from "@/lib/integrations/runtime";
@@ -314,8 +315,9 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
       const { data: v } = await supabase.from("quote_versions").select("snapshot").eq("id", cur.id).single();
       const logo = await logoBytes(orgRow?.logo_url);
       const snap = (v?.snapshot ?? { sections: [] }) as QuoteSnapshotData;
+      const billTo = await loadBillTo(supabase, org.id, q.customer_id, q.event?.primary_contact_id ?? null).catch(() => null);
       pdfFor = (url: string) => buildQuotePdf({
-        snap, orgName: org.name, quoteNumber: q.number, versionNumber: cur.version_number, customerName: q.customer?.name ?? null,
+        snap, orgName: org.name, quoteNumber: q.number, versionNumber: cur.version_number, customerName: q.customer?.name ?? null, billTo,
         eventLabel: common.eventLine, eventDate: q.event ? q.event.event_date ?? null : undefined, currency: org.currency, brand: orgRow?.brand_colour, logo, acceptUrl: url,
       });
     }

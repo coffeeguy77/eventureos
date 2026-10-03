@@ -1,4 +1,6 @@
 import "server-only";
+export { contactPhone, contactPerson, type XeroPhone, type XeroContact } from "./xero-format";
+import type { XeroContact } from "./xero-format";
 import { apiJSON, type SyncContext } from "@/lib/integrations/runtime";
 
 /**
@@ -27,12 +29,6 @@ export async function xeroConnectionsWithToken(accessToken: string): Promise<Xer
   return (await res.json()) as XeroConnection[];
 }
 
-export interface XeroPhone { PhoneType?: string; PhoneNumber?: string; PhoneAreaCode?: string; PhoneCountryCode?: string }
-export interface XeroContact {
-  ContactID: string; ContactStatus?: string; Name: string; FirstName?: string; LastName?: string; EmailAddress?: string;
-  Phones?: XeroPhone[]; IsCustomer?: boolean; IsSupplier?: boolean; UpdatedDateUTC?: string;
-  ContactPersons?: { FirstName?: string; LastName?: string; EmailAddress?: string; IncludeInEmails?: boolean }[];
-}
 export interface XeroLineItem {
   Description?: string; Quantity?: number; UnitAmount?: number; ItemCode?: string; AccountCode?: string; LineAmount?: number; TaxAmount?: number; DiscountRate?: number;
 }
@@ -84,19 +80,7 @@ export function xeroTimestamp(v?: string | null): string | null {
   return v && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null;
 }
 
-export function contactPhone(c: XeroContact): string | null {
-  const order = ["MOBILE", "DEFAULT", "DDI", "OFFICE"];
-  const phones = (c.Phones ?? []).filter((p) => p.PhoneNumber?.trim());
-  phones.sort((a, b) => order.indexOf(a.PhoneType ?? "") - order.indexOf(b.PhoneType ?? ""));
-  const p = phones[0];
-  if (!p) return null;
-  return [p.PhoneCountryCode ? `+${p.PhoneCountryCode.replace(/^\+/, "")}` : "", p.PhoneAreaCode ?? "", p.PhoneNumber ?? ""].filter(Boolean).join(" ").trim();
-}
 
-export function contactPerson(c: XeroContact): string | null {
-  const n = [c.FirstName, c.LastName].filter((x) => x?.trim()).join(" ").trim();
-  return n || null;
-}
 
 /** Map Xero invoice status to EventureOS status (Xero is authoritative). */
 export function mapInvoiceStatus(inv: Pick<XeroInvoice, "Status" | "AmountPaid" | "AmountDue" | "DueDate" | "DueDateString">, today: string) {
