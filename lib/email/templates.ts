@@ -86,3 +86,16 @@ export function staffAppInviteEmail(o: { businessName: string; firstName: string
   const text = `${paragraphs.join("\n\n")}\n\nOpen the staff app: ${o.url}`;
   return { subject, html, text };
 }
+
+export function staffSignInEmail(o: { businessName: string; firstName: string; url: string; code: string | null; brand?: string | null; logoUrl?: string | null }) {
+  const subject = `Sign in to the ${o.businessName} staff app`;
+  const paragraphs = [
+    `Hi ${o.firstName},`,
+    "Tap the button to sign in to the staff app. The link works once and expires in an hour.",
+    ...(o.code ? [`Using the app from your iPhone home screen? Type this code into the app instead: ${o.code}`] : []),
+  ];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: "Sign in to the staff app", paragraphs,
+    button: { label: "Sign in", url: o.url }, footer: `Didn't ask for this? You can ignore it — nobody can sign in without this email. Sent on behalf of ${o.businessName}.` });
+  const text = `${paragraphs.join("\n\n")}\n\nSign in: ${o.url}`;
+  return { subject, html, text };
+}

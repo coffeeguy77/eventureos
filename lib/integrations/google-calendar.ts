@@ -158,6 +158,18 @@ function eventBody(ctx: SyncContext, ce: CalRow, job?: JobInfo | null, freeDays:
       extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
     };
   }
+  if (ce.kind === "shift") {
+    // A staff shift that isn't an event (e.g. a weekly coffee delivery): an invite to that staff member
+    return {
+      summary: ce.title,
+      location: ce.location ?? undefined,
+      description: ce.description || "Shift — details in the staff app",
+      start: ce.all_day ? { date: localDate(ce.starts_at, tz) } : { dateTime: ce.starts_at, timeZone: tz },
+      end: ce.all_day ? { date: localDate(new Date(Date.parse(ce.starts_at) + 86400000).toISOString(), tz) } : { dateTime: ce.ends_at, timeZone: tz },
+      transparency: "opaque",
+      extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
+    };
+  }
   if (ce.kind === "task") {
     // A follow-up reminder: shows as Free (never blocks bookings) and pops up at the time it's due
     return {
@@ -227,7 +239,7 @@ async function guestLists(ctx: SyncContext, eventIds: string[], includeClients: 
 export async function syncGoogleCalendar(ctx: SyncContext) {
   const logId = await startSyncLog(ctx, "calendar", "outbound");
   const s = (ctx.integration.settings ?? {}) as CalendarSettings;
-  const kinds = [...new Set([...(s.sync_kinds?.length ? s.sync_kinds : DEFAULT_SYNC_KINDS), "task"])]; // follow-up reminders always go to the calendar
+  const kinds = [...new Set([...(s.sync_kinds?.length ? s.sync_kinds : DEFAULT_SYNC_KINDS), "task", "shift"])]; // follow-up reminders and staff shifts always go to the calendar
   let pushed = 0, failed = 0, pulled = 0;
   const errors: string[] = [];
   try {
@@ -377,11 +389,14 @@ async function pushRows(ctx: SyncContext, s: CalendarSettings, byId: Map<string,
   const pushIds = toPush.filter((c) => c.kind === "event").map((c) => c.event_id).filter((x): x is string => !!x);
   const guests = await guestLists(ctx, toPush.map((c) => c.event_id).filter((x): x is string => !!x), s.invite_clients !== false);
   const jobs = await jobInfo(ctx, pushIds);
+  const shiftInfo = await shiftInvites(ctx, toPush.filter((c) => c.kind === "shift").map((c) => c.id));
   const freeDays = Array.isArray(s.free_weekdays) ? s.free_weekdays : DEFAULT_FREE_WEEKDAYS;
   for (const ce of toPush) {
     const calId = byId.get(ce.calendar_connection_id)!.external_calendar_id;
     try {
-      const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : [];
+      const shift = ce.kind === "shift" ? shiftInfo.get(ce.id) : undefined;
+      const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : shift?.email ? [shift.email] : [];
+      if (shift) ce.description = shift.description;
       const had = [...(ce.attendees ?? [])].sort();
       const changed = want.join(",") !== had.join(",");
       const job = ce.kind === "event" && ce.event_id ? jobs.get(ce.event_id) ?? null : null;
@@ -475,4 +490,23 @@ async function recordCrewRsvps(ctx: SyncContext, connId: string, items: { id: st
       }
     }
   }
+}
+
+
+/** The staff member (invite) and notes for staff-shift calendar entries. */
+async function shiftInvites(ctx: SyncContext, calendarRowIds: string[]) {
+  const out = new Map<string, { email: string | null; description: string }>();
+  if (!calendarRowIds.length) return out;
+  const [{ data }, { data: org }] = await Promise.all([
+    ctx.db.from("calendar_events").select("id, shift:staff_shifts(notes, member:crew_members(email))").in("id", calendarRowIds),
+    ctx.db.from("organisations").select("slug").eq("id", ctx.org.id).maybeSingle(),
+  ]);
+  const link = org?.slug ? `${appBaseUrl()}/crew/${org.slug}` : null;
+  for (const r of (data ?? []) as unknown as { id: string; shift: { notes: string | null; member: { email: string | null } | null } | null }[]) {
+    out.set(r.id, {
+      email: r.shift?.member?.email?.toLowerCase() ?? null,
+      description: [r.shift?.notes, link ? `Your shifts and pay: ${link}` : null].filter(Boolean).join("\n\n") || "Shift",
+    });
+  }
+  return out;
 }

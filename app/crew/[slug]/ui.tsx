@@ -6,7 +6,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { CalendarCheck, CalendarOff, Check, Download, Hand, Loader2, Megaphone, Share, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
-  acceptShift, addAway, claimExtraHours, crewSignIn, declineShift, postToBoard, removeAway, setInterest, takeOffBoard, takeOpenShift, takeSwap,
+  acceptShift, addAway, claimExtraHours, crewLinkSignIn, crewSignIn, declineShift, postToBoard, removeAway, setInterest, takeOffBoard, takeOpenShift, takeSwap,
   type CrewResult, type CrewSignInState,
 } from "./actions";
 
@@ -263,4 +263,29 @@ export function AwayForm({ slug, today }: { slug: string; today: string }) {
 export function RemoveAwayButton({ slug, id }: { slug: string; id: string }) {
   const { run, pending, toast } = useRun();
   return (<><button aria-label="Remove" disabled={pending} onClick={() => run(() => removeAway(slug, id))} className="rounded-lg p-2 text-ink-faint hover:bg-zinc-100 hover:text-ink"><X className="h-4 w-4" /></button>{toast}</>);
+}
+
+
+/** Signs in from the emailed link as soon as the page opens (or on tap if that fails). */
+export function FinishSignIn({ slug, th, t }: { slug: string; th: string; t: string }) {
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: true, error: null });
+  const go = () => {
+    setState({ busy: true, error: null });
+    crewLinkSignIn(slug, th, t).then((r) => { if (r?.error) setState({ busy: false, error: r.error }); })
+      .catch((e) => { if (!String(e?.digest ?? e?.message ?? "").includes("NEXT_REDIRECT")) setState({ busy: false, error: "No connection — try again." }); });
+  };
+  useEffect(() => { go(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  return (
+    <div className="w-full max-w-sm">
+      {state.busy ? (
+        <><Loader2 className="mx-auto h-8 w-8 animate-spin text-[var(--crew-brand)]" /><p className="mt-3 text-[0.9375rem] text-ink">Signing you in…</p></>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-[0.9375rem] text-rose-700">{state.error}</p>
+          <button className={btn("primary", "w-full")} onClick={go}>Try again</button>
+          <Link href={`/crew/${slug}/login`} className={btn("secondary", "w-full")}>Get a new sign-in email</Link>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -11,7 +11,7 @@ import { FormError, Input, Label } from "@/components/ui/form";
 
 export interface CrewMember {
   id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
-  hourly_rate?: number | null; rank?: number; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
+  hourly_rate?: number | null; rank?: number; extra_emails?: string[]; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
 }
 type AppInfo = { ready: boolean; slug: string; rate: number };
 
@@ -60,7 +60,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
-                <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", r.phone].filter(Boolean).join(" · ")}</p>
+                <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>
                 {app?.ready && r.active && (
                   <p className="text-[0.7188rem] text-ink-faint">{r.app_last_seen_at ? <span className="text-emerald-700">Using the staff app</span> : r.app_invited_at ? "Invited to the staff app" : "Not invited to the staff app yet"}</p>
                 )}
@@ -93,10 +93,11 @@ function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => voi
     name: initial?.name ?? "", email: initial?.email ?? "", phone: initial?.phone ?? "", role: initial?.role ?? "",
     always_invite: initial?.always_invite ?? false, active: initial?.active ?? true,
   });
+  const [extras, setExtras] = useState((initial?.extra_emails ?? []).join(", "));
   const set = (k: keyof CrewInput, val: string | boolean) => setV((x) => ({ ...x, [k]: val }));
   const save = () => start(async () => {
     setError(null);
-    const r = await saveCrewMember(initial?.id ?? null, v).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    const r = await saveCrewMember(initial?.id ?? null, { ...v, extra_emails: extras.split(/[,\s;]+/).filter(Boolean) }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setError(r.error); return; }
     router.refresh(); onDone();
   });
@@ -107,6 +108,8 @@ function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => voi
         <div><Label htmlFor="cr-role" hint="e.g. Barista, Rosters">Role</Label><Input id="cr-role" value={v.role ?? ""} onChange={(e) => set("role", e.target.value)} maxLength={60} /></div>
         <div><Label htmlFor="cr-email" hint="for calendar invites">Email</Label><Input id="cr-email" type="email" value={v.email ?? ""} onChange={(e) => set("email", e.target.value)} /></div>
         <div><Label htmlFor="cr-phone">Phone</Label><Input id="cr-phone" value={v.phone ?? ""} onChange={(e) => set("phone", e.target.value)} maxLength={40} /></div>
+        <div className="sm:col-span-2"><Label htmlFor="cr-extra" hint="they can sign in to the staff app with any of these">Other emails they use</Label>
+          <Input id="cr-extra" value={extras} onChange={(e) => setExtras(e.target.value)} placeholder="e.g. jim.smith@gmail.com, jim@bigpond.com" /></div>
       </div>
       <label className="flex items-start gap-2 text-[0.8125rem] text-ink">
         <input type="checkbox" checked={v.always_invite} onChange={(e) => set("always_invite", e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-500" />

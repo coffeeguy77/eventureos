@@ -35,6 +35,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
       <div>
         <div className="flex flex-wrap gap-1.5">
           {d.status === "confirmed" ? <Pill tone="green">Confirmed</Pill> : d.status === "offered" ? <Pill tone="brand">Waiting for your answer</Pill> : <Pill tone="amber">Hand up — TBC</Pill>}
+          {d.kind === "custom" && <Pill>Regular / office shift</Pill>}
           {d.job.status !== "confirmed" && <Pill tone="amber">Job not confirmed yet</Pill>}
           {d.boardPostedAt && <Pill tone="amber">On the job board</Pill>}
         </div>
@@ -128,7 +129,8 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
             </ul>
           )}
           {!d.paymentId && (past || d.job.event_date === today) && <ExtraHours slug={slug} shiftId={d.id} />}
-          {!past && d.job.event_date !== today && <BoardControls slug={slug} shiftId={d.id} posted={!!d.boardPostedAt} />}
+          {!past && d.job.event_date !== today && d.kind === "event" && <BoardControls slug={slug} shiftId={d.id} posted={!!d.boardPostedAt} />}
+          {!past && d.kind === "custom" && <p className="text-[0.8125rem] text-ink-muted">Can&apos;t make it? Let the office know{s.org.contact_phone ? <> — <a href={`tel:${s.org.contact_phone.replace(/\s+/g, "")}`} className="font-semibold text-[var(--crew-brand)]">call {s.org.contact_phone}</a></> : ""}.</p>}
         </Card>
       )}
     </div>

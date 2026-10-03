@@ -48,6 +48,14 @@ export async function GET(req: NextRequest) {
     console.error("[cron/sync] service client:", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
+  // Regular staff shifts: keep them filled 8 weeks ahead (and on the staff member's calendar)
+  try {
+    const { fillSeries } = await import("@/lib/crew/custom-shifts");
+    const { data: ser } = await db.from("staff_shift_series").select("organisation_id, org:organisations(timezone)").eq("active", true);
+    const orgs = new Map(((ser ?? []) as unknown as { organisation_id: string; org: { timezone: string } | null }[]).map((r) => [r.organisation_id, r.org?.timezone ?? "Australia/Sydney"]));
+    for (const [orgId, tz] of orgs) await fillSeries(db, orgId, tz).catch((e) => console.error("[cron/sync] regular shifts:", e));
+  } catch (e) { console.error("[cron/sync] regular shifts:", e); }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped

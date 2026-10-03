@@ -7,6 +7,8 @@ export interface JobInfo extends ShiftEvent {
   id: string; name: string; venue: string | null; address: string | null; status: string; crew_needed: number | null; client: string | null;
 }
 export interface Shift {
+  /** event = a shift on an event; custom = a shift the office set up (one-off or regular) */
+  kind: "event" | "custom";
   id: string; status: "interested" | "offered" | "confirmed"; role: string | null; boardPostedAt: string | null; boardNote: string | null;
   calendarResponse: string | null; paymentId: string | null; job: JobInfo;
   start: string | null; finish: string | null; hours: number | null; amount: number | null; rate: number; extraApproved: number; extraPending: number;
@@ -27,17 +29,48 @@ export async function myShifts(s: CrewSession, opts: { from?: string; to?: strin
   const rows = ((data ?? []) as unknown as Row[]).filter((r) => r.event && r.event.status !== "cancelled")
     .filter((r) => (!opts.from || (r.event!.event_date ?? "9999") >= opts.from) && (!opts.to || (r.event!.event_date ?? "0000") <= opts.to));
   const claims = await claimsFor(s, rows.map((r) => r.id));
-  return rows.map((r) => {
+  const eventShifts = rows.map((r) => {
     const job = toJob(r.event!);
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
     const p = plannedShift(job);
     const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
       rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate });
     return {
-      id: r.id, status: r.status, role: r.role, boardPostedAt: r.board_posted_at, boardNote: r.board_note, calendarResponse: r.calendar_response, paymentId: r.payment_id,
+      kind: "event" as const, id: r.id, status: r.status, role: r.role, boardPostedAt: r.board_posted_at, boardNote: r.board_note, calendarResponse: r.calendar_response, paymentId: r.payment_id,
       job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending,
     };
-  }).sort((a, b) => (a.job.event_date ?? "9999").localeCompare(b.job.event_date ?? "9999") || (a.start ?? "").localeCompare(b.start ?? ""));
+  });
+  return [...eventShifts, ...(await customShifts(s, opts))]
+    .sort((a, b) => (a.job.event_date ?? "9999").localeCompare(b.job.event_date ?? "9999") || (a.start ?? "").localeCompare(b.start ?? ""));
+}
+
+/** Shifts the office set up that aren't event shifts (a regular delivery round, a one-off). */
+async function customShifts(s: CrewSession, opts: { from?: string; to?: string }): Promise<Shift[]> {
+  let q = s.db.from("staff_shifts").select("id, title, shift_date, start_time, finish_time, location, hours_override, rate_override, payment_id").eq("organisation_id", s.org.id).eq("crew_member_id", s.member.id);
+  if (opts.from) q = q.gte("shift_date", opts.from);
+  if (opts.to) q = q.lte("shift_date", opts.to);
+  const { data, error } = await q.limit(500);
+  if (error) return []; // before the database update
+  type Row = { id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; hours_override: number | null; rate_override: number | null; payment_id: string | null };
+  const rows = (data ?? []) as Row[];
+  const claims = new Map<string, { approved: number; pending: number }>();
+  if (rows.length) {
+    const { data: cl } = await s.db.from("staff_hour_claims").select("staff_shift_id, hours, status").in("staff_shift_id", rows.map((r) => r.id));
+    for (const c of (cl ?? []) as { staff_shift_id: string; hours: number; status: string }[]) {
+      const v = claims.get(c.staff_shift_id) ?? { approved: 0, pending: 0 };
+      if (c.status === "approved") v.approved += Number(c.hours); else if (c.status === "pending") v.pending += Number(c.hours);
+      claims.set(c.staff_shift_id, v);
+    }
+  }
+  return rows.map((r) => {
+    const job: JobInfo = { id: r.id, name: r.title, event_date: r.shift_date, setup_time: null, start_time: r.start_time, finish_time: r.finish_time, venue: r.location, address: null, status: "confirmed", crew_needed: null, client: null };
+    const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
+    const p = plannedShift(job);
+    const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
+      rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate });
+    return { kind: "custom" as const, id: r.id, status: "confirmed" as const, role: null, boardPostedAt: null, boardNote: null, calendarResponse: null, paymentId: r.payment_id,
+      job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending };
+  });
 }
 
 async function claimsFor(s: CrewSession, shiftIds: string[]) {
@@ -64,6 +97,14 @@ export async function shiftDetail(s: CrewSession, shiftId: string): Promise<Shif
   const list = await myShifts(s);
   const sh = list.find((x) => x.id === shiftId);
   if (!sh) return null;
+  if (sh.kind === "custom") {
+    const [{ data: row }, { data: claims }] = await Promise.all([
+      s.db.from("staff_shifts").select("notes").eq("id", sh.id).maybeSingle(),
+      s.db.from("staff_hour_claims").select("id, hours, reason, status, created_at").eq("staff_shift_id", sh.id).order("created_at"),
+    ]);
+    return { ...sh, guests: null, serves: null, notes: (row?.notes as string | null) ?? null, requirements: null, type: null, onsite: null, team: [], inclusions: [],
+      claims: ((claims ?? []) as ShiftDetail["claims"]).map((c) => ({ ...c, hours: Number(c.hours) })) };
+  }
   const eventId = sh.job.id;
   const [{ data: ev }, { data: team }, { data: q }, { data: claims }] = await Promise.all([
     s.db.from("events").select("guest_count, serves, crew_notes, requirements, event_type, contact:contacts!events_primary_contact_id_organisation_id_fkey(first_name, last_name, phone)").eq("id", eventId).maybeSingle(),

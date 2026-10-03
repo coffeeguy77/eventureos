@@ -40,10 +40,14 @@ export async function crewSession(slug: string): Promise<CrewSession | null> {
   const cols = "id, name, email, phone, role, hourly_rate, rank, user_id, app_last_seen_at";
   let { data: m } = await db.from("crew_members").select(cols).eq("organisation_id", org.id).eq("active", true).eq("user_id", user.id).maybeSingle();
   if (!m) {
-    const { data: byEmail } = await db.from("crew_members").select(cols).eq("organisation_id", org.id).eq("active", true).ilike("email", user.email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
-    if (byEmail && (!byEmail.user_id || byEmail.user_id === user.id)) {
-      await db.from("crew_members").update({ user_id: user.id }).eq("id", byEmail.id);
-      m = byEmail;
+    // Signed in with their main email or one of their extra emails
+    const id = await crewIdForEmail(db, org.id, user.email);
+    if (id) {
+      const { data: byEmail } = await db.from("crew_members").select(cols).eq("id", id).maybeSingle();
+      if (byEmail) {
+        if (!byEmail.user_id) await db.from("crew_members").update({ user_id: user.id }).eq("id", byEmail.id);
+        m = byEmail;
+      }
     }
   }
   if (!m) return null;
@@ -53,6 +57,18 @@ export async function crewSession(slug: string): Promise<CrewSession | null> {
     db, org, userId: user.id,
     member: { id: m.id, name: m.name, email: m.email, phone: m.phone, role: m.role, hourly_rate: m.hourly_rate == null ? null : Number(m.hourly_rate), rank: Number(m.rank ?? 100) },
   };
+}
+
+const likeExact = (e: string) => e.replace(/[%_\\]/g, "\\$&");
+
+/** The active staff member an email belongs to (their main email, or an extra email added in Settings → Team). */
+export async function crewIdForEmail(db: SupabaseClient, orgId: string, email: string): Promise<string | null> {
+  const e = email.trim().toLowerCase();
+  const { data: main } = await db.from("crew_members").select("id").eq("organisation_id", orgId).eq("active", true).ilike("email", likeExact(e)).maybeSingle();
+  if (main) return main.id as string;
+  const { data: extra, error } = await db.from("crew_member_emails").select("crew_member_id, member:crew_members!inner(active)").eq("organisation_id", orgId).ilike("email", likeExact(e)).eq("member.active", true).maybeSingle();
+  if (error) return null; // before the database update
+  return (extra?.crew_member_id as string | undefined) ?? null;
 }
 
 export async function requireCrew(slug: string): Promise<CrewSession> {

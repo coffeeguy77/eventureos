@@ -65,7 +65,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     const segs = segmentsFor(r.starts_at, r.ends_at, days, tz);
     const spanDays = r.all_day ? Math.max(1, Math.round((Date.parse(r.ends_at) - Date.parse(r.starts_at)) / 86400e3)) : 0;
     return {
-      id: r.id, title: r.title, kind: r.kind, startsAt: r.starts_at, endsAt: r.ends_at, allDay: r.all_day,
+      id: r.id, title: (r.kind as string) === "shift" ? `Shift: ${r.title}` : r.title, kind: (["event", "site_visit", "setup", "hold", "other"].includes(r.kind) ? r.kind : "other") as EntryKind, startsAt: r.starts_at, endsAt: r.ends_at, allDay: r.all_day,
       lane: r.all_day || long ? "allday" : "timed", location: r.location,
       resourceId: r.calendar_connection_id, eventId: r.event_id, eventName: r.event?.name ?? null, eventNumber: r.event?.number ?? null,
       customerName: r.event?.customer?.name ?? null, syncStatus: r.sync_status, externalEventId: r.external_event_id, lastSyncedAt: r.last_synced_at ? fmtDateTime(r.last_synced_at, tz) : null,

@@ -28,7 +28,7 @@ async function resync(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase
   await q;
 }
 
-export interface CrewInput { name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active?: boolean }
+export interface CrewInput { name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active?: boolean; extra_emails?: string[] }
 
 function clean(input: CrewInput) {
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
@@ -46,9 +46,22 @@ export async function saveCrewMember(id: string | null, input: CrewInput): Promi
     const { supabase, org } = await manager();
     const row = clean(input);
     const res = id
-      ? (UUID.test(id) ? await supabase.from("crew_members").update(row).eq("id", id).eq("organisation_id", org.id) : (() => { throw new Error("Refresh and try again."); })())
-      : await supabase.from("crew_members").insert({ organisation_id: org.id, ...row });
+      ? (UUID.test(id) ? await supabase.from("crew_members").update(row).eq("id", id).eq("organisation_id", org.id).select("id").single() : (() => { throw new Error("Refresh and try again."); })())
+      : await supabase.from("crew_members").insert({ organisation_id: org.id, ...row }).select("id").single();
     if (res.error) throw new Error(res.error.code === "23505" ? "Someone on the staff list already has that email." : res.error.message);
+    // Extra emails they can sign in to the staff app with
+    if (input.extra_emails) {
+      const memberId = res.data.id as string;
+      const extras = [...new Set(input.extra_emails.map((e) => e.trim().toLowerCase()).filter(Boolean))].filter((e) => e !== row.email).slice(0, 10);
+      const bad = extras.find((e) => !EMAIL.test(e));
+      if (bad) throw new Error(`“${bad}” isn't a valid email address.`);
+      const { error: dErr } = await supabase.from("crew_member_emails").delete().eq("crew_member_id", memberId).eq("organisation_id", org.id);
+      if (dErr) throw new Error(/crew_member_emails/.test(dErr.message) ? "Run the latest database update to add extra emails." : dErr.message);
+      if (extras.length) {
+        const { error: iErr } = await supabase.from("crew_member_emails").insert(extras.map((email) => ({ organisation_id: org.id, crew_member_id: memberId, email })));
+        if (iErr) throw new Error(iErr.code === "23505" ? "One of those extra emails already belongs to someone on the staff list." : iErr.message);
+      }
+    }
     // "Always invite" affects every upcoming job's invite
     await resync(supabase, org.id);
     revalidatePath("/settings/team");

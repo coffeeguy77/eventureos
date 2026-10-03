@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/integrations/runtime";
-import { crewOrg, crewSession, resyncJobCalendar, tellOffice, type CrewSession } from "@/lib/crew/server";
+import { crewIdForEmail, crewOrg, crewSession, resyncJobCalendar, tellOffice, type CrewOrg, type CrewSession } from "@/lib/crew/server";
 import { clashes, fmtHours } from "@/lib/crew/shifts";
 import { myShifts } from "@/lib/crew/data";
 import { fmtDate, todayISO } from "@/lib/format";
@@ -32,14 +32,18 @@ export async function crewSignIn(prev: CrewSignInState, form: FormData): Promise
   if (!EMAIL_RE.test(email) || email.length > 254) return { step: "email", email, error: "Enter a valid email address." };
 
   if (intent === "send" || intent === "resend") {
-    // Only people on the staff list get a code
+    // Only people on the staff list (main or extra email) can sign in
     const db = createServiceClient();
-    const { data: m } = await db.from("crew_members").select("id").eq("organisation_id", org.id).eq("active", true).ilike("email", email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
-    if (!m) return { step: "email", email, error: `${email} isn't on ${org.name}'s staff list. Ask the office to add you, using this email.` };
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-    if (error) return { step: intent === "resend" ? "code" : "email", email, error: friendly(error.message) };
-    return { step: "code", email, message: `We've emailed a sign-in code to ${email}.` };
+    const memberId = await crewIdForEmail(db, org.id, email);
+    if (!memberId) return { step: "email", email, error: `${email} isn't on ${org.name}'s staff list. Ask the office to add you, using this email.` };
+    const sent = await sendStaffSignIn(db, org, memberId, email).catch(() => false);
+    if (!sent) {
+      // Fallback: Supabase's own sign-in email
+      const supabase = await createClient();
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      if (error) return { step: intent === "resend" ? "code" : "email", email, error: friendly(error.message) };
+    }
+    return { step: "code", email, message: `We've emailed a sign-in link to ${email}. Tap it to sign in — or type the code from the email below.` };
   }
   if (intent === "verify") {
     const token = String(form.get("code") ?? "").replace(/\s+/g, "");
@@ -52,6 +56,38 @@ export async function crewSignIn(prev: CrewSignInState, form: FormData): Promise
     redirect(`/crew/${slug}`);
   }
   return { step: "email", error: "Something went wrong — please try again." };
+}
+
+/**
+ * Our own sign-in email with a one-tap link (and the code, for the iPhone home-screen app, which can't receive links).
+ * Returns false if email isn't set up here, so the caller falls back to Supabase's email.
+ */
+async function sendStaffSignIn(db: ReturnType<typeof createServiceClient>, org: CrewOrg, memberId: string, email: string): Promise<boolean> {
+  const { emailConfigured, sendEmail } = await import("@/lib/email/send");
+  if (!emailConfigured()) return false;
+  // Make sure there's a login for this email (staff never set a password)
+  const { error: cErr } = await db.auth.admin.createUser({ email, email_confirm: true });
+  if (cErr && !/already|registered|exists/i.test(cErr.message)) throw cErr;
+  const { data, error } = await db.auth.admin.generateLink({ type: "magiclink", email });
+  if (error || !data?.properties?.hashed_token) throw error ?? new Error("No sign-in link");
+  const { appBaseUrl } = await import("@/lib/integrations/registry");
+  const { staffSignInEmail } = await import("@/lib/email/templates");
+  const { data: m } = await db.from("crew_members").select("name").eq("id", memberId).maybeSingle();
+  const url = `${appBaseUrl()}/crew/${org.slug}/auth?th=${encodeURIComponent(data.properties.hashed_token)}&t=${encodeURIComponent(data.properties.verification_type ?? "magiclink")}`;
+  const msg = staffSignInEmail({ businessName: org.name, firstName: (m?.name as string | undefined)?.split(" ")[0] ?? "there", url, code: data.properties.email_otp ?? null, brand: org.brand_colour, logoUrl: org.logo_url });
+  await sendEmail({ to: email, ...msg, fromName: org.name, replyTo: org.contact_email });
+  return true;
+}
+
+/** Finish signing in from the emailed link. */
+export async function crewLinkSignIn(slug: string, tokenHash: string, type: string): Promise<{ error: string } | undefined> {
+  if (!(await crewOrg(slug))) return { error: "This staff app link isn't valid." };
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(tokenHash)) return { error: "That sign-in link is incomplete — ask for a new one." };
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: (type === "email" ? "email" : "magiclink") as "email" | "magiclink" });
+  if (error) return { error: /expired|invalid/i.test(error.message) ? "That sign-in link has expired or was already used — ask for a new one." : error.message };
+  if (!(await crewSession(slug))) { await supabase.auth.signOut(); return { error: "That email isn't on the staff list any more." }; }
+  redirect(`/crew/${slug}`);
 }
 
 export async function crewSignOut(form: FormData) {
@@ -205,16 +241,21 @@ export async function setInterest(slug: string, eventId: string, on: boolean) {
 
 export async function claimExtraHours(slug: string, shiftId: string, hours: number, reason: string) {
   return act(slug, async (s) => {
-    const r = await myShiftRow(s, shiftId);
-    if (r.status !== "confirmed") throw new Error("You can only add hours to a shift you worked.");
+    if (!UUID.test(shiftId)) throw new Error("Refresh and try again.");
     const h = Math.round(Number(hours) * 4) / 4;
     if (!Number.isFinite(h) || h <= 0 || h > 12) throw new Error("Enter the extra hours (e.g. 0.5 or 1.25).");
     const why = reason.trim();
     if (why.length < 3) throw new Error("Say why the shift went longer.");
-    const { error } = await s.db.from("staff_hour_claims").insert({ organisation_id: s.org.id, event_crew_id: r.id, hours: h, reason: why.slice(0, 500) });
+    // An event shift, or one of the office's own shifts
+    const { data: ec } = await s.db.from("event_crew").select("id, status, event_id, event:events(name)").eq("id", shiftId).eq("organisation_id", s.org.id).eq("crew_member_id", s.member.id).maybeSingle();
+    const { data: cs } = ec ? { data: null } : await s.db.from("staff_shifts").select("id, title, payment_id").eq("id", shiftId).eq("organisation_id", s.org.id).eq("crew_member_id", s.member.id).maybeSingle();
+    if (!ec && !cs) throw new Error("That shift isn't yours any more.");
+    if (ec && ec.status !== "confirmed") throw new Error("You can only add hours to a shift you worked.");
+    const name = ec ? ((ec.event as unknown as { name: string } | null)?.name ?? "a job") : (cs!.title as string);
+    const { error } = await s.db.from("staff_hour_claims").insert({ organisation_id: s.org.id, hours: h, reason: why.slice(0, 500), ...(ec ? { event_crew_id: ec.id } : { staff_shift_id: cs!.id }) });
     if (error) throw new Error(error.message);
-    await tellOffice(s, { type: "crew.hours_claimed", title: `${s.member.name} added ${fmtHours(h)} on ${r.event.name}`, body: why.slice(0, 300), eventId: r.event_id, link: "/wages",
-      summary: `${s.member.name} asked for ${fmtHours(h)} extra on ${r.event.name}: ${why.slice(0, 200)}` });
+    await tellOffice(s, { type: "crew.hours_claimed", title: `${s.member.name} added ${fmtHours(h)} on ${name}`, body: why.slice(0, 300), eventId: (ec?.event_id as string | undefined) ?? null, link: "/wages",
+      summary: `${s.member.name} asked for ${fmtHours(h)} extra on ${name}: ${why.slice(0, 200)}` });
     return "Sent for approval.";
   });
 }
