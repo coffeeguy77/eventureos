@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ArrowDown, FileText, Sparkles } from "lucide-react";
+import { ArrowDown, BellPlus, FileText, Sparkles } from "lucide-react";
+import { DateTimeField } from "@/components/ui/datetime-field";
+import { addTask } from "@/app/(app)/tasks/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +64,7 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected, o
               {t.state === "awaiting_customer" && <Badge tone="neutral">Awaiting customer</Badge>}
               {savedDraft(t) && <Badge tone="amber">Draft ready</Badge>}
             </header>
-            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} saved={savedDraft(t)} orgName={orgName} />}
+            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} saved={savedDraft(t)} orgName={orgName} thread={t} />}
             <ol className="divide-y divide-line">
               {msgs.map((m, i) => {
                 const out = m.direction === "outbound";
@@ -111,7 +113,8 @@ function savedDraft(t: EmailThread): SavedDraft | null {
   };
 }
 
-function ReplyBox({ threadId, saved, orgName }: { threadId: string; saved?: SavedDraft | null; orgName: string }) {
+function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; saved?: SavedDraft | null; orgName: string; thread: EmailThread }) {
+  const [followUp, setFollowUp] = useState(false);
   const [open, setOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -187,6 +190,9 @@ function ReplyBox({ threadId, saved, orgName }: { threadId: string; saved?: Save
           {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
         </span>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={() => setFollowUp((f) => !f)} aria-expanded={followUp}>
+            <BellPlus className="h-3.5 w-3.5 text-brand-600" />Follow up later
+          </Button>
           <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={replyWithQuote} disabled={quoting}>
             <FileText className="h-3.5 w-3.5 text-brand-600" />{quoting ? "Opening…" : "Reply with quote"}
           </Button>
@@ -196,6 +202,7 @@ function ReplyBox({ threadId, saved, orgName }: { threadId: string; saved?: Save
           <Button size="sm" variant="secondary" className="h-10 sm:h-8" onClick={() => setOpen(true)}>Reply</Button>
         </div>
       </div>
+      {followUp && <FollowUpLater thread={thread} onDone={() => setFollowUp(false)} />}
       {draftError && <p role="alert" className="mx-4 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-700 ring-1 ring-inset ring-rose-100">{draftError}</p>}
     </>);
   }
@@ -264,5 +271,44 @@ function NotConnectedHint({ connected, empty }: { connected: boolean; empty?: bo
         )}
       </div>
     </div>
+  );
+}
+
+/** "Follow up later": a to-do linked to this conversation, with a reminder in the calendar at that time. */
+function FollowUpLater({ thread, onDone }: { thread: EmailThread; onDone: () => void }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={formRef} className="space-y-2 border-b border-line bg-brand-50/40 px-4 py-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        const due = String(fd.get("due") ?? "");
+        if (!due) { setMsg({ text: "Pick when to follow up.", ok: false }); return; }
+        setPending(true);
+        const r = await addTask({
+          title: String(fd.get("title") ?? "").trim() || `Follow up: ${thread.subject ?? "email"}`, notes: String(fd.get("notes") ?? ""),
+          dueIso: due, remind: true, enquiryId: thread.enquiry_id, eventId: thread.event_id, customerId: thread.customer_id,
+        }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+        setPending(false);
+        setMsg(r.ok ? { text: r.message ?? "Added to the to-do list.", ok: true } : { text: r.error, ok: false });
+        if (r.ok) { router.refresh(); setTimeout(onDone, 1800); }
+      }}>
+      <p className="text-[0.75rem] font-medium text-ink">Follow up later — adds a to-do and a reminder in the calendar</p>
+      <input name="title" defaultValue={`Follow up: ${thread.subject ?? "email"}`} maxLength={300} aria-label="What to follow up"
+        className="w-full rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-[0.8125rem] text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="sm:w-60"><DateTimeField name="due" /></div>
+        <input name="notes" placeholder="Note for yourself (optional)" maxLength={2000}
+          className="min-w-0 flex-1 rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-[0.8125rem] text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
+        <div className="flex gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onDone}>Cancel</Button>
+          <Button size="sm" variant="primary" disabled={pending}>{pending ? "Adding…" : "Add"}</Button>
+        </div>
+      </div>
+      {msg && <p className={cn("text-[0.75rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
+    </form>
   );
 }
