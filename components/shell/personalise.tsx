@@ -7,16 +7,16 @@ import { savePrefs } from "@/app/prefs-actions";
 import { ACCENTS, DEFAULT_PREFS, htmlAttrs, parsePrefs, SCHEMES, TEXT_STEPS, type UiPrefs } from "@/lib/theme/prefs";
 import { cn } from "@/lib/cn";
 
-function readCurrent(): UiPrefs {
+export function readCurrent(): UiPrefs {
   const el = document.documentElement;
   const fs = Number(getComputedStyle(el).getPropertyValue("--fs")) || DEFAULT_PREFS.text / 100;
-  return parsePrefs({ scheme: el.dataset.scheme, accent: el.dataset.accent, contrast: el.dataset.contrast, motion: el.dataset.motion, width: el.dataset.width, text: Math.round(fs * 100) });
+  return parsePrefs({ scheme: el.dataset.scheme, accent: el.dataset.accent, contrast: el.dataset.contrast, motion: el.dataset.motion, width: el.dataset.width, emails: el.dataset.emails, text: Math.round(fs * 100) });
 }
 
 export function applyPrefs(p: UiPrefs) {
   const el = document.documentElement;
   const a = htmlAttrs(p);
-  el.dataset.scheme = a["data-scheme"]; el.dataset.accent = a["data-accent"]; el.dataset.contrast = a["data-contrast"]; el.dataset.motion = a["data-motion"]; el.dataset.width = a["data-width"];
+  el.dataset.scheme = a["data-scheme"]; el.dataset.accent = a["data-accent"]; el.dataset.contrast = a["data-contrast"]; el.dataset.motion = a["data-motion"]; el.dataset.width = a["data-width"]; el.dataset.emails = a["data-emails"];
   el.style.setProperty("--fs", String(p.text / 100));
 }
 
@@ -154,7 +154,8 @@ export function Personalise({ variant = "icon" }: { variant?: "icon" | "row" }) 
                   className="inline-flex h-9 w-11 items-center justify-center rounded-lg text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50 disabled:opacity-40"><Plus className="h-4 w-4" /><span className="sr-only">A+</span></button>
               </div>
             </div>
-            {seg("Page width", p.width, [["standard", "Standard (1440px)"], ["full", "Full width"]], (v) => update({ width: v as UiPrefs["width"] }))}
+            {seg("Page width", p.width, [["standard", "Standard"], ["wide", "Wide"], ["full", "Full width"]], (v) => update({ width: v as UiPrefs["width"] }))}
+            {seg("Customer emails on a quote", p.emails, [["side", "Side panel"], ["popup", "Pop-up window"]], (v) => update({ emails: v as UiPrefs["emails"] }))}
             {seg("Contrast", p.contrast, [["normal", "Standard"], ["more", "Increased"]], (v) => update({ contrast: v as UiPrefs["contrast"] }))}
             {seg("Motion", p.motion, [["full", "Full"], ["reduce", "Reduced"]], (v) => update({ motion: v as UiPrefs["motion"] }))}
           </div>

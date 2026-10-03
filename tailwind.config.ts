@@ -1,3 +1,4 @@
+import plugin from "tailwindcss/plugin";
 import type { Config } from "tailwindcss";
 
 const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
@@ -39,7 +40,16 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Layout by the space a component actually has (not the screen), so a side panel or a narrow window never
+    // squeezes the quote editor into sideways scrolling. qrow: a section is wide enough for one-line item rows;
+    // qpage: the quote page is wide enough for the totals column beside the sections.
+    plugin(({ addVariant }) => {
+      addVariant("qmid", "@container qsection (min-width: 600px)");
+      addVariant("qrow", "@container qsection (min-width: 940px)");
+      addVariant("qpage", "@container qpage (min-width: 1300px)");
+    }),
+  ],
 };
 
 export default config;

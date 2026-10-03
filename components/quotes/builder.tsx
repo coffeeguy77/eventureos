@@ -489,7 +489,7 @@ export function QuoteBuilder(p: BuilderProps) {
   const itemCount = items.length;
 
   return (
-    <div className={cn("transition-[padding] duration-200", emailOpen && "lg:pr-[456px]")}>
+    <div>
       {/* ------------------------------------------------------------ header */}
       <div className="mb-5">
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[0.75rem] text-ink-faint">
@@ -614,7 +614,8 @@ export function QuoteBuilder(p: BuilderProps) {
       {!!p.emails?.length && <EmailDrawer threads={p.emails} tz={p.tz} open={emailOpen} onClose={() => setEmailOpen(false)} highlightThread={p.replyTo?.threadId ?? null} />}
 
       {/* ------------------------------------------------------------ body */}
-      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="[container-name:qpage] [container-type:inline-size]">
+      <div className="mt-6 grid gap-6 qpage:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">
           {sortedSections.map((s, i) => (
             <SectionEditor
@@ -683,8 +684,8 @@ export function QuoteBuilder(p: BuilderProps) {
         </div>
 
         {/* ------------------------------------------------------------ sidebar */}
-        <div className="space-y-6 xl:sticky xl:top-4 xl:self-start">
-          <Card>
+        <div className="space-y-6 qpage:sticky qpage:top-4 qpage:self-start">
+          <Card id="quote-totals" className="scroll-mt-20">
             <CardHeader title="Draft total" subtitle={`${itemCount} line item${itemCount === 1 ? "" : "s"}`} />
             <dl className="space-y-1.5 px-5 pb-4 text-[0.8125rem]">
               {totals.quoteDiscount > 0 && <>
@@ -754,6 +755,14 @@ export function QuoteBuilder(p: BuilderProps) {
           </Card>
           {p.history}
         </div>
+      </div>
+      {/* When the totals column has dropped below (narrow window or emails open beside it), keep the total in view */}
+      <div className="pointer-events-none sticky bottom-3 z-20 mt-4 flex justify-end qpage:hidden max-lg:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]">
+        <a href="#quote-totals" className="pointer-events-auto inline-flex items-baseline gap-3 rounded-xl bg-surface/95 px-4 py-2.5 text-[0.8125rem] shadow-pop ring-1 ring-line-strong backdrop-blur">
+          <span className="text-ink-muted">{itemCount} line{itemCount === 1 ? "" : "s"} · GST {money(totals.tax, currency)}</span>
+          <span className="tabular text-[1rem] font-semibold text-ink">Total {money(totals.total, currency)}</span>
+        </a>
+      </div>
       </div>
 
       {/* ------------------------------------------------------------ overlays */}

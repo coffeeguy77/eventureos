@@ -42,7 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <PrefsSync saved={(profile as { ui_prefs?: unknown }).ui_prefs ?? null} />
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
       <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} />
-      <div className="lg:pl-[232px]">
+      <div className="app-column lg:pl-[232px]">
         <Topbar
           role={role}
           user={{ name: profile.full_name ?? profile.email, email: profile.email }}

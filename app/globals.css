@@ -8,7 +8,12 @@
   --fs: 1;
   --page-max: 1440px;
 }
+html[data-width="wide"] { --page-max: 1920px; }
 html[data-width="full"] { --page-max: 100%; }
+/* The customer's emails docked beside a quote take their own column: the page moves over instead of being covered */
+@media (min-width: 1024px) {
+  html[data-panel="side"] .app-column { padding-right: var(--side-w, 440px); }
+}
 html[data-scheme="dim"], html[data-scheme="dark"], html[data-scheme="midnight"] { --shadow: 0 0 0; }
 @media (prefers-color-scheme: dark) { html[data-scheme="system"] { --shadow: 0 0 0; } }
 

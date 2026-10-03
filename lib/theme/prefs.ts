@@ -6,7 +6,9 @@ import ACCENTS from "./accents.json";
  * theme with no flash) and on the user's account (so it follows them to other devices).
  */
 export type Scheme = "light" | "dim" | "dark" | "midnight" | "system";
-export interface UiPrefs { scheme: Scheme; accent: string; text: number; contrast: "normal" | "more"; motion: "full" | "reduce"; width: "standard" | "full" }
+export interface UiPrefs { scheme: Scheme; accent: string; text: number; contrast: "normal" | "more"; motion: "full" | "reduce"; width: "standard" | "wide" | "full";
+  /** How a customer's emails open beside a quote: docked to the side (pushes the page over) or a floating pop-up window */
+  emails: "side" | "popup" }
 
 export const SCHEMES: { id: Scheme; name: string; hint: string; swatch: [string, string] }[] = [
   { id: "light", name: "Light", hint: "Bright and clean", swatch: ["#F6F6F8", "#FFFFFF"] },
@@ -17,7 +19,7 @@ export const SCHEMES: { id: Scheme; name: string; hint: string; swatch: [string,
 ];
 export { ACCENTS };
 export const TEXT_STEPS = [90, 100, 106, 112, 118, 125, 131, 137];
-export const DEFAULT_PREFS: UiPrefs = { scheme: "light", accent: "violet", text: 106, contrast: "normal", motion: "full", width: "standard" };
+export const DEFAULT_PREFS: UiPrefs = { scheme: "light", accent: "violet", text: 106, contrast: "normal", motion: "full", width: "standard", emails: "side" };
 export const PREFS_COOKIE = "eos-ui";
 
 export function parsePrefs(raw: unknown): UiPrefs {
@@ -28,13 +30,13 @@ export function parsePrefs(raw: unknown): UiPrefs {
   const accent = ACCENTS.some((a) => a.id === o.accent) ? (o.accent as string) : DEFAULT_PREFS.accent;
   const t = Number(o.text);
   const text = TEXT_STEPS.includes(t) ? t : DEFAULT_PREFS.text;
-  return { scheme, accent, text, contrast: o.contrast === "more" ? "more" : "normal", motion: o.motion === "reduce" ? "reduce" : "full", width: o.width === "full" ? "full" : "standard" };
+  return { scheme, accent, text, contrast: o.contrast === "more" ? "more" : "normal", motion: o.motion === "reduce" ? "reduce" : "full", width: o.width === "full" ? "full" : o.width === "wide" ? "wide" : "standard", emails: o.emails === "popup" ? "popup" : "side" };
 }
 
 /** Attributes for <html>. */
 export function htmlAttrs(p: UiPrefs) {
   return {
-    "data-scheme": p.scheme, "data-accent": p.accent, "data-contrast": p.contrast, "data-motion": p.motion, "data-width": p.width,
+    "data-scheme": p.scheme, "data-accent": p.accent, "data-contrast": p.contrast, "data-motion": p.motion, "data-width": p.width, "data-emails": p.emails,
     style: { ["--fs" as string]: String(p.text / 100) } as React.CSSProperties,
   };
 }

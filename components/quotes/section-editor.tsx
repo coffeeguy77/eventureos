@@ -15,18 +15,19 @@ import type { StaffRule } from "@/lib/pricing/engine";
 export type Col = NumField | TextField;
 
 /** Desktop (md+) column template — shared by the header row and every item row. */
-const GRID_MD = "md:grid-cols-[minmax(250px,1fr)_72px_84px_112px_68px_92px_112px_84px] md:items-start md:gap-x-1.5 md:gap-y-0";
+const GRID_MD = "qrow:grid-cols-[minmax(250px,1fr)_72px_84px_112px_68px_92px_112px_84px] qrow:items-start qrow:gap-x-1.5 qrow:gap-y-0";
 const GRID = cn("grid", GRID_MD);
 /** Phones (< md): each item is a stacked card — name full width, then 3-up rows of numbers. */
 export const GST_RATE = 10;
-const ROW = cn("grid grid-cols-3 gap-x-2 gap-y-2.5", GRID_MD);
+// Narrow: 3 per row · medium: the six numbers on one line under the name · wide: everything on one line
+const ROW = cn("grid grid-cols-3 gap-x-2 gap-y-2.5 qmid:grid-cols-6", GRID_MD);
 const cell =
   "h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-[0.8125rem] text-ink placeholder:text-ink-faint transition-colors hover:border-line focus:border-brand-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:hover:border-transparent max-md:h-10 max-md:border-line max-md:bg-surface";
 const numCell = cn(cell, "tabular text-right");
 /** Field label, only shown on phones (the desktop grid has a column header instead). */
-const mLabel = "mb-1 block px-0.5 text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint md:hidden";
+const mLabel = "mb-1 block px-0.5 text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint qrow:hidden";
 const iconBtn =
-  "inline-flex h-10 w-10 items-center justify-center rounded-md md:h-7 md:w-7 text-ink-faint hover:bg-zinc-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-30";
+  "inline-flex h-10 w-10 items-center justify-center rounded-md qrow:h-7 qrow:w-7 text-ink-faint hover:bg-zinc-100 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-30";
 
 export interface SectionHandlers {
   onSectionTitle: (sectionId: string, value: string) => void;
@@ -68,7 +69,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
   const optionalTotal = items.reduce((a, i) => a + (i.is_optional ? lineTotal(draftNums(i)) : 0), 0);
 
   return (
-    <section className={cn("rounded-xl border bg-surface shadow-card", section.is_optional ? "border-dashed border-brand-200" : "border-line")} aria-label={`Section ${section.title}`}>
+    <section className={cn("rounded-xl border bg-surface shadow-card [container-name:qsection] [container-type:inline-size]", section.is_optional ? "border-dashed border-brand-200" : "border-line")} aria-label={`Section ${section.title}`}>
       {/* section header */}
       <div className="flex flex-wrap items-center gap-2 px-3 pt-3 sm:px-4">
         <input
@@ -82,7 +83,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
           placeholder="Section name"
           className="h-10 min-w-0 flex-1 basis-full rounded-md border border-transparent bg-transparent px-2 text-[0.875rem] font-semibold sm:h-8 sm:basis-auto text-ink hover:border-line focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
-        <label className={cn("inline-flex h-9 cursor-pointer md:h-7 select-none items-center gap-1.5 rounded-full px-2.5 text-[0.7188rem] font-medium ring-1 ring-inset",
+        <label className={cn("inline-flex h-9 cursor-pointer qrow:h-7 select-none items-center gap-1.5 rounded-full px-2.5 text-[0.7188rem] font-medium ring-1 ring-inset",
           section.is_optional ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-muted ring-line hover:text-ink")}>
           <input type="checkbox" className="sr-only" checked={section.is_optional} onChange={(e) => h.onSectionOptional(section.id, e.target.checked)} />
           {section.is_optional ? "Optional section" : "Mark optional"}
@@ -105,9 +106,9 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
       )}
 
       {/* items */}
-      <div className="mt-2 md:overflow-x-auto">
-        <div className="px-3 md:min-w-[880px] md:px-3">
-          <div className={cn(GRID, "hidden border-b border-line px-0 pb-1.5 md:grid text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint")}>
+      <div className="mt-2">
+        <div className="px-3">
+          <div className={cn(GRID, "hidden border-b border-line px-0 pb-1.5 qrow:grid text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint")}>
             <span className="px-2">Item</span>
             <span className="px-2 text-right">Qty</span>
             <span className="px-2">Unit</span>
@@ -132,7 +133,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-3 py-2 sm:px-4">
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => h.onAddItem(section.id)} disabled={adding}
-            className="inline-flex h-10 items-center md:h-8 gap-1.5 rounded-lg px-2.5 text-[0.7812rem] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-60">
+            className="inline-flex h-10 items-center qrow:h-8 gap-1.5 rounded-lg px-2.5 text-[0.7812rem] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-60">
             {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add item
           </button>
           <QuickAdd catalogue={catalogue} currency={currency} onPick={(c) => h.onQuickAdd(section.id, c)} disabled={adding} />
@@ -175,15 +176,15 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
 
   const chip = (field: BoolField, on: boolean, label: string, icon: React.ReactNode, title: string) => (
     <button type="button" aria-pressed={on} title={title} onClick={() => h.onField(it.id, field, !on)}
-      className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset transition-colors md:h-6 md:px-2",
+      className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset transition-colors qrow:h-6 qrow:px-2",
         on ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-faint ring-transparent hover:text-ink hover:ring-line")}>
       {icon}{label}
     </button>
   );
 
   return (
-    <li className={cn(ROW, "group py-3 md:py-2", excluded && "bg-zinc-50/60", offList && "bg-amber-50/60 shadow-[inset_3px_0_0_theme(colors.amber.400)]")}>
-      <div className="col-span-3 min-w-0 md:col-span-1">
+    <li className={cn(ROW, "group py-3 qrow:py-2", excluded && "bg-zinc-50/60", offList && "bg-amber-50/60 shadow-[inset_3px_0_0_theme(colors.amber.400)]")}>
+      <div className="col-span-3 min-w-0 qmid:col-span-6 qrow:col-span-1">
         {input("name", { className: cn(cell, "font-medium"), placeholder: "Item name", "aria-label": "Item name", maxLength: 200 })}
         <AutoGrow
           data-item={it.id}
@@ -201,7 +202,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
           {chip("is_optional", it.is_optional, "Optional", null, "Optional items are shown to the customer but excluded from the total")}
           {chip("is_package", it.is_package, "Package", <Package className="h-3 w-3" />, "Show this line as a package / bundle")}
           <button type="button" onClick={() => setShowImage((s) => !s)} aria-pressed={showImage || !!it.image_url}
-            className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset md:h-6 md:px-2",
+            className={cn("inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.6875rem] font-medium ring-1 ring-inset qrow:h-6 qrow:px-2",
               it.image_url ? "bg-brand-50 text-brand-700 ring-brand-200" : "text-ink-faint ring-transparent hover:text-ink hover:ring-line")}>
             <ImageIcon className="h-3 w-3" />Image
           </button>
@@ -209,7 +210,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
         {offList && (
           <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[0.7188rem]">
             <span className="font-medium text-amber-800">Not on your price list</span>
-            <select aria-label={`Swap ${it.name} for a price-list item`} value="" className="h-8 max-w-full rounded-md border border-amber-300 bg-surface px-2 text-[0.75rem] text-ink md:h-7"
+            <select aria-label={`Swap ${it.name} for a price-list item`} value="" className="h-8 max-w-full rounded-md border border-amber-300 bg-surface px-2 text-[0.75rem] text-ink qrow:h-7"
               onChange={(e) => { const c = linkable.find((x) => x.service_id === e.target.value); if (c) h.onLink(it.id, c); }}>
               <option value="">Match to an item…</option>
               {linkable.map((c) => <option key={c.service_id!} value={c.service_id!}>{c.category ? `${c.category} · ` : ""}{c.name} — {money(c.unit_price, currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
@@ -243,12 +244,12 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
           const gst = (parseNum(it.tax_rate) ?? 0) > 0;
           const label = gst ? "GST" : "No GST";
           if (it.service_id) return (
-            <span title="Set on the item in Settings → Services & pricing" className={cn("flex h-8 items-center justify-end px-2 text-[0.75rem] font-medium md:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</span>
+            <span title="Set on the item in Settings → Services & pricing" className={cn("flex h-8 items-center justify-end px-2 text-[0.75rem] font-medium qrow:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</span>
           );
           return (
             <button type="button" aria-label={`${label} — click to change`} title="Click to switch between GST and No GST"
               onClick={() => { h.onField(it.id, "tax_rate", gst ? "0" : String(GST_RATE)); h.onBlurField(it.id, "tax_rate"); }}
-              className={cn("flex h-8 w-full items-center justify-end rounded-md px-2 text-[0.75rem] font-medium hover:bg-zinc-100 md:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</button>
+              className={cn("flex h-8 w-full items-center justify-end rounded-md px-2 text-[0.75rem] font-medium hover:bg-zinc-100 qrow:h-7", gst ? "text-ink-muted" : "text-amber-700")}>{label}</button>
           );
         })()}
       </div>
@@ -274,12 +275,12 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
       </div>
       <div>
         <span className={cn(mLabel, "text-right")} aria-hidden>Total</span>
-        <div className="flex h-10 flex-col items-end justify-center px-2 md:h-8">
-          <span className={cn("tabular text-[0.875rem] md:text-[0.8125rem]", excluded ? "text-ink-faint line-through decoration-ink-faint/40" : "font-semibold text-ink md:font-medium")}>{money(total, currency)}</span>
+        <div className="flex h-10 flex-col items-end justify-center px-2 qrow:h-8">
+          <span className={cn("tabular text-[0.875rem] qrow:text-[0.8125rem]", excluded ? "text-ink-faint line-through decoration-ink-faint/40" : "font-semibold text-ink qrow:font-medium")}>{money(total, currency)}</span>
           {excluded && <span className="text-[0.6562rem] text-ink-faint">not in total</span>}
         </div>
       </div>
-      <div className="col-span-3 -my-1 flex items-center justify-end md:col-span-1 md:my-0 md:h-8 md:opacity-60 md:transition-opacity md:focus-within:opacity-100 md:group-hover:opacity-100">
+      <div className="col-span-3 -my-1 flex items-center justify-end qmid:col-span-6 qrow:col-span-1 qrow:my-0 qrow:h-8 qrow:opacity-60 qrow:transition-opacity qrow:focus-within:opacity-100 qrow:group-hover:opacity-100">
         <button type="button" className={iconBtn} onClick={() => h.onMoveItem(it.id, -1)} disabled={first} aria-label="Move item up" title="Move up"><ArrowUp className="h-3.5 w-3.5" /></button>
         <button type="button" className={iconBtn} onClick={() => h.onMoveItem(it.id, 1)} disabled={last} aria-label="Move item down" title="Move down"><ArrowDown className="h-3.5 w-3.5" /></button>
         <button type="button" className={cn(iconBtn, "hover:bg-rose-50 hover:text-rose-700")} onClick={() => h.onDeleteItem(it.id)} aria-label={`Remove ${it.name || "item"}`} title="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
