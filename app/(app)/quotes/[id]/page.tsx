@@ -219,6 +219,17 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   // ------------------------------------------------------------------ editable draft
   // Is the booking already on the calendar? (for the one-click "Add to calendar")
   const { data: onCal } = await supabase.from("calendar_events").select("id").eq("organisation_id", org.id).eq("event_id", q.event.id).eq("kind", "event").limit(1);
+  // The client's people: who's on this job (ticked when emailing) and everyone else on file
+  const [{ data: jcRows }, { data: allPeople }] = await Promise.all([
+    supabase.from("event_contacts").select("id, contact_id").eq("organisation_id", org.id).eq("event_id", q.event.id),
+    supabase.from("contacts").select("id, first_name, last_name, email").eq("organisation_id", org.id).eq("customer_id", q.customer.id).order("first_name"),
+  ]);
+  const personName = (c: { first_name: string; last_name: string | null }) => `${c.first_name} ${c.last_name ?? ""}`.trim();
+  const clientPeople = ((allPeople ?? []) as { id: string; first_name: string; last_name: string | null; email: string | null }[]).map((c) => ({ id: c.id, name: personName(c), email: c.email }));
+  const links = (jcRows ?? []) as { id: string; contact_id: string }[];
+  const jobPeople = clientPeople.filter((c) => links.some((l) => l.contact_id === c.id) || c.id === q.event!.primary_contact_id)
+    .map((c) => ({ linkId: links.find((l) => l.contact_id === c.id)?.id ?? "", contactId: c.id, name: c.name, email: c.email, main: c.id === q.event!.primary_contact_id }))
+    .sort((a, b) => Number(b.main) - Number(a.main));
   // The client's quotes in Xero (newest first) — can be brought in and edited here
   const { data: xqRows } = await supabase.from("xero_quotes").select("id, number, reference, status, quote_date, total, line_items")
     .eq("organisation_id", org.id).eq("customer_id", q.customer.id).neq("status", "DELETED").order("quote_date", { ascending: false, nullsFirst: false }).limit(20);
@@ -280,6 +291,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       onCalendar={!!onCal?.length}
       xeroQuotes={xeroQuotes}
       billTo={billTo}
+      jobPeople={jobPeople}
+      clientPeople={clientPeople}
       currency={cur}
       tz={tz}
       today={today}

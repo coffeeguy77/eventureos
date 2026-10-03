@@ -114,14 +114,16 @@ const needsPublishing = (q: { current_version_id: string | null; has_unpublished
 export async function quoteSendSetup(quoteId: string): Promise<ActionResult<QuoteSendSetup>> {
   try {
     const { supabase, org, user, profile, q } = await load(quoteId);
-    const [{ data: contacts }, { data: versions }, { data: prev }, { data: o }] = await Promise.all([
+    const [{ data: contacts }, { data: versions }, { data: prev }, { data: o }, { data: jobPeople }] = await Promise.all([
       supabase.from("contacts").select("id, first_name, last_name, email, is_primary").eq("organisation_id", org.id).eq("customer_id", q.customer_id).not("email", "is", null),
       supabase.from("quote_versions").select("version_number, total").eq("quote_id", q.id).order("version_number", { ascending: false }).limit(1),
       supabase.from("email_send_recipients").select("email").eq("quote_id", q.id).eq("role", "to"),
       supabase.from("organisations").select("brand_colour, logo_url, contact_email").eq("id", org.id).single(),
+      supabase.from("event_contacts").select("contact_id").eq("organisation_id", org.id).eq("event_id", q.event_id),
     ]);
 
-    // Suggestions: the event's contact first, then the client's email, then their other contacts
+    // Suggestions: the people on this job first (all ticked), then the client's general email, then the client's other
+    // contacts — e.g. someone at the same organisation who looks after a different event — unticked.
     const seen = new Set<string>();
     const suggestions: SuggestedRecipient[] = [];
     const push = (email: string | null | undefined, name: string | null, label: string) => {
@@ -131,12 +133,16 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
     };
     const cs = (contacts ?? []) as { id: string; first_name: string | null; last_name: string | null; email: string | null; is_primary: boolean }[];
     const full = (c: { first_name: string | null; last_name: string | null }) => [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || null;
+    const onJob = new Set(((jobPeople ?? []) as { contact_id: string }[]).map((r) => r.contact_id));
+    if (q.event?.primary_contact_id) onJob.add(q.event.primary_contact_id);
     const eventContact = cs.find((c) => c.id === q.event?.primary_contact_id);
-    if (eventContact) push(eventContact.email, full(eventContact), "Event contact");
-    push(q.customer?.email, q.customer?.kind === "company" ? null : q.customer?.name ?? null, "Client email");
-    for (const c of cs.sort((a, b) => Number(b.is_primary) - Number(a.is_primary))) push(c.email, full(c), c.is_primary ? "Primary contact" : "Contact");
+    if (eventContact) push(eventContact.email, full(eventContact), "Main contact for this job");
+    for (const c of cs.filter((c) => onJob.has(c.id))) push(c.email, full(c), "On this job");
+    const jobEmails = suggestions.map((x) => x);
+    push(q.customer?.email, q.customer?.kind === "company" ? null : q.customer?.name ?? null, "Client's general email");
+    for (const c of cs.filter((c) => !onJob.has(c.id)).sort((a, b) => Number(b.is_primary) - Number(a.is_primary))) push(c.email, full(c), "Not on this job");
 
-    const first = suggestions[0];
+    const first = jobEmails[0] ?? suggestions[0];
     const firstName = (first?.name ?? (q.customer?.kind === "company" ? null : q.customer?.name) ?? "").split(" ")[0] || null;
     const needsPublish = needsPublishing(q);
     const lastVersion = versions?.[0] as { version_number: number; total: number } | undefined;
@@ -160,7 +166,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
       ok: true,
       data: {
         suggestions,
-        defaultTo: first ? [first] : [],
+        defaultTo: jobEmails.length ? jobEmails : first ? [first] : [],
         subject: defaultQuoteSubject({ businessName: org.name, quoteNumber: q.number, eventName: q.event?.name }),
         message: defaultQuoteMessage({
           firstName, eventName: q.event?.name ?? null, eventDate, validUntil,
@@ -398,6 +404,13 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
         return { organisation_id: org.id, customer_id: q.customer_id, first_name: first.slice(0, 80), last_name: rest.join(" ").slice(0, 80) || null, email: r.email, is_primary: false, created_by: user.id };
       });
       if (add.length) await supabase.from("contacts").insert(add);
+    }
+    // Everyone the quote went to who is a contact of this client is now on the job (so later emails and copies include them)
+    if (sent.length) {
+      const { data: people } = await supabase.from("contacts").select("id, email").eq("organisation_id", org.id).eq("customer_id", q.customer_id).not("email", "is", null);
+      const links = ((people ?? []) as { id: string; email: string }[]).filter((c) => sent.includes(c.email.toLowerCase()))
+        .map((c) => ({ organisation_id: org.id, event_id: q.event_id, contact_id: c.id }));
+      if (links.length) await supabase.from("event_contacts").upsert(links, { onConflict: "event_id,contact_id", ignoreDuplicates: true });
     }
 
     await logActivity(supabase, {

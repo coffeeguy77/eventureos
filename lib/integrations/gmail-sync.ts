@@ -428,6 +428,11 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
     const cid = (patch.customer_id as string | undefined) ?? thread.customer_id;
     if (cid && looksLikeDetailChange(bodyClean)) await spotDetailChange(ctx, thread.id, cid, pm, bodyClean).catch(() => undefined);
   }
+  // The client cc'd someone new on a job's emails → they're added to the job, so they get the updates too
+  if (!outbound && !bulk && thread.classification !== "spam" && thread.event_id && Date.parse(pm.sentAt) > Date.now() - 30 * 86400_000) {
+    const cid = (patch.customer_id as string | undefined) ?? thread.customer_id;
+    if (cid) await addCcPeople(ctx, thread.event_id, cid, pm, own, thread.participants).catch(() => undefined);
+  }
 
   // keep the enquiry's "last contact" current when we reply from Gmail directly
   if (outbound && thread.enquiry_id) {
@@ -646,4 +651,63 @@ async function spotDetailChange(ctx: SyncContext, threadId: string, customerId: 
   });
   await logIntegration(ctx, { action: "customer.details_change_spotted", entityType: "email_thread", entityId: threadId, customerId,
     summary: `Spotted a request from ${update.from} to update ${what} — waiting for someone to apply it` });
+}
+
+
+const WEBMAIL = /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|ymail|icloud|me|mac|bigpond|optusnet|iinet|internode|tpg|westnet|aol|proton|protonmail)\./i;
+const domainOf = (e: string) => e.split("@")[1]?.toLowerCase() ?? "";
+
+/**
+ * People in a client's email to a job (sender, To and Cc) who aren't on the job yet:
+ *   – already a contact of the client → added to the job
+ *   – new address at the client's own organisation (same email domain, not Gmail/Outlook etc.) → saved as a contact and added
+ *   – anyone else (another company, a personal address) → not added; the team is told so they can decide
+ */
+async function addCcPeople(ctx: SyncContext, eventId: string, customerId: string, pm: ParsedMessage, own: string[], seenBefore: string[]) {
+  const db = ctx.db;
+  const people = [pm.from, ...pm.to, ...pm.cc].filter((a): a is NonNullable<typeof a> => !!a?.email)
+    .map((a) => ({ email: a.email.trim().toLowerCase(), name: a.name?.trim() || null }))
+    .filter((a, i, all) => !own.includes(a.email) && all.findIndex((b) => b.email === a.email) === i);
+  if (people.length < 2 && !pm.cc.length) return; // just the usual sender — nothing new
+  const [{ data: cust }, { data: contacts }, { data: links }, { data: ev }] = await Promise.all([
+    db.from("customers").select("name, email").eq("id", customerId).eq("organisation_id", ctx.org.id).maybeSingle(),
+    db.from("contacts").select("id, email").eq("organisation_id", ctx.org.id).eq("customer_id", customerId),
+    db.from("event_contacts").select("contact_id").eq("organisation_id", ctx.org.id).eq("event_id", eventId),
+    db.from("events").select("name").eq("id", eventId).maybeSingle(),
+  ]);
+  if (!cust) return;
+  const list = (contacts ?? []) as { id: string; email: string | null }[];
+  const onJob = new Set(((links ?? []) as { contact_id: string }[]).map((l) => l.contact_id));
+  const domains = new Set([cust.email, ...list.map((c) => c.email)].filter((e): e is string => !!e).map(domainOf).filter((d) => d && !WEBMAIL.test(d)));
+  const added: string[] = [], outsiders: string[] = [];
+  for (const p of people) {
+    let contact = list.find((c) => c.email?.toLowerCase() === p.email);
+    if (!contact) {
+      if (!domains.has(domainOf(p.email))) { if (p.email !== pm.from.email.toLowerCase() && !seenBefore.map((x) => x.toLowerCase()).includes(p.email)) outsiders.push(p.name ? `${p.name} (${p.email})` : p.email); continue; }
+      const [first, ...rest] = (p.name ?? p.email.split("@")[0].replace(/[._-]+/g, " ")).split(/\s+/);
+      const { data: c, error } = await db.from("contacts").insert({
+        organisation_id: ctx.org.id, customer_id: customerId, first_name: (first || p.email).slice(0, 100), last_name: rest.join(" ").slice(0, 100) || null,
+        email: p.email, is_primary: false, created_by: ctx.actorId,
+      }).select("id, email").single();
+      if (error || !c) continue;
+      contact = c as { id: string; email: string };
+      list.push(contact);
+    }
+    if (onJob.has(contact.id)) continue;
+    const { error } = await db.from("event_contacts").upsert({ organisation_id: ctx.org.id, event_id: eventId, contact_id: contact.id }, { onConflict: "event_id,contact_id", ignoreDuplicates: true });
+    if (!error) { onJob.add(contact.id); added.push(p.name ?? p.email); }
+  }
+  const job = ev?.name ?? "the job";
+  if (added.length) {
+    await logIntegration(ctx, { action: "event.person_added", entityType: "event", entityId: eventId, eventId, customerId,
+      summary: `Added ${added.join(", ")} to ${job} — included in ${pm.from.name ?? pm.from.email}'s email` });
+    await db.from("notifications").insert({ organisation_id: ctx.org.id, type: "event.person_added", title: `${added.join(", ")} added to ${job}`,
+      body: `${pm.from.name ?? pm.from.email} included them in an email, so they'll get the updates too. Take them off the job if they shouldn't.`,
+      link: `/events/${eventId}`, entity_type: "event", entity_id: eventId });
+  }
+  if (outsiders.length) {
+    await db.from("notifications").insert({ organisation_id: ctx.org.id, type: "event.cc_outsider", title: `${outsiders.length === 1 ? "Someone" : `${outsiders.length} people`} outside ${cust.name} copied in on ${job}`,
+      body: `${outsiders.join(", ")} — not added to the job. Add them from the job page if they should get quotes and updates.`,
+      link: `/events/${eventId}`, entity_type: "event", entity_id: eventId });
+  }
 }

@@ -14,14 +14,17 @@ export interface OldLine {
   code: string | null; title: string; rest: string | null; quantity: number; unitAmount: number; lineAmount: number; note: boolean;
   item: { id: string; name: string; unit: string | null; unit_price: number | null } | null; via: "code" | "alias" | null;
 }
+export interface CopyPerson { id: string; name: string; email: string | null; picked: boolean }
 export interface PriceOption { id: string; name: string; code: string | null; unit: string | null; unit_price: number; category: string | null }
 
 /**
  * An old quote's or invoice's lines, each checked against today's price list. Lines that match nothing are
  * highlighted, and (for managers) can be matched to a current item — remembered for that old item code everywhere.
  */
-export function OldLines({ lines, options, currency, canEdit, source, sourceId, defaultName, total }: {
+export function OldLines({ lines, options, currency, canEdit, source, sourceId, defaultName, total, people = [] }: {
   lines: OldLine[]; options: PriceOption[]; currency: string; canEdit: boolean;
+  /** The client's people; `picked` = on the job last time (or the main contact) */
+  people?: CopyPerson[];
   source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; total: number;
 }) {
   const priced = lines.filter((l) => !l.note);
@@ -52,7 +55,7 @@ export function OldLines({ lines, options, currency, canEdit, source, sourceId, 
           {lines.map((l, i) => <LineRow key={i} l={l} groups={groups} currency={currency} canEdit={canEdit} />)}
         </ul>
       </Card>
-      <CopyPanel source={source} sourceId={sourceId} defaultName={defaultName} unmatched={unmatched.length}
+      <CopyPanel source={source} sourceId={sourceId} defaultName={defaultName} unmatched={unmatched.length} people={people}
         priceChanges={priced.filter((l) => l.item?.unit_price != null && Math.abs(Number(l.item.unit_price) - l.unitAmount) > 0.004).length} />
     </div>
   );
@@ -135,7 +138,8 @@ function LineRow({ l, groups, currency, canEdit }: { l: OldLine; groups: [string
   );
 }
 
-function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges }: { source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; unmatched: number; priceChanges: number }) {
+function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, people }: { source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; unmatched: number; priceChanges: number; people: CopyPerson[] }) {
+  const [picked, setPicked] = useState<string[]>(people.filter((p) => p.picked).map((p) => p.id));
   const router = useRouter();
   const [name, setName] = useState(defaultName);
   const [prices, setPrices] = useState<"old" | "current">("current");
@@ -143,7 +147,7 @@ function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges }: {
   const [pending, start] = useTransition();
   const go = () => start(async () => {
     setErr(null);
-    const r = await copyToNewQuote({ source, id: sourceId, prices, name }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    const r = await copyToNewQuote({ source, id: sourceId, prices, name, contactIds: picked }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setErr(r.error); return; }
     router.push(`/quotes/${r.data.quoteId}`);
   });
@@ -165,6 +169,23 @@ function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges }: {
           {opt("current", "Today's prices", priceChanges ? `${priceChanges} matched line${priceChanges === 1 ? " changes" : "s change"} to the price-list price` : "Matched lines use the price list")}
           {opt("old", "Same prices as last time", "Every line keeps its old price")}
         </div>
+        {people.length > 0 && (
+          <div>
+            <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">Who this job is with <span className="font-normal text-ink-faint">— only they get the quote emails</span></span>
+            <div className="flex flex-wrap gap-1.5">
+              {people.map((p) => {
+                const on = picked.includes(p.id);
+                return (
+                  <label key={p.id} className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.75rem] ring-1 ring-inset", on ? "bg-brand-50 text-brand-800 ring-brand-300" : "text-ink-muted ring-line hover:ring-brand-200")}>
+                    <input type="checkbox" className="h-3.5 w-3.5 accent-brand-600" checked={on} onChange={(e) => setPicked((x) => e.target.checked ? [...x, p.id] : x.filter((y) => y !== p.id))} />
+                    {p.name}{p.email ? <span className="text-ink-faint">· {p.email}</span> : <span className="text-amber-700">· no email</span>}
+                  </label>
+                );
+              })}
+            </div>
+            {picked.length === 0 && <p className="mt-1 text-[0.7188rem] text-ink-faint">Nobody ticked — the client&apos;s main contact will be used.</p>}
+          </div>
+        )}
         {unmatched > 0 && <p className="text-[0.75rem] text-amber-800">{unmatched} unmatched line{unmatched === 1 ? "" : "s"} will be highlighted on the new quote so you can swap {unmatched === 1 ? "it" : "them"} for a current item.</p>}
         {err && <p className="text-[0.75rem] text-rose-700">{err}</p>}
         <div className="flex justify-end">

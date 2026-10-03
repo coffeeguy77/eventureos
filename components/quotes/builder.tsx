@@ -11,6 +11,7 @@ import {
 import { updateEventDetails } from "@/app/(app)/events/actions";
 import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
 import type { BillTo } from "@/lib/customers/bill-to";
+import { JobPeople, type ClientPerson, type JobPerson } from "./job-people";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -57,6 +58,9 @@ export interface BuilderProps {
   xeroQuotes?: XeroQuoteChoice[];
   /** The client's details for the preview's "Prepared for" */
   billTo?: BillTo | null;
+  /** Who at the client this job is with, and everyone else on file */
+  jobPeople?: JobPerson[];
+  clientPeople?: ClientPerson[];
   currency: string;
   tz: string;
   today: string;
@@ -560,6 +564,7 @@ export function QuoteBuilder(p: BuilderProps) {
           {p.templates && <SaveAsTemplateButton quoteId={quote.id} defaultName={quote.title} onDone={(m, ok) => showToast({ message: m, tone: ok ? "ok" : "error" }, 7000)} />}
         </div>
 
+        {p.jobPeople && <JobPeople eventId={p.event.id} people={p.jobPeople} others={p.clientPeople ?? []} clientName={p.customer.name} />}
         {!!p.customerPricing?.length && <CustomerPricingNote quoteId={quote.id} terms={p.customerPricing} customerName={p.customer.name} editable
           onDone={(m, ok) => { showToast({ message: m, tone: ok ? "ok" : "error" }); if (ok) router.refresh(); }} />}
         {!!p.xeroQuotes?.length && <XeroQuoteImport quoteId={quote.id} quotes={p.xeroQuotes} customerName={p.customer.name} currency={currency}

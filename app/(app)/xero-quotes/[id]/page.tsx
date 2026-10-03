@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, Field } from "@/components/ui/card";
 import { OldLines } from "@/components/history/old-lines";
 import { fmtDate, money, todayISO } from "@/lib/format";
-import { forView, loadMatchContext } from "@/lib/quotes/history";
+import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
 
 export const metadata = { title: "Xero quote" };
@@ -27,6 +27,7 @@ export default async function XeroQuotePage({ params }: { params: Promise<{ id: 
   const customer = q.customer as unknown as { id: string; name: string } | null;
 
   const { priceList, aliases } = await loadMatchContext(org.id);
+  const people = customer ? await copyPeople(supabase, org.id, customer.id).catch(() => []) : [];
   const view = forView(matchLines((q.line_items ?? []) as XeroLine[], priceList, aliases), priceList);
   const today = todayISO(org.timezone);
   const current = (q.status === "SENT" || q.status === "DRAFT") && (!q.expiry_date || q.expiry_date >= today);
@@ -53,7 +54,7 @@ export default async function XeroQuotePage({ params }: { params: Promise<{ id: 
       </div>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <OldLines lines={view.lines} options={view.options} currency={org.currency} canEdit={canManage(role)}
-          source="xero_quote" sourceId={q.id} defaultName={q.reference || q.title || customer?.name || ""} total={Number(q.total)} />
+          source="xero_quote" sourceId={q.id} people={people} defaultName={q.reference || q.title || customer?.name || ""} total={Number(q.total)} />
         <Card className="self-start">
           <CardHeader title="Details" subtitle="A copy of the quote in Xero — read only" />
           <dl className="grid grid-cols-2 gap-4 px-5 pb-5">

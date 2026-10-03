@@ -15,7 +15,7 @@ import type { ActivityLog, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { InvoiceActions } from "./controls";
 import { OldLines } from "@/components/history/old-lines";
-import { forView, loadMatchContext } from "@/lib/quotes/history";
+import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
 
 export const metadata = { title: "Invoice" };
@@ -72,6 +72,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const oldView = !version && inv.line_items?.length
     ? await loadMatchContext(org.id).then(({ priceList, aliases }) => forView(matchLines(inv.line_items!, priceList, aliases), priceList)).catch(() => null)
     : null;
+  const copyList = oldView && inv.customer ? await copyPeople(supabase, org.id, inv.customer.id, inv.event?.id ?? null).catch(() => []) : [];
 
   const s = INVOICE_STATUS[inv.status];
   const xeroManaged = !!inv.xero_invoice_id;
@@ -141,7 +142,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
           {oldView ? (
             <OldLines lines={oldView.lines} options={oldView.options} currency={cur} canEdit={canManage(role)}
-              source="invoice" sourceId={inv.id} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
+              source="invoice" sourceId={inv.id} people={copyList} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
           ) : (
           <Card>
             <CardHeader

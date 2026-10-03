@@ -45,7 +45,7 @@ export async function saveItemAlias(code: string, serviceId: string | null): Pro
   }
 }
 
-export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; id: string; prices: "old" | "current"; name?: string }): Promise<Result<{ quoteId: string; number: number }>> {
+export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; id: string; prices: "old" | "current"; name?: string; contactIds?: string[] }): Promise<Result<{ quoteId: string; number: number }>> {
   try {
     const { supabase, org, user, profile } = await requireOrg();
     if (!UUID.test(input.id)) return { ok: false, error: "That record link isn't valid." };
@@ -74,14 +74,19 @@ export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; 
     if (!customer) return { ok: false, error: "The client for that record couldn't be found." };
     const name = (input.name?.trim() || src.label?.trim() || customer.name).slice(0, 200);
 
-    // A new job (date TBC) …
-    const { data: contact } = await supabase.from("contacts").select("id").eq("customer_id", customer.id).order("is_primary", { ascending: false }).limit(1).maybeSingle();
+    // A new job (date TBC) with the people chosen (else the client's main contact) …
+    const { data: clientPeople } = await supabase.from("contacts").select("id, is_primary").eq("organisation_id", org.id).eq("customer_id", customer.id).order("is_primary", { ascending: false });
+    const allowed = new Set(((clientPeople ?? []) as { id: string }[]).map((c) => c.id));
+    const chosen = (input.contactIds ?? []).filter((cid) => UUID.test(cid) && allowed.has(cid)).slice(0, 30);
+    const fallback = (clientPeople ?? [])[0] as { id: string } | undefined;
+    const peopleIds = chosen.length ? chosen : fallback ? [fallback.id] : [];
+    const contact = peopleIds.length ? { id: peopleIds[0] } : null;
     const { data: ev, error: evErr } = await supabase.from("events").insert({
       organisation_id: org.id, name, customer_id: customer.id, primary_contact_id: contact?.id ?? null,
       status: "planning", assigned_to: user.id, next_action: "Check the copied quote and send it", created_by: user.id,
     }).select("id, number").single();
     if (evErr) return { ok: false, error: `Couldn't create the job: ${evErr.message}` };
-    if (contact) await supabase.from("event_contacts").insert({ organisation_id: org.id, event_id: ev.id, contact_id: contact.id, role: "Primary contact" });
+    if (peopleIds.length) await supabase.from("event_contacts").insert(peopleIds.map((cid, i) => ({ organisation_id: org.id, event_id: ev.id, contact_id: cid, role: i === 0 ? "Primary contact" : null })));
 
     // … with a draft quote holding the copied lines
     const today = todayISO(org.timezone);

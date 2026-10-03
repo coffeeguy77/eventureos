@@ -34,6 +34,9 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   const target = await replyTarget(supabase, org.id, threadId, ownAddresses(ctx));
   if (!target) return { error: "That conversation couldn't be found." };
   const { thread, to, subject, inReplyTo, references } = target;
+  // Copied in: the job people in this conversation, minus anyone the sender took off
+  const keepCc = new Set(form.getAll("cc").map((v) => String(v).toLowerCase()));
+  const cc = form.has("cc_shown") ? target.cc.filter((e) => keepCc.has(e)) : target.cc;
   if (!to) return { error: "Couldn't work out who to reply to — reply from Gmail for this one." };
   const fromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;
 
@@ -52,7 +55,7 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   let sent: Awaited<ReturnType<typeof sendGmail>>;
   let gmailThreadId: string | null = thread.gmail_thread_id;
   try {
-    const raw = buildRawMessage({ from, fromName, to: [to], subject, inReplyTo, references, text: bodyText, html: bodyHtml });
+    const raw = buildRawMessage({ from, fromName, to: [to], cc, subject, inReplyTo, references, text: bodyText, html: bodyHtml });
     try {
       sent = await sendGmail(ctx, raw, gmailThreadId);
     } catch (e) {
@@ -68,7 +71,7 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
 
   const { error: mErr } = await supabase.from("email_messages").insert({
     organisation_id: org.id, thread_id: thread.id, gmail_message_id: sent.id, rfc_message_id: sent.messageId,
-    direction: "outbound", from_email: from.toLowerCase(), from_name: fromName, to_emails: [to], subject,
+    direction: "outbound", from_email: from.toLowerCase(), from_name: fromName, to_emails: [to], cc_emails: cc, subject,
     snippet: text.replace(/\s+/g, " ").slice(0, 280), body_text: bodyText, body_html: bodyHtml, signature_version: sig?.version ?? null,
     sent_at: now, is_read: true, sent_by: user.id,
   });
@@ -219,4 +222,14 @@ export async function startQuoteFromThread(threadId: string): Promise<QuoteFromT
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." };
   }
+}
+
+
+/** Who a reply in this conversation goes to (shown above the reply box). */
+export async function replyRecipients(threadId: string): Promise<{ to: string | null; cc: string[] }> {
+  const { supabase, org, user } = await requireOrg();
+  let own: string[] = [];
+  try { own = ownAddresses(await buildContext(supabase, "user", org.id, "gmail", user.id)); } catch { /* Gmail not connected */ }
+  const t = await replyTarget(supabase, org.id, threadId, own);
+  return { to: t?.to ?? null, cc: t?.cc ?? [] };
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ArrowDown, BellPlus, FileText, Sparkles } from "lucide-react";
+import { ArrowDown, BellPlus, FileText, Sparkles, X } from "lucide-react";
 import { DateTimeField } from "@/components/ui/datetime-field";
 import { addTask } from "@/app/(app)/tasks/actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,7 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { discardSavedDraft, draftReplyAction, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { discardSavedDraft, draftReplyAction, replyRecipients, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
 import { useRouter } from "next/navigation";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
@@ -132,7 +132,7 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
     router.push(r.url);
   }
   useEffect(() => {
-    if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); setSig(null); }
+    if (state?.ok) { formRef.current?.reset(); setBody(""); setDraftNotes([]); setOpen(false); setSig(null); setRcpt(null); }
   }, [state]);
   // The signature this reply will get (loaded when the box opens)
   const [sig, setSig] = useState<SignaturePreviewState | null>(null);
@@ -143,6 +143,15 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
     replySignaturePreview(threadId).then((r) => { if (live) setSig(r); }).catch(() => {});
     return () => { live = false; };
   }, [open, sig, threadId]);
+  // Who it goes to: the customer, plus the job's people in this conversation (removable)
+  const [rcpt, setRcpt] = useState<{ to: string | null; cc: string[] } | null>(null);
+  const [cc, setCc] = useState<string[]>([]);
+  useEffect(() => {
+    if (!open || rcpt) return;
+    let live = true;
+    replyRecipients(threadId).then((r) => { if (live) { setRcpt(r); setCc(r.cc); } }).catch(() => {});
+    return () => { live = false; };
+  }, [open, rcpt, threadId]);
   async function draft() {
     setDrafting(true); setDraftError(null);
     const r = await draftReplyAction(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
@@ -212,6 +221,24 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
         <ul className="mb-2 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-900 ring-1 ring-inset ring-amber-100">
           {draftNotes.map((n, i) => <li key={i}>• {n}</li>)}
         </ul>
+      )}
+      {rcpt && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[0.75rem] text-ink-muted">
+          <span>To <b className="font-medium text-ink">{rcpt.to ?? "—"}</b></span>
+          {rcpt.cc.length > 0 && <>
+            <input type="hidden" name="cc_shown" value="1" />
+            <span className="ml-1">Cc</span>
+            {rcpt.cc.map((e) => cc.includes(e) ? (
+              <span key={e} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-0.5 pl-2 pr-1 text-ink">
+                <input type="hidden" name="cc" value={e} />{e}
+                <button type="button" aria-label={`Don't copy in ${e}`} onClick={() => setCc((x) => x.filter((y) => y !== e))} className="rounded-full p-0.5 text-ink-faint hover:bg-zinc-200 hover:text-ink"><X className="h-3 w-3" /></button>
+              </span>
+            ) : (
+              <button key={e} type="button" onClick={() => setCc((x) => [...x, e])} className="rounded-full px-2 py-0.5 text-ink-faint line-through hover:text-ink">{e}</button>
+            ))}
+            <span className="text-ink-faint">· people on this job in the conversation</span>
+          </>}
+        </div>
       )}
       <textarea name="body" rows={body ? 14 : 4} autoFocus required placeholder="Write a reply…" value={body} onChange={(e) => setBody(e.target.value)}
         className="w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
