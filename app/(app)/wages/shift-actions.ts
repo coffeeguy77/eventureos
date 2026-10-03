@@ -163,3 +163,107 @@ export async function assignPastBooking(calendarEventId: string, crewId: string)
     return `${m.name} added — their hours are now in Wages.`;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Edit any unpaid shift: who, when, hours, rate (office shifts also: name, where, notes)
+// ---------------------------------------------------------------------------
+export interface ShiftEdit {
+  crewId: string;
+  hoursOverride: number | null; rateOverride: number | null;
+  // office shifts only
+  title?: string; date?: string; start?: string | null; finish?: string | null; location?: string | null; notes?: string | null;
+}
+
+export async function editShift(key: string, input: ShiftEdit) {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    const [kind, id] = key.split(":");
+    if (!UUID.test(id ?? "") || (kind !== "e" && kind !== "c") || !UUID.test(input.crewId)) throw new Error("Refresh and try again.");
+    if (input.hoursOverride != null && (!Number.isFinite(input.hoursOverride) || input.hoursOverride < 0 || input.hoursOverride > 48)) throw new Error("Hours must be between 0 and 48.");
+    if (input.rateOverride != null && (!Number.isFinite(input.rateOverride) || input.rateOverride < 0 || input.rateOverride > 500)) throw new Error("Rate must be between $0 and $500.");
+    const { data: m } = await supabase.from("crew_members").select("name").eq("id", input.crewId).eq("organisation_id", org.id).maybeSingle();
+    if (!m) throw new Error("That person isn't on the staff list.");
+
+    if (kind === "e") {
+      const { data: r } = await supabase.from("event_crew").select("id, event_id, crew_member_id, payment_id, member:crew_members(name), event:events(name, customer_id)").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+      if (!r) throw new Error("That shift no longer exists.");
+      if (r.payment_id) throw new Error("This shift has been paid. Undo the payment first to change it.");
+      const moved = r.crew_member_id !== input.crewId;
+      const { error } = await supabase.from("event_crew").update({
+        crew_member_id: input.crewId, hours_override: input.hoursOverride, rate_override: input.rateOverride,
+        ...(moved ? { calendar_response: null, calendar_response_at: null, board_posted_at: null, board_note: null } : {}),
+      }).eq("id", id);
+      if (error) throw new Error(error.code === "23505" ? `${m.name} is already on this job.` : error.message);
+      const ev = r.event as unknown as { name: string; customer_id: string } | null;
+      if (moved) {
+        await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "event.crew_changed", entityType: "event", entityId: r.event_id, eventId: r.event_id, customerId: ev?.customer_id,
+          summary: `${actorName(profile)} moved the shift on ${ev?.name ?? "a job"} from ${(r.member as unknown as { name: string } | null)?.name ?? "someone"} to ${m.name}` });
+        await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("event_id", r.event_id).eq("kind", "event").neq("sync_status", "local");
+      }
+      return moved ? `Moved to ${m.name}.` : "Saved.";
+    }
+
+    const { data: s } = await supabase.from("staff_shifts").select("id, crew_member_id, title, shift_date, series_id, payment_id, member:crew_members(name)").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    if (!s) throw new Error("That shift no longer exists.");
+    if (s.payment_id) throw new Error("This shift has been paid. Undo the payment first to change it.");
+    const title = (input.title ?? s.title).trim().slice(0, 120);
+    if (!title) throw new Error("Give the shift a name.");
+    const date = input.date ?? s.shift_date;
+    if (!DATE.test(date)) throw new Error("Choose the date.");
+    if (input.start && !TIME.test(input.start)) throw new Error("Check the start time.");
+    if (input.finish && !TIME.test(input.finish)) throw new Error("Check the finish time.");
+    const dateChanged = date !== s.shift_date;
+    const { error } = await supabase.from("staff_shifts").update({
+      crew_member_id: input.crewId, title, shift_date: date,
+      ...(input.start !== undefined ? { start_time: input.start || null } : {}), ...(input.finish !== undefined ? { finish_time: input.finish || null } : {}),
+      ...(input.location !== undefined ? { location: input.location?.trim().slice(0, 300) || null } : {}), ...(input.notes !== undefined ? { notes: input.notes?.trim().slice(0, 2000) || null } : {}),
+      hours_override: input.hoursOverride, rate_override: input.rateOverride,
+      // a regular shift moved to another day becomes a one-off, and its old date isn't re-created
+      ...(dateChanged && s.series_id ? { series_id: null } : {}),
+    }).eq("id", id);
+    if (error) throw new Error(error.message);
+    if (dateChanged && s.series_id) {
+      const { data: ser } = await supabase.from("staff_shift_series").select("skip_dates").eq("id", s.series_id).maybeSingle();
+      await supabase.from("staff_shift_series").update({ skip_dates: [...new Set([...((ser?.skip_dates as string[] | null) ?? []), s.shift_date])] }).eq("id", s.series_id);
+    }
+    // Calendar: future shifts are (re)sent; one moved into the past comes off the calendar
+    if (date >= todayISO(org.timezone)) await syncShiftCalendar(supabase, org.id, org.timezone, [id]);
+    else await removeShiftCalendar(supabase, org.id, [id]);
+    const from = (s.member as unknown as { name: string } | null)?.name ?? "someone";
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "crew.shift_changed", entityType: "crew_member", entityId: input.crewId,
+      summary: `${actorName(profile)} changed the shift “${title}” on ${fmtDate(date)}${s.crew_member_id !== input.crewId ? ` (moved from ${from} to ${m.name})` : ""}` });
+    return s.crew_member_id !== input.crewId ? `Moved to ${m.name}.` : "Saved.";
+  });
+}
+
+/** Take a worked event shift off someone (e.g. added to the wrong person) — unpaid only. */
+export async function removeEventShift(eventCrewId: string) {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    if (!UUID.test(eventCrewId)) throw new Error("Refresh and try again.");
+    const { data: r } = await supabase.from("event_crew").select("event_id, payment_id, member:crew_members(name), event:events(name, customer_id)").eq("id", eventCrewId).eq("organisation_id", org.id).maybeSingle();
+    if (!r) return;
+    if (r.payment_id) throw new Error("That shift has been paid. Undo the payment first.");
+    await supabase.from("event_crew").delete().eq("id", eventCrewId);
+    const ev = r.event as unknown as { name: string; customer_id: string } | null;
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "event.crew_removed", entityType: "event", entityId: r.event_id, eventId: r.event_id, customerId: ev?.customer_id,
+      summary: `${actorName(profile)} took ${(r.member as unknown as { name: string } | null)?.name ?? "someone"} off ${ev?.name ?? "a job"}` });
+    await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("event_id", r.event_id).eq("kind", "event").neq("sync_status", "local");
+    return "Removed.";
+  });
+}
+
+/** Minimum paid hours per shift (short shifts are paid up to this). Stored in the organisation's settings. */
+export async function setStaffMinHours(hours: number) {
+  return wrap(async () => {
+    const { supabase, org, role } = await office();
+    if (role === "manager") throw new Error("Only owners and admins can change pay rules.");
+    if (!Number.isFinite(hours) || hours < 0 || hours > 12) throw new Error("Enter between 0 and 12 hours.");
+    const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = { ...((o?.settings as Record<string, unknown> | null) ?? {}), staff_min_hours: Math.round(hours * 4) / 4 };
+    const { error } = await supabase.from("organisations").update({ settings }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/settings/team");
+    return "Saved.";
+  });
+}

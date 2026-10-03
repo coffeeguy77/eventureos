@@ -6,7 +6,8 @@ import { fillSeries, HORIZON_DAYS } from "@/lib/crew/custom-shifts";
 import { WEEKDAYS } from "@/lib/crew/series";
 import { addDaysISO, fmtDate, todayISO } from "@/lib/format";
 import { WageTabs } from "../tabs";
-import { AddShiftForm, DeleteShiftButton, EndSeriesButton } from "../shifts-ui";
+import { AddShiftForm, EndSeriesButton } from "../shifts-ui";
+import { EditShiftToggle } from "../shift-editor";
 
 export const metadata = { title: "Shifts" };
 
@@ -23,11 +24,11 @@ export default async function ShiftsPage() {
   const [{ data: staffRows }, { data: series }, { data: shifts }] = await Promise.all([
     supabase.from("crew_members").select("id, name").eq("organisation_id", org.id).eq("active", true).order("rank").order("name"),
     supabase.from("staff_shift_series").select("id, title, weekday, every_weeks, start_time, finish_time, location, starts_on, ends_on, member:crew_members(name)").eq("organisation_id", org.id).eq("active", true).order("weekday"),
-    supabase.from("staff_shifts").select("id, title, shift_date, start_time, finish_time, location, series_id, payment_id, member:crew_members(name)").eq("organisation_id", org.id).gte("shift_date", today).lte("shift_date", addDaysISO(today, HORIZON_DAYS)).order("shift_date").order("start_time"),
+    supabase.from("staff_shifts").select("id, crew_member_id, title, shift_date, start_time, finish_time, location, notes, hours_override, rate_override, series_id, payment_id, member:crew_members(name)").eq("organisation_id", org.id).gte("shift_date", today).lte("shift_date", addDaysISO(today, HORIZON_DAYS)).order("shift_date").order("start_time"),
   ]);
   const staff = (staffRows ?? []) as { id: string; name: string }[];
   type Ser = { id: string; title: string; weekday: number; every_weeks: number; start_time: string; finish_time: string; location: string | null; starts_on: string; ends_on: string | null; member: { name: string } | null };
-  type Sh = { id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; series_id: string | null; payment_id: string | null; member: { name: string } | null };
+  type Sh = { id: string; crew_member_id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; notes: string | null; hours_override: number | null; rate_override: number | null; series_id: string | null; payment_id: string | null; member: { name: string } | null };
   const ser = (series ?? []) as unknown as Ser[], list = (shifts ?? []) as unknown as Sh[];
   return (
     <div>
@@ -56,13 +57,17 @@ export default async function ShiftsPage() {
           {list.length === 0 ? <EmptyState title="Nothing booked" /> : (
             <ul className="divide-y divide-line border-t border-line">
               {list.map((s) => (
-                <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
-                  <div className="w-24 shrink-0 text-[0.75rem] text-ink-muted">{fmtDate(s.shift_date, "weekday")}</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[0.8125rem] font-medium text-ink">{s.title} · {s.member?.name ?? "—"}{s.series_id && <span className="font-normal text-ink-faint"> · regular</span>}</p>
-                    <p className="text-[0.7188rem] text-ink-muted">{t(s.start_time)}–{t(s.finish_time)}{s.location ? ` · ${s.location}` : ""}</p>
-                  </div>
-                  {!s.payment_id && <DeleteShiftButton id={s.id} label={`${s.title} on ${s.shift_date}`} />}
+                <li key={s.id} className="px-5 py-2.5">
+                  <EditShiftToggle staff={staff} s={{ key: `c:${s.id}`, kind: "custom", crewId: s.crew_member_id, hoursOverride: s.hours_override, rateOverride: s.rate_override, planned: null, rate: 0,
+                    title: s.title, date: s.shift_date, start: s.start_time, finish: s.finish_time, location: s.location, notes: s.notes }}>
+                    <div className="flex flex-wrap items-baseline gap-3">
+                      <div className="w-24 shrink-0 text-[0.75rem] text-ink-muted">{fmtDate(s.shift_date, "weekday")}</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[0.8125rem] font-medium text-ink">{s.title} · {s.member?.name ?? "—"}{s.series_id && <span className="font-normal text-ink-faint"> · regular</span>}</p>
+                        <p className="text-[0.7188rem] text-ink-muted">{t(s.start_time)}–{t(s.finish_time)}{s.location ? ` · ${s.location}` : ""}</p>
+                      </div>
+                    </div>
+                  </EditShiftToggle>
                 </li>
               ))}
             </ul>

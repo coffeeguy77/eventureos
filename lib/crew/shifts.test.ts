@@ -13,4 +13,7 @@ eq("clash same day overlapping", clashes(ev, { event_date: "2026-10-17", setup_t
 eq("no clash back to back", clashes(ev, { event_date: "2026-10-17", setup_time: "12:00", start_time: null, finish_time: "14:00" }), false);
 eq("different day", clashes(ev, { ...ev, event_date: "2026-10-18" }), false);
 eq("hours label", [fmtHours(3.5), fmtHours(1), fmtHours(4)], ["3.5 hrs", "1 hr", "4 hrs"]);
+eq("3 hour minimum tops up a short shift", shiftPay({ event: { ...ev, setup_time: "09:00", finish_time: "11:00" }, orgRate: 30, minHours: 3 }).hours, 3);
+eq("minimum doesn't shorten a long shift", shiftPay({ event: ev, orgRate: 30, minHours: 3 }).hours, 3.5);
+eq("office override beats the minimum", shiftPay({ event: ev, orgRate: 30, minHours: 3, hoursOverride: 2 }).hours, 2);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }

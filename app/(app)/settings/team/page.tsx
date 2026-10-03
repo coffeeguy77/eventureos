@@ -11,6 +11,7 @@ import { changeMemberRole, inviteMember, removeMember, resendInvitation, revokeI
 import { PERMISSIONS, ROLE_HINT, ROLE_LABEL } from "../constants";
 import { RosterToggle } from "./roster-toggle";
 import { CrewList, type CrewMember } from "./crew-list";
+import { staffMinHours } from "@/lib/crew/shifts";
 
 export const metadata = { title: "Team" };
 
@@ -50,8 +51,9 @@ export default async function TeamPage() {
   const crew = (crewData ?? []) as CrewMember[];
   const { data: extraRows } = await supabase.from("crew_member_emails").select("crew_member_id, email").eq("organisation_id", org.id);
   for (const c of crew) c.extra_emails = ((extraRows ?? []) as { crew_member_id: string; email: string }[]).filter((x) => x.crew_member_id === c.id).map((x) => x.email);
-  const { data: orgRow } = await supabase.from("organisations").select("slug, staff_hourly_rate").eq("id", org.id).maybeSingle();
-  const staffApp = { ready: !crewRes.error, slug: (orgRow as { slug?: string } | null)?.slug ?? "", rate: Number((orgRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30) };
+  const { data: orgRow } = await supabase.from("organisations").select("slug, staff_hourly_rate, settings").eq("id", org.id).maybeSingle();
+  const staffApp = { ready: !crewRes.error, slug: (orgRow as { slug?: string } | null)?.slug ?? "", rate: Number((orgRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30),
+    minHours: staffMinHours((orgRow as { settings?: Record<string, unknown> } | null)?.settings) };
   if (membersRes.error) throw new Error(`Could not load team: ${membersRes.error.message}`);
   if (invitesRes.error) throw new Error(`Could not load invitations: ${invitesRes.error.message}`);
 

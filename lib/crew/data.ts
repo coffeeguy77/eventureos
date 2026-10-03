@@ -34,7 +34,7 @@ export async function myShifts(s: CrewSession, opts: { from?: string; to?: strin
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
     const p = plannedShift(job);
     const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
-      rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate });
+      rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate, minHours: s.org.staff_min_hours });
     return {
       kind: "event" as const, id: r.id, status: r.status, role: r.role, boardPostedAt: r.board_posted_at, boardNote: r.board_note, calendarResponse: r.calendar_response, paymentId: r.payment_id,
       job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending,
@@ -67,7 +67,7 @@ async function customShifts(s: CrewSession, opts: { from?: string; to?: string }
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
     const p = plannedShift(job);
     const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
-      rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate });
+      rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate, minHours: s.org.staff_min_hours });
     return { kind: "custom" as const, id: r.id, status: "confirmed" as const, role: null, boardPostedAt: null, boardNote: null, calendarResponse: null, paymentId: r.payment_id,
       job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending };
   });
@@ -181,6 +181,6 @@ export async function myAway(s: CrewSession, today: string) {
 }
 
 export async function myPayments(s: CrewSession) {
-  const { data } = await s.db.from("staff_payments").select("id, paid_on, hours, amount, reference").eq("crew_member_id", s.member.id).order("paid_on", { ascending: false }).limit(50);
-  return ((data ?? []) as { id: string; paid_on: string; hours: number; amount: number; reference: string | null }[]).map((p) => ({ ...p, hours: Number(p.hours), amount: Number(p.amount) }));
+  const { data } = await s.db.from("staff_payments").select("id, paid_on, hours, amount, reference, note").eq("crew_member_id", s.member.id).order("paid_on", { ascending: false }).limit(50);
+  return ((data ?? []) as { id: string; paid_on: string; hours: number; amount: number; reference: string | null; note: string | null }[]).map((p) => ({ ...p, hours: Number(p.hours), amount: Number(p.amount) }));
 }

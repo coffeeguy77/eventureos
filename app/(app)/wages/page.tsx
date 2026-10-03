@@ -3,7 +3,7 @@ import { requireOrg } from "@/lib/context";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { loadWageShifts } from "@/lib/crew/wages";
-import { fmtHours } from "@/lib/crew/shifts";
+import { fmtHours, staffMinHours } from "@/lib/crew/shifts";
 import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import { ClaimRow, OwedCard, PaymentRow } from "./ui";
 import { WageTabs } from "./tabs";
@@ -21,7 +21,7 @@ export default async function WagesPage() {
   }
   const [{ data: claimRows }, { data: payRows }] = await Promise.all([
     supabase.from("staff_hour_claims").select("id, hours, reason, created_at, shift:event_crew(id, payment_id, member:crew_members(name), event:events(id, name, event_date)), custom:staff_shifts(id, payment_id, title, shift_date, member:crew_members(name))").eq("organisation_id", org.id).eq("status", "pending").order("created_at"),
-    supabase.from("staff_payments").select("id, paid_on, hours, amount, reference, member:crew_members(name)").eq("organisation_id", org.id).gte("paid_on", addDaysISO(today, -120)).order("paid_on", { ascending: false }).limit(60),
+    supabase.from("staff_payments").select("id, paid_on, hours, amount, reference, note, member:crew_members(name)").eq("organisation_id", org.id).gte("paid_on", addDaysISO(today, -120)).order("paid_on", { ascending: false }).limit(60),
   ]);
   type ClaimRaw = { id: string; hours: number; reason: string; created_at: string;
     shift: { id: string; payment_id: string | null; member: { name: string } | null; event: { id: string; name: string; event_date: string | null } | null } | null;
@@ -34,12 +34,18 @@ export default async function WagesPage() {
   const people = new Map<string, typeof owed>();
   for (const s of owed) people.set(s.crewId, [...(people.get(s.crewId) ?? []), s]);
   const totalOwed = owed.reduce((t, s) => t + (s.amount ?? 0), 0);
-  const payments = ((payRows ?? []) as unknown as { id: string; paid_on: string; hours: number; amount: number; reference: string | null; member: { name: string } | null }[])
-    .map((p) => ({ id: p.id, when: fmtDate(p.paid_on), who: p.member?.name ?? "Staff", hours: fmtHours(Number(p.hours)), amount: money(Number(p.amount), org.currency, { cents: true }), reference: p.reference }));
+  const payments = ((payRows ?? []) as unknown as { id: string; paid_on: string; hours: number; amount: number; reference: string | null; note: string | null; member: { name: string } | null }[])
+    .map((p) => ({ id: p.id, when: fmtDate(p.paid_on), who: p.member?.name ?? "Staff", hours: fmtHours(Number(p.hours)), amount: money(Number(p.amount), org.currency, { cents: true }), reference: p.reference, method: p.note }));
+  const [{ data: staffRows }, { data: orgRow }] = await Promise.all([
+    supabase.from("crew_members").select("id, name").eq("organisation_id", org.id).eq("active", true).order("rank").order("name"),
+    supabase.from("organisations").select("settings").eq("id", org.id).single(),
+  ]);
+  const staff = (staffRows ?? []) as { id: string; name: string }[];
+  const minHours = staffMinHours((orgRow?.settings as Record<string, unknown> | null) ?? null);
 
   return (
     <div>
-      <PageHeader title="Wages" subtitle={`${money(totalOwed, org.currency, { cents: true })} owed across ${owed.length} shift${owed.length === 1 ? "" : "s"} · hours are setup → finish plus approved extras`} />
+      <PageHeader title="Wages" subtitle={`${money(totalOwed, org.currency, { cents: true })} owed across ${owed.length} shift${owed.length === 1 ? "" : "s"} · hours are setup → finish (minimum ${minHours} hrs) plus approved extras`} />
       <WageTabs active="owed" />
       <div className="space-y-6">
         {claims.length > 0 && (
@@ -51,7 +57,7 @@ export default async function WagesPage() {
         {people.size === 0 ? (
           <Card><EmptyState title="Nobody's owed anything">Shifts appear here once the job date has passed. Missing some? Record who worked recent jobs under “Past jobs — who worked”.</EmptyState></Card>
         ) : [...people.values()].sort((a, b) => a[0].crewName.localeCompare(b[0].crewName)).map((list) => (
-          <OwedCard key={list[0].crewId} crewId={list[0].crewId} name={list[0].crewName} shifts={list} currency={org.currency} today={today} />
+          <OwedCard key={list[0].crewId} crewId={list[0].crewId} name={list[0].crewName} shifts={list} currency={org.currency} today={today} staff={staff} minHours={minHours} />
         ))}
         {payments.length > 0 && (
           <Card>

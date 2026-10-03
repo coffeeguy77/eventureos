@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { staffMinHours } from "./shifts";
 
 /**
  * The staff app (/crew/[slug]). Staff aren't EventureOS users of the organisation: they sign in with an emailed code,
@@ -10,7 +11,7 @@ import { createServiceClient } from "@/lib/integrations/runtime";
  */
 export interface CrewOrg {
   id: string; name: string; slug: string; logo_url: string | null; brand_colour: string | null; timezone: string; currency: string;
-  contact_email: string | null; contact_phone: string | null; staff_hourly_rate: number;
+  contact_email: string | null; contact_phone: string | null; staff_hourly_rate: number; staff_min_hours: number;
 }
 export interface CrewMember { id: string; name: string; email: string | null; phone: string | null; role: string | null; hourly_rate: number | null; rank: number }
 export interface CrewSession { db: SupabaseClient; org: CrewOrg; member: CrewMember; userId: string }
@@ -21,12 +22,14 @@ export async function crewOrg(slug: string): Promise<CrewOrg | null> {
   if (!SLUG.test(slug)) return null;
   const db = createServiceClient();
   const { data, error } = await db.from("organisations")
-    .select("id, name, slug, logo_url, brand_colour, timezone, currency, contact_email, contact_phone, staff_hourly_rate").eq("slug", slug).maybeSingle();
+    .select("id, name, slug, logo_url, brand_colour, timezone, currency, contact_email, contact_phone, staff_hourly_rate, settings").eq("slug", slug).maybeSingle();
   if (error && /staff_hourly_rate/.test(error.message)) {
     const { data: d2 } = await db.from("organisations").select("id, name, slug, logo_url, brand_colour, timezone, currency, contact_email, contact_phone").eq("slug", slug).maybeSingle();
-    return d2 ? { ...(d2 as Omit<CrewOrg, "staff_hourly_rate">), staff_hourly_rate: 30 } : null;
+    return d2 ? { ...(d2 as Omit<CrewOrg, "staff_hourly_rate" | "staff_min_hours">), staff_hourly_rate: 30, staff_min_hours: 3 } : null;
   }
-  return data ? { ...(data as CrewOrg), staff_hourly_rate: Number((data as CrewOrg).staff_hourly_rate ?? 30) } : null;
+  if (!data) return null;
+  const { settings, ...rest } = data as CrewOrg & { settings?: Record<string, unknown> };
+  return { ...rest, staff_hourly_rate: Number(rest.staff_hourly_rate ?? 30), staff_min_hours: staffMinHours(settings) };
 }
 
 /** The signed-in staff member for this organisation, linking their login to their staff record the first time. */

@@ -56,7 +56,7 @@ export async function adjustShift(key: string, hours: number | null, rate: numbe
 }
 
 /** Record that the selected shifts have been paid. The staff member sees the payment and total in their app. */
-export async function markShiftsPaid(crewId: string, keys: string[], paidOn: string, reference: string) {
+export async function markShiftsPaid(crewId: string, keys: string[], paidOn: string, reference: string, method = "Bank transfer") {
   return wrap(async () => {
     const { supabase, org, user, profile } = await office();
     if (!UUID.test(crewId) || !keys.length || keys.some((k) => !/^[ec]:[0-9a-f-]{36}$/i.test(k))) throw new Error("Tick the shifts you're paying.");
@@ -68,6 +68,7 @@ export async function markShiftsPaid(crewId: string, keys: string[], paidOn: str
     const amount = Math.round(shifts.reduce((t, s) => t + (s.amount ?? 0), 0) * 100) / 100;
     const { data: pay, error } = await supabase.from("staff_payments").insert({
       organisation_id: org.id, crew_member_id: crewId, paid_on: paidOn, hours, amount, reference: reference.trim().slice(0, 120) || null, created_by: user.id,
+      note: ["Bank transfer", "Cash", "Contra", "Paid outside EventureOS"].includes(method) ? method : "Bank transfer",
     }).select("id").single();
     if (error) throw new Error(error.message);
     const ev = shifts.filter((s) => s.kind === "event").map((s) => s.id), cu = shifts.filter((s) => s.kind === "custom").map((s) => s.id);
@@ -75,7 +76,7 @@ export async function markShiftsPaid(crewId: string, keys: string[], paidOn: str
     const r2 = cu.length ? await supabase.from("staff_shifts").update({ payment_id: pay.id }).in("id", cu).is("payment_id", null) : { error: null };
     if (r1.error || r2.error) { await supabase.from("staff_payments").delete().eq("id", pay.id); throw new Error((r1.error ?? r2.error)!.message); }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "crew.paid", entityType: "crew_member", entityId: crewId,
-      summary: `${actorName(profile)} paid ${shifts[0].crewName} ${money(amount, org.currency, { cents: true })} for ${shifts.length} shift${shifts.length === 1 ? "" : "s"} (${fmtHours(hours)})` });
+      summary: `${actorName(profile)} recorded ${method.toLowerCase()} pay of ${money(amount, org.currency, { cents: true })} to ${shifts[0].crewName} for ${shifts.length} shift${shifts.length === 1 ? "" : "s"} (${fmtHours(hours)})` });
     return `Recorded ${money(amount, org.currency, { cents: true })} paid to ${shifts[0].crewName}.`;
   });
 }

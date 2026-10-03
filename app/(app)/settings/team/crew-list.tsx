@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Copy, Pencil, Plus, Send, Smartphone } from "lucide-react";
 import { inviteCrewToApp, moveCrewRank, saveCrewMember, setDefaultStaffRate, setStaffRate, type CrewInput } from "@/app/(app)/events/crew-actions";
+import { setStaffMinHours } from "@/app/(app)/wages/shift-actions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ export interface CrewMember {
   id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
   hourly_rate?: number | null; rank?: number; extra_emails?: string[]; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
 }
-type AppInfo = { ready: boolean; slug: string; rate: number };
+type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number };
 
 /** People who work jobs but don't log in to EventureOS — they receive the calendar invites. */
 export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewMember[]; canEdit: boolean; canAdmin?: boolean; app?: AppInfo }) {
@@ -36,6 +37,9 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
             <button type="button" onClick={() => { void navigator.clipboard?.writeText(appUrl); setNote({ text: "Link copied.", ok: true }); }} className="text-brand-700 hover:underline" aria-label="Copy staff app link"><Copy className="h-3.5 w-3.5" /></button></span>
           <span className="inline-flex items-center gap-1.5">Default pay rate
             <RateInput value={app.rate} disabled={!canAdmin || pending} onSave={(v) => run(() => setDefaultStaffRate(v ?? 30), "Default rate saved.")} required /> /hr
+          </span>
+          <span className="inline-flex items-center gap-1.5">Minimum paid
+            <HoursInput value={app.minHours ?? 3} disabled={!canAdmin || pending} onSave={(v) => run(() => setStaffMinHours(v), "Minimum hours saved.")} /> hrs per shift
           </span>
         </div>
       )}
@@ -142,5 +146,14 @@ function RateInput({ value, placeholder, disabled, onSave, required }: { value: 
         onBlur={() => { const n = v.trim() === "" ? null : Number(v); if (n === value || (n == null && required)) return; if (n != null && !Number.isFinite(n)) return; onSave(n); }}
         className="h-7 w-14 bg-transparent px-1 text-right tabular text-[0.75rem] text-ink outline-none" />
     </span>
+  );
+}
+
+function HoursInput({ value, disabled, onSave }: { value: number; disabled?: boolean; onSave: (v: number) => void }) {
+  const [v, setV] = useState(String(value));
+  return (
+    <input value={v} disabled={disabled} inputMode="decimal" aria-label="Minimum paid hours per shift" onChange={(e) => setV(e.target.value.replace(/[^0-9.]/g, ""))}
+      onBlur={() => { const n = Number(v); if (v !== "" && Number.isFinite(n) && n !== value) onSave(n); }}
+      className="h-7 w-12 rounded-md border border-line bg-surface px-1.5 text-right tabular text-[0.75rem] text-ink outline-none" />
   );
 }

@@ -33,7 +33,7 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
           <Card key={p.id} className="flex items-center gap-3 py-3">
             <div className="min-w-0 flex-1">
               <p className="text-[0.9375rem] font-semibold text-ink">{fmtDate(p.paid_on, "long")}</p>
-              <p className="text-[0.8125rem] text-ink-muted">{fmtHours(p.hours)}{p.reference ? ` · Ref ${p.reference}` : ""}</p>
+              <p className="text-[0.8125rem] text-ink-muted">{fmtHours(p.hours)}{p.note && p.note !== "Bank transfer" ? ` · ${p.note}` : ""}{p.reference ? ` · Ref ${p.reference}` : ""}</p>
             </div>
             <p className="text-[1.0625rem] font-bold text-emerald-700">{money(p.amount, cur, { cents: true })}</p>
           </Card>

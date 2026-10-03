@@ -27,11 +27,14 @@ export interface PayInput {
   rateOverride?: number | null;
   memberRate?: number | null;
   orgRate: number;
+  /** Minimum paid hours per shift (planned hours are topped up to this; an hours override set by the office wins) */
+  minHours?: number | null;
 }
 
 export function shiftPay(p: PayInput): { base: number | null; extra: number; hours: number | null; rate: number; amount: number | null } {
   const planned = plannedShift(p.event).hours;
-  const base = p.hoursOverride ?? planned;
+  const min = Number(p.minHours ?? 0);
+  const base = p.hoursOverride ?? (planned == null ? null : Math.max(planned, min));
   const extra = Math.max(0, p.approvedExtra ?? 0);
   const rate = Number(p.rateOverride ?? p.memberRate ?? p.orgRate);
   const hours = base == null ? (extra || null) : Math.round((base + extra) * 100) / 100;
@@ -48,3 +51,9 @@ export function clashes(a: ShiftEvent, b: ShiftEvent): boolean {
 }
 
 export const fmtHours = (h: number | null | undefined) => h == null ? "—" : `${Number.isInteger(h) ? h : h.toFixed(2).replace(/0$/, "")} hr${h === 1 ? "" : "s"}`;
+
+/** The organisation's minimum paid hours per shift (Settings → Team), default 3. */
+export function staffMinHours(settings: Record<string, unknown> | null | undefined): number {
+  const v = Number((settings ?? {}).staff_min_hours);
+  return Number.isFinite(v) && v >= 0 && v <= 12 ? v : 3;
+}
