@@ -1,22 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AlertTriangle, Check, Eye, Loader2, Mail, Plus, Send, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, BellRing, Check, Eye, Loader2, Mail, Plus, Send, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
 import { quoteEmail } from "@/lib/email/quote-email";
 import { quoteSendSetup, sendQuoteEmail, type QuoteSendSetup, type SendQuoteResult } from "@/app/(app)/quotes/send-actions";
 import { publishQuote } from "@/app/(app)/quotes/actions";
+import { followUpToTask } from "@/app/(app)/tasks/actions";
+import { addDaysISO, todayISO, zonedTimeUTC } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 const EMAIL = /^[^\s@<>"',;:()]+@[^\s@<>"',;:()]+\.[^\s@<>"',;:()]{2,}$/;
 interface Recipient { email: string; name: string | null }
 
+/** Where to go once the quote has gone out */
+export interface AfterSend {
+  clientId: string; clientName: string; eventId: string; tz: string;
+  /** The customer's emails: the conversation it was opened from, else the job's Communication tab */
+  emailsHref: string; emailsLabel?: string;
+}
+
 /** "Send quote" pop-up: who it goes to, the message, a live preview of the email, then send (publishing first if needed). */
-export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup, replyThreadId }: {
+export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup, replyThreadId, after }: {
   quoteId: string;
+  after?: AfterSend;
   /** Start in "reply in this email conversation" mode (e.g. from "Reply with quote" on a thread) */
   replyThreadId?: string | null;
   /** Already-loaded setup (skips the server round trip) */
@@ -137,7 +147,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
   const body = (
     <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Send quote">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/45" onClick={() => !busy && onClose()} />
-      <div className="relative flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-2xl bg-surface shadow-pop sm:rounded-2xl">
+      <div className="relative flex max-h-[94dvh] w-full max-w-[min(1360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-t-2xl bg-surface shadow-pop sm:rounded-2xl">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
           <div className="min-w-0">
             <p className="text-[0.9375rem] font-semibold text-ink">{setup ? `Email Quote Q-${setup.quoteNumber}` : "Email quote"}</p>
@@ -155,22 +165,11 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
             {loadErr ? <div className="w-full max-w-md"><FormError message={loadErr} /></div> : <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Preparing the email…</span>}
           </div>
         ) : result ? (
-          <div className="p-6 sm:p-8">
-            <div className="mx-auto max-w-lg text-center">
-              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-6 w-6" /></span>
-              <p className="mt-3 text-[1.0625rem] font-semibold text-ink">{result.sent.length ? `Quote sent${result.published ? ` (version ${result.versionNumber})` : ""}` : "Nothing was sent"}</p>
-              {result.sent.length > 0 && <p className="mt-1 text-[0.875rem] text-ink-muted">To {result.sent.join(", ")}. You&apos;ll see when it&apos;s opened under <b>Sent emails</b> on this quote.</p>}
-              {result.failed.length > 0 && (
-                <div className="mt-4 rounded-xl bg-rose-50 p-3 text-left text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-200">
-                  {result.failed.map((f) => <p key={f.email}><b>{f.email}</b>: {f.error}</p>)}
-                </div>
-              )}
-              <Button variant="primary" className="mt-5" onClick={() => onDone(result.sent.length ? `Quote emailed to ${result.sent.join(", ")}.` : "The quote wasn't emailed.")}>Done</Button>
-            </div>
-          </div>
+          <SentScreen result={result} quoteId={quoteId} quoteNumber={setup.quoteNumber} names={to} after={after}
+            onDone={() => onDone(result.sent.length ? `Quote emailed to ${result.sent.join(", ")}.` : "The quote wasn't emailed.")} />
         ) : (
           <>
-            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:overflow-hidden">
+            <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] lg:overflow-hidden">
               {/* Compose */}
               <div className="min-w-0 space-y-4 p-4 sm:p-5 lg:overflow-y-auto">
                 {!setup.emailReady && <FormError message="Email can't be sent yet — connect Gmail in Settings → Integrations." />}
@@ -265,12 +264,12 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                 <button type="button" onClick={() => setShowPreview((s) => !s)} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 lg:hidden">
                   <Eye className="h-4 w-4" />{showPreview ? "Hide preview" : "Preview the email"}
                 </button>
-                {showPreview && <iframe title="Email preview" srcDoc={preview} sandbox="" className="h-[560px] w-full rounded-xl border border-line bg-[#f4f4f5] lg:hidden" />}
+                {showPreview && <div className="max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-[#f4f4f5] lg:hidden"><FitPreview html={preview} /></div>}
               </div>
               {/* Preview (desktop) */}
-              <div className="hidden min-h-0 border-l border-line bg-[#f4f4f5] lg:block">
-                <p className="border-b border-line bg-surface px-4 py-2 text-[0.75rem] font-medium text-ink-muted">Preview — what {to[0]?.name?.split(" ")[0] ?? "they"} will see</p>
-                <iframe title="Email preview" srcDoc={preview} sandbox="" className="h-[calc(94dvh-10.5rem)] max-h-[680px] w-full border-0" />
+              <div className="hidden min-h-0 flex-col border-l border-line bg-[#f4f4f5] lg:flex">
+                <p className="shrink-0 border-b border-line bg-surface px-4 py-2 text-[0.75rem] font-medium text-ink-muted">Preview — what {to[0]?.name?.split(" ")[0] ?? "they"} will see</p>
+                <div className="min-h-0 flex-1 overflow-y-auto"><FitPreview html={preview} /></div>
               </div>
             </div>
             <div className="flex shrink-0 flex-col gap-2 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -315,5 +314,132 @@ function Check2({ on, onChange, children }: { on: boolean; onChange: (v: boolean
       <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-brand-500" />
       <span className="min-w-0 break-words">{children}</span>
     </label>
+  );
+}
+
+/**
+ * The email preview, shrunk to fit its pane. Emails (and some signatures) have a fixed minimum width, which used to
+ * leave the right-hand side cut off behind a sideways scrollbar.
+ */
+function FitPreview({ html }: { html: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [size, setSize] = useState({ pane: 0, inner: 0, height: 600 });
+
+  const measure = useCallback(() => {
+    const el = box.current, f = frame.current;
+    const doc = f?.contentDocument;
+    if (!el || !f || !doc?.documentElement) return;
+    const pane = el.clientWidth;
+    if (!pane) return;
+    // Lay it out at the pane's width; if the content needs more room, give it that and scale the lot down
+    f.style.width = `${pane}px`;
+    const inner = Math.max(pane, doc.documentElement.scrollWidth);
+    f.style.width = `${inner}px`;
+    const height = Math.max(200, doc.documentElement.scrollHeight);
+    setSize({ pane, inner, height });
+  }, []);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  const scale = size.inner ? size.pane / size.inner : 1;
+  return (
+    <div ref={box} className="w-full overflow-hidden" style={{ height: Math.ceil(size.height * scale) }}>
+      {/* allow-same-origin (no scripts) only so the preview can be measured */}
+      <iframe ref={frame} title="Email preview" srcDoc={html} sandbox="allow-same-origin" onLoad={measure} scrolling="no"
+        className="block border-0" style={{ width: size.inner || "100%", height: size.height, transform: `scale(${scale})`, transformOrigin: "0 0" }} />
+    </div>
+  );
+}
+
+const FOLLOW_UPS = [{ days: 2, label: "In 2 days" }, { days: 4, label: "In 4 days" }, { days: 7, label: "In a week" }] as const;
+
+/** 9am on a working day, `days` from today, in the business's timezone */
+function followUpTime(days: number, tz: string) {
+  let d = addDaysISO(todayISO(tz), days);
+  while ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) d = addDaysISO(d, 1);
+  return zonedTimeUTC(d, "09:00", tz);
+}
+
+/** After sending: who got it, then straight back to the customer's emails, the client, or a follow-up reminder. */
+export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone }: {
+  result: SendQuoteResult; quoteId: string; quoteNumber: number | string; names: Recipient[]; after?: AfterSend; onDone: () => void;
+}) {
+  const [follow, setFollow] = useState<{ busy: number | null; msg: string | null; ok: boolean }>({ busy: null, msg: null, ok: true });
+  const sent = result.sent.length > 0;
+  const who = result.sent.map((e) => names.find((n) => n.email === e)?.name || e);
+  const first = names.find((n) => n.email === result.sent[0])?.name?.split(" ")[0] ?? after?.clientName ?? "them";
+
+  async function remind(days: number) {
+    if (!after) return;
+    setFollow({ busy: days, msg: null, ok: true });
+    const r = await followUpToTask({
+      key: `quote-follow-up:${quoteId}:v${result.versionNumber}`, title: `Follow up quote Q-${quoteNumber} with ${first}`,
+      dueIso: followUpTime(days, after.tz), eventId: after.eventId, customerId: after.clientId,
+    }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    setFollow({ busy: null, ok: r.ok, msg: r.ok ? (r.message ?? "Added to your to-do list.") : r.error });
+  }
+
+  return (
+    <div className="overflow-y-auto p-6 sm:p-10">
+      <div className="mx-auto max-w-xl">
+        <div className="text-center">
+          <span className={cn("mx-auto grid h-14 w-14 place-items-center rounded-full", sent ? "bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/50" : "bg-rose-50 text-rose-600")}>
+            {sent ? <Check className="h-7 w-7" /> : <AlertTriangle className="h-7 w-7" />}
+          </span>
+          <p className="mt-4 text-[1.25rem] font-semibold tracking-tight text-ink">{sent ? `Quote Q-${quoteNumber} is on its way` : "Nothing was sent"}</p>
+          {sent && (
+            <p className="mt-1 text-[0.875rem] text-ink-muted">
+              Sent to {who.join(", ")}{result.published ? ` · version ${result.versionNumber} published` : ""}. You&apos;ll see when it&apos;s opened under <b className="font-medium text-ink">Sent emails</b> on this quote.
+            </p>
+          )}
+        </div>
+        {result.failed.length > 0 && (
+          <div className="mt-4 rounded-xl bg-rose-50 p-3 text-left text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-200">
+            {result.failed.map((f) => <p key={f.email}><b>{f.email}</b>: {f.error}</p>)}
+          </div>
+        )}
+
+        {after && (
+          <div className="mt-6 space-y-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Link href={after.emailsHref} className="flex items-center gap-3 rounded-xl bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-700">
+                <ArrowLeft className="h-5 w-5 shrink-0" />
+                <span className="min-w-0"><span className="block text-[0.875rem] font-semibold">{after.emailsLabel ?? `Back to ${after.clientName}'s emails`}</span><span className="block text-[0.72rem] text-white/80">See the conversation with this quote in it</span></span>
+              </Link>
+              <Link href={`/clients/${after.clientId}`} className="flex items-center gap-3 rounded-xl px-4 py-3 ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+                <UserRound className="h-5 w-5 shrink-0 text-ink-faint" />
+                <span className="min-w-0"><span className="block truncate text-[0.875rem] font-semibold text-ink">Open {after.clientName}</span><span className="block text-[0.72rem] text-ink-muted">Their jobs, quotes, invoices and people</span></span>
+              </Link>
+            </div>
+            {sent && (
+              <div className="rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
+                <p className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-ink"><BellRing className="h-4 w-4 text-ink-faint" />Remind me to follow up if {first} hasn&apos;t replied</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {FOLLOW_UPS.map((f) => (
+                    <button key={f.days} type="button" disabled={follow.busy !== null || (follow.ok && !!follow.msg)} onClick={() => remind(f.days)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-[0.78rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50 disabled:opacity-60">
+                      {follow.busy === f.days && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{f.label}
+                    </button>
+                  ))}
+                </div>
+                {follow.msg && <p className={cn("mt-2 text-[0.75rem]", follow.ok ? "text-emerald-700" : "text-rose-700")}>{follow.msg}</p>}
+                <p className="mt-1.5 text-[0.7rem] text-ink-faint">Adds a to-do at 9am (skipping weekends) with a calendar reminder, linked to this job.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-6 text-center">
+          <Button variant={after ? "ghost" : "primary"} onClick={onDone}>{after ? "Stay on this quote" : "Done"}</Button>
+        </div>
+      </div>
+    </div>
   );
 }

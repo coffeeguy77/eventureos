@@ -587,6 +587,8 @@ export function QuoteBuilder(p: BuilderProps) {
         )}
         {panel === "publish" && (
           <SendQuoteDialog quoteId={quote.id} flushAll={flushAll} onClose={() => setPanel(null)} replyThreadId={p.replyTo?.threadId ?? null}
+            after={{ clientId: p.customer.id, clientName: p.customer.name, eventId: p.event.id, tz: p.tz,
+              emailsHref: p.replyTo?.backHref ?? `/events/${p.event.id}?tab=communication`, emailsLabel: p.replyTo ? "Back to the email" : undefined }}
             onDone={(m) => { setPanel(null); setLocalDirty(false); router.refresh(); showToast({ message: m, tone: "ok" }, 7000); }} />
         )}
         {panel === "accept" && (
