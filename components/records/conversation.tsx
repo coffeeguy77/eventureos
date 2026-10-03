@@ -60,8 +60,9 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected, o
               <Badge tone={c.tone}>{c.label}{t.classification_confidence != null && t.classification === "needs_review" ? ` · ${Math.round(t.classification_confidence * 100)}%` : ""}</Badge>
               {t.state === "needs_reply" && <Badge tone="red" dot>Needs reply</Badge>}
               {t.state === "awaiting_customer" && <Badge tone="neutral">Awaiting customer</Badge>}
+              {savedDraft(t) && <Badge tone="amber">Draft ready</Badge>}
             </header>
-            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} saved={savedDraft(t)} />}
+            {gmailConnected && t.classification !== "spam" && <ReplyBox threadId={t.id} saved={savedDraft(t)} orgName={orgName} />}
             <ol className="divide-y divide-line">
               {msgs.map((m, i) => {
                 const out = m.direction === "outbound";
@@ -110,7 +111,7 @@ function savedDraft(t: EmailThread): SavedDraft | null {
   };
 }
 
-function ReplyBox({ threadId, saved }: { threadId: string; saved?: SavedDraft | null }) {
+function ReplyBox({ threadId, saved, orgName }: { threadId: string; saved?: SavedDraft | null; orgName: string }) {
   const [open, setOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -150,18 +151,35 @@ function ReplyBox({ threadId, saved }: { threadId: string; saved?: SavedDraft | 
   if (!open) {
     return (<>
       {saved && !state?.ok && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[0.7812rem] text-amber-900">
-          <span className="min-w-0"><b className="font-semibold">Draft reply ready</b>{saved.by ? ` — prepared by ${saved.by}` : ""}{saved.drafted_at ? `, ${relative(saved.drafted_at)}` : ""}. Check it before sending.
-            {saved.quote_url && <> A <Link href={saved.quote_url} className="font-medium underline underline-offset-2">draft quote</Link> is ready too.</>}</span>
-          <span className="flex shrink-0 gap-2">
-            <Button size="sm" variant="primary" className="h-10 sm:h-8" onClick={() => { setBody(saved.body); setDraftNotes(saved.notes); setOpen(true); }}>Open draft</Button>
-            <Button size="sm" variant="ghost" className="h-10 sm:h-8" disabled={discarding} onClick={async () => {
-              setDiscarding(true);
-              const r = await discardSavedDraft(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
-              setDiscarding(false);
-              if (!r.ok) setDraftError(r.error); else router.refresh();
-            }}>{discarding ? "Discarding…" : "Discard"}</Button>
-          </span>
+        // The prepared reply shown in the thread, as the newest message — not sent until you press Send
+        <div className="border-b border-line bg-amber-50/50 px-4 py-3.5">
+          <div className="flex gap-3">
+            <Avatar name={orgName} size={28} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-[0.8125rem] font-semibold text-ink">Draft reply</span>
+                <Badge tone="amber">Not sent</Badge>
+                <span className="text-[0.7188rem] text-ink-faint">{saved.by ? `Prepared by ${saved.by}` : "Prepared"}{saved.drafted_at ? ` · ${relative(saved.drafted_at)}` : ""}</span>
+              </div>
+              <p className="mt-1.5 whitespace-pre-line break-words text-[0.8125rem] leading-relaxed text-ink">{saved.body}</p>
+              {saved.notes.length > 0 && (
+                <div className="mt-3 rounded-lg bg-amber-100/60 px-3 py-2 text-[0.75rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+                  <p className="mb-1 font-semibold">Check before sending (only you see this)</p>
+                  <ul className="space-y-1">{saved.notes.map((n, i) => <li key={i}>• {n}</li>)}</ul>
+                </div>
+              )}
+              {saved.quote_url && <p className="mt-2 text-[0.75rem] text-ink-muted">A <Link href={saved.quote_url} className="font-medium text-brand-700 underline underline-offset-2">draft quote</Link> with these prices is ready too.</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button size="sm" variant="primary" className="h-10 sm:h-8" onClick={() => { setBody(saved.body); setDraftNotes(saved.notes); setOpen(true); }}>Edit &amp; send</Button>
+                <Button size="sm" variant="ghost" className="h-10 sm:h-8" disabled={discarding} onClick={async () => {
+                  setDiscarding(true);
+                  const r = await discardSavedDraft(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+                  setDiscarding(false);
+                  if (!r.ok) setDraftError(r.error); else router.refresh();
+                }}>{discarding ? "Discarding…" : "Discard draft"}</Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
