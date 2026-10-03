@@ -7,9 +7,11 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { ButtonLink } from "@/components/ui/button";
-import { fmtDate, initials, relative } from "@/lib/format";
+import { fmtDate, initials, relative, todayISO } from "@/lib/format";
 import { cancelDocumentRequest } from "./actions";
 import { CopyLink, RequestDocumentForm } from "./controls";
+import { DocumentLibrary } from "./library";
+import { loadLibrary } from "@/lib/documents/library";
 
 export const metadata = { title: "Customer Portal" };
 
@@ -35,6 +37,7 @@ export default async function PortalAdminPage() {
   ]);
   for (const r of [brandRes, contactsRes, actRes, msgRes, evRes, reqRes]) if (r.error) throw new Error(`Could not load the portal settings: ${r.error.message}`);
 
+  const library = await loadLibrary(supabase, org.id);
   const brand = brandRes.data!;
   const colour = /^#[0-9a-f]{6}$/i.test(brand.brand_colour ?? "") ? brand.brand_colour : "#6028EC";
   type One<T> = T | T[] | null;
@@ -80,6 +83,13 @@ export default async function PortalAdminPage() {
                 The email must match the customer&apos;s email or one of their contacts in EventureOS. Internal notes, draft quotes and internal documents are never shown.
               </p>
             </div>
+          </Card>
+
+          <Card id="documents">
+            <CardHeader title="Documents for every customer" subtitle="Public liability certificate, food licence, artwork templates for cart and machine wraps… Customers download current ones from their portal. Expired documents are hidden automatically." />
+            {library === null
+              ? <p className="px-5 pb-5 text-[0.8125rem] text-ink-muted">Run the documents database update (0045_document_library.sql) in Supabase to switch this on.</p>
+              : <DocumentLibrary orgId={org.id} docs={library} today={todayISO(org.timezone)} canEdit={canManage(role)} />}
           </Card>
 
           <Card>

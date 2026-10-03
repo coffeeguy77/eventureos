@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { createServiceClient } from "@/lib/integrations/runtime";
+import { loadLibrary } from "@/lib/documents/library";
+import { DocList } from "@/components/portal/doc-list";
 import { cn } from "@/lib/cn";
 import { firstName, fmtDate, money, relativeDay, timeRange, todayISO } from "@/lib/format";
 import {
@@ -39,6 +42,8 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
   if (vErr) throw new Error(`Could not load your quotes: ${vErr.message}`);
   const versions = new Map(((vData ?? []) as unknown as PortalVersion[]).map((v) => [v.id, v]));
 
+  // The business's documents (insurance certificate, food licence, artwork templates…) — current ones only
+  const library = (await loadLibrary(createServiceClient(), org.id, { current: today })) ?? [];
   const cards = events.map((e) => {
     const q = quotes.find((x) => x.event_id === e.id) ?? null; // newest first
     const v = q?.current_version_id ? versions.get(q.current_version_id) ?? null : null;
@@ -72,6 +77,14 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
       <div className="space-y-4">
         {upcoming.map((c) => <EventCard key={c.e.id} slug={slug} card={c} today={today} currency={org.currency} />)}
       </div>
+
+      {library.length > 0 && (
+        <div className="mt-10">
+          <h2 className="mb-1 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">Documents from {branding.name}</h2>
+          <p className="text-[0.8125rem] text-ink-muted">Insurance, licences and artwork templates.</p>
+          <DocList docs={library} base={`/p/${slug}/library`} />
+        </div>
+      )}
 
       {past.length > 0 && (
         <>
