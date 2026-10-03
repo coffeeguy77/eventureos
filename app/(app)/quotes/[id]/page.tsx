@@ -38,7 +38,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const { id } = await params;
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, role } = await requireOrg();
   const tz = org.timezone;
   const cur = org.currency;
   const today = todayISO(tz);
@@ -140,6 +140,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   // ------------------------------------------------------------------ read-only: a specific version, or an accepted (locked) quote
   if (viewing || locked) {
     const shown = viewing ?? currentVersion;
+    const { data: qi } = locked ? await supabase.from("invoices").select("id, number").eq("organisation_id", org.id).eq("quote_id", q.id).neq("status", "void").order("created_at", { ascending: false }).limit(1) : { data: null };
+    const quoteInvoice = (qi?.[0] as { id: string; number: string } | undefined) ?? null;
     let snap: QuoteSnapshotData | null = null;
     if (shown) {
       const { data: sv, error: sErr } = await supabase.from("quote_versions").select("snapshot").eq("id", shown.id).single();
@@ -170,6 +172,11 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
               {viewing && !locked && (
                 <Link href={`/quotes/${q.id}`} className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg sm:h-9 bg-surface px-3.5 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
                   <ArrowLeft className="h-4 w-4" />Back to draft
+                </Link>
+              )}
+              {locked && !viewing && ["owner", "admin", "manager"].includes(role) && (
+                <Link href={quoteInvoice ? `/invoices/${quoteInvoice.id}` : `/invoices/new?quote=${q.id}`} className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-600 px-3.5 text-[0.8125rem] font-medium text-on-brand hover:bg-brand-700 sm:h-9">
+                  {quoteInvoice ? `Invoice ${quoteInvoice.number}` : "Create invoice"}
                 </Link>
               )}
               <DuplicateButton quoteId={q.id} variant="button" />
@@ -292,6 +299,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       xeroQuotes={xeroQuotes}
       billTo={billTo}
       jobPeople={jobPeople}
+      canAdminAccept={["owner", "admin", "manager"].includes(role)}
       clientPeople={clientPeople}
       currency={cur}
       tz={tz}

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
-  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote,
+  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote, adminAcceptQuote,
 } from "@/app/(app)/quotes/actions";
 import { updateEventDetails } from "@/app/(app)/events/actions";
 import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
@@ -60,6 +60,8 @@ export interface BuilderProps {
   billTo?: BillTo | null;
   /** Who at the client this job is with, and everyone else on file */
   jobPeople?: JobPerson[];
+  /** Owners / admins / managers can accept on the client's behalf */
+  canAdminAccept?: boolean;
   clientPeople?: ClientPerson[];
   currency: string;
   tz: string;
@@ -84,7 +86,7 @@ export interface BuilderProps {
 
 export interface XeroQuoteChoice { id: string; number: string; reference: string | null; status: string; date: string | null; total: number; lines: number }
 
-type Panel = null | "publish" | "respond";
+type Panel = null | "publish" | "respond" | "accept";
 type Toast = { message: string; tone: "ok" | "error"; undo?: () => void };
 
 const SAVE_DELAY = 700;
@@ -560,6 +562,12 @@ export function QuoteBuilder(p: BuilderProps) {
               Record acceptance / decline
             </button>
           )}
+          {p.canAdminAccept && quote.status !== "accepted" && (
+            <button type="button" onClick={() => setPanel(panel === "accept" ? null : "accept")} aria-expanded={panel === "accept"}
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-2 text-[0.75rem] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100 sm:py-1">
+              <Check className="h-3.5 w-3.5" />Accept for client
+            </button>
+          )}
           <DuplicateButton quoteId={quote.id} onError={(m) => showToast({ message: m, tone: "error" })} />
           {p.templates && <SaveAsTemplateButton quoteId={quote.id} defaultName={quote.title} onDone={(m, ok) => showToast({ message: m, tone: ok ? "ok" : "error" }, 7000)} />}
         </div>
@@ -580,6 +588,10 @@ export function QuoteBuilder(p: BuilderProps) {
         {panel === "publish" && (
           <SendQuoteDialog quoteId={quote.id} flushAll={flushAll} onClose={() => setPanel(null)} replyThreadId={p.replyTo?.threadId ?? null}
             onDone={(m) => { setPanel(null); setLocalDirty(false); router.refresh(); showToast({ message: m, tone: "ok" }, 7000); }} />
+        )}
+        {panel === "accept" && (
+          <AdminAcceptPanel quoteId={quote.id} defaultName={p.jobPeople?.find((x) => x.main)?.name ?? p.customer.name} flushAll={flushAll}
+            onClose={() => setPanel(null)} onDone={(m) => { setPanel(null); showToast({ message: m, tone: "ok" }, 9000); router.refresh(); }} />
         )}
         {panel === "respond" && cv && (
           <RespondPanel quoteId={quote.id} version={cv} signerName={p.signerName} acceptanceNote={p.acceptanceNote}
@@ -890,6 +902,42 @@ function CustomerPricingNote({ quoteId, terms, customerName, editable, onDone }:
           {pending ? "Applying…" : "Apply to lines already on this quote"}
         </button>
       )}
+    </div>
+  );
+}
+
+/** Accept on the client's behalf (they said yes by phone, email or in person) — then go straight to the invoice. */
+function AdminAcceptPanel({ quoteId, defaultName, flushAll, onClose, onDone }: { quoteId: string; defaultName: string; flushAll: () => Promise<boolean>; onClose: () => void; onDone: (m: string) => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(defaultName);
+  const [how, setHow] = useState("Phone");
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const go = (thenInvoice: boolean) => start(async () => {
+    setErr(null);
+    await flushAll();
+    const r = await adminAcceptQuote(quoteId, name, how).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    if (!r.ok) { setErr(r.error); return; }
+    if (thenInvoice) { router.push(r.data.invoiceHref); return; }
+    onDone(r.data.invoiceNumber ? `Accepted — invoice ${r.data.invoiceNumber} was raised automatically.` : "Accepted. The quote is now locked.");
+  });
+  return (
+    <div className="mt-4 rounded-xl bg-emerald-50/60 px-4 py-3 text-[0.8125rem] text-emerald-950 ring-1 ring-inset ring-emerald-200">
+      <p className="font-semibold">Accept this quote for the client</p>
+      <p className="mt-0.5 text-emerald-900">For when they&apos;ve said yes another way. The latest changes become the accepted version (nothing is emailed), the job is confirmed and your quote-accepted steps run — including the invoice.</p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5">Accepted by<input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} className="h-9 w-48 rounded-md border border-emerald-300 bg-surface px-2 text-ink" /></label>
+        <label className="flex items-center gap-1.5">How
+          <select value={how} onChange={(e) => setHow(e.target.value)} className="h-9 rounded-md border border-emerald-300 bg-surface px-2 text-ink">
+            {["Phone", "Email", "In person", "Text message", "Other"].map((h) => <option key={h}>{h}</option>)}
+          </select></label>
+      </div>
+      {err && <p className="mt-2 text-rose-700">{err}</p>}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button size="sm" disabled={pending || !name.trim()} onClick={() => go(false)}>Accept</Button>
+        <Button size="sm" variant="primary" disabled={pending || !name.trim()} onClick={() => go(true)}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Accept &amp; go to invoice</Button>
+      </div>
     </div>
   );
 }

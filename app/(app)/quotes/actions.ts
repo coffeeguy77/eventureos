@@ -941,3 +941,43 @@ export async function importXeroQuote(quoteId: string, xeroQuoteRowId: string, r
     return { lines: lines.length };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Admin accept: the client said yes by phone / email / in person — accept now and invoice straight away
+// ---------------------------------------------------------------------------
+export async function adminAcceptQuote(quoteId: string, acceptedBy: string, how: string): Promise<ActionResult<{ invoiceHref: string; invoiceNumber: string | null }>> {
+  return run(async () => {
+    const { supabase, org, role, profile } = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(role)) fail("Only owners, admins and managers can accept a quote for the client.");
+    const q = await loadQuote(supabase, org.id, quoteId);
+    if (q.status === "accepted") return { invoiceHref: `/invoices/new?quote=${q.id}`, invoiceNumber: null };
+    const who = clean(acceptedBy, 120);
+    if (!who) fail("Enter who accepted it (the client's name).");
+    const via = ["Phone", "Email", "In person", "Text message", "Other"].includes(how) ? how : "Other";
+    // Make sure the latest draft is the version being accepted (publishing doesn't email anyone)
+    let versionId = q.current_version_id;
+    const needsPublish = !versionId || q.has_unpublished_changes || q.status === "declined" || q.status === "expired" || q.status === "draft";
+    if (needsPublish) {
+      const r = await publishQuote(q.id);
+      if (!r.ok) fail(r.error);
+      const { data: fresh } = await supabase.from("quotes").select("current_version_id").eq("id", q.id).single();
+      versionId = fresh?.current_version_id ?? null;
+    }
+    if (!versionId) fail("Couldn't find the quote version to accept.");
+    const { error } = await supabase.rpc("staff_record_quote_response", {
+      p_version_id: versionId, p_decision: "accepted", p_name: who!,
+      p_reason: `Accepted for the client by ${actorName(profile)} (${via.toLowerCase()})`,
+    });
+    if (error) fail(`Couldn't accept the quote: ${error.message}`);
+    if (q.event_id) {
+      const { alertBookingApproval } = await import("@/lib/email/booking-approval");
+      await alertBookingApproval(supabase, q.event_id);
+    }
+    refresh(q);
+    revalidatePath("/invoices");
+    revalidatePath("/calendar");
+    // Acceptance runs the "Quote accepted" automation, which may already have raised the (deposit) invoice
+    const { data: inv } = await supabase.from("invoices").select("id, number").eq("organisation_id", org.id).eq("quote_id", q.id).neq("status", "void").order("created_at", { ascending: false }).limit(1);
+    return inv?.length ? { invoiceHref: `/invoices/${inv[0].id}`, invoiceNumber: inv[0].number as string } : { invoiceHref: `/invoices/new?quote=${q.id}`, invoiceNumber: null };
+  });
+}
