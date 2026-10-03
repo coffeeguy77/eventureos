@@ -391,6 +391,13 @@ export function QuoteBuilder(p: BuilderProps) {
         if (r.ok) { focusNext.current = { id: r.data.id, col: "quantity" }; setItems((all) => all.some((i) => i.id === r.data.id) ? all : [...all, toDraft(r.data)]); }
       });
     },
+    onLink(id, c) {
+      if (!c.service_id) return;
+      const patch = { service_id: c.service_id, name: c.name, unit: c.unit, tax_rate: c.tax_rate };
+      setItems((all) => all.map((i) => (i.id === id ? { ...i, service_id: c.service_id, name: c.name, unit: c.unit, tax_rate: numStr(c.tax_rate) } : i)));
+      queue(`i:${id}`, patch, sendItem(id), 0);
+      showToast({ message: `Matched to ${c.name}. The quantity and price stayed as they were — change them if needed.`, tone: "ok" });
+    },
     onMoveItem(id, dir) {
       void flush(`i:${id}`);
       setItems((all) => {

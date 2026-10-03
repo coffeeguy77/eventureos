@@ -39,6 +39,8 @@ export interface SectionHandlers {
   onItemKey: (e: React.KeyboardEvent<HTMLElement>, itemId: string, col: Col) => void;
   onAddItem: (sectionId: string) => void;
   onQuickAdd: (sectionId: string, c: CatalogueItem) => void;
+  /** Link a one-off line to a price-list item (name, unit and GST from the item; quantity and price kept). */
+  onLink: (itemId: string, c: CatalogueItem) => void;
   onMoveItem: (itemId: string, dir: -1 | 1) => void;
   onDeleteItem: (itemId: string) => void;
   /** A line helper changed: save how the quantity was worked out, plus the new quantity and description. */
@@ -120,7 +122,7 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
           )}
           <ul className="divide-y divide-line">
             {items.map((it, i) => (
-              <ItemRow key={it.id} it={it} first={i === 0} last={i === items.length - 1} currency={currency} h={h} optionalSection={section.is_optional} />
+              <ItemRow key={it.id} it={it} first={i === 0} last={i === items.length - 1} currency={currency} h={h} optionalSection={section.is_optional} catalogue={catalogue} />
             ))}
           </ul>
         </div>
@@ -146,9 +148,12 @@ export function SectionEditor({ section, items, index, count, currency, catalogu
   );
 }
 
-function ItemRow({ it, first, last, currency, h, optionalSection }: {
-  it: ItemDraft; first: boolean; last: boolean; currency: string; h: SectionHandlers; optionalSection: boolean;
+function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
+  it: ItemDraft; first: boolean; last: boolean; currency: string; h: SectionHandlers; optionalSection: boolean; catalogue: CatalogueItem[];
 }) {
+  // A priced line that isn't a price-list item (e.g. copied from an old Xero quote) — flag it so it can be swapped for a current item
+  const linkable = catalogue.filter((c) => c.service_id);
+  const offList = !it.service_id && !!it.name.trim() && (parseNum(it.unit_price) ?? 0) !== 0 && linkable.length > 0;
   const [showImage, setShowImage] = useState(!!it.image_url);
   const [discMode, setDiscMode] = useState<"percent" | "amount">((parseNum(it.discount_amount) ?? 0) > 0 ? "amount" : "percent");
   const total = lineTotal(draftNums(it));
@@ -177,7 +182,7 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
   );
 
   return (
-    <li className={cn(ROW, "group py-3 md:py-2", excluded && "bg-zinc-50/60")}>
+    <li className={cn(ROW, "group py-3 md:py-2", excluded && "bg-zinc-50/60", offList && "bg-amber-50/60 shadow-[inset_3px_0_0_theme(colors.amber.400)]")}>
       <div className="col-span-3 min-w-0 md:col-span-1">
         {input("name", { className: cn(cell, "font-medium"), placeholder: "Item name", "aria-label": "Item name", maxLength: 200 })}
         <AutoGrow
@@ -201,6 +206,16 @@ function ItemRow({ it, first, last, currency, h, optionalSection }: {
             <ImageIcon className="h-3 w-3" />Image
           </button>
         </div>
+        {offList && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 px-1 text-[0.7188rem]">
+            <span className="font-medium text-amber-800">Not on your price list</span>
+            <select aria-label={`Swap ${it.name} for a price-list item`} value="" className="h-8 max-w-full rounded-md border border-amber-300 bg-surface px-2 text-[0.75rem] text-ink md:h-7"
+              onChange={(e) => { const c = linkable.find((x) => x.service_id === e.target.value); if (c) h.onLink(it.id, c); }}>
+              <option value="">Match to an item…</option>
+              {linkable.map((c) => <option key={c.service_id!} value={c.service_id!}>{c.category ? `${c.category} · ` : ""}{c.name} — {money(c.unit_price, currency)}{c.unit ? `/${c.unit}` : ""}</option>)}
+            </select>
+          </div>
+        )}
         {helper && <LineHelperPanel it={it} helper={helper} h={h} />}
         {(showImage || it.image_url) && (
           <div className="mt-1.5 flex items-center gap-2 px-1">

@@ -567,7 +567,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         )}
 
         {tab === "history" && (
-          <JobHistory invoices={invoices} xeroQuotes={xeroQuotes} bookings={bookings} cur={cur} tz={tz} />
+          <JobHistory invoices={invoices} xeroQuotes={xeroQuotes} bookings={bookings} cur={cur} tz={tz} today={today} />
         )}
 
         {tab === "invoices" && (
@@ -698,16 +698,21 @@ function lineSummary(lines: HistLine[] | null) {
 }
 
 /** Every job with this client, newest first: Xero quotes and invoices with what was sold. */
-function JobHistory({ invoices, xeroQuotes, bookings, cur, tz }: { invoices: InvoiceRow[]; xeroQuotes: XeroQuoteRow[]; bookings: BookingRow[]; cur: string; tz: string }) {
-  type Row = { key: string; date: string | null; kind: "Invoice" | "Quote" | "Booking"; number: string; ref: string | null; total: number | null; status: React.ReactNode; lines: string | null; href?: string; external?: boolean };
+function JobHistory({ invoices, xeroQuotes, bookings, cur, tz, today }: { invoices: InvoiceRow[]; xeroQuotes: XeroQuoteRow[]; bookings: BookingRow[]; cur: string; tz: string; today: string }) {
+  type Row = { key: string; date: string | null; kind: "Invoice" | "Quote" | "Booking"; number: string; ref: string | null; total: number | null; status: React.ReactNode; lines: string | null; href?: string; external?: boolean; current?: string };
+  // "Current": a Xero quote that's still open (draft/sent, not expired) or an invoice with money owing
+  const openQuote = (q: XeroQuoteRow) => (q.status === "SENT" || q.status === "DRAFT") && (!q.expiry_date || q.expiry_date >= today);
+  const owing = (i: InvoiceRow) => ["awaiting_payment", "part_paid", "overdue"].includes(i.status) && Number(i.balance) > 0;
   const rows: Row[] = [
     ...invoices.map((i) => ({
       key: i.id, date: i.issue_date, kind: "Invoice" as const, number: i.number, ref: i.reference ?? i.event?.name ?? null, total: Number(i.total),
       status: <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>, lines: lineSummary(i.line_items), href: `/invoices/${i.id}`,
+      current: owing(i) ? `${money(Number(i.balance), cur)} owing` : undefined,
     })),
     ...xeroQuotes.map((q) => ({
       key: q.id, date: q.quote_date, kind: "Quote" as const, number: q.number ?? "Quote", ref: q.reference ?? q.title, total: Number(q.total),
       status: <Badge tone={XQ_TONE[q.status] ?? "neutral"}>{q.status.charAt(0) + q.status.slice(1).toLowerCase()} in Xero</Badge>, lines: lineSummary(q.line_items),
+      href: `/xero-quotes/${q.id}`, current: openQuote(q) ? (q.expiry_date ? `Open · expires ${fmtDate(q.expiry_date)}` : "Open") : undefined,
     })),
     ...bookings.map((b) => ({
       key: b.id, date: localDate(b.starts_at, tz), kind: "Booking" as const, number: "", ref: b.title, total: null,
@@ -716,14 +721,24 @@ function JobHistory({ invoices, xeroQuotes, bookings, cur, tz }: { invoices: Inv
     })),
   ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const paidTotal = invoices.filter((i) => i.status !== "void" && i.status !== "draft").reduce((s, i) => s + Number(i.total), 0);
+  const currentRows = rows.filter((r) => r.current);
   const years = new Set(rows.map((r) => r.date?.slice(0, 4)).filter(Boolean));
   return (
     <Card>
       <CardHeader title="Job history" subtitle={rows.length ? `${invoices.filter((i) => i.status !== "void").length} invoices, ${xeroQuotes.length} Xero quotes and ${bookings.length} calendar bookings${years.size ? ` since ${[...years].sort()[0]}` : ""} · ${money(paidTotal, cur)} invoiced` : undefined} />
+      {currentRows.length > 0 && (
+        <div className="mx-5 mb-3 rounded-lg bg-amber-50 px-3 py-2.5 text-[0.7812rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+          <p className="font-semibold">{currentRows.length} current</p>
+          <ul className="mt-1 space-y-0.5">
+            {currentRows.map((r) => <li key={r.key}><Link href={r.href!} className="font-medium underline-offset-2 hover:underline">{r.kind} {r.number}</Link>{r.ref ? ` · ${r.ref}` : ""} — {r.current}</li>)}
+          </ul>
+        </div>
+      )}
+      {rows.length > 0 && <p className="px-5 pb-3 text-[0.7188rem] text-ink-faint">Open any quote or invoice to see what was on it and copy it to a new quote.</p>}
       {rows.length === 0 ? <EmptyState title="No history yet">Invoices and quotes from Xero, and Google Calendar bookings with this client’s email, appear here after a sync.</EmptyState> : (
         <ul className="divide-y divide-line border-t border-line">
           {rows.map((r) => (
-            <li key={r.key} className="px-5 py-3">
+            <li key={r.key} className={cn("px-5 py-3", r.current && "bg-amber-50/50")}>
               <div className="flex flex-wrap items-start gap-3">
                 <div className="w-20 shrink-0 text-[0.75rem] text-ink-muted">{r.date ? fmtDate(r.date) : "—"}</div>
                 <div className="min-w-0 flex-1">
@@ -740,6 +755,7 @@ function JobHistory({ invoices, xeroQuotes, bookings, cur, tz }: { invoices: Inv
                 <div className="shrink-0 text-right">
                   {r.total != null && <p className="tabular text-[0.8438rem] font-semibold text-ink">{money(r.total, cur)}</p>}
                   {r.status}
+                  {r.current && <p className="mt-1 text-[0.6875rem] font-medium text-amber-800">{r.current}</p>}
                 </div>
               </div>
             </li>

@@ -14,6 +14,9 @@ import { daysBetween, fmtDate, fmtDateTime, money, relative, todayISO, zonedTime
 import type { ActivityLog, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { InvoiceActions } from "./controls";
+import { OldLines } from "@/components/history/old-lines";
+import { forView, loadMatchContext } from "@/lib/quotes/history";
+import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
 
 export const metadata = { title: "Invoice" };
 
@@ -22,7 +25,7 @@ const KIND_LABEL: Record<string, string> = { deposit: "Deposit invoice", final: 
 type Inv = {
   id: string; number: string; kind: string; issue_date: string; due_date: string | null; subtotal: number; tax_total: number; total: number;
   amount_paid: number; balance: number; status: InvoiceStatus; currency: string; xero_invoice_id: string | null; xero_synced_at: string | null;
-  quote_id: string | null; created_at: string; updated_at: string;
+  quote_id: string | null; created_at: string; updated_at: string; reference: string | null; line_items: XeroLine[] | null;
   customer: { id: string; name: string; email: string | null; phone: string | null; company: string | null } | null;
   event: { id: string; number: number; name: string; event_date: string | null; venue: string | null } | null;
 };
@@ -40,7 +43,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const today = todayISO(tz);
 
   const { data, error } = await supabase.from("invoices")
-    .select("id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, pay_token, created_at, updated_at, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)")
+    .select("id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (error) throw new Error(`Could not load invoice: ${error.message}`);
   if (!data) notFound();
@@ -65,6 +68,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const versions = (verRes.data ?? []) as unknown as Version[];
   const version = versions.find((v) => v.status === "accepted") ?? versions[0] ?? null;
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
+  // Invoices raised in Xero (no EventureOS quote): show their lines against today's price list, with "Copy to new quote"
+  const oldView = !version && inv.line_items?.length
+    ? await loadMatchContext(org.id).then(({ priceList, aliases }) => forView(matchLines(inv.line_items!, priceList, aliases), priceList)).catch(() => null)
+    : null;
 
   const s = INVOICE_STATUS[inv.status];
   const xeroManaged = !!inv.xero_invoice_id;
@@ -132,6 +139,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             )}
           </Card>
 
+          {oldView ? (
+            <OldLines lines={oldView.lines} options={oldView.options} currency={cur} canEdit={canManage(role)}
+              source="invoice" sourceId={inv.id} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
+          ) : (
           <Card>
             <CardHeader
               title={version?.quote ? `From quote Q-${version.quote.number} · ${version.quote.title}` : "Line summary"}
@@ -165,6 +176,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </Card>
+          )}
 
           <Card>
             <CardHeader title="Payments" subtitle={`${money(inv.amount_paid, cur)} received`} />

@@ -9,7 +9,8 @@ import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
 import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
 import { cleanDetails, servesLine, staffLine } from "@/lib/quotes/line-helpers";
-import { xeroLinesToQuoteLines, type PriceItem, type XeroLine } from "@/lib/quotes/xero-import";
+import { xeroLinesToQuoteLines, type XeroLine } from "@/lib/quotes/xero-import";
+import { loadMatchContext } from "@/lib/quotes/history";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -907,9 +908,8 @@ export async function importXeroQuote(quoteId: string, xeroQuoteRowId: string, r
     if (!xq) fail("That Xero quote isn't in EventureOS any more. Try syncing Xero.");
     if (xq!.customer_id !== q.customer_id) fail(`Xero quote ${xq!.number ?? ""} belongs to a different client.`);
 
-    const { data: svc, error: sErr } = await supabase.from("services").select("id, code, name, unit, tax_rate").eq("organisation_id", org.id);
-    if (sErr) fail(`Couldn't load the price list: ${sErr.message}`);
-    const lines = xeroLinesToQuoteLines((xq!.line_items ?? []) as XeroLine[], (svc ?? []) as PriceItem[]);
+    const { priceList, aliases } = await loadMatchContext(org.id);
+    const lines = xeroLinesToQuoteLines((xq!.line_items ?? []) as XeroLine[], priceList, { aliases });
     if (!lines.length) fail(`Xero quote ${xq!.number ?? ""} has no lines to bring across.`);
 
     if (replace) {
