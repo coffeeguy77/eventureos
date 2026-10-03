@@ -194,11 +194,9 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-        <span className="min-w-0 text-[0.75rem] text-ink-faint">
-          {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
-        </span>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+      <div className="border-b border-line px-4 py-2.5">
+        {/* Actions on their own row so a long "Sent to" address can never sit underneath them */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={() => setFollowUp((f) => !f)} aria-expanded={followUp}>
             <BellPlus className="h-3.5 w-3.5 text-brand-600" />Follow up later
           </Button>
@@ -208,8 +206,11 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
           <Button size="sm" variant="ghost" className="h-10 sm:h-8" onClick={draft} disabled={drafting}>
             <Sparkles className="h-3.5 w-3.5 text-brand-600" />{drafting ? "Drafting…" : "Draft with AI"}
           </Button>
-          <Button size="sm" variant="secondary" className="h-10 sm:h-8" onClick={() => setOpen(true)}>Reply</Button>
+          <Button size="sm" variant="secondary" className="ml-auto h-10 sm:h-8" onClick={() => setOpen(true)}>Reply</Button>
         </div>
+        <p className="mt-1.5 break-words text-[0.75rem] text-ink-faint [overflow-wrap:anywhere]">
+          {state?.ok ? `Sent to ${state.sentTo} via Gmail.` : "Replies send from your connected Gmail and stay in Gmail."}
+        </p>
       </div>
       {followUp && <FollowUpLater thread={thread} onDone={() => setFollowUp(false)} />}
       {draftError && <p role="alert" className="mx-4 mb-3 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-700 ring-1 ring-inset ring-rose-100">{draftError}</p>}
