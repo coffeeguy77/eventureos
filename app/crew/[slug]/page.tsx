@@ -8,8 +8,9 @@ import { Card, JobSummary, Pill, Section, ShiftRow } from "./parts";
 export const metadata = { title: "Shifts" };
 export const dynamic = "force-dynamic";
 
-export default async function CrewShifts({ params }: { params: Promise<{ slug: string }> }) {
+export default async function CrewShifts({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ office?: string }> }) {
   const { slug } = await params;
+  const office = (await searchParams).office === "1";
   const s = await requireCrew(slug);
   const today = todayISO(s.org.timezone);
   const shifts = await myShifts(s, { from: today });
@@ -20,6 +21,11 @@ export default async function CrewShifts({ params }: { params: Promise<{ slug: s
 
   return (
     <div>
+      {office && (
+        <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-amber-200">
+          You&apos;re signed in as <b>{s.member.email ?? s.member.name}</b> (staff app). To use the office app, tap <b>Sign out</b> at the top and sign in with your office email.
+        </p>
+      )}
       <h1 className="mb-1 text-[1.5rem] font-bold tracking-tight text-ink">Your shifts</h1>
       <p className="mb-5 text-[0.875rem] text-ink-muted">{confirmed.length ? `${confirmed.length} coming up${thisWeek.length ? ` · ${thisWeek.length} in the next 7 days` : ""}` : "Nothing booked yet."}</p>
 

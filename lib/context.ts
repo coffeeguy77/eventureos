@@ -66,9 +66,21 @@ export async function requireOrg() {
     // Portal-only customers belong in their portal, not the staff app
     if (ctx.portalOrgs.length) redirect(`/p/${ctx.portalOrgs[0].slug}`);
     if (ctx.suspended) redirect("/suspended");
+    // Staff-app people (casual baristas) belong in their staff app
+    const crewSlug = await crewAppFor(ctx.user.id);
+    if (crewSlug) redirect(`/crew/${crewSlug}?office=1`);
     redirect("/onboarding");
   }
   return { ...ctx, org: ctx.current.organisation, role: ctx.current.role };
+}
+
+/** The staff app this login belongs to, if they're on an organisation's staff list (not an office user). */
+async function crewAppFor(userId: string): Promise<string | null> {
+  try {
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const { data } = await createServiceClient().from("crew_members").select("org:organisations(slug)").eq("user_id", userId).eq("active", true).limit(1).maybeSingle();
+    return (data?.org as unknown as { slug: string } | null)?.slug ?? null;
+  } catch { return null; }
 }
 
 export const getMembers = cache(async (orgId: string) => {

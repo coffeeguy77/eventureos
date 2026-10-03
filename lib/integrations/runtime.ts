@@ -230,5 +230,8 @@ export async function logIntegration(ctx: SyncContext, a: {
 export const likeExact = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
 
 export function errMessage(e: unknown) {
+  // A Next.js redirect thrown inside a try/catch means the person isn't signed in to the office app any more
+  const digest = (e as { digest?: unknown } | null)?.digest;
+  if (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) return "You're no longer signed in to the office app in this browser. Refresh the page and sign in again.";
   return e instanceof Error ? e.message : String(e);
 }
