@@ -8,7 +8,13 @@ import ACCENTS from "./accents.json";
 export type Scheme = "light" | "dim" | "dark" | "midnight" | "system";
 export interface UiPrefs { scheme: Scheme; accent: string; text: number; contrast: "normal" | "more"; motion: "full" | "reduce"; width: "standard" | "wide" | "full";
   /** How a customer's emails open beside a quote: docked to the side (pushes the page over) or a floating pop-up window */
-  emails: "side" | "popup" }
+  emails: "side" | "popup";
+  /** Which status tabs show along the top of Enquiries (the rest are under "More") */
+  enqTabs: string[] }
+
+/** Every status tab Enquiries can show, in order */
+export const ENQUIRY_TAB_KEYS = ["open", "starred", "new", "needs_review", "contacted", "qualified", "quote_required", "quote_sent", "negotiating", "won", "lost", "all"] as const;
+export const DEFAULT_ENQ_TABS = ["open", "starred", "new", "needs_review", "quote_sent", "all"];
 
 export const SCHEMES: { id: Scheme; name: string; hint: string; swatch: [string, string] }[] = [
   { id: "light", name: "Light", hint: "Bright and clean", swatch: ["#F6F6F8", "#FFFFFF"] },
@@ -19,7 +25,7 @@ export const SCHEMES: { id: Scheme; name: string; hint: string; swatch: [string,
 ];
 export { ACCENTS };
 export const TEXT_STEPS = [90, 100, 106, 112, 118, 125, 131, 137];
-export const DEFAULT_PREFS: UiPrefs = { scheme: "light", accent: "violet", text: 106, contrast: "normal", motion: "full", width: "standard", emails: "side" };
+export const DEFAULT_PREFS: UiPrefs = { scheme: "light", accent: "violet", text: 106, contrast: "normal", motion: "full", width: "standard", emails: "side", enqTabs: DEFAULT_ENQ_TABS };
 export const PREFS_COOKIE = "eos-ui";
 
 export function parsePrefs(raw: unknown): UiPrefs {
@@ -30,13 +36,19 @@ export function parsePrefs(raw: unknown): UiPrefs {
   const accent = ACCENTS.some((a) => a.id === o.accent) ? (o.accent as string) : DEFAULT_PREFS.accent;
   const t = Number(o.text);
   const text = TEXT_STEPS.includes(t) ? t : DEFAULT_PREFS.text;
-  return { scheme, accent, text, contrast: o.contrast === "more" ? "more" : "normal", motion: o.motion === "reduce" ? "reduce" : "full", width: o.width === "full" ? "full" : o.width === "wide" ? "wide" : "standard", emails: o.emails === "popup" ? "popup" : "side" };
+  return { scheme, accent, text, contrast: o.contrast === "more" ? "more" : "normal", motion: o.motion === "reduce" ? "reduce" : "full", width: o.width === "full" ? "full" : o.width === "wide" ? "wide" : "standard", emails: o.emails === "popup" ? "popup" : "side", enqTabs: parseTabs(o.enqTabs) };
+}
+
+function parseTabs(v: unknown): string[] {
+  const list = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map(String);
+  const ok = ENQUIRY_TAB_KEYS.filter((k) => list.includes(k));
+  return ok.length ? ok : DEFAULT_ENQ_TABS;
 }
 
 /** Attributes for <html>. */
 export function htmlAttrs(p: UiPrefs) {
   return {
-    "data-scheme": p.scheme, "data-accent": p.accent, "data-contrast": p.contrast, "data-motion": p.motion, "data-width": p.width, "data-emails": p.emails,
+    "data-scheme": p.scheme, "data-accent": p.accent, "data-contrast": p.contrast, "data-motion": p.motion, "data-width": p.width, "data-emails": p.emails, "data-enq-tabs": p.enqTabs.join(","),
     style: { ["--fs" as string]: String(p.text / 100) } as React.CSSProperties,
   };
 }

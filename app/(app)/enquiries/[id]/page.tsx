@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SpamButtons } from "@/components/enquiries/spam-buttons";
-import { DeleteEnquiryButton, StarPanel } from "@/components/enquiries/star";
+import { ArchiveToggle, DeleteEnquiryButton, StarPanel } from "@/components/enquiries/star";
 import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { deleteJob } from "@/app/(app)/events/actions";
 import { notFound } from "next/navigation";
@@ -124,7 +124,8 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
 
       {e.status !== "spam" && <StarPanel id={e.id} starred={!!star.starred_at} note={star.star_note ?? null} by={star.starred_by ? names[star.starred_by]?.split(" ")[0] ?? null : null} />}
       <SpamButtons id={e.id} isSpam={e.status === "spam"} sender={e.contact_email} reason={(e as { spam_reason?: string | null }).spam_reason ?? null} hasEvent={!!e.event}
-        extra={["owner", "admin", "manager"].includes(role) ? <DeleteEnquiryButton id={e.id} label={`ENQ-${e.number} “${e.title}”`} /> : null} />
+        extra={<>{e.status !== "archived" && <ArchiveToggle id={e.id} archived={false} />}{["owner", "admin", "manager"].includes(role) ? <DeleteEnquiryButton id={e.id} label={`ENQ-${e.number} “${e.title}”`} /> : null}</>} />
+      {e.status === "archived" && <ArchiveToggle id={e.id} archived />}
       {e.event && ["owner", "admin", "manager"].includes(role) && (
         <div className="mt-4">
           <DeleteConfirm label="Delete enquiry and job" variant="chip" title={`Delete ENQ-${e.number} and job EV-${e.event.number}?`} run={deleteJob.bind(null, e.event.id, "enquiries")}>

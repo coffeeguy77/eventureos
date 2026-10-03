@@ -438,6 +438,11 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   if (outbound && thread.enquiry_id) {
     await db.from("enquiries").update({ last_contact_at: pm.sentAt }).eq("id", thread.enquiry_id).or(`last_contact_at.is.null,last_contact_at.lt.${pm.sentAt}`);
   }
+  // The customer writes again about an archived enquiry: bring it back into the inbox
+  if (!outbound && !bulk && thread.enquiry_id && thread.classification !== "spam" && Date.parse(pm.sentAt) > Date.now() - 14 * 86400_000) {
+    await db.from("enquiries").update({ status: "needs_review", next_action: "They've emailed again — check and reply", next_action_due: new Date().toISOString() })
+      .eq("id", thread.enquiry_id).eq("organisation_id", ctx.org.id).eq("status", "archived");
+  }
   // A reply from the customer on an existing thread: tell the team
   if (!outbound && thread.message_count > 0 && thread.classification !== "spam" && !bulk) {
     await db.from("notifications").insert({

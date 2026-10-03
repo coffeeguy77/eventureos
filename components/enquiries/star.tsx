@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Star, Trash2 } from "lucide-react";
-import { deleteEnquiries, setStar, setStarNote, type StarResult } from "@/app/(app)/enquiries/star-actions";
+import { Archive as ArchiveIcon, Loader2, Star, Trash2 } from "lucide-react";
+import { archiveEnquiries, deleteEnquiries, setStar, setStarNote, unarchiveEnquiries, type StarResult } from "@/app/(app)/enquiries/star-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -100,6 +100,34 @@ export function DeleteEnquiryButton({ id, label }: { id: string; label: string }
           {err && <p className="w-full text-[0.7812rem] font-medium text-rose-700">{err}</p>}
         </div>
       )}
+    </>
+  );
+}
+
+/** Archive (out of the inbox, history kept) or bring back — on the enquiry page. */
+export function ArchiveToggle({ id, archived }: { id: string; archived: boolean }) {
+  const router = useRouter();
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const go = () => start(async () => {
+    setErr(null);
+    const r = await (archived ? unarchiveEnquiries([id]) : archiveEnquiries([id])).catch(() => fail);
+    if (!r.ok) { setErr(r.error); return; }
+    router.refresh();
+  });
+  if (archived) {
+    return (
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-zinc-50 px-4 py-3 text-[0.8125rem] text-ink">
+        <span className="min-w-0 flex-1"><b className="font-semibold">Archived.</b> Kept for history — it isn&apos;t in the inbox.</span>
+        <Button size="sm" disabled={pending} onClick={go}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Back to inbox</Button>
+        {err && <p className="w-full text-[0.78rem] text-rose-700">{err}</p>}
+      </div>
+    );
+  }
+  return (
+    <>
+      <Button size="sm" variant="ghost" disabled={pending} onClick={go}>{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArchiveIcon className="h-3.5 w-3.5" />}Archive</Button>
+      {err && <span className="text-[0.78rem] text-rose-700">{err}</span>}
     </>
   );
 }

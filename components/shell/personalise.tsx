@@ -10,13 +10,13 @@ import { cn } from "@/lib/cn";
 export function readCurrent(): UiPrefs {
   const el = document.documentElement;
   const fs = Number(getComputedStyle(el).getPropertyValue("--fs")) || DEFAULT_PREFS.text / 100;
-  return parsePrefs({ scheme: el.dataset.scheme, accent: el.dataset.accent, contrast: el.dataset.contrast, motion: el.dataset.motion, width: el.dataset.width, emails: el.dataset.emails, text: Math.round(fs * 100) });
+  return parsePrefs({ scheme: el.dataset.scheme, accent: el.dataset.accent, contrast: el.dataset.contrast, motion: el.dataset.motion, width: el.dataset.width, emails: el.dataset.emails, enqTabs: el.dataset.enqTabs, text: Math.round(fs * 100) });
 }
 
 export function applyPrefs(p: UiPrefs) {
   const el = document.documentElement;
   const a = htmlAttrs(p);
-  el.dataset.scheme = a["data-scheme"]; el.dataset.accent = a["data-accent"]; el.dataset.contrast = a["data-contrast"]; el.dataset.motion = a["data-motion"]; el.dataset.width = a["data-width"]; el.dataset.emails = a["data-emails"];
+  el.dataset.scheme = a["data-scheme"]; el.dataset.accent = a["data-accent"]; el.dataset.contrast = a["data-contrast"]; el.dataset.motion = a["data-motion"]; el.dataset.width = a["data-width"]; el.dataset.emails = a["data-emails"]; el.dataset.enqTabs = a["data-enq-tabs"];
   el.style.setProperty("--fs", String(p.text / 100));
 }
 

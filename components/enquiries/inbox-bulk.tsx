@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, ShieldAlert, Star, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Ban, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { blockSenders, markSpam, type SpamResult } from "@/app/(app)/enquiries/spam-actions";
-import { deleteEnquiries, setStar } from "@/app/(app)/enquiries/star-actions";
+import { archiveEnquiries, deleteEnquiries, setStar, unarchiveEnquiries } from "@/app/(app)/enquiries/star-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -18,7 +18,7 @@ export function RowCheck({ id, label }: { id: string; label: string }) {
 }
 
 /** Select-all + bulk "Move to spam" / "Block sender" for the enquiries inbox. */
-export function InboxBulkBar({ total, canDelete = false }: { total: number; canDelete?: boolean }) {
+export function InboxBulkBar({ total, canDelete = false, archivedView = false }: { total: number; canDelete?: boolean; archivedView?: boolean }) {
   const router = useRouter();
   const [count, setCount] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
@@ -53,7 +53,10 @@ export function InboxBulkBar({ total, canDelete = false }: { total: number; canD
         {count > 0 && (
           <>
             <span className="flex-1" />
-            <Button size="sm" disabled={pending} onClick={() => run(() => setStar(selected(), true))}><Star className="h-3.5 w-3.5" />Star</Button>
+            {archivedView
+              ? <Button size="sm" disabled={pending} onClick={() => run(() => unarchiveEnquiries(selected()))}><ArchiveRestore className="h-3.5 w-3.5" />Back to inbox</Button>
+              : <Button size="sm" disabled={pending} onClick={() => run(() => archiveEnquiries(selected()))}><Archive className="h-3.5 w-3.5" />Archive</Button>}
+            {!archivedView && <Button size="sm" disabled={pending} onClick={() => run(() => setStar(selected(), true))}><Star className="h-3.5 w-3.5" />Star</Button>}
             <Button size="sm" disabled={pending} onClick={() => run(() => markSpam(selected()))}><ShieldAlert className="h-3.5 w-3.5" />Move to spam</Button>
             <Button size="sm" disabled={pending} onClick={() => setConfirmBlock((v) => !v)}><Ban className="h-3.5 w-3.5" />Block sender</Button>
             {canDelete && <Button size="sm" variant="danger" disabled={pending} onClick={() => { setConfirmDelete((v) => !v); setConfirmBlock(false); }}><Trash2 className="h-3.5 w-3.5" />Delete</Button>}

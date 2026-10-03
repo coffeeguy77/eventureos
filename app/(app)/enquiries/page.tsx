@@ -11,7 +11,11 @@ import { enquiryNextAction } from "@/lib/next-action";
 import { fmtDate, money, relative } from "@/lib/format";
 import type { Enquiry, EnquirySource, EnquiryStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { Ban, Inbox, ShieldAlert } from "lucide-react";
+import { Archive, Ban, Inbox, ShieldAlert } from "lucide-react";
+import { cookies } from "next/headers";
+import { parsePrefs, PREFS_COOKIE } from "@/lib/theme/prefs";
+import { EnquiryTabBar } from "@/components/enquiries/tab-bar";
+import { TidyBanner } from "@/components/enquiries/tidy-banner";
 import { InboxBulkBar, RowCheck } from "@/components/enquiries/inbox-bulk";
 import { StarToggle } from "@/components/enquiries/star";
 import { SpamList, type SpamRow } from "@/components/enquiries/spam-list";
@@ -24,18 +28,19 @@ export const metadata = { title: "Enquiries" };
 type Row = Enquiry & { customer: { name: string } | null; starred_at?: string | null; star_note?: string | null };
 
 export default async function EnquiriesPage({ searchParams }: {
-  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string }>;
+  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string; past?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
-  const folder = sp.folder === "spam" || sp.folder === "blocked" ? sp.folder : "inbox";
-  const [{ count: spamCount }, { count: blockedCount }] = await Promise.all([
+  const folder = sp.folder === "spam" || sp.folder === "blocked" || sp.folder === "archived" ? sp.folder : "inbox";
+  const [{ count: spamCount }, { count: blockedCount }, { count: archivedCount }] = await Promise.all([
     supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "spam"),
     supabase.from("email_blocklist").select("id", { count: "exact", head: true }).eq("organisation_id", org.id),
+    supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "archived"),
   ]);
   const folders = (
     <div className="mb-4 flex gap-1 border-b border-line">
-      {([["inbox", "Inbox", Inbox, null], ["spam", "Spam", ShieldAlert, spamCount ?? 0], ["blocked", "Blocked", Ban, blockedCount ?? 0]] as const).map(([key, label, Icon, n]) => (
+      {([["inbox", "Inbox", Inbox, null], ["archived", "Archived", Archive, archivedCount ?? 0], ["spam", "Spam", ShieldAlert, spamCount ?? 0], ["blocked", "Blocked", Ban, blockedCount ?? 0]] as const).map(([key, label, Icon, n]) => (
         <Link key={key} href={key === "inbox" ? "/enquiries" : `/enquiries?folder=${key}`} scroll={false}
           className={cn("-mb-px flex items-center gap-1.5 border-b-2 px-3 pb-2.5 pt-1 text-[0.8438rem] font-medium",
             folder === key ? "border-brand-500 text-ink" : "border-transparent text-ink-muted hover:text-ink")}>
@@ -47,7 +52,7 @@ export default async function EnquiriesPage({ searchParams }: {
   const header = (
     <PageHeader
       title="Enquiries"
-      subtitle={folder === "spam" ? "Junk and unwanted email — nothing here is lost; move it back if it's real." : folder === "blocked" ? "Senders that are never imported again." : "Every new lead, from every channel, in one inbox."}
+      subtitle={folder === "spam" ? "Junk and unwanted email — nothing here is lost; move it back if it's real." : folder === "blocked" ? "Senders that are never imported again." : folder === "archived" ? "Past enquiries kept for history — out of the inbox, still on each client's record and in search." : "Every new lead, from every channel, in one inbox."}
       actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>}
     />
   );
@@ -110,7 +115,11 @@ export default async function EnquiriesPage({ searchParams }: {
   }
   const members = await getMembers(org.id);
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
-  const statusKey = sp.status ?? "open";
+  const archivedView = folder === "archived";
+  const statusKey = archivedView ? "archived" : sp.status ?? "open";
+  const pastOnly = sp.past === "1" && !archivedView;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone || "Australia/Sydney" }).format(new Date());
+  const prefs = parsePrefs((await cookies()).get(PREFS_COOKIE)?.value);
 
   let query = supabase
     .from("enquiries")
@@ -121,7 +130,8 @@ export default async function EnquiriesPage({ searchParams }: {
   if (statusKey === "open") query = query.in("status", OPEN_ENQUIRY_STATUSES);
   else if (statusKey === "starred") query = query.not("starred_at", "is", null).neq("status", "spam");
   else if (statusKey !== "all") query = query.eq("status", statusKey);
-  else query = query.neq("status", "spam");
+  else query = query.not("status", "in", "(spam,archived)");
+  if (pastOnly) query = query.is("event_id", null).lt("event_date", today);
   if (sp.source) query = query.eq("source", sp.source);
   if (sp.assignee === "unassigned") query = query.is("assigned_to", null);
   else if (sp.assignee) query = query.eq("assigned_to", sp.assignee);
@@ -146,9 +156,10 @@ export default async function EnquiriesPage({ searchParams }: {
   const rows = ((data ?? []) as Row[]).map((r, i) => ({ r, i }))
     .sort((a, b) => (b.r.starred_at ? 1 : 0) - (a.r.starred_at ? 1 : 0) || (a.r.starred_at && b.r.starred_at ? b.r.starred_at.localeCompare(a.r.starred_at) : 0) || a.i - b.i)
     .map((x) => x.r);
-  const counts: Record<string, number> = { all: allStatuses?.length ?? 0, open: 0, starred: 0 };
+  const counts: Record<string, number> = { all: 0, open: 0, starred: 0 };
   for (const r of (allStatuses ?? []) as { status: string; starred_at?: string | null }[]) {
-    if (r.starred_at) counts.starred++;
+    if (r.status !== "archived") counts.all++;
+    if (r.starred_at && r.status !== "archived") counts.starred++;
     counts[r.status] = (counts[r.status] ?? 0) + 1;
     if (OPEN_ENQUIRY_STATUSES.includes(r.status as EnquiryStatus)) counts.open++;
   }
@@ -156,7 +167,7 @@ export default async function EnquiriesPage({ searchParams }: {
   const tabs = [
     { key: "open", label: "Open" },
     { key: "starred", label: "★ Starred" },
-    ...ENQUIRY_STATUS_ORDER.map((s) => ({ key: s, label: ENQUIRY_STATUS[s].label })),
+    ...ENQUIRY_STATUS_ORDER.filter((s) => s !== "archived").map((s) => ({ key: s, label: ENQUIRY_STATUS[s].label })),
     { key: "all", label: "All" },
   ];
   const qs = (key: string) => {
@@ -165,9 +176,15 @@ export default async function EnquiriesPage({ searchParams }: {
     if (sp.source) p.set("source", sp.source);
     if (sp.assignee) p.set("assignee", sp.assignee);
     if (sp.q) p.set("q", sp.q);
+    if (archivedView) p.set("folder", "archived");
     const s = p.toString();
     return s ? `/enquiries?${s}` : "/enquiries";
   };
+  // Open enquiries for dates that have passed and never became a job (not starred) — the tidy-up suggestion
+  let pastQ = supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id)
+    .in("status", OPEN_ENQUIRY_STATUSES).is("event_id", null).lt("event_date", today);
+  if (counts.starred || (allStatuses ?? []).some((r) => "starred_at" in r)) pastQ = pastQ.is("starred_at", null);
+  const pastCount = (await pastQ).count ?? 0;
   const now = new Date().toISOString();
   // Enquiries with a reply draft waiting to be checked
   const drafted = new Set<string>();
@@ -182,20 +199,10 @@ export default async function EnquiriesPage({ searchParams }: {
       {header}
       {folders}
 
-      <div className="no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
-        {tabs.map((t) => {
-          const on = t.key === statusKey;
-          const c = counts[t.key] ?? 0;
-          return (
-            <Link key={t.key} href={qs(t.key)} scroll={false}
-              className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium",
-                on ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line hover:text-ink")}>
-              {t.label}
-              <span className={cn("text-[0.6875rem]", on ? "text-surface/70" : "text-ink-faint")}>{c}</span>
-            </Link>
-          );
-        })}
-      </div>
+      {!archivedView && (
+        <EnquiryTabBar active={statusKey} pinned={prefs.enqTabs} tabs={tabs.map((t) => ({ key: t.key, label: t.label, count: counts[t.key] ?? 0, href: qs(t.key) }))} />
+      )}
+      {!archivedView && (statusKey === "open" || pastOnly) && pastCount > 0 && <TidyBanner count={pastCount} showing={pastOnly} />}
 
       <Card>
         <div className="border-b border-line px-4 py-3">
@@ -207,10 +214,10 @@ export default async function EnquiriesPage({ searchParams }: {
             ]}
           />
         </div>
-        {rows.length > 0 && <InboxBulkBar total={rows.length} canDelete={["owner", "admin", "manager"].includes(role)} />}
+        {rows.length > 0 && <InboxBulkBar total={rows.length} canDelete={["owner", "admin", "manager"].includes(role)} archivedView={archivedView} />}
         <p id="enquiry-star-status" hidden className="border-b border-line px-4 py-2 text-[0.7812rem] font-medium text-rose-700" />
         {rows.length === 0 ? (
-          <EmptyState title={statusKey === "starred" ? "Nothing starred" : "No enquiries match"} action={<ButtonLink href="/enquiries" size="sm">{statusKey === "starred" ? "Back to inbox" : "Clear filters"}</ButtonLink>}>
+          <EmptyState title={archivedView ? "Nothing archived" : statusKey === "starred" ? "Nothing starred" : "No enquiries match"} action={<ButtonLink href="/enquiries" size="sm">{statusKey === "starred" ? "Back to inbox" : "Clear filters"}</ButtonLink>}>
             {statusKey === "starred" ? "Star an enquiry you need to think about and it'll wait here — with a note on what to think about." : "Try another status or clear your filters."}
           </EmptyState>
         ) : (

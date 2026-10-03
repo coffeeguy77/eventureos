@@ -90,3 +90,72 @@ export async function deleteEnquiries(enquiryIds: string[]): Promise<StarResult>
     return `${pl(n, "enquiry", "enquiries")} deleted from EventureOS. Gmail isn't touched.${skipped ? ` ${skipped} already turned into events ${skipped === 1 ? "was" : "were"} left alone.` : ""}`;
   });
 }
+
+const OPEN = ["new", "needs_review", "contacted", "qualified", "quote_required", "quote_sent", "negotiating"];
+
+/** Archive enquiries: out of the inbox, kept for history (client page, search, the Archived folder). */
+export async function archiveEnquiries(enquiryIds: string[]): Promise<StarResult> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    const list = ids(enquiryIds);
+    if (!list.length) throw new Error("Choose at least one enquiry.");
+    const { data, error } = await supabase.from("enquiries").update({ status: "archived", next_action: null, next_action_due: null })
+      .eq("organisation_id", org.id).in("id", list).neq("status", "spam").neq("status", "archived").select("id");
+    if (error) throw new Error(error.message);
+    const done = (data ?? []).map((r) => r.id as string);
+    if (done.length) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "enquiry.archived", entityType: "enquiry",
+      entityId: done.length === 1 ? done[0] : null, enquiryId: done.length === 1 ? done[0] : null,
+      summary: `${actorName(profile)} archived ${done.length === 1 ? "this enquiry" : pl(done.length, "enquiry", "enquiries")}` });
+    revalidatePath("/enquiries");
+    revalidatePath("/dashboard");
+    for (const id of done.slice(0, 20)) revalidatePath(`/enquiries/${id}`);
+    return `${pl(done.length, "enquiry", "enquiries")} archived — find ${done.length === 1 ? "it" : "them"} under Archived.`;
+  });
+}
+
+/** Bring archived enquiries back into the inbox. */
+export async function unarchiveEnquiries(enquiryIds: string[]): Promise<StarResult> {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    const list = ids(enquiryIds);
+    if (!list.length) throw new Error("Choose at least one enquiry.");
+    const { data: rows, error } = await supabase.from("enquiries").select("id, event_id, last_contact_at").eq("organisation_id", org.id).in("id", list).eq("status", "archived");
+    if (error) throw new Error(error.message);
+    const r = (rows ?? []) as { id: string; event_id: string | null; last_contact_at: string | null }[];
+    // Back to where it most likely was: a job → quote required; contacted before → contacted; otherwise needs review
+    for (const group of [
+      { status: "quote_required", ids: r.filter((x) => x.event_id).map((x) => x.id) },
+      { status: "contacted", ids: r.filter((x) => !x.event_id && x.last_contact_at).map((x) => x.id) },
+      { status: "needs_review", ids: r.filter((x) => !x.event_id && !x.last_contact_at).map((x) => x.id) },
+    ]) {
+      if (group.ids.length) await supabase.from("enquiries").update({ status: group.status }).eq("organisation_id", org.id).in("id", group.ids);
+    }
+    if (r.length) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "enquiry.unarchived", entityType: "enquiry",
+      entityId: r.length === 1 ? r[0].id : null, enquiryId: r.length === 1 ? r[0].id : null,
+      summary: `${actorName(profile)} moved ${r.length === 1 ? "this enquiry" : pl(r.length, "enquiry", "enquiries")} back to the inbox` });
+    revalidatePath("/enquiries");
+    for (const x of r.slice(0, 20)) revalidatePath(`/enquiries/${x.id}`);
+    return `${pl(r.length, "enquiry", "enquiries")} back in the inbox.`;
+  });
+}
+
+/**
+ * The tidy-up: archive every open enquiry whose event date has passed and that never became a job.
+ * Starred ones are left alone (you flagged them to think about).
+ */
+export async function archivePastEnquiries(): Promise<StarResult> {
+  return wrap(async () => {
+    const { supabase, org } = await office();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone || "Australia/Sydney" }).format(new Date());
+    let q = supabase.from("enquiries").select("id").eq("organisation_id", org.id).in("status", OPEN).is("event_id", null).lt("event_date", today).limit(500);
+    const starredOk = await supabase.from("enquiries").select("starred_at").limit(1);
+    if (!starredOk.error) q = q.is("starred_at", null);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const list = (data ?? []).map((r) => r.id as string);
+    if (!list.length) return "Nothing to tidy — no open enquiries are for dates that have passed.";
+    const r = await archiveEnquiries(list);
+    if (!r.ok) throw new Error(r.error);
+    return r.message;
+  });
+}
