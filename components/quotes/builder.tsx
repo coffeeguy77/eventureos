@@ -929,7 +929,8 @@ function AdminAcceptPanel({ quoteId, defaultName, flushAll, onClose, onDone }: {
     await flushAll();
     const r = await adminAcceptQuote(quoteId, name, how).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setErr(r.error); return; }
-    if (thenInvoice) { router.push(r.data.invoiceHref); return; }
+    // Straight to the invoice with the email window open, so it can go to whoever asked for it
+    if (thenInvoice) { router.push(r.data.invoiceHref.startsWith("/invoices/new") ? r.data.invoiceHref : `${r.data.invoiceHref}?send=1`); return; }
     onDone(r.data.invoiceNumber ? `Accepted — invoice ${r.data.invoiceNumber} was raised automatically.` : "Accepted. The quote is now locked.");
   });
   return (
@@ -947,7 +948,7 @@ function AdminAcceptPanel({ quoteId, defaultName, flushAll, onClose, onDone }: {
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
         <Button size="sm" disabled={pending || !name.trim()} onClick={() => go(false)}>Accept</Button>
-        <Button size="sm" variant="primary" disabled={pending || !name.trim()} onClick={() => go(true)}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Accept &amp; go to invoice</Button>
+        <Button size="sm" variant="primary" disabled={pending || !name.trim()} onClick={() => go(true)}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Accept &amp; email invoice</Button>
       </div>
     </div>
   );

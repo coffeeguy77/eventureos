@@ -297,7 +297,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
   return mounted ? createPortal(body, document.body) : null;
 }
 
-function FromOption({ on, disabled, onPick, title, hint }: { on: boolean; disabled: boolean; onPick: () => void; title: string; hint: React.ReactNode }) {
+export function FromOption({ on, disabled, onPick, title, hint }: { on: boolean; disabled: boolean; onPick: () => void; title: string; hint: React.ReactNode }) {
   return (
     <div role="radio" aria-checked={on} aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
       onClick={() => !disabled && onPick()} onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onPick(); } }}
@@ -308,7 +308,7 @@ function FromOption({ on, disabled, onPick, title, hint }: { on: boolean; disabl
   );
 }
 
-function Check2({ on, onChange, children }: { on: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
+export function Check2({ on, onChange, children }: { on: boolean; onChange: (v: boolean) => void; children: React.ReactNode }) {
   return (
     <label className={cn("flex cursor-pointer items-start gap-2.5 text-ink")}>
       <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 rounded border-line-strong accent-brand-500" />
@@ -321,7 +321,7 @@ function Check2({ on, onChange, children }: { on: boolean; onChange: (v: boolean
  * The email preview, shrunk to fit its pane. Emails (and some signatures) have a fixed minimum width, which used to
  * leave the right-hand side cut off behind a sideways scrollbar.
  */
-function FitPreview({ html }: { html: string }) {
+export function FitPreview({ html }: { html: string }) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const [size, setSize] = useState({ pane: 0, inner: 0, height: 600 });
@@ -368,9 +368,13 @@ function followUpTime(days: number, tz: string) {
 }
 
 /** After sending: who got it, then straight back to the customer's emails, the client, or a follow-up reminder. */
-export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone }: {
-  result: SendQuoteResult; quoteId: string; quoteNumber: number | string; names: Recipient[]; after?: AfterSend; onDone: () => void;
+export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone, doc }: {
+  result: Pick<SendQuoteResult, "sent" | "failed"> & Partial<Pick<SendQuoteResult, "versionNumber" | "published">>;
+  quoteId: string; quoteNumber: number | string; names: Recipient[]; after?: AfterSend; onDone: () => void;
+  /** For something other than a quote (e.g. an invoice): what it is, and a line about what happens next */
+  doc?: { label: string; note: string; key: string };
 }) {
+  const label = doc?.label ?? `Quote Q-${quoteNumber}`;
   const [follow, setFollow] = useState<{ busy: number | null; msg: string | null; ok: boolean }>({ busy: null, msg: null, ok: true });
   const sent = result.sent.length > 0;
   const who = result.sent.map((e) => names.find((n) => n.email === e)?.name || e);
@@ -380,7 +384,7 @@ export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone 
     if (!after) return;
     setFollow({ busy: days, msg: null, ok: true });
     const r = await followUpToTask({
-      key: `quote-follow-up:${quoteId}:v${result.versionNumber}`, title: `Follow up quote Q-${quoteNumber} with ${first}`,
+      key: doc?.key ?? `quote-follow-up:${quoteId}:v${result.versionNumber}`, title: `Follow up ${doc ? doc.label : `quote Q-${quoteNumber}`} with ${first}`,
       dueIso: followUpTime(days, after.tz), eventId: after.eventId, customerId: after.clientId,
     }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     setFollow({ busy: null, ok: r.ok, msg: r.ok ? (r.message ?? "Added to your to-do list.") : r.error });
@@ -393,10 +397,10 @@ export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone 
           <span className={cn("mx-auto grid h-14 w-14 place-items-center rounded-full", sent ? "bg-emerald-50 text-emerald-600 ring-8 ring-emerald-50/50" : "bg-rose-50 text-rose-600")}>
             {sent ? <Check className="h-7 w-7" /> : <AlertTriangle className="h-7 w-7" />}
           </span>
-          <p className="mt-4 text-[1.25rem] font-semibold tracking-tight text-ink">{sent ? `Quote Q-${quoteNumber} is on its way` : "Nothing was sent"}</p>
+          <p className="mt-4 text-[1.25rem] font-semibold tracking-tight text-ink">{sent ? `${label} is on its way` : "Nothing was sent"}</p>
           {sent && (
             <p className="mt-1 text-[0.875rem] text-ink-muted">
-              Sent to {who.join(", ")}{result.published ? ` · version ${result.versionNumber} published` : ""}. You&apos;ll see when it&apos;s opened under <b className="font-medium text-ink">Sent emails</b> on this quote.
+              Sent to {who.join(", ")}{result.published ? ` · version ${result.versionNumber} published` : ""}. {doc ? doc.note : <>You&apos;ll see when it&apos;s opened under <b className="font-medium text-ink">Sent emails</b> on this quote.</>}
             </p>
           )}
         </div>
@@ -420,7 +424,7 @@ export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone 
             </div>
             {sent && (
               <div className="rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
-                <p className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-ink"><BellRing className="h-4 w-4 text-ink-faint" />Remind me to follow up if {first} hasn&apos;t replied</p>
+                <p className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-ink"><BellRing className="h-4 w-4 text-ink-faint" />{doc ? `Remind me to check ${first} has paid` : <>Remind me to follow up if {first} hasn&apos;t replied</>}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {FOLLOW_UPS.map((f) => (
                     <button key={f.days} type="button" disabled={follow.busy !== null || (follow.ok && !!follow.msg)} onClick={() => remind(f.days)}

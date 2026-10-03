@@ -13,7 +13,7 @@ import { INVOICE_STATUS, QUOTE_STATUS } from "@/lib/status";
 import { daysBetween, fmtDate, fmtDateTime, money, relative, todayISO, zonedTimeUTC } from "@/lib/format";
 import type { ActivityLog, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { InvoiceActions } from "./controls";
+import { EmailInvoiceButton, InvoiceActions } from "./controls";
 import { OldLines } from "@/components/history/old-lines";
 import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
@@ -35,7 +35,8 @@ type Version = {
   quote: { number: number; title: string } | null;
 };
 
-export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function InvoicePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ send?: string }> }) {
+  const sp = await searchParams;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { supabase, org, role } = await requireOrg();
@@ -222,6 +223,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
             <CardHeader title="Actions" />
+            {canManage(role) && inv.status !== "void" && Number(inv.balance) > 0 && inv.customer && (
+              <EmailInvoiceButton invoiceId={inv.id} autoOpen={sp.send === "1"} after={{
+                clientId: inv.customer.id, clientName: inv.customer.name, eventId: inv.event?.id ?? "", tz,
+                emailsHref: inv.event ? `/events/${inv.event.id}?tab=communication` : `/clients/${inv.customer.id}?tab=emails`,
+              }} />
+            )}
             <InvoiceActions id={inv.id} number={inv.number} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
               paid={Number(inv.amount_paid)} paidLabel={money(inv.amount_paid, cur)} today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>

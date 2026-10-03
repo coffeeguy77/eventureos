@@ -1,6 +1,10 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Mail } from "lucide-react";
+import { SendInvoiceDialog } from "@/components/invoices/send-invoice-dialog";
+import type { AfterSend } from "@/components/quotes/send-dialog";
 import { Lock } from "lucide-react";
 import { creditInvoice, deleteInvoice, markInvoiceSent, recordPayment, voidInvoice, type InvoiceFormState } from "../actions";
 import { Button } from "@/components/ui/button";
@@ -44,7 +48,7 @@ export function InvoiceActions({ id, number, status, balance, balanceLabel, paid
         </div>
       )}
       <div className="flex flex-wrap gap-2 [&>*]:h-10 [&>*]:flex-1 sm:[&>*]:h-8 sm:[&>*]:flex-none">
-        {canPay && <Button size="sm" variant={mode === "pay" ? "secondary" : "primary"} onClick={() => toggle("pay")}>Record payment</Button>}
+        {canPay && <Button size="sm" variant="secondary" onClick={() => toggle("pay")}>Record payment</Button>}
         {status === "draft" && !xeroManaged && (
           <Button size="sm" disabled={sending} onClick={() => startSend(async () => setSentState(await markInvoiceSent(id)))}>
             {sending ? "Updating…" : "Mark as sent"}
@@ -121,6 +125,22 @@ export function InvoiceActions({ id, number, status, balance, balanceLabel, paid
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+/** "Email invoice" — opens the send window (straight away when arriving from "Accept & go to invoice"). */
+export function EmailInvoiceButton({ invoiceId, autoOpen, after }: { invoiceId: string; autoOpen: boolean; after: AfterSend }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(autoOpen);
+  const [done, setDone] = useState<string | null>(null);
+  return (
+    <div className="px-5 pb-3">
+      <Button size="sm" variant="primary" className="h-10 w-full sm:h-9" onClick={() => setOpen(true)}><Mail className="h-4 w-4" />Email invoice to client</Button>
+      {done && <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-[0.7812rem] text-emerald-800 ring-1 ring-inset ring-emerald-100">{done}</p>}
+      {open && <SendInvoiceDialog invoiceId={invoiceId} after={after}
+        onClose={() => { setOpen(false); if (autoOpen) router.replace(`/invoices/${invoiceId}`, { scroll: false }); }}
+        onDone={(m) => { setOpen(false); setDone(m); router.replace(`/invoices/${invoiceId}`, { scroll: false }); router.refresh(); }} />}
     </div>
   );
 }
