@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SpamButtons } from "@/components/enquiries/spam-buttons";
+import { DeleteEnquiryButton, StarPanel } from "@/components/enquiries/star";
 import { notFound } from "next/navigation";
 import { ArrowUpRight, Mail, Phone, Building2 } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
@@ -25,7 +26,7 @@ export const metadata = { title: "Enquiry" };
 export default async function EnquiryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, role } = await requireOrg();
   const tz = org.timezone;
 
   const { data: enquiry, error } = await supabase
@@ -85,6 +86,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
   const history = ((historyRes.data ?? []) as { id: string; name: string; event_date: string | null; status: EventStatus }[]).filter((x) => x.id !== e.event_id);
   const gmailConnected = gmailRes.data?.status === "connected";
 
+  const star = e as { starred_at?: string | null; star_note?: string | null; starred_by?: string | null };
   const displayName = e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown sender";
 
   return (
@@ -118,7 +120,9 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <SpamButtons id={e.id} isSpam={e.status === "spam"} sender={e.contact_email} reason={(e as { spam_reason?: string | null }).spam_reason ?? null} hasEvent={!!e.event} />
+      {e.status !== "spam" && <StarPanel id={e.id} starred={!!star.starred_at} note={star.star_note ?? null} by={star.starred_by ? names[star.starred_by]?.split(" ")[0] ?? null : null} />}
+      <SpamButtons id={e.id} isSpam={e.status === "spam"} sender={e.contact_email} reason={(e as { spam_reason?: string | null }).spam_reason ?? null} hasEvent={!!e.event}
+        extra={["owner", "admin", "manager"].includes(role) ? <DeleteEnquiryButton id={e.id} label={`ENQ-${e.number} “${e.title}”`} /> : null} />
       {e.status !== "spam" && <NextActionBanner action={na} />}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:grid-rows-[auto_1fr]">

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
 /** Spam / Not spam / Block sender for one enquiry. Blocking asks once, inline. */
-export function SpamButtons({ id, isSpam, sender, reason, hasEvent }: { id: string; isSpam: boolean; sender: string | null; reason: string | null; hasEvent: boolean }) {
+export function SpamButtons({ id, isSpam, sender, reason, hasEvent, extra }: { id: string; isSpam: boolean; sender: string | null; reason: string | null; hasEvent: boolean; extra?: React.ReactNode }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -33,6 +33,7 @@ export function SpamButtons({ id, isSpam, sender, reason, hasEvent }: { id: stri
       <div className="flex flex-wrap items-center gap-2">
         {!isSpam && <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => markSpam([id]))}><ShieldAlert className="h-3.5 w-3.5" />Spam</Button>}
         {sender && <Button size="sm" variant="ghost" disabled={pending} onClick={() => setConfirm((v) => !v)}><Ban className="h-3.5 w-3.5" />Block {sender}</Button>}
+        {extra}
         {msg && <span className={cn("text-[0.7812rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</span>}
       </div>
       {confirm && sender && (

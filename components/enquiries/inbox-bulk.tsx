@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, ShieldAlert } from "lucide-react";
+import { Ban, ShieldAlert, Star, Trash2 } from "lucide-react";
 import { blockSenders, markSpam, type SpamResult } from "@/app/(app)/enquiries/spam-actions";
+import { deleteEnquiries, setStar } from "@/app/(app)/enquiries/star-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -17,10 +18,11 @@ export function RowCheck({ id, label }: { id: string; label: string }) {
 }
 
 /** Select-all + bulk "Move to spam" / "Block sender" for the enquiries inbox. */
-export function InboxBulkBar({ total }: { total: number }) {
+export function InboxBulkBar({ total, canDelete = false }: { total: number; canDelete?: boolean }) {
   const router = useRouter();
   const [count, setCount] = useState(0);
   const [confirmBlock, setConfirmBlock] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   useEffect(() => {
@@ -34,7 +36,7 @@ export function InboxBulkBar({ total }: { total: number }) {
     setMsg(null);
     const r = await fn().catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     setMsg(r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error });
-    if (r.ok) { setAll(false); setConfirmBlock(false); }
+    if (r.ok) { setAll(false); setConfirmBlock(false); setConfirmDelete(false); }
     router.refresh();
   });
   const all = total > 0 && count === total;
@@ -51,8 +53,10 @@ export function InboxBulkBar({ total }: { total: number }) {
         {count > 0 && (
           <>
             <span className="flex-1" />
+            <Button size="sm" disabled={pending} onClick={() => run(() => setStar(selected(), true))}><Star className="h-3.5 w-3.5" />Star</Button>
             <Button size="sm" disabled={pending} onClick={() => run(() => markSpam(selected()))}><ShieldAlert className="h-3.5 w-3.5" />Move to spam</Button>
             <Button size="sm" disabled={pending} onClick={() => setConfirmBlock((v) => !v)}><Ban className="h-3.5 w-3.5" />Block sender</Button>
+            {canDelete && <Button size="sm" variant="danger" disabled={pending} onClick={() => { setConfirmDelete((v) => !v); setConfirmBlock(false); }}><Trash2 className="h-3.5 w-3.5" />Delete</Button>}
           </>
         )}
       </div>
@@ -61,6 +65,13 @@ export function InboxBulkBar({ total }: { total: number }) {
           <span className="min-w-0 flex-1">Block the sender{count === 1 ? "" : "s"}? Their unworked emails are removed from EventureOS (Gmail keeps them) and they&apos;re never imported again.</span>
           <Button size="sm" onClick={() => setConfirmBlock(false)}>Cancel</Button>
           <Button size="sm" variant="primary" disabled={pending} onClick={() => run(() => blockSenders(selected()))}>{pending ? "Blocking…" : "Block"}</Button>
+        </div>
+      )}
+      {confirmDelete && count > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-rose-100 bg-rose-50 px-4 py-2.5 text-[0.8125rem] text-rose-900">
+          <span className="min-w-0 flex-1">Delete {count === 1 ? "this enquiry" : `these ${count} enquiries`} from EventureOS? Their emails, notes and to-dos here go too. Not marked as spam, nobody is blocked, and Gmail isn&apos;t touched. Ones already turned into events are skipped. This can&apos;t be undone.</span>
+          <Button size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button size="sm" variant="danger" disabled={pending} onClick={() => run(() => deleteEnquiries(selected()))}>{pending ? "Deleting…" : "Delete"}</Button>
         </div>
       )}
       {msg && <p role="status" className={cn("border-b border-line px-4 py-2 text-[0.7812rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}

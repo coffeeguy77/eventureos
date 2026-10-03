@@ -13,6 +13,7 @@ import type { Enquiry, EnquirySource, EnquiryStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { Ban, Inbox, ShieldAlert } from "lucide-react";
 import { InboxBulkBar, RowCheck } from "@/components/enquiries/inbox-bulk";
+import { StarToggle } from "@/components/enquiries/star";
 import { SpamList, type SpamRow } from "@/components/enquiries/spam-list";
 import { BlockedList, type BlockRow } from "@/components/enquiries/blocked-list";
 import { SpamRules } from "@/components/enquiries/spam-rules";
@@ -20,7 +21,7 @@ import { DEFAULT_SPAM_PHRASES } from "@/lib/integrations/spam";
 
 export const metadata = { title: "Enquiries" };
 
-type Row = Enquiry & { customer: { name: string } | null };
+type Row = Enquiry & { customer: { name: string } | null; starred_at?: string | null; star_note?: string | null };
 
 export default async function EnquiriesPage({ searchParams }: {
   searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string }>;
@@ -118,6 +119,7 @@ export default async function EnquiriesPage({ searchParams }: {
     .order("received_at", { ascending: false })
     .limit(500);
   if (statusKey === "open") query = query.in("status", OPEN_ENQUIRY_STATUSES);
+  else if (statusKey === "starred") query = query.not("starred_at", "is", null).neq("status", "spam");
   else if (statusKey !== "all") query = query.eq("status", statusKey);
   else query = query.neq("status", "spam");
   if (sp.source) query = query.eq("source", sp.source);
@@ -131,20 +133,29 @@ export default async function EnquiriesPage({ searchParams }: {
     }
   }
 
-  const [{ data, error }, { data: allStatuses, error: e2 }] = await Promise.all([
-    query,
-    supabase.from("enquiries").select("status").eq("organisation_id", org.id).neq("status", "spam"),
-  ]);
+  const statusRows = async () => {
+    const r = await supabase.from("enquiries").select("status, starred_at").eq("organisation_id", org.id).neq("status", "spam");
+    // Before the 0046 database update there's no star column
+    if (r.error && /starred_at/.test(r.error.message)) return supabase.from("enquiries").select("status").eq("organisation_id", org.id).neq("status", "spam");
+    return r;
+  };
+  const [{ data, error }, { data: allStatuses, error: e2 }] = await Promise.all([query, statusRows()]);
+  if (error && statusKey === "starred" && /starred_at/.test(error.message)) throw new Error("Stars need the 0046 database update — run it in Supabase, then refresh.");
   if (error || e2) throw new Error(`Could not load enquiries: ${(error ?? e2)!.message}`);
-  const rows = (data ?? []) as Row[];
-  const counts: Record<string, number> = { all: allStatuses?.length ?? 0, open: 0 };
-  for (const r of allStatuses ?? []) {
+  // Starred ones first (newest star first), then the usual newest-received order
+  const rows = ((data ?? []) as Row[]).map((r, i) => ({ r, i }))
+    .sort((a, b) => (b.r.starred_at ? 1 : 0) - (a.r.starred_at ? 1 : 0) || (a.r.starred_at && b.r.starred_at ? b.r.starred_at.localeCompare(a.r.starred_at) : 0) || a.i - b.i)
+    .map((x) => x.r);
+  const counts: Record<string, number> = { all: allStatuses?.length ?? 0, open: 0, starred: 0 };
+  for (const r of (allStatuses ?? []) as { status: string; starred_at?: string | null }[]) {
+    if (r.starred_at) counts.starred++;
     counts[r.status] = (counts[r.status] ?? 0) + 1;
     if (OPEN_ENQUIRY_STATUSES.includes(r.status as EnquiryStatus)) counts.open++;
   }
 
   const tabs = [
     { key: "open", label: "Open" },
+    { key: "starred", label: "★ Starred" },
     ...ENQUIRY_STATUS_ORDER.map((s) => ({ key: s, label: ENQUIRY_STATUS[s].label })),
     { key: "all", label: "All" },
   ];
@@ -196,10 +207,11 @@ export default async function EnquiriesPage({ searchParams }: {
             ]}
           />
         </div>
-        {rows.length > 0 && <InboxBulkBar total={rows.length} />}
+        {rows.length > 0 && <InboxBulkBar total={rows.length} canDelete={["owner", "admin", "manager"].includes(role)} />}
+        <p id="enquiry-star-status" hidden className="border-b border-line px-4 py-2 text-[0.7812rem] font-medium text-rose-700" />
         {rows.length === 0 ? (
-          <EmptyState title="No enquiries match" action={<ButtonLink href="/enquiries" size="sm">Clear filters</ButtonLink>}>
-            Try another status or clear your filters.
+          <EmptyState title={statusKey === "starred" ? "Nothing starred" : "No enquiries match"} action={<ButtonLink href="/enquiries" size="sm">{statusKey === "starred" ? "Back to inbox" : "Clear filters"}</ButtonLink>}>
+            {statusKey === "starred" ? "Star an enquiry you need to think about and it'll wait here — with a note on what to think about." : "Try another status or clear your filters."}
           </EmptyState>
         ) : (
           <>
@@ -210,13 +222,14 @@ export default async function EnquiriesPage({ searchParams }: {
               const unread = e.status === "new" || e.status === "needs_review";
               return (
                 <li key={e.id} className="relative flex items-start">
-                  <span className="pl-4 pt-3.5"><RowCheck id={e.id} label={e.title} /></span>
+                  <span className="flex flex-col items-center gap-1 pl-4 pt-3.5"><RowCheck id={e.id} label={e.title} /><StarToggle id={e.id} starred={!!e.starred_at} note={e.star_note} /></span>
                   <Link href={`/enquiries/${e.id}`} className="flex min-h-[56px] min-w-0 flex-1 items-start gap-3 px-3 py-3 active:bg-zinc-50">
                     <div className="min-w-0 flex-1">
                       <div className={cn("truncate text-[0.8438rem] text-ink", unread ? "font-semibold" : "font-medium")}>
                         {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
                       </div>
                       <div className="truncate text-[0.7812rem] text-ink-muted">{e.title}</div>
+                      {e.star_note && <div className="truncate text-[0.75rem] text-amber-800">★ {e.star_note}</div>}
                       <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
                         {e.event_date ? fmtDate(e.event_date) : "No date"} · {relative(e.received_at)}
                         {na.due && na.due < now ? <span className="font-medium text-rose-700"> · Overdue</span> : null}
@@ -237,6 +250,7 @@ export default async function EnquiriesPage({ searchParams }: {
               <thead>
                 <tr className="border-b border-line text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                   <th className="w-10 px-4 py-2.5" aria-label="Select" />
+                  <th className="w-8 py-2.5" aria-label="Star" />
                   {["Customer", "Event", "Type", "Event date", "Received", "Source", "Budget", "Status", "Assigned", "Last contact", "Next action"].map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", h === "Budget" && "text-right")}>{h}</th>
                   ))}
@@ -248,8 +262,9 @@ export default async function EnquiriesPage({ searchParams }: {
                   const na = enquiryNextAction(e);
                   const unread = e.status === "new" || e.status === "needs_review";
                   return (
-                    <tr key={e.id} className="relative hover:bg-zinc-50/70">
+                    <tr key={e.id} className={cn("relative hover:bg-zinc-50/70", e.starred_at && "bg-amber-50/40")}>
                       <td className="px-4 py-3"><RowCheck id={e.id} label={e.title} /></td>
+                      <td className="py-3"><StarToggle id={e.id} starred={!!e.starred_at} note={e.star_note} /></td>
                       <td className="px-4 py-3">
                         <Link href={`/enquiries/${e.id}`} className="after:absolute after:inset-0">
                           <span className={cn("block max-w-[200px] truncate text-ink", unread ? "font-semibold" : "font-medium")}>
@@ -263,6 +278,7 @@ export default async function EnquiriesPage({ searchParams }: {
                       <td className="max-w-[240px] px-4 py-3">
                         <span className="block truncate text-ink">{e.title}</span>
                         <span className="text-[0.75rem] text-ink-faint">ENQ-{e.number}{e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
+                        {e.star_note && <span className="block truncate text-[0.75rem] text-amber-800" title={e.star_note}>★ {e.star_note}</span>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.event_type ?? "—"}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{fmtDate(e.event_date)}</td>
