@@ -295,7 +295,8 @@ export default async function DashboardPage() {
         <div className="space-y-6">
           {streams && <RevenueStreams data={streams} currency={cur} />}
           <Card>
-            <CardHeader title="Tasks requiring attention" subtitle={`${tasks.filter((t) => t.due_at && t.due_at < nowIso).length} overdue`} />
+            <CardHeader title="Tasks requiring attention" subtitle={`${tasks.filter((t) => t.due_at && t.due_at < nowIso).length} overdue`}
+              action={<Link href="/tasks" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">To-do list</Link>} />
             {tasks.length === 0 ? <EmptyState title="No open tasks" /> : (
               <ul className="divide-y divide-line border-t border-line">
                 {tasks.map((t) => {

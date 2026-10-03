@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Globe, BarChart3, Settings, ShieldCheck, Briefcase,
+  CreditCard, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
@@ -13,6 +13,7 @@ import type { OrgRole } from "@/lib/types";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/tasks", label: "To-do", icon: ListTodo, countKey: "todo" as const },
   { href: "/enquiries", label: "Enquiries", icon: Inbox, countKey: "enquiries" as const },
   { href: "/crm", label: "CRM", icon: Workflow },
   { href: "/quotes", label: "Quotes", icon: FileText },
@@ -27,7 +28,7 @@ const NAV = [
   { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgName: string; counts: { enquiries: number }; isSuperAdmin?: boolean; role: OrgRole }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole }) {
   const pathname = usePathname();
   const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff"));
   return (
@@ -39,7 +40,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgNa
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
-          const count = item.countKey ? counts[item.countKey] : 0;
+          const count = item.countKey ? counts[item.countKey] ?? 0 : 0;
           return (
             <Link
               key={item.href}

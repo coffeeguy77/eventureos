@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
@@ -22,6 +22,7 @@ const TABS = [
 ];
 
 const MORE = [
+  { href: "/tasks", label: "To-do", icon: ListTodo },
   { href: "/crm", label: "CRM", icon: Workflow },
   { href: "/quotes", label: "Quotes", icon: FileText },
   { href: "/clients", label: "Clients", icon: Users },

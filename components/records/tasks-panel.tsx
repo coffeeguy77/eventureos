@@ -55,6 +55,10 @@ export function TasksPanel({ tasks, members, action }: {
               {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
+          <label className="flex items-center gap-2 text-[0.75rem] text-ink-muted">
+            <input type="checkbox" name="remind" defaultChecked className="h-4 w-4 rounded border-line-strong accent-brand-600" />
+            Add a reminder to the calendar at the due time
+          </label>
           <div className="flex justify-end gap-2">
             <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setAdding(false)}>Cancel</Button>
             <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Adding…" : "Add task"}</Button>

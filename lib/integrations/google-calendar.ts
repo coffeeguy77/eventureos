@@ -80,6 +80,8 @@ interface CalRow {
   id: string; calendar_connection_id: string; event_id: string | null; title: string; starts_at: string; ends_at: string;
   all_day: boolean; location: string | null; kind: string; external_event_id: string | null; sync_status: string;
   last_synced_at: string | null; updated_at: string; attendees: string[] | null;
+  /** Task reminders only: notes shown in the Google event */
+  description?: string | null;
 }
 
 export const DEFAULT_FREE_WEEKDAYS = [6];
@@ -156,6 +158,17 @@ function eventBody(ctx: SyncContext, ce: CalRow, job?: JobInfo | null, freeDays:
       extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
     };
   }
+  if (ce.kind === "task") {
+    // A follow-up reminder: shows as Free (never blocks bookings) and pops up at the time it's due
+    return {
+      summary: `Follow up: ${ce.title}`,
+      description: `${ce.description ? `${ce.description}\n\n` : ""}To-do in EventureOS — ${appBaseUrl()}/tasks`,
+      start: { dateTime: ce.starts_at, timeZone: tz }, end: { dateTime: ce.ends_at, timeZone: tz },
+      transparency: "transparent",
+      reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 0 }] },
+      extendedProperties: { private: { eventureos_id: ce.id, eventureos_org: ctx.org.id } },
+    };
+  }
   const start = ce.all_day ? { date: localDate(ce.starts_at, tz) } : { dateTime: ce.starts_at, timeZone: tz };
   const endDate = localDate(ce.ends_at, tz);
   const endExclusive = new Date(endDate + "T00:00:00Z");
@@ -212,7 +225,7 @@ async function guestLists(ctx: SyncContext, eventIds: string[], includeClients: 
 export async function syncGoogleCalendar(ctx: SyncContext) {
   const logId = await startSyncLog(ctx, "calendar", "outbound");
   const s = (ctx.integration.settings ?? {}) as CalendarSettings;
-  const kinds = s.sync_kinds?.length ? s.sync_kinds : DEFAULT_SYNC_KINDS;
+  const kinds = [...new Set([...(s.sync_kinds?.length ? s.sync_kinds : DEFAULT_SYNC_KINDS), "task"])]; // follow-up reminders always go to the calendar
   let pushed = 0, failed = 0, pulled = 0;
   const errors: string[] = [];
   try {
@@ -354,4 +367,36 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
     await finishSyncLog(ctx, logId, "error", pushed, `Google Calendar sync failed: ${errMessage(e)}`);
     throw e;
   }
+}
+
+
+/** Push one calendar entry (e.g. a follow-up reminder) to Google straight away, rather than waiting for the next sync. */
+export async function pushCalendarEntry(ctx: SyncContext, id: string, description?: string | null): Promise<void> {
+  const { data: ce } = await ctx.db.from("calendar_events")
+    .select("id, calendar_connection_id, event_id, title, starts_at, ends_at, all_day, location, kind, external_event_id, sync_status, last_synced_at, updated_at, attendees, conn:calendar_connections(external_calendar_id, sync_enabled, provider)")
+    .eq("organisation_id", ctx.org.id).eq("id", id).maybeSingle();
+  const row = ce as unknown as (CalRow & { conn: { external_calendar_id: string | null; sync_enabled: boolean; provider: string } | null }) | null;
+  if (!row?.conn?.external_calendar_id || !row.conn.sync_enabled || row.conn.provider !== "google") return;
+  const calId = row.conn.external_calendar_id;
+  const body = eventBody(ctx, { ...row, description }, null);
+  let g: GEvent | null = null;
+  if (row.external_event_id) {
+    try {
+      g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(row.external_event_id)}?sendUpdates=none`,
+        { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch");
+      if (g.status === "cancelled") g = null;
+    } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
+  }
+  if (!g) {
+    g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events?sendUpdates=none`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.insert");
+  }
+  await ctx.db.from("calendar_events").update({ external_event_id: g.id, sync_status: "synced", last_synced_at: new Date().toISOString() }).eq("id", row.id);
+}
+
+/** Remove an entry's event from Google (already gone is fine). */
+export async function deleteGoogleEvent(ctx: SyncContext, calendarId: string, externalEventId: string): Promise<void> {
+  try {
+    await apiJSON(ctx, `${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalEventId)}?sendUpdates=none`, { method: "DELETE" }, "Google events.delete");
+  } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
 }

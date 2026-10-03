@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
+import { syncTaskReminder } from "@/lib/tasks/reminders";
 
 type Link = { eventId?: string | null; enquiryId?: string | null; customerId?: string | null };
 
@@ -39,7 +40,7 @@ export async function createTask(link: Link, form: FormData) {
   const due = String(form.get("due") ?? "");
   const assignee = String(form.get("assigned_to") ?? "") || null;
   const { supabase, org, user, profile } = await requireOrg();
-  const { error } = await supabase.from("tasks").insert({
+  const { data: created, error } = await supabase.from("tasks").insert({
     organisation_id: org.id,
     title,
     due_at: due ? new Date(due).toISOString() : null,
@@ -48,14 +49,17 @@ export async function createTask(link: Link, form: FormData) {
     enquiry_id: link.enquiryId ?? null,
     customer_id: link.customerId ?? null,
     created_by: user.id,
-  });
+  }).select("id").single();
   if (error) throw new Error(`Could not create task: ${error.message}`);
+  // Follow-up reminder in the calendar (ticked by default when there's a due time)
+  if (due && form.get("remind") === "on") await syncTaskReminder(supabase, org.id, user.id, created.id, { remind: true });
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "task.created", entityType: "task",
     summary: `${actorName(profile)} created task “${title}”`, eventId: link.eventId, enquiryId: link.enquiryId, customerId: link.customerId,
   });
   revalidatePath(pathFor(link));
   revalidatePath("/dashboard");
+  revalidatePath("/tasks");
 }
 
 export async function setTaskDone(taskId: string, done: boolean) {
@@ -68,11 +72,13 @@ export async function setTaskDone(taskId: string, done: boolean) {
     .select("title, event_id, enquiry_id, customer_id")
     .single();
   if (error) throw new Error(`Could not update task: ${error.message}`);
+  await syncTaskReminder(supabase, org.id, user.id, taskId); // done → reminder comes off the calendar
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: done ? "task.completed" : "task.reopened", entityType: "task", entityId: taskId,
     summary: `${actorName(profile)} ${done ? "completed" : "reopened"} task “${data.title}”`,
     eventId: data.event_id, enquiryId: data.enquiry_id, customerId: data.customer_id,
   });
   revalidatePath("/dashboard");
+  revalidatePath("/tasks");
   revalidatePath(pathFor({ eventId: data.event_id, enquiryId: data.enquiry_id, customerId: data.customer_id }));
 }
