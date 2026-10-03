@@ -26,6 +26,8 @@ import { EVENT_STATUS, INVOICE_STATUS, QUOTE_STATUS } from "@/lib/status";
 import { addDaysISO, daysBetween, fmtDate, fmtDateTime, fmtTime, money, relative, relativeDay, timeRange, todayISO, zonedMidnightUTC } from "@/lib/format";
 import type { ActivityLog, EmailMessage, EmailThread, EventRecord, InvoiceStatus, QuoteStatus, Task } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { DeleteConfirm } from "@/components/records/delete-confirm";
+import { deleteJob } from "../actions";
 
 export const metadata = { title: "Event" };
 
@@ -521,7 +523,17 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           </Card>
         )}
       </div>
-      <p className="mt-8 text-[0.7188rem] text-ink-faint">Last updated {relative((ev as { updated_at: string }).updated_at)}</p>
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[0.7188rem] text-ink-faint">Last updated {relative((ev as { updated_at: string }).updated_at)}</p>
+        {["owner", "admin", "manager"].includes(role) && (invoices.some((i) => Number(i.amount_paid) > 0)
+          ? <p className="text-[0.7188rem] text-ink-faint">Money has been received on this job, so it can&apos;t be deleted — set it to Cancelled and credit any balance instead.</p>
+          : (
+            <DeleteConfirm label="Delete job" variant="chip" title={`Delete EV-${e.number} “${e.name}”?`} run={deleteJob.bind(null, e.id, undefined)}>
+              <p>For tests and mistakes. This removes the job{quotes.length ? `, its ${quotes.length === 1 ? "quote" : `${quotes.length} quotes`}` : ""}{invoices.length ? `, ${invoices.length === 1 ? "its unpaid invoice" : `${invoices.length} unpaid invoices`}` : ""}, the enquiry it came from, its emails, crew, to-dos, notes, files and calendar entries (Google Calendar too). The client record stays.</p>
+              <p>Nothing changes in Gmail{invoices.some((i) => i.xero_invoice_id && i.status !== "void") ? ", but invoices in Xero must be voided first" : ""}. This can&apos;t be undone — for a real cancellation, set the job to Cancelled instead so the history stays.</p>
+            </DeleteConfirm>
+          ))}
+      </div>
     </div>
   );
 }

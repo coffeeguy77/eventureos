@@ -9,6 +9,8 @@ import { cleanSections, templateTotals } from "@/lib/quotes/templates";
 import type { TemplateChoice } from "@/components/quotes/template-picker";
 import type { DrawerThread } from "@/components/quotes/email-drawer";
 import { QuoteBuilder, DuplicateButton } from "@/components/quotes/builder";
+import { DeleteConfirm } from "@/components/records/delete-confirm";
+import { deleteQuote } from "@/app/(app)/quotes/actions";
 import { loadBillTo } from "@/lib/customers/bill-to";
 import type { PricingPackage } from "@/components/quotes/price-job";
 import type { PricedService } from "@/lib/pricing/engine";
@@ -180,6 +182,12 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
                 </Link>
               )}
               <DuplicateButton quoteId={q.id} variant="button" />
+              {["owner", "admin", "manager"].includes(role) && (
+                <DeleteConfirm label="Delete quote" title={`Delete Q-${q.number}?`} run={deleteQuote.bind(null, q.id)}>
+                  <p>Removes the quote, every version sent, and its files. The job stays.{locked ? " It's been accepted — the job stays confirmed; change its status if it's no longer going ahead." : ""}</p>
+                  <p>If it has a live invoice, delete or void that first. This can&apos;t be undone.</p>
+                </DeleteConfirm>
+              )}
             </div>
           </div>
         </div>
@@ -300,6 +308,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       billTo={billTo}
       jobPeople={jobPeople}
       canAdminAccept={["owner", "admin", "manager"].includes(role)}
+      canDelete={["owner", "admin", "manager"].includes(role)}
       clientPeople={clientPeople}
       currency={cur}
       tz={tz}

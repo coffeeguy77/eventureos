@@ -53,7 +53,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const { data: stripeInt } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
   const stripeOn = stripeInt?.status === "connected";
   const payLink = `${appBaseUrl()}/pay/${(inv as unknown as { pay_token: string }).pay_token}`;
-  const [payRes, actRes, verRes, members] = await Promise.all([
+  const [payRes, actRes, verRes, members, creditRes] = await Promise.all([
     supabase.from("payments").select("id, amount, paid_at, method, reference, xero_payment_id, created_by").eq("organisation_id", org.id).eq("invoice_id", inv.id).order("paid_at", { ascending: false }),
     supabase.from("activity_logs").select("*").eq("organisation_id", org.id).eq("entity_id", inv.id).order("created_at", { ascending: false }).limit(100),
     inv.quote_id
@@ -61,7 +61,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         .eq("organisation_id", org.id).eq("quote_id", inv.quote_id).order("version_number", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     getMembers(org.id),
+    // Before the 0047 database update there's no credits table — treat as none
+    supabase.from("invoice_credits").select("id, number, amount, credit_date, reason, xero_credit_note_id, created_by").eq("organisation_id", org.id).eq("invoice_id", inv.id).order("credit_date", { ascending: false }),
   ]);
+  const credits = (creditRes.error ? [] : creditRes.data ?? []) as { id: string; number: string; amount: number; credit_date: string; reason: string; xero_credit_note_id: string | null; created_by: string | null }[];
+  const credited = credits.reduce((t, c) => t + Number(c.amount), 0);
+  const received = Math.max(0, Number(inv.amount_paid) - credited);
   for (const r of [payRes, actRes, verRes]) if (r.error) throw new Error(`Could not load invoice details: ${r.error.message}`);
   const payments = payRes.data ?? [];
   const activity = (actRes.data ?? []) as ActivityLog[];
@@ -82,7 +87,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
   const na: NextAction =
     inv.status === "void" ? { label: "Void — no action needed", urgency: "done" }
-      : inv.status === "paid" || Number(inv.balance) <= 0 ? { label: "Paid in full", detail: payments[0] ? `Last payment ${fmtDateTime(payments[0].paid_at, tz, "date")}` : undefined, urgency: "done" }
+      : inv.status === "paid" || Number(inv.balance) <= 0 ? { label: credited > 0 ? (received > 0 ? "Settled — part paid, the rest credited" : "Settled — fully credited") : "Paid in full", detail: payments[0] ? `Last payment ${fmtDateTime(payments[0].paid_at, tz, "date")}` : undefined, urgency: "done" }
         : inv.status === "draft" ? { label: "Send the invoice to the customer", detail: xeroManaged ? "Approve it in Xero" : "Mark it as sent once it’s gone out", urgency: "normal" }
           : late ? { label: `Chase payment — ${money(inv.balance, cur)} is ${lateDays} day${lateDays === 1 ? "" : "s"} overdue`, detail: inv.customer?.email ?? undefined, urgency: "overdue" }
             : {
@@ -123,11 +128,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
           <Card>
             <CardHeader title="Amounts" subtitle={xeroManaged ? "Xero is authoritative for these values" : "Prices include GST"} />
-            <dl className="grid grid-cols-2 gap-4 px-5 pb-5 sm:grid-cols-5">
+            <dl className={cn("grid grid-cols-2 gap-4 px-5 pb-5", credited ? "sm:grid-cols-6" : "sm:grid-cols-5")}>
               <Field label="Subtotal"><span className="tabular">{money(inv.subtotal, cur)}</span></Field>
               <Field label="GST"><span className="tabular">{money(inv.tax_total, cur)}</span></Field>
               <Field label="Total"><span className="tabular font-semibold">{money(inv.total, cur)}</span></Field>
-              <Field label="Paid"><span className="tabular text-emerald-700">{money(inv.amount_paid, cur)}</span></Field>
+              <Field label="Paid"><span className="tabular text-emerald-700">{money(received, cur)}</span></Field>
+              {credited > 0 && <Field label="Credited"><span className="tabular text-amber-700">{money(credited, cur)}</span></Field>}
               <Field label="Balance"><span className={cn("tabular font-semibold", late && "text-rose-700")}>{money(inv.balance, cur)}</span></Field>
             </dl>
             {Number(inv.total) > 0 && (
@@ -180,8 +186,21 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           )}
 
           <Card>
-            <CardHeader title="Payments" subtitle={`${money(inv.amount_paid, cur)} received`} />
-            {payments.length === 0 ? <EmptyState title="No payments yet" /> : (
+            <CardHeader title="Payments" subtitle={`${money(received, cur)} received${credited ? ` · ${money(credited, cur)} credited` : ""}`} />
+            {credits.length > 0 && (
+              <ul className="divide-y divide-line border-t border-line bg-amber-50/40">
+                {credits.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className="text-[0.8125rem] font-medium text-ink">{fmtDate(c.credit_date)} · Credit note {c.number}</p>
+                      <p className="truncate text-[0.75rem] text-ink-muted" title={c.reason}>{c.reason}{c.xero_credit_note_id ? " · In Xero" : ""}{c.created_by && names[c.created_by] ? ` · by ${names[c.created_by]}` : ""}</p>
+                    </div>
+                    <span className="tabular shrink-0 text-[0.8438rem] font-medium text-amber-700">−{money(c.amount, cur)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {payments.length === 0 ? (credits.length ? null : <EmptyState title="No payments yet" />) : (
               <ul className="divide-y divide-line border-t border-line">
                 {payments.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
@@ -203,8 +222,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
             <CardHeader title="Actions" />
-            <InvoiceActions id={inv.id} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
-              today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
+            <InvoiceActions id={inv.id} number={inv.number} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
+              paid={Number(inv.amount_paid)} paidLabel={money(inv.amount_paid, cur)} today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>
 
           {open && Number(inv.balance) > 0 && (

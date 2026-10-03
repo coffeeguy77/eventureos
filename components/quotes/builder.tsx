@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
-  addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
+  addItem, addSection, deleteItem, deleteQuote, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote, adminAcceptQuote,
 } from "@/app/(app)/quotes/actions";
 import { updateEventDetails } from "@/app/(app)/events/actions";
@@ -28,6 +28,7 @@ import { MenuPicker } from "./menu-picker";
 import type { PricedService } from "@/lib/pricing/engine";
 import { QuoteDocument } from "./quote-document";
 import { SendQuoteDialog } from "./send-dialog";
+import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { SectionEditor, type Col, type LineHelper, type SectionHandlers } from "./section-editor";
 import { SaveAsTemplateButton, TemplatePicker, type TemplateChoice } from "./template-picker";
 import { EmailDrawer, type DrawerThread } from "./email-drawer";
@@ -62,6 +63,8 @@ export interface BuilderProps {
   jobPeople?: JobPerson[];
   /** Owners / admins / managers can accept on the client's behalf */
   canAdminAccept?: boolean;
+  /** Owners / admins / managers can delete the quote */
+  canDelete?: boolean;
   clientPeople?: ClientPerson[];
   currency: string;
   tz: string;
@@ -569,6 +572,12 @@ export function QuoteBuilder(p: BuilderProps) {
             </button>
           )}
           <DuplicateButton quoteId={quote.id} onError={(m) => showToast({ message: m, tone: "error" })} />
+          {p.canDelete && (
+            <DeleteConfirm label="Delete quote" variant="chip" title={`Delete Q-${quote.number}?`} run={async () => { await flushAll(); return deleteQuote(quote.id); }}>
+              <p>Removes this quote{cv ? ", every version sent to the customer," : ""} and its files. The job stays.</p>
+              <p>If it has a live invoice, delete or void that first. This can&apos;t be undone.</p>
+            </DeleteConfirm>
+          )}
           {p.templates && <SaveAsTemplateButton quoteId={quote.id} defaultName={quote.title} onDone={(m, ok) => showToast({ message: m, tone: ok ? "ok" : "error" }, 7000)} />}
         </div>
 

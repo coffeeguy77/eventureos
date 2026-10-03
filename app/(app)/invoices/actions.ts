@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { money, todayISO, zonedTimeUTC } from "@/lib/format";
+import { buildContext } from "@/lib/integrations/sync-runner";
+import { errMessage } from "@/lib/integrations/runtime";
+import { creditInXero, voidInXero } from "@/lib/integrations/xero-invoice-ops";
 
 export type InvoiceFormState = { error?: string; ok?: string } | undefined;
 
@@ -93,12 +96,19 @@ export async function voidInvoice(invoiceId: string, _prev: InvoiceFormState, fo
   const { ctx, inv } = await loadInvoice(invoiceId);
   if (!inv) return { error: "Invoice not found." };
   if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can void invoices." };
-  if (inv.xero_invoice_id) return { error: XERO_MSG };
   if (inv.status === "void") return { error: "This invoice is already void." };
-  if (Number(inv.amount_paid) > 0) return { error: `${money(inv.amount_paid, ctx.org.currency)} has been paid on this invoice. Refund or reallocate the payment before voiding it.` };
+  if (Number(inv.amount_paid) > 0) return { error: `${money(inv.amount_paid, ctx.org.currency)} has been paid or credited on this invoice, so it can't be voided. Use “Credit the balance” to write off what's left.` };
   const reason = str(form.get("reason"));
   if (!reason) return { error: "Give a reason for voiding the invoice." };
   if (reason.length > 500) return { error: "Keep the reason under 500 characters." };
+  // In Xero too: void it there first, so the two never disagree
+  let inXero = "";
+  if (inv.xero_invoice_id) {
+    try {
+      const sctx = await buildContext(ctx.supabase, "user", ctx.org.id, "xero", ctx.user.id);
+      inXero = (await voidInXero(sctx, inv.xero_invoice_id)) === "DELETED" ? " (deleted in Xero, where it was a draft)" : " (voided in Xero too)";
+    } catch (e) { return { error: errMessage(e) }; }
+  }
 
   const { error } = await ctx.supabase.from("invoices").update({ status: "void" })
     .eq("id", inv.id).eq("organisation_id", ctx.org.id);
@@ -106,12 +116,71 @@ export async function voidInvoice(invoiceId: string, _prev: InvoiceFormState, fo
   await logActivity(ctx.supabase, {
     orgId: ctx.org.id, actorId: ctx.user.id, action: "invoice.voided", entityType: "invoice", entityId: inv.id,
     eventId: inv.event_id, customerId: inv.customer_id,
-    summary: `${actorName(ctx.profile)} voided ${inv.number} — ${reason}`,
+    summary: `${actorName(ctx.profile)} voided ${inv.number}${inXero} — ${reason}`,
     changes: { status: [inv.status, "void"] },
     metadata: { reason },
   });
   revalidateInvoice(inv.id, inv.event_id, inv.customer_id);
-  return { ok: "Invoice voided" };
+  return { ok: `Invoice voided${inXero}` };
+}
+
+/** Delete an invoice nobody has paid anything on (not in Xero — those are voided instead). Goes back to the job. */
+export async function deleteInvoice(invoiceId: string): Promise<InvoiceFormState> {
+  const { ctx, inv } = await loadInvoice(invoiceId);
+  if (!inv) return { error: "Invoice not found." };
+  if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can delete invoices." };
+  if (inv.xero_invoice_id) return { error: `${inv.number} is in Xero — void it instead (that voids it in Xero too).` };
+  if (Number(inv.amount_paid) > 0) return { error: `Money has been received on ${inv.number} — credit the balance instead.` };
+  const { error } = await ctx.supabase.rpc("delete_invoice", { p_org: ctx.org.id, p_invoice_id: inv.id });
+  if (error) return { error: /delete_invoice/.test(error.message) ? "Run the 0047 database update in Supabase first." : error.message };
+  await logActivity(ctx.supabase, {
+    orgId: ctx.org.id, actorId: ctx.user.id, action: "invoice.deleted", entityType: inv.event_id ? "event" : "customer", entityId: inv.event_id ?? inv.customer_id,
+    eventId: inv.event_id, customerId: inv.customer_id,
+    summary: `${actorName(ctx.profile)} deleted invoice ${inv.number} (${money(inv.total, ctx.org.currency)}, nothing paid)`,
+  });
+  revalidateInvoice(inv.id, inv.event_id, inv.customer_id);
+  redirect(inv.event_id ? `/events/${inv.event_id}?tab=invoice` : `/clients/${inv.customer_id}?tab=invoices`);
+}
+
+/**
+ * Credit what's still owing — e.g. a deposit was paid and the event was cancelled. Settles the invoice without
+ * pretending the money came in. For Xero invoices the credit note is made and applied in Xero first.
+ */
+export async function creditInvoice(invoiceId: string, _prev: InvoiceFormState, form: FormData): Promise<InvoiceFormState> {
+  const { ctx, inv } = await loadInvoice(invoiceId);
+  if (!inv) return { error: "Invoice not found." };
+  if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can credit invoices." };
+  if (inv.status === "void") return { error: "This invoice is void." };
+  const balance = Math.round((Number(inv.total) - Number(inv.amount_paid)) * 100) / 100;
+  if (balance <= 0) return { error: "Nothing is owing on this invoice." };
+  const amt = amount(form.get("amount"));
+  const reason = str(form.get("reason"));
+  const today = todayISO(ctx.org.timezone);
+  const date = str(form.get("credit_date")) ?? today;
+  if (amt == null || Number.isNaN(amt) || amt <= 0) return { error: "Enter the amount to credit." };
+  if (Math.abs(amt * 100 - Math.round(amt * 100)) > 1e-6) return { error: "Amounts can have at most two decimal places." };
+  if (amt > balance + 0.001) return { error: `That's more than the ${money(balance, ctx.org.currency, { cents: true })} owing.` };
+  if (!reason) return { error: "Give a reason — it goes on the credit note." };
+  if (reason.length > 500) return { error: "Keep the reason under 500 characters." };
+  if (!DATE.test(date) || date > today) return { error: "Choose today or an earlier date." };
+  if (inv.status === "draft") return { error: "This invoice is still a draft — delete or void it instead of crediting it." };
+
+  let xero: { id: string; number: string | null } | null = null;
+  if (inv.xero_invoice_id) {
+    try {
+      const sctx = await buildContext(ctx.supabase, "user", ctx.org.id, "xero", ctx.user.id);
+      xero = await creditInXero(sctx, inv.xero_invoice_id, Math.round(amt * 100) / 100, date, reason);
+    } catch (e) { return { error: errMessage(e) }; }
+  }
+  const { error } = await ctx.supabase.rpc("credit_invoice", {
+    p_invoice_id: inv.id, p_amount: Math.round(amt * 100) / 100, p_reason: reason, p_date: date, p_number: xero?.number ?? null, p_xero_credit_note_id: xero?.id ?? null,
+  });
+  if (error) {
+    const msg = /credit_invoice/.test(error.message) ? "Run the 0047 database update in Supabase first." : error.message;
+    return { error: xero ? `The credit note was made in Xero${xero.number ? ` (${xero.number})` : ""}, but EventureOS couldn't record it: ${msg}. The next Xero sync will update the balance.` : msg };
+  }
+  revalidateInvoice(inv.id, inv.event_id, inv.customer_id);
+  return { ok: `${money(amt, ctx.org.currency, { cents: true })} credited${xero ? ` — credit note ${xero.number ?? ""} made and applied in Xero` : ""}.` };
 }
 
 export async function createInvoice(_prev: InvoiceFormState, form: FormData): Promise<InvoiceFormState> {

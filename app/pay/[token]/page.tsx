@@ -24,6 +24,10 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   // The client's details (the pay link's token is already checked)
   const svc = createServiceClient();
   const { data: evc } = inv.event_id ? await svc.from("events").select("primary_contact_id").eq("id", inv.event_id).maybeSingle() : { data: null };
+  // Credit notes (e.g. balance written off after a cancellation) — none before the 0047 database update
+  const { data: cr, error: crErr } = await svc.from("invoice_credits").select("amount").eq("invoice_id", inv.id);
+  const credited = crErr ? 0 : (cr ?? []).reduce((t, c) => t + Number(c.amount), 0);
+  const received = Math.max(0, Number(inv.amount_paid) - credited);
   const bill = billToLines(await loadBillTo(svc, inv.organisation_id, inv.customer_id, evc?.primary_contact_id ?? null).catch(() => null));
   const kind = inv.kind === "deposit" ? "Deposit invoice" : inv.kind === "final" ? "Final invoice" : "Invoice";
 
@@ -49,7 +53,8 @@ export default async function PayPage({ params, searchParams }: { params: Promis
 
             <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[0.875rem]">
               <div className="flex justify-between"><dt className="text-ink-muted">Invoice total</dt><dd className="text-ink">{money(inv.total, cur, { cents: true })}</dd></div>
-              {Number(inv.amount_paid) > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="text-ink">{money(inv.amount_paid, cur, { cents: true })}</dd></div>}
+              {received > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="text-ink">{money(received, cur, { cents: true })}</dd></div>}
+              {credited > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Credited</dt><dd className="text-ink">−{money(credited, cur, { cents: true })}</dd></div>}
               {inv.due_date && <div className="flex justify-between"><dt className="text-ink-muted">Due</dt><dd className="text-ink">{fmtDate(inv.due_date, "long")}</dd></div>}
               <div className="flex justify-between border-t border-line pt-3 text-[1.0625rem] font-semibold"><dt className="text-ink">Amount due</dt><dd className="text-ink">{money(justPaid ? 0 : inv.balance, cur, { cents: true })}</dd></div>
             </dl>
@@ -58,7 +63,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
             {justPaid || inv.status === "paid" ? (
               <div className="text-center">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
-                <p className="mt-2 text-[1rem] font-semibold text-ink">{justPaid ? "Payment received — thank you!" : "This invoice is paid — thank you!"}</p>
+                <p className="mt-2 text-[1rem] font-semibold text-ink">{justPaid ? "Payment received — thank you!" : credited > 0 ? "Nothing more to pay on this invoice." : "This invoice is paid — thank you!"}</p>
                 <p className="mt-1 text-[0.8125rem] text-ink-muted">{justPaid ? "Stripe will email your receipt. " : ""}{inv.org.name} has been notified.</p>
               </div>
             ) : canPay ? (

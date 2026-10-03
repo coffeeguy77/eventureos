@@ -165,6 +165,29 @@ export async function duplicateQuote(quoteId: string): Promise<ActionResult<neve
   redirect(`/quotes/${newId}`);
 }
 
+/** Delete a quote (tests, mistakes, a replaced quote). Its live invoices must be deleted or voided first. */
+export async function deleteQuote(quoteId: string): Promise<ActionResult<never>> {
+  let back = "/quotes";
+  const res = await run(async () => {
+    const { supabase, org, user, profile, role } = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(role)) fail("Only owners, admins and managers can delete quotes.");
+    const q = await loadQuote(supabase, org.id, quoteId);
+    const { data: docs } = await supabase.from("documents").select("storage_path").eq("organisation_id", org.id).eq("quote_id", q.id);
+    const { error } = await supabase.rpc("delete_quote", { p_org: org.id, p_quote_id: q.id });
+    if (error) fail(/delete_quote/.test(error.message) ? "Run the 0047 database update in Supabase first." : error.message);
+    const paths = (docs ?? []).map((d) => d.storage_path as string | null).filter((x): x is string => !!x && x.startsWith(`${org.id}/`));
+    if (paths.length) await supabase.storage.from("documents").remove(paths).catch(() => undefined);
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote.deleted", entityType: "event", entityId: q.event_id, eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} deleted Quote Q-${q.number} “${q.title}”`,
+    });
+    refresh(q);
+    back = `/events/${q.event_id}?tab=quote`;
+  });
+  if (!res.ok) return res;
+  redirect(back);
+}
+
 // ---------------------------------------------------------------------------
 // header, notes, terms
 // ---------------------------------------------------------------------------
