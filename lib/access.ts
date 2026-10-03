@@ -7,7 +7,7 @@ import type { OrgRole } from "@/lib/types";
  *  - sales: enquiries, clients, events, quotes, calendar — no invoices, payments, reports or settings
  *  - staff (field staff): only My jobs
  */
-const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings"];
+const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages"];
 const STAFF_ALLOWED = ["/my-jobs", "/my-signature"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");

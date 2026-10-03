@@ -2,27 +2,57 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
-import { saveCrewMember, type CrewInput } from "@/app/(app)/events/crew-actions";
+import { ArrowDown, ArrowUp, Copy, Pencil, Plus, Send, Smartphone } from "lucide-react";
+import { inviteCrewToApp, moveCrewRank, saveCrewMember, setDefaultStaffRate, setStaffRate, type CrewInput } from "@/app/(app)/events/crew-actions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label } from "@/components/ui/form";
 
-export interface CrewMember { id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean }
+export interface CrewMember {
+  id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
+  hourly_rate?: number | null; rank?: number; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
+}
+type AppInfo = { ready: boolean; slug: string; rate: number };
 
 /** People who work jobs but don't log in to EventureOS — they receive the calendar invites. */
-export function CrewList({ rows, canEdit }: { rows: CrewMember[]; canEdit: boolean }) {
+export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewMember[]; canEdit: boolean; canAdmin?: boolean; app?: AppInfo }) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok?: string) => start(async () => {
+    const r = await fn().catch(() => ({ ok: false, error: "Couldn't reach the server." }));
+    setNote(r.ok ? (ok ? { text: ok, ok: true } : null) : { text: r.error ?? "Something went wrong.", ok: false });
+    router.refresh();
+  });
   const active = rows.filter((r) => r.active), inactive = rows.filter((r) => !r.active);
+  const appUrl = app?.slug ? `${typeof window === "undefined" ? "" : window.location.origin}/crew/${app.slug}` : "";
   return (
     <div className="px-4 pb-5 sm:px-5">
+      {app?.ready && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-zinc-50 px-3 py-2.5 text-[0.7812rem] text-ink-muted ring-1 ring-inset ring-line">
+          <span className="inline-flex items-center gap-1.5"><Smartphone className="h-4 w-4 text-ink-faint" />Staff app: <code className="rounded bg-surface px-1.5 py-0.5 text-ink">/crew/{app.slug}</code>
+            <button type="button" onClick={() => { void navigator.clipboard?.writeText(appUrl); setNote({ text: "Link copied.", ok: true }); }} className="text-brand-700 hover:underline" aria-label="Copy staff app link"><Copy className="h-3.5 w-3.5" /></button></span>
+          <span className="inline-flex items-center gap-1.5">Default pay rate
+            <RateInput value={app.rate} disabled={!canAdmin || pending} onSave={(v) => run(() => setDefaultStaffRate(v ?? 30), "Default rate saved.")} required /> /hr
+          </span>
+        </div>
+      )}
+      {note && <p className={`mb-2 text-[0.75rem] ${note.ok ? "text-emerald-700" : "text-rose-700"}`}>{note.text}</p>}
       {rows.length === 0 && editing !== "new" && <p className="text-[0.8125rem] text-ink-muted">Nobody yet. Add your casual staff here — no login needed.</p>}
       <ul className="divide-y divide-line">
         {[...active, ...inactive].map((r) => editing === r.id
           ? <li key={r.id} className="py-3"><CrewForm initial={r} onDone={() => setEditing(null)} /></li>
           : (
-            <li key={r.id} className={`flex items-center gap-3 py-2.5 ${r.active ? "" : "opacity-60"}`}>
+            <li key={r.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${r.active ? "" : "opacity-60"}`}>
+              {canEdit && app?.ready && r.active && (
+                <span className="flex flex-col">
+                  <button type="button" disabled={pending || active[0]?.id === r.id} onClick={() => run(() => moveCrewRank(r.id, -1))} aria-label={`Move ${r.name} up`} className="rounded p-0.5 text-ink-faint hover:bg-zinc-100 hover:text-ink disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                  <button type="button" disabled={pending || active[active.length - 1]?.id === r.id} onClick={() => run(() => moveCrewRank(r.id, 1))} aria-label={`Move ${r.name} down`} className="rounded p-0.5 text-ink-faint hover:bg-zinc-100 hover:text-ink disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                </span>
+              )}
+              {app?.ready && r.active && <span className="w-5 text-center text-[0.75rem] font-semibold tabular text-ink-faint">{active.findIndex((a) => a.id === r.id) + 1}</span>}
               <Avatar name={r.name} size={30} />
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-medium text-ink">{r.name}
@@ -31,7 +61,20 @@ export function CrewList({ rows, canEdit }: { rows: CrewMember[]; canEdit: boole
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
                 <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", r.phone].filter(Boolean).join(" · ")}</p>
+                {app?.ready && r.active && (
+                  <p className="text-[0.7188rem] text-ink-faint">{r.app_last_seen_at ? <span className="text-emerald-700">Using the staff app</span> : r.app_invited_at ? "Invited to the staff app" : "Not invited to the staff app yet"}</p>
+                )}
               </div>
+              {app?.ready && r.active && (
+                <span className="flex items-center gap-1 text-[0.75rem] text-ink-muted">
+                  <RateInput value={r.hourly_rate ?? null} placeholder={String(app.rate)} disabled={!canEdit || pending} onSave={(v) => run(() => setStaffRate(r.id, v), "Rate saved.")} />/hr
+                </span>
+              )}
+              {canEdit && app?.ready && r.active && r.email && (
+                <button type="button" disabled={pending} onClick={() => run(() => inviteCrewToApp(r.id), `Staff app link emailed to ${r.email}.`)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium text-brand-700 hover:bg-brand-50" title="Email them the staff app link">
+                  <Send className="h-3.5 w-3.5" />{r.app_invited_at ? "Resend app" : "Invite to app"}
+                </button>
+              )}
               {canEdit && <button type="button" onClick={() => setEditing(r.id)} className="rounded-md p-1.5 text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label={`Edit ${r.name}`}><Pencil className="h-4 w-4" /></button>}
             </li>
           ))}
@@ -81,5 +124,20 @@ function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => voi
         <Button size="sm" variant="primary" onClick={save} disabled={pending || !v.name.trim()}>{pending ? "Saving…" : "Save"}</Button>
       </div>
     </div>
+  );
+}
+
+
+/** A small $/hr box that saves on blur. Empty = use the default rate (unless required). */
+function RateInput({ value, placeholder, disabled, onSave, required }: { value: number | null; placeholder?: string; disabled?: boolean; onSave: (v: number | null) => void; required?: boolean }) {
+  const [v, setV] = useState(value == null ? "" : String(value));
+  return (
+    <span className="inline-flex items-center rounded-md border border-line bg-surface px-1.5">
+      <span className="text-ink-faint">$</span>
+      <input value={v} disabled={disabled} inputMode="decimal" placeholder={placeholder} aria-label="Hourly rate"
+        onChange={(e) => setV(e.target.value.replace(/[^0-9.]/g, ""))}
+        onBlur={() => { const n = v.trim() === "" ? null : Number(v); if (n === value || (n == null && required)) return; if (n != null && !Number.isFinite(n)) return; onSave(n); }}
+        className="h-7 w-14 bg-transparent px-1 text-right tabular text-[0.75rem] text-ink outline-none" />
+    </span>
   );
 }

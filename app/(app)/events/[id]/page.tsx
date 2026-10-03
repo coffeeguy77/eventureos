@@ -70,11 +70,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       .eq("organisation_id", org.id).eq("status", "active").neq("role", "customer").is("expires_at", null),
     supabase.from("event_contacts").select("id, contact_id, role, created_at, invited_at, contact:contacts(first_name, last_name, email, phone)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("contacts").select("id, first_name, last_name, email").eq("organisation_id", org.id).eq("customer_id", e.customer_id).order("first_name"),
-    supabase.from("event_crew").select("id, crew_member_id, role, member:crew_members(name, email)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
+    supabase.from("event_crew").select("*, member:crew_members(name, email)").eq("organisation_id", org.id).eq("event_id", e.id).order("created_at"),
     supabase.from("crew_members").select("id, name, email, role, always_invite").eq("organisation_id", org.id).eq("active", true).order("name"),
   ]);
-  const crewList: CrewRow[] = ((crewRows ?? []) as unknown as { id: string; crew_member_id: string; role: string | null; member: { name: string; email: string | null } | null }[])
-    .map((r) => ({ id: r.id, crew_member_id: r.crew_member_id, name: r.member?.name ?? "Removed", email: r.member?.email ?? null, role: r.role }));
+  const crewList: CrewRow[] = ((crewRows ?? []) as unknown as { id: string; crew_member_id: string; role: string | null; status?: string; calendar_response?: string | null; board_posted_at?: string | null; member: { name: string; email: string | null } | null }[])
+    .map((r) => ({ id: r.id, crew_member_id: r.crew_member_id, name: r.member?.name ?? "Removed", email: r.member?.email ?? null, role: r.role,
+      status: (r.status ?? "confirmed") as CrewRow["status"], calendar: r.calendar_response ?? null, onBoard: !!r.board_posted_at }));
+  const crewNeeds = { ready: "crew_needed" in (e as object), needed: (e as { crew_needed?: number | null }).crew_needed ?? null, notes: (e as { crew_notes?: string | null }).crew_notes ?? null };
   const crewOptions = (crewOpts ?? []) as CrewOption[];
   const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; invited_at: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
     .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id, invited_at: r.invited_at }))
@@ -258,7 +260,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
               <Card>
                 <CardHeader title="Team on this job" subtitle={`${staffList.length + crewList.length} rostered`} />
                 <StaffCard eventId={e.id} rows={staffList} team={teamList.map((t) => ({ id: t.id, name: t.name, role: t.role }))} canEdit={role !== "staff"} />
-                <CrewCard eventId={e.id} rows={crewList} options={crewOptions} canEdit={role === "owner" || role === "admin" || role === "manager"} />
+                <CrewCard eventId={e.id} rows={crewList} options={crewOptions} canEdit={role === "owner" || role === "admin" || role === "manager"} needs={crewNeeds} confirmed={e.status === "confirmed"} />
               </Card>
               <Card>
                 <CardHeader title="Money" action={<span className="text-right text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />

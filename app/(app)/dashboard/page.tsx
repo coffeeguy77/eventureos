@@ -3,6 +3,9 @@ import { ArrowUpRight } from "lucide-react";
 import { canManage, requireOrg, getMembers } from "@/lib/context";
 import { loadRevenueStreams } from "@/lib/revenue/load";
 import { RevenueStreams } from "@/components/dashboard/revenue-streams";
+import { StaffingCard } from "@/components/dashboard/staffing";
+import { staffingIssues } from "@/lib/crew/staffing";
+import { addDaysISO as addDaysStaff } from "@/lib/format";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -38,6 +41,7 @@ export default async function DashboardPage() {
   const cur = org.currency;
   // Revenue by stream (owners and managers only) — never let it break the dashboard
   const fyStart = Number((org.settings as Record<string, unknown> | null)?.fy_start_month) || 7;
+  const staffing = canManage(role) ? await staffingIssues(supabase, org.id, today, addDaysStaff(today, 30)).catch(() => null) : null;
   const streams = canManage(role) ? await loadRevenueStreams(supabase, org.id, today, fyStart).catch((e) => { console.error("revenue streams:", e); return null; }) : null;
 
   const [eventsRes, enquiriesRes, quotesRes, invoicesRes, paymentsRes, threadsRes, tasksRes, activityRes, calRes, messagesRes, members, confirmedRes, overdueEventsRes] =
@@ -293,6 +297,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-6">
+          {staffing && <StaffingCard issues={staffing} />}
           {streams && <RevenueStreams data={streams} currency={cur} />}
           <Card>
             <CardHeader title="Tasks requiring attention" subtitle={`${tasks.filter((t) => t.due_at && t.due_at < nowIso).length} overdue`}

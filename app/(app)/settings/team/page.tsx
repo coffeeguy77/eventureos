@@ -41,9 +41,15 @@ export default async function TeamPage() {
           .is("accepted_at", null)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
-    supabase.from("crew_members").select("id, name, email, phone, role, always_invite, active").eq("organisation_id", org.id).order("name"),
+    supabase.from("crew_members").select("id, name, email, phone, role, always_invite, active, hourly_rate, rank, app_invited_at, app_last_seen_at, user_id").eq("organisation_id", org.id).order("rank").order("name"),
   ]);
-  const crew = (crewRes.data ?? []) as CrewMember[];
+  // Before the staff-app database update the new columns don't exist yet
+  const crewData = crewRes.error
+    ? (await supabase.from("crew_members").select("id, name, email, phone, role, always_invite, active").eq("organisation_id", org.id).order("name")).data
+    : crewRes.data;
+  const crew = (crewData ?? []) as CrewMember[];
+  const { data: orgRow } = await supabase.from("organisations").select("slug, staff_hourly_rate").eq("id", org.id).maybeSingle();
+  const staffApp = { ready: !crewRes.error, slug: (orgRow as { slug?: string } | null)?.slug ?? "", rate: Number((orgRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30) };
   if (membersRes.error) throw new Error(`Could not load team: ${membersRes.error.message}`);
   if (invitesRes.error) throw new Error(`Could not load invitations: ${invitesRes.error.message}`);
 
@@ -66,8 +72,8 @@ export default async function TeamPage() {
   return (
     <>
       <Card className="mb-6">
-        <CardHeader title="Staff list" subtitle="People who work your jobs without logging in. Add them to a job and they get the Google Calendar invite." />
-        <CrewList rows={crew} canEdit={role === "owner" || role === "admin" || role === "manager"} />
+        <CardHeader title="Staff list" subtitle="People who work your jobs. Add them to a job and they get the Google Calendar invite — and their shifts, job details and pay in the staff app. Order = preference: the top people get first pick of TBC jobs." />
+        <CrewList rows={crew} canEdit={role === "owner" || role === "admin" || role === "manager"} canAdmin={canAdmin} app={staffApp} />
       </Card>
       <Card>
         <CardHeader

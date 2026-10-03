@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo,
+  CreditCard, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
@@ -22,6 +22,7 @@ const NAV = [
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/wages", label: "Wages", icon: Wallet },
   { href: "/portal", label: "Customer Portal", icon: Globe },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },

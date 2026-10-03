@@ -25,7 +25,7 @@ const CAL = "https://www.googleapis.com/calendar/v3";
 export interface GoogleCalendar { id: string; summary: string; primary?: boolean; accessRole?: string; backgroundColor?: string; timeZone?: string }
 interface GEvent {
   id: string; status?: string; summary?: string; location?: string; transparency?: string; description?: string; htmlLink?: string;
-  attendees?: { email?: string; self?: boolean; resource?: boolean }[]; organizer?: { email?: string; self?: boolean };
+  attendees?: { email?: string; self?: boolean; resource?: boolean; responseStatus?: string }[]; organizer?: { email?: string; self?: boolean };
   start?: { date?: string; dateTime?: string; timeZone?: string }; end?: { date?: string; dateTime?: string; timeZone?: string };
   extendedProperties?: { private?: Record<string, string> };
 }
@@ -208,7 +208,9 @@ async function guestLists(ctx: SyncContext, eventIds: string[], includeClients: 
   const { data: staff } = await ctx.db.from("event_staff").select("event_id, user:users!event_staff_user_id_fkey(email)").eq("organisation_id", ctx.org.id).in("event_id", ids);
   for (const r of (staff ?? []) as unknown as { event_id: string; user: { email: string } | null }[]) add(r.event_id, r.user?.email);
   // Staff list people on the job, plus anyone set to be on every job (e.g. whoever does the rosters)
-  const { data: crew } = await ctx.db.from("event_crew").select("event_id, member:crew_members(email, active)").eq("organisation_id", ctx.org.id).in("event_id", ids);
+  // Staff who've put their hand up for a TBC job aren't invited — only rostered (offered / confirmed) shifts
+  let { data: crew, error: crewErr } = await ctx.db.from("event_crew").select("event_id, member:crew_members(email, active)").eq("organisation_id", ctx.org.id).in("event_id", ids).in("status", ["offered", "confirmed"]);
+  if (crewErr) ({ data: crew } = await ctx.db.from("event_crew").select("event_id, member:crew_members(email, active)").eq("organisation_id", ctx.org.id).in("event_id", ids)); // before the staff-app update
   for (const r of (crew ?? []) as unknown as { event_id: string; member: { email: string | null; active: boolean } | null }[]) if (r.member?.active) add(r.event_id, r.member.email);
   const { data: always } = await ctx.db.from("crew_members").select("email").eq("organisation_id", ctx.org.id).eq("active", true).eq("always_invite", true);
   for (const ev of ids) for (const m of (always ?? []) as { email: string | null }[]) add(ev, m.email);
@@ -268,6 +270,7 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
         const backfill = !done.has(conn.id);
         const min = new Date(now - (backfill ? (s.history_months ?? 24) * 30.5 : 30) * 86400000).toISOString();
         let page: string | undefined = s.pull_cursor?.conn === conn.id ? s.pull_cursor.page : undefined;
+        const rsvps: { id: string; attendees: NonNullable<GEvent["attendees"]> }[] = [];
         do {
           if (Date.now() - started > PULL_BUDGET_MS) {
             await saveIntegrationSettings(ctx, { pull_cursor: page ? { conn: conn.id, page } : null });
@@ -285,7 +288,10 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
           const gone: string[] = [];
           const rows = [];
           for (const ge of r.items ?? []) {
-            if (ge.extendedProperties?.private?.eventureos_id) continue; // ours
+            if (ge.extendedProperties?.private?.eventureos_id) { // ours — just note who accepted / declined the invite
+              if (ge.status !== "cancelled" && ge.attendees?.length) rsvps.push({ id: ge.id, attendees: ge.attendees });
+              continue;
+            }
             if (ge.status === "cancelled" || ge.transparency === "transparent") { gone.push(ge.id); continue; }
             const startIso = ge.start?.dateTime ?? (ge.start?.date ? ge.start.date + "T00:00:00Z" : null);
             const endIso = ge.end?.dateTime ?? (ge.end?.date ? ge.end.date + "T00:00:00Z" : null);
@@ -309,6 +315,7 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
             const { error: pErr } = await ctx.db.from("calendar_events").upsert(rows.slice(i, i + 500), { onConflict: "calendar_connection_id,external_event_id" });
             if (pErr) { errors.push(`Calendar import: ${pErr.message}`); break; } else pulled += Math.min(500, rows.length - i);
           }
+          if (rsvps.length) { await recordCrewRsvps(ctx, conn.id, rsvps.splice(0)).catch((e) => errors.push(`Staff invite replies: ${e instanceof Error ? e.message : String(e)}`)); }
           page = r.nextPageToken;
         } while (page);
         if (backfill) { done.add(conn.id); await saveIntegrationSettings(ctx, { history_done_for: [...done], pull_cursor: null }); }
@@ -424,4 +431,48 @@ export async function pushCalendarRowsNow(ctx: SyncContext, ids: string[]) {
   const errors: string[] = [];
   const r = await pushRows(ctx, s, byId, toPush, errors);
   return { ...r, errors };
+}
+
+
+/**
+ * Staff replies to job invites (Accept / Decline in Google Calendar). Accepting confirms the shift; declining flags the
+ * job on the dashboard as needing someone. Before the staff-app database update this quietly does nothing.
+ */
+async function recordCrewRsvps(ctx: SyncContext, connId: string, items: { id: string; attendees: NonNullable<GEvent["attendees"]> }[]) {
+  const db = ctx.db;
+  const { data: cal } = await db.from("calendar_events").select("event_id, external_event_id").eq("calendar_connection_id", connId)
+    .in("external_event_id", items.map((i) => i.id)).not("event_id", "is", null);
+  const byExt = new Map(((cal ?? []) as { event_id: string; external_event_id: string }[]).map((c) => [c.external_event_id, c.event_id]));
+  const eventIds = [...new Set(byExt.values())];
+  if (!eventIds.length) return;
+  const { data: crew, error } = await db.from("event_crew").select("id, event_id, status, calendar_response, member:crew_members(name, email), event:events(name, event_date)")
+    .eq("organisation_id", ctx.org.id).in("event_id", eventIds).in("status", ["offered", "confirmed"]);
+  if (error) return; // staff-app update not run yet
+  type Row = { id: string; event_id: string; status: string; calendar_response: string | null; member: { name: string; email: string | null } | null; event: { name: string; event_date: string | null } | null };
+  const rows = (crew ?? []) as unknown as Row[];
+  for (const it of items) {
+    const eventId = byExt.get(it.id);
+    if (!eventId) continue;
+    for (const a of it.attendees) {
+      const email = a.email?.toLowerCase();
+      const resp = a.responseStatus;
+      if (!email || !resp || !["needsAction", "accepted", "declined", "tentative"].includes(resp)) continue;
+      const r = rows.find((x) => x.event_id === eventId && x.member?.email?.toLowerCase() === email);
+      if (!r || r.calendar_response === resp) continue;
+      const patch: Record<string, unknown> = { calendar_response: resp, calendar_response_at: new Date().toISOString() };
+      if (resp === "accepted" && r.status === "offered") { patch.status = "confirmed"; patch.responded_at = new Date().toISOString(); }
+      await db.from("event_crew").update(patch).eq("id", r.id);
+      r.calendar_response = resp;
+      if (resp === "declined") {
+        await db.from("notifications").insert({ organisation_id: ctx.org.id, type: "crew.calendar_declined",
+          title: `${r.member?.name ?? "A staff member"} declined ${r.event?.name ?? "a job"} in Google Calendar`,
+          body: "They're still rostered in EventureOS — find cover or take them off the job.", link: `/events/${eventId}`, entity_type: "event", entity_id: eventId });
+        await logIntegration(ctx, { action: "crew.calendar_declined", entityType: "event", entityId: eventId, eventId,
+          summary: `${r.member?.name ?? "A staff member"} declined the calendar invite for ${r.event?.name ?? "the job"}` });
+      } else if (resp === "accepted") {
+        await logIntegration(ctx, { action: "crew.calendar_accepted", entityType: "event", entityId: eventId, eventId,
+          summary: `${r.member?.name ?? "A staff member"} accepted the calendar invite for ${r.event?.name ?? "the job"}` });
+      }
+    }
+  }
 }

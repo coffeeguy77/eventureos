@@ -72,3 +72,17 @@ export function xeroQuoteAcceptedEmail(o: { businessName: string; customer: stri
   const text = `${paragraphs.join("\n\n")}\n\nOpen the client: ${o.url}`;
   return { subject, html, text };
 }
+
+export function staffAppInviteEmail(o: { businessName: string; firstName: string; inviterName: string | null; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const subject = `Your ${o.businessName} staff app`;
+  const paragraphs = [
+    `Hi ${o.firstName},`,
+    `${o.inviterName ? `${o.inviterName} has set you up` : "You've been set up"} on the ${o.businessName} staff app — your shifts, job addresses and details, the job board for swapping shifts, your hours and pay, all in one place.`,
+    "Open it on your phone and sign in with this email address (we'll email you a code, no password). Then add it to your home screen so it opens like an app: on iPhone tap Share → Add to Home Screen; on Android tap the ⋮ menu → Add to Home screen.",
+    "Keep accepting the Google Calendar invites too — your calendar gives you the reminders, the app gives you everything else.",
+  ];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: "Your staff app", paragraphs,
+    button: { label: "Open the staff app", url: o.url }, footer: `Sent on behalf of ${o.businessName}.` });
+  const text = `${paragraphs.join("\n\n")}\n\nOpen the staff app: ${o.url}`;
+  return { subject, html, text };
+}
