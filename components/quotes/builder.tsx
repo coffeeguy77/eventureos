@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
-  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing,
+  publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote,
 } from "@/app/(app)/quotes/actions";
 import { updateEventDetails } from "@/app/(app)/events/actions";
+import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -49,6 +50,10 @@ export interface BuilderProps {
   orgName: string;
   /** Branding logo, shown on the customer preview */
   orgLogo?: string | null;
+  /** The booking already has a calendar entry */
+  onCalendar?: boolean;
+  /** The client's quotes in Xero, newest first — can be brought into this quote */
+  xeroQuotes?: XeroQuoteChoice[];
   currency: string;
   tz: string;
   today: string;
@@ -69,6 +74,8 @@ export interface BuilderProps {
   /** Opened from "Reply with quote" on an email: sending replies in that conversation. */
   replyTo?: { threadId: string; subject: string; backHref: string } | null;
 }
+
+export interface XeroQuoteChoice { id: string; number: string; reference: string | null; status: string; date: string | null; total: number; lines: number }
 
 type Panel = null | "publish" | "respond";
 type Toast = { message: string; tone: "ok" | "error"; undo?: () => void };
@@ -485,6 +492,7 @@ export function QuoteBuilder(p: BuilderProps) {
               <Link href={`/clients/${p.customer.id}`} className="font-medium text-ink hover:text-brand-700">{p.customer.name}</Link>
               <Link href={`/events/${p.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{p.event.number} · {p.event.name}</Link>
               <EventDateField eventId={p.event.id} date={p.event.event_date} onError={(m) => showToast({ message: m, tone: "error" })} />
+              <AddToCalendarButton eventId={p.event.id} onCalendar={!!p.onCalendar} hasDate={!!p.event.event_date} size="xs" />
               <span title="Set to the publish date each time you send">Issued {fmtDate(quote.issue_date)}</span>
               <label className="flex items-center gap-1.5">
                 <span>Expires</span>
@@ -544,6 +552,9 @@ export function QuoteBuilder(p: BuilderProps) {
 
         {!!p.customerPricing?.length && <CustomerPricingNote quoteId={quote.id} terms={p.customerPricing} customerName={p.customer.name} editable
           onDone={(m, ok) => { showToast({ message: m, tone: ok ? "ok" : "error" }); if (ok) router.refresh(); }} />}
+        {!!p.xeroQuotes?.length && <XeroQuoteImport quoteId={quote.id} quotes={p.xeroQuotes} customerName={p.customer.name} currency={currency}
+          hasLines={items.some((i) => i.name.trim())} flushAll={flushAll}
+          onDone={(m, ok) => { showToast({ message: m, tone: ok ? "ok" : "error" }, 7000); if (ok) router.refresh(); }} />}
         {p.replyTo && (
           <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-brand-50/70 px-4 py-3 text-[0.8125rem] text-brand-900 ring-1 ring-inset ring-brand-200">
             <Reply className="h-4 w-4 shrink-0 text-brand-600" />
@@ -863,6 +874,50 @@ function CustomerPricingNote({ quoteId, terms, customerName, editable, onDone }:
         })} className="shrink-0 font-medium text-emerald-800 underline-offset-2 hover:underline disabled:opacity-60">
           {pending ? "Applying…" : "Apply to lines already on this quote"}
         </button>
+      )}
+    </div>
+  );
+}
+
+/** "This client has quotes in Xero" — bring one's lines in (added, or replacing what's here) to edit and send from EventureOS. */
+function XeroQuoteImport({ quoteId, quotes, customerName, currency, hasLines, flushAll, onDone }: {
+  quoteId: string; quotes: XeroQuoteChoice[]; customerName: string; currency: string; hasLines: boolean;
+  flushAll: () => Promise<boolean>; onDone: (m: string, ok: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState(quotes[0]?.id ?? "");
+  const [pending, start] = useTransition();
+  const chosen = quotes.find((x) => x.id === pick);
+  const go = (replace: boolean) => start(async () => {
+    if (!chosen) return;
+    await flushAll();
+    const r = await importXeroQuote(quoteId, chosen.id, replace).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    if (!r.ok) { onDone(r.error, false); return; }
+    setOpen(false);
+    onDone(`${replace ? "Replaced the lines with" : "Added"} ${r.data.lines} line${r.data.lines === 1 ? "" : "s"} from ${chosen.number}. Edit away — nothing was changed in Xero.`, true);
+  });
+  const label = (x: XeroQuoteChoice) => `${x.number}${x.reference ? ` (${x.reference})` : ""} · ${x.date ? fmtDate(x.date) : "no date"} · ${money(x.total, currency)} inc GST · ${x.status.toLowerCase()}`;
+  return (
+    <div className="mt-4 rounded-xl bg-sky-50/70 px-4 py-2.5 text-[0.8125rem] text-sky-900 ring-1 ring-inset ring-sky-200">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="min-w-0 flex-1"><b className="font-semibold">{customerName} has {quotes.length} quote{quotes.length === 1 ? "" : "s"} in Xero</b>{quotes[0] ? ` — latest ${quotes[0].number}, ${money(quotes[0].total, currency)}` : ""}. Bring one in to edit it here.</span>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="shrink-0 font-medium text-sky-800 underline-offset-2 hover:underline">
+          {open ? "Close" : "Bring in from Xero"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2.5 space-y-2 border-t border-sky-200 pt-2.5">
+          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Xero quote" className={cn(inputClass, "bg-surface")}>
+            {quotes.map((x) => <option key={x.id} value={x.id}>{label(x)}</option>)}
+          </select>
+          <p className="text-[0.75rem] text-sky-800">Quantities and prices come across exactly as in Xero. Items on your price list are linked to it; anything else comes in as a one-off line.</p>
+          <div className="flex flex-wrap justify-end gap-2">
+            {hasLines && <Button size="sm" variant="ghost" disabled={pending || !chosen} onClick={() => go(false)}>Add below what&apos;s here</Button>}
+            <Button size="sm" variant="primary" disabled={pending || !chosen} onClick={() => go(true)}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}{hasLines ? "Replace this quote's lines" : "Bring in these lines"}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

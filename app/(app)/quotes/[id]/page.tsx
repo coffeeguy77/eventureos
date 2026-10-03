@@ -215,6 +215,14 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   }
 
   // ------------------------------------------------------------------ editable draft
+  // Is the booking already on the calendar? (for the one-click "Add to calendar")
+  const { data: onCal } = await supabase.from("calendar_events").select("id").eq("organisation_id", org.id).eq("event_id", q.event.id).eq("kind", "event").limit(1);
+  // The client's quotes in Xero (newest first) — can be brought in and edited here
+  const { data: xqRows } = await supabase.from("xero_quotes").select("id, number, reference, status, quote_date, total, line_items")
+    .eq("organisation_id", org.id).eq("customer_id", q.customer.id).neq("status", "DELETED").order("quote_date", { ascending: false, nullsFirst: false }).limit(20);
+  const xeroQuotes = ((xqRows ?? []) as { id: string; number: string | null; reference: string | null; status: string; quote_date: string | null; total: number; line_items: { description?: string | null }[] | null }[])
+    .map((x) => ({ id: x.id, number: x.number ?? "Xero quote", reference: x.reference, status: x.status, date: x.quote_date, total: Number(x.total ?? 0),
+      lines: (x.line_items ?? []).filter((l) => (l.description ?? "").trim()).length }));
   // The client's special pricing (shown as a note, with "apply" for lines added before it was set)
   const { data: cpRows } = await supabase.from("customer_prices").select("service_id, kind, value, service:services(name)").eq("organisation_id", org.id).eq("customer_id", q.customer.id);
   const customerPricing = ((cpRows ?? []) as unknown as { service_id: string; kind: "percent" | "price"; value: number; service: { name: string } | null }[])
@@ -267,6 +275,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       orgId={org.id}
       orgName={org.name}
       orgLogo={org.logo_url}
+      onCalendar={!!onCal?.length}
+      xeroQuotes={xeroQuotes}
       currency={cur}
       tz={tz}
       today={today}

@@ -171,3 +171,54 @@ export async function deleteCalendarEntry(id: string): Promise<CalFormState> {
   revalidate(e.event_id);
   return { ok: "Deleted" };
 }
+
+/**
+ * "Add to calendar" from the event or quote page: puts the booking on the default calendar using the event's
+ * date and times, and sends it to Google straight away (with the usual title, description and guest invites).
+ */
+export async function addEventToCalendar(eventId: string): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  try {
+    if (!UUID.test(eventId)) return { ok: false, error: "That event couldn't be found." };
+    const { supabase, org, user, profile, role } = await requireOrg();
+    if (role === "staff" || role === "customer") return { ok: false, error: "You don't have permission to change the calendar." };
+    const { data: ev } = await supabase.from("events").select("id, number, name, customer_id, venue, event_date, setup_time, start_time, finish_time")
+      .eq("id", eventId).eq("organisation_id", org.id).maybeSingle();
+    if (!ev) return { ok: false, error: "That event couldn't be found." };
+    if (!ev.event_date) return { ok: false, error: "Set the event date first, then add it to the calendar." };
+
+    const { data: existing } = await supabase.from("calendar_events").select("id").eq("organisation_id", org.id).eq("event_id", ev.id).eq("kind", "event").limit(1);
+    let id = existing?.[0]?.id as string | undefined;
+    if (!id) {
+      const { data: conn } = await supabase.from("calendar_connections").select("id, name, provider, sync_enabled")
+        .eq("organisation_id", org.id).order("is_default", { ascending: false }).order("created_at").limit(1).maybeSingle();
+      if (!conn) return { ok: false, error: "No calendar is set up yet — add one in Settings → Integrations → Google Calendar." };
+      const tz = org.timezone;
+      const hhmm = (t: string | null) => (t ? String(t).slice(0, 5) : null);
+      const startT = hhmm(ev.setup_time) ?? hhmm(ev.start_time) ?? "09:00";
+      const startsAt = zonedTimeUTC(ev.event_date, startT, tz);
+      const endT = hhmm(ev.finish_time);
+      let endsAt = endT ? zonedTimeUTC(ev.event_date, endT, tz) : new Date(Date.parse(startsAt) + 3 * 3600e3).toISOString();
+      if (Date.parse(endsAt) <= Date.parse(startsAt)) endsAt = new Date(Date.parse(startsAt) + 3600e3).toISOString();
+      const { data: row, error } = await supabase.from("calendar_events").insert({
+        organisation_id: org.id, calendar_connection_id: conn.id, event_id: ev.id, title: ev.name, starts_at: startsAt, ends_at: endsAt,
+        all_day: false, location: ev.venue, kind: "event", sync_status: syncStatusFor(conn as Conn), created_by: user.id,
+      }).select("id").single();
+      if (error) return { ok: false, error: `Couldn't add it to the calendar: ${error.message}` };
+      id = row.id as string;
+      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "calendar.created", entityType: "calendar_event", entityId: id,
+        eventId: ev.id, customerId: ev.customer_id, summary: `${actorName(profile)} added EV-${ev.number} to ${(conn as Conn).name} on ${fmtDate(ev.event_date)}` });
+    }
+    // Send it to Google now
+    let message = "Added to the calendar.";
+    try {
+      const { buildContext } = await import("@/lib/integrations/sync-runner");
+      const { pushCalendarRowsNow } = await import("@/lib/integrations/google-calendar");
+      const ctx = await buildContext(supabase, "user", org.id, "google_calendar", user.id);
+      const r = await pushCalendarRowsNow(ctx, [id!]);
+      message = r.failed ? `Added — Google Calendar didn't take it yet (${r.errors[0] ?? "try again"}).` : existing?.length ? "Already on the calendar — updated in Google Calendar." : "Added to your Google Calendar. Rostered staff and the client's people are invited.";
+    } catch { message = "Added to the EventureOS calendar (Google Calendar isn't connected)."; }
+    revalidate(ev.id);
+    revalidatePath("/tasks");
+    return { ok: true, message };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't add it to the calendar." }; }
+}

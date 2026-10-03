@@ -253,45 +253,8 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
       .order("starts_at").limit(1000);
     if (rErr) throw new Error(`Could not load calendar entries: ${rErr.message}`);
     const toPush = ((rows ?? []) as CalRow[]).filter(needsPush);
-    const pushIds = toPush.filter((c) => c.kind === "event").map((c) => c.event_id).filter((x): x is string => !!x);
-    const guests = await guestLists(ctx, toPush.map((c) => c.event_id).filter((x): x is string => !!x), s.invite_clients !== false);
-    const jobs = await jobInfo(ctx, pushIds);
-    const freeDays = Array.isArray(s.free_weekdays) ? s.free_weekdays : DEFAULT_FREE_WEEKDAYS;
-    for (const ce of toPush) {
-      const calId = byId.get(ce.calendar_connection_id)!.external_calendar_id;
-      try {
-        const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : [];
-        const had = [...(ce.attendees ?? [])].sort();
-        const changed = want.join(",") !== had.join(",");
-        const job = ce.kind === "event" && ce.event_id ? jobs.get(ce.event_id) ?? null : null;
-        const body = { ...eventBody(ctx, ce, job, freeDays), ...(want.length || had.length ? { attendees: want.map((email) => ({ email })) } : {}) };
-        // Google only emails guests when the guest list changes — not on every time/venue tweak
-        const notify = changed && want.length ? "all" : "none";
-        let g: GEvent | null = null;
-        if (ce.external_event_id) {
-          try {
-            g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(ce.external_event_id)}?sendUpdates=${notify}`,
-              { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch");
-            if (g.status === "cancelled") g = null; // deleted in Google → recreate
-          } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
-        }
-        if (!g) {
-          const found = await findByEventureId(ctx, calId, ce.id);
-          g = found
-            ? await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(found.id)}?sendUpdates=${notify}`,
-                { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch")
-            : await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events?sendUpdates=${notify}`,
-                { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.insert");
-        }
-        const { error: uErr } = await ctx.db.from("calendar_events").update({ external_event_id: g.id, sync_status: "synced", last_synced_at: new Date().toISOString(), attendees: want }).eq("id", ce.id);
-        if (uErr) throw new Error(uErr.message);
-        pushed++;
-      } catch (e) {
-        failed++;
-        errors.push(`${ce.title}: ${errMessage(e)}`);
-        await ctx.db.from("calendar_events").update({ sync_status: "error" }).eq("id", ce.id);
-      }
-    }
+    const r = await pushRows(ctx, s, byId, toPush, errors);
+    pushed += r.pushed; failed += r.failed;
 
     // PULL (optional): entries from Google — busy time for conflict checks, and the client booking history
     let pullMore = false;
@@ -399,4 +362,66 @@ export async function deleteGoogleEvent(ctx: SyncContext, calendarId: string, ex
   try {
     await apiJSON(ctx, `${CAL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalEventId)}?sendUpdates=none`, { method: "DELETE" }, "Google events.delete");
   } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
+}
+
+/** Push calendar rows to Google: bookings get the job's title/description and guest invites; others a plain entry. */
+async function pushRows(ctx: SyncContext, s: CalendarSettings, byId: Map<string, { id: string; name: string; external_calendar_id: string }>, toPush: CalRow[], errors: string[]) {
+  let pushed = 0, failed = 0;
+  const pushIds = toPush.filter((c) => c.kind === "event").map((c) => c.event_id).filter((x): x is string => !!x);
+  const guests = await guestLists(ctx, toPush.map((c) => c.event_id).filter((x): x is string => !!x), s.invite_clients !== false);
+  const jobs = await jobInfo(ctx, pushIds);
+  const freeDays = Array.isArray(s.free_weekdays) ? s.free_weekdays : DEFAULT_FREE_WEEKDAYS;
+  for (const ce of toPush) {
+    const calId = byId.get(ce.calendar_connection_id)!.external_calendar_id;
+    try {
+      const want = ce.event_id && ce.kind === "event" ? guests.get(ce.event_id) ?? [] : [];
+      const had = [...(ce.attendees ?? [])].sort();
+      const changed = want.join(",") !== had.join(",");
+      const job = ce.kind === "event" && ce.event_id ? jobs.get(ce.event_id) ?? null : null;
+      const body = { ...eventBody(ctx, ce, job, freeDays), ...(want.length || had.length ? { attendees: want.map((email) => ({ email })) } : {}) };
+      // Google only emails guests when the guest list changes — not on every time/venue tweak
+      const notify = changed && want.length ? "all" : "none";
+      let g: GEvent | null = null;
+      if (ce.external_event_id) {
+        try {
+          g = await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(ce.external_event_id)}?sendUpdates=${notify}`,
+            { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch");
+          if (g.status === "cancelled") g = null; // deleted in Google → recreate
+        } catch (e) { if (!(e instanceof ApiError && (e.status === 404 || e.status === 410))) throw e; }
+      }
+      if (!g) {
+        const found = await findByEventureId(ctx, calId, ce.id);
+        g = found
+          ? await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(found.id)}?sendUpdates=${notify}`,
+              { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.patch")
+          : await apiJSON<GEvent>(ctx, `${CAL}/calendars/${encodeURIComponent(calId)}/events?sendUpdates=${notify}`,
+              { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, "Google events.insert");
+      }
+      const { error: uErr } = await ctx.db.from("calendar_events").update({ external_event_id: g.id, sync_status: "synced", last_synced_at: new Date().toISOString(), attendees: want }).eq("id", ce.id);
+      if (uErr) throw new Error(uErr.message);
+      pushed++;
+    } catch (e) {
+      failed++;
+      errors.push(`${ce.title}: ${errMessage(e)}`);
+      await ctx.db.from("calendar_events").update({ sync_status: "error" }).eq("id", ce.id);
+    }
+  }
+
+  return { pushed, failed };
+}
+
+/** Push particular entries now (e.g. "Add to calendar" on an event) instead of waiting for the daily sync. */
+export async function pushCalendarRowsNow(ctx: SyncContext, ids: string[]) {
+  if (!ids.length) return { pushed: 0, failed: 0, errors: [] as string[] };
+  const s = (ctx.integration.settings ?? {}) as CalendarSettings;
+  const { data: conns } = await ctx.db.from("calendar_connections").select("id, name, external_calendar_id")
+    .eq("organisation_id", ctx.org.id).eq("provider", "google").eq("sync_enabled", true).not("external_calendar_id", "is", null);
+  const byId = new Map((conns ?? []).map((c) => [c.id as string, c as { id: string; name: string; external_calendar_id: string }]));
+  const { data: rows } = await ctx.db.from("calendar_events")
+    .select("id, calendar_connection_id, event_id, title, starts_at, ends_at, all_day, location, kind, external_event_id, sync_status, last_synced_at, updated_at, attendees")
+    .eq("organisation_id", ctx.org.id).in("id", ids);
+  const toPush = ((rows ?? []) as CalRow[]).filter((r) => byId.has(r.calendar_connection_id));
+  const errors: string[] = [];
+  const r = await pushRows(ctx, s, byId, toPush, errors);
+  return { ...r, errors };
 }

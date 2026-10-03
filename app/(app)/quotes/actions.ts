@@ -9,6 +9,7 @@ import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
 import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
 import { cleanDetails, servesLine, staffLine } from "@/lib/quotes/line-helpers";
+import { xeroLinesToQuoteLines, type PriceItem, type XeroLine } from "@/lib/quotes/xero-import";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -881,5 +882,62 @@ export async function applyCustomerPricing(quoteId: string): Promise<ActionResul
       refresh(q);
     }
     return { updated };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// import from Xero
+// ---------------------------------------------------------------------------
+
+/**
+ * Copy the lines of one of the client's Xero quotes (our synced copy) into this quote so it can be edited here.
+ * Quantities and prices come across exactly as they are in Xero. `replace` clears the quote's current lines first.
+ * Nothing is changed in Xero.
+ */
+export async function importXeroQuote(quoteId: string, xeroQuoteRowId: string, replace: boolean): Promise<ActionResult<{ lines: number }>> {
+  return run(async () => {
+    const { supabase, org, user, profile } = await requireOrg();
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    assertId(xeroQuoteRowId, "Xero quote");
+    const { data: xq, error: xErr } = await supabase.from("xero_quotes")
+      .select("id, number, reference, customer_id, line_items, quote_date")
+      .eq("id", xeroQuoteRowId).eq("organisation_id", org.id).maybeSingle();
+    if (xErr) fail(`Couldn't load the Xero quote: ${xErr.message}`);
+    if (!xq) fail("That Xero quote isn't in EventureOS any more. Try syncing Xero.");
+    if (xq!.customer_id !== q.customer_id) fail(`Xero quote ${xq!.number ?? ""} belongs to a different client.`);
+
+    const { data: svc, error: sErr } = await supabase.from("services").select("id, code, name, unit, tax_rate").eq("organisation_id", org.id);
+    if (sErr) fail(`Couldn't load the price list: ${sErr.message}`);
+    const lines = xeroLinesToQuoteLines((xq!.line_items ?? []) as XeroLine[], (svc ?? []) as PriceItem[]);
+    if (!lines.length) fail(`Xero quote ${xq!.number ?? ""} has no lines to bring across.`);
+
+    if (replace) {
+      const { error: dI } = await supabase.from("quote_items").delete().eq("quote_id", q.id).eq("organisation_id", org.id);
+      if (dI) fail(`Couldn't clear the current lines: ${dI.message}`);
+      const { error: dS } = await supabase.from("quote_sections").delete().eq("quote_id", q.id).eq("organisation_id", org.id);
+      if (dS) fail(`Couldn't clear the current sections: ${dS.message}`);
+    }
+    const { data: last } = await supabase.from("quote_sections").select("position").eq("quote_id", q.id)
+      .order("position", { ascending: false }).limit(1).maybeSingle();
+    const title = replace ? "Services" : `From Xero ${xq!.number ?? ""}`.trim();
+    const { data: sec, error: secErr } = await supabase.from("quote_sections").insert({
+      organisation_id: org.id, quote_id: q.id, title, position: (last?.position ?? -1) + 1,
+    }).select("id").single();
+    if (secErr) fail(`Couldn't add the section: ${secErr.message}`);
+    const { error: iErr } = await supabase.from("quote_items").insert(lines.map((l, i) => ({
+      organisation_id: org.id, quote_id: q.id, section_id: sec!.id, position: i,
+      name: l.name, description: l.description, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, service_id: l.service_id,
+    })));
+    if (iErr) fail(`Couldn't add the lines: ${iErr.message}`);
+
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "quote.imported_xero", entityType: "quote", entityId: q.id,
+      eventId: q.event_id, customerId: q.customer_id,
+      summary: `${actorName(profile)} ${replace ? "replaced the lines on" : "added lines to"} Quote Q-${q.number} from Xero quote ${xq!.number ?? ""}`,
+      metadata: { xero_quote_id: xq!.id, lines: lines.length, replace },
+    });
+    refresh(q);
+    return { lines: lines.length };
   });
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
 import { notFound } from "next/navigation";
 import { Mail, Phone, MapPin, Clock, Users } from "lucide-react";
 import { requireOrg, getMembers } from "@/lib/context";
@@ -390,7 +391,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader title="Calendar entries" action={<span className="block max-w-[9rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}</span>} />
-              {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<Link href={`/calendar?add=${e.id}`} className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">Add to calendar</Link>}>Confirmed events are added to a calendar automatically when the quote is accepted.</EmptyState> : (
+              {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<AddToCalendarButton eventId={e.id} onCalendar={false} hasDate={!!e.event_date} />}>Add it now, or it goes on automatically when the quote is accepted.</EmptyState> : (
                 <ul className="divide-y divide-line border-t border-line">
                   {cal.map((c) => (
                     <li key={c.id} className="flex items-center gap-3 px-5 py-3">
