@@ -91,11 +91,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <p className="mt-4 max-w-md text-[0.875rem] text-white/70">
             Enquiry → customer → event → quote → acceptance → calendar → delivery → invoice → payment.
           </p>
-          <div className="mt-10 grid max-w-md grid-cols-3 gap-3 text-[0.75rem] text-white/70">
-            {["Gmail", "Google Calendar", "Xero"].map((i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">{i}</div>
+          <p className="mt-10 text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-white/50">Works with</p>
+          <ul className="mt-3 grid max-w-md grid-cols-4 gap-3" aria-label="Works with Gmail, Google Calendar, Xero and Stripe">
+            {([["gmail", "Gmail", "h-6"], ["google-calendar", "Google Calendar", "h-7"], ["xero", "Xero", "h-8"], ["stripe", "Stripe", "h-6"]] as const).map(([file, name, h]) => (
+              <li key={file} title={name} className="flex h-14 items-center justify-center rounded-xl bg-white px-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)] ring-1 ring-white/20">
+                <Image src={`/brand/integrations/${file}.svg`} alt={name} width={96} height={40} unoptimized className={`${h} w-auto`} />
+              </li>
             ))}
-          </div>
+          </ul>
           </div>
         </div>
       </div>
