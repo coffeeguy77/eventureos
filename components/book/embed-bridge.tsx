@@ -9,10 +9,12 @@ import { useEffect } from "react";
 export function EmbedBridge() {
   useEffect(() => {
     if (window.parent === window) return;
-    const post = () => window.parent.postMessage({ type: "eventureos:height", height: Math.ceil(document.documentElement.scrollHeight) }, "*");
+    // Measure the form itself — the document is never shorter than the frame, so it could grow but never shrink
+    const root = () => document.querySelector<HTMLElement>("[data-book-root]");
+    const post = () => window.parent.postMessage({ type: "eventureos:height", height: Math.ceil((root()?.getBoundingClientRect().height ?? document.body.scrollHeight) + 4) }, "*");
     post();
     const ro = new ResizeObserver(post);
-    ro.observe(document.body);
+    ro.observe(root() ?? document.body);
     window.addEventListener("load", post);
     return () => { ro.disconnect(); window.removeEventListener("load", post); };
   }, []);

@@ -18,8 +18,8 @@ export function brandStyle(org: Pick<PublicOrg, "brand_colour">): React.CSSPrope
 export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean }) {
   const q = embed ? "?embed=1" : "";
   return (
-    <div style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
-      {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important}"}</style></>}
+    <div data-book-root style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
+      {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important;min-height:0!important;height:auto!important}"}</style></>}
       {!embed && (
         <header className="border-b border-line bg-surface">
           <div className={`mx-auto flex h-16 items-center gap-3 px-4 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>
