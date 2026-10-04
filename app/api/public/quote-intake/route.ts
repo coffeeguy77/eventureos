@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const { data: conns, error: connErr } = await db.rpc("intake_connection", { p_key_hash: hashIntakeKey(key) });
   if (connErr) { console.error("intake_connection failed", connErr.message); return json({ ok: false, error: "Couldn't check the connection key" }, 500); }
   const conn = (conns as { connection_id: string; organisation_id: string; org_name: string }[] | null)?.[0];
-  if (!conn) return json({ ok: false, error: "This connection key isn't valid or has been revoked" }, 401);
+  if (!conn || (conn as { provider?: string }).provider === "wordpress") return json({ ok: false, error: "This connection key isn't valid or has been revoked" }, 401);
 
   if (!(req.headers.get("content-type") ?? "").includes("application/json")) return json({ ok: false, error: "Send the quote as application/json" }, 415);
   const rawText = await req.text();

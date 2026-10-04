@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
-  BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
+  BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
   ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -25,6 +25,7 @@ const MORE = [
   { href: "/tasks", label: "To-do", icon: ListTodo },
   { href: "/crm", label: "CRM", icon: Workflow },
   { href: "/quotes", label: "Quotes", icon: FileText },
+  { href: "/bookings", label: "Bookings", icon: Ticket },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/payments", label: "Payments", icon: CreditCard },

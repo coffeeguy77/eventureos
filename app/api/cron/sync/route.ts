@@ -56,6 +56,13 @@ export async function GET(req: NextRequest) {
     for (const [orgId, tz] of orgs) await fillSeries(db, orgId, tz).catch((e) => console.error("[cron/sync] regular shifts:", e));
   } catch (e) { console.error("[cron/sync] regular shifts:", e); }
 
+  // Course bookings: reminders, thank-yous, scheduled gift certificates, unpaid seat holds (quietly nothing before the 0049 update)
+  let bookingJobs: unknown = null;
+  try {
+    const { runBookingJobs } = await import("@/lib/bookings/server");
+    bookingJobs = await runBookingJobs(db);
+  } catch (e) { bookingJobs = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -76,5 +83,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs });
 }

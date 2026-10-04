@@ -133,6 +133,14 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") return `ignored ${event.type}`;
   const s = event.data.object;
   if (s.payment_status !== "paid") return "not paid yet";
+  if (s.metadata?.eventureos_org_id === orgId && (s.metadata?.eventureos_booking_id || s.metadata?.eventureos_gift_id)) {
+    // Course bookings and gift certificates (lib/bookings)
+    const bookings = await import("@/lib/bookings/server");
+    const session = s as CheckoutSession & { id: string };
+    return s.metadata.eventureos_booking_id
+      ? bookings.confirmPaidBooking(db, orgId, s.metadata.eventureos_booking_id, session)
+      : bookings.activateGift(db, orgId, s.metadata.eventureos_gift_id, session);
+  }
   const invoiceId = s.metadata?.eventureos_invoice_id;
   if (!invoiceId || s.metadata?.eventureos_org_id !== orgId) return "not an EventureOS payment";
   const pi = s.payment_intent ?? s.id;

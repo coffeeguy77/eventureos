@@ -62,6 +62,8 @@ export interface CheckoutSession { id: string; url: string | null; payment_statu
 export function createCheckout(key: string, o: {
   amountCents: number; currency: string; name: string; description?: string; email?: string | null;
   successUrl: string; cancelUrl: string; metadata: Record<string, string>; idempotencyKey: string; account?: string | null;
+  /** Unix seconds; Stripe allows 30 minutes to 24 hours from now. Used so a held booking seat can't be paid for after it's released. */
+  expiresAt?: number;
 }) {
   return call<CheckoutSession>(key, "POST", "/checkout/sessions", {
     mode: "payment",
@@ -70,9 +72,14 @@ export function createCheckout(key: string, o: {
     customer_email: o.email || undefined,
     line_items: [{ quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } }],
     metadata: o.metadata,
+    expires_at: o.expiresAt,
     payment_intent_data: { metadata: o.metadata, description: o.name },
   }, o.idempotencyKey, o.account);
 }
+
+/** Look up a Checkout Session (e.g. to confirm a payment when the customer lands back before the webhook arrives). */
+export const getCheckoutSession = (key: string, id: string, account?: string | null) =>
+  call<CheckoutSession>(key, "GET", `/checkout/sessions/${encodeURIComponent(id)}`, undefined, undefined, account);
 
 // ---------------------------------------------------------------- Connect (OAuth for Standard accounts)
 const CONNECT = "https://connect.stripe.com";

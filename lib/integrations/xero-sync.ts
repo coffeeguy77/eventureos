@@ -353,15 +353,18 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
   const errors: string[] = [];
   let pushed = 0;
   const { data: rows, error } = await ctx.db.from("invoices")
-    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, quote_id, customer:customers(name, xero_contact_id), event:events(name)")
-    .eq("organisation_id", ctx.org.id).is("xero_invoice_id", null).neq("status", "void").limit(50);
+    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, quote_id, reference, line_items, customer:customers(name, xero_contact_id), event:events(name)")
+    // Drafts made in EventureOS (e.g. agency course bookings) wait for someone to check and approve them first
+    .eq("organisation_id", ctx.org.id).is("xero_invoice_id", null).neq("status", "void").neq("status", "draft").limit(50);
   if (error) throw new Error(`Could not load invoices to push: ${error.message}`);
-  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; quote_id: string | null; customer: { name: string; xero_contact_id: string | null } | null; event: { name: string } | null };
+  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; quote_id: string | null; reference: string | null; line_items: LocalLine[] | null; customer: { name: string; xero_contact_id: string | null } | null; event: { name: string } | null };
   const list = (rows ?? []) as unknown as Row[];
   const ready = list.filter((r) => r.customer?.xero_contact_id);
   for (const inv of ready) {
     const kindLabel = inv.kind === "deposit" ? "Deposit" : inv.kind === "final" ? "Final balance" : "Services";
-    const itemised = inv.kind === "full" && inv.quote_id ? await quoteLines(ctx, inv.quote_id, Number(inv.total), s) : null;
+    // Lines written on the invoice itself (GST inclusive), e.g. an agency booking; otherwise the quote's lines for a full invoice
+    const own = localLines(inv.line_items, Number(inv.total), s);
+    const itemised = own ? null : inv.kind === "full" && inv.quote_id ? await quoteLines(ctx, inv.quote_id, Number(inv.total), s) : null;
     const body = {
       Invoices: [{
         Type: "ACCREC",
@@ -369,11 +372,11 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
         Date: inv.issue_date,
         DueDate: inv.due_date ?? inv.issue_date,
         InvoiceNumber: inv.number,
-        Reference: inv.event?.name?.slice(0, 255) ?? undefined,
+        Reference: (inv.event?.name ?? inv.reference)?.slice(0, 255) ?? undefined,
         LineAmountTypes: itemised ? "Exclusive" : "Inclusive",
         Status: s.push_invoices === "authorised" ? "AUTHORISED" : "DRAFT",
         CurrencyCode: inv.currency,
-        LineItems: itemised ?? [{
+        LineItems: own ?? itemised ?? [{
           Description: `${kindLabel}${inv.event?.name ? ` — ${inv.event.name}` : ""}`,
           Quantity: 1, UnitAmount: Number(inv.total),
           AccountCode: s.sales_account_code || "200",
@@ -394,6 +397,21 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
     }
   }
   return { pushed, waiting: list.length - ready.length, errors };
+}
+
+type LocalLine = { description?: string | null; quantity?: number | null; unit_amount?: number | null; line_amount?: number | null; item_code?: string | null; account_code?: string | null };
+/** An invoice's own lines (GST inclusive) as Xero line items — only if they add up to the invoice total. */
+function localLines(lines: LocalLine[] | null, total: number, s: XeroSettings) {
+  if (!Array.isArray(lines) || !lines.length) return null;
+  const sum = lines.reduce((t, l) => t + Number(l.quantity ?? 1) * Number(l.unit_amount ?? 0), 0);
+  if (Math.abs(sum - total) > 0.02) return null;
+  return lines.map((l) => ({
+    Description: String(l.description ?? "").slice(0, 4000) || "Services",
+    Quantity: Number(l.quantity ?? 1), UnitAmount: Number(l.unit_amount ?? 0),
+    ...(l.item_code ? { ItemCode: l.item_code } : {}),
+    AccountCode: l.account_code || s.sales_account_code || "200",
+    TaxType: s.tax_type || "OUTPUT",
+  }));
 }
 
 /**
