@@ -92,10 +92,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             Enquiry → customer → event → quote → acceptance → calendar → delivery → invoice → payment.
           </p>
           <p className="mt-10 text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-white/50">Works with</p>
-          <ul className="mt-3 grid max-w-md grid-cols-4 gap-3" aria-label="Works with Gmail, Google Calendar, Xero and Stripe">
-            {([["gmail", "Gmail", "h-6"], ["google-calendar", "Google Calendar", "h-7"], ["xero", "Xero", "h-8"], ["stripe", "Stripe", "h-6"]] as const).map(([file, name, h]) => (
-              <li key={file} title={name} className="flex h-14 items-center justify-center rounded-xl bg-white px-3 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)] ring-1 ring-white/20">
-                <Image src={`/brand/integrations/${file}.svg`} alt={name} width={96} height={40} unoptimized className={`${h} w-auto`} />
+          <ul className="mt-3 flex max-w-md items-center gap-8" aria-label="Works with Gmail, Google Calendar, Xero and Stripe">
+            {/* Stripe's purple wordmark disappears on this background, so it's shown in white (Stripe's own dark-background version) */}
+            {([["gmail", "Gmail", "h-7", ""], ["google-calendar", "Google Calendar", "h-8", ""], ["xero", "Xero", "h-9", ""], ["stripe", "Stripe", "h-8", "brightness-0 invert"]] as const).map(([file, name, h, tone]) => (
+              <li key={file} title={name} className="flex items-center">
+                <Image src={`/brand/integrations/${file}.svg`} alt={name} width={96} height={40} unoptimized className={`${h} w-auto ${tone}`} />
               </li>
             ))}
           </ul>
