@@ -304,7 +304,9 @@ export async function syncGoogleCalendar(ctx: SyncContext) {
               if (ge.status !== "cancelled" && ge.attendees?.length) rsvps.push({ id: ge.id, attendees: ge.attendees });
               continue;
             }
-            if (ge.status === "cancelled" || ge.transparency === "transparent") { gone.push(ge.id); continue; }
+            // Bookings shown as "Free" in Google (e.g. Saturdays kept free so a booking site doesn't block the day) are
+            // still real bookings here, so they're imported too — only cancelled ones are dropped
+            if (ge.status === "cancelled") { gone.push(ge.id); continue; }
             const startIso = ge.start?.dateTime ?? (ge.start?.date ? ge.start.date + "T00:00:00Z" : null);
             const endIso = ge.end?.dateTime ?? (ge.end?.date ? ge.end.date + "T00:00:00Z" : null);
             if (!startIso || !endIso) continue;

@@ -255,3 +255,27 @@ export async function createInvoice(_prev: InvoiceFormState, form: FormData): Pr
   revalidateInvoice(inv.id, ev?.id, customerId);
   redirect(`/invoices/${inv.id}`);
 }
+
+/** Put an invoice on a job (or take it off one) — e.g. an invoice raised in Xero for a job booked here. */
+export async function linkInvoiceToJob(invoiceId: string, eventId: string | null): Promise<InvoiceFormState> {
+  const { ctx, inv } = await loadInvoice(invoiceId);
+  if (!inv) return { error: "Invoice not found." };
+  if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can change invoices." };
+  let name: string | null = null;
+  if (eventId) {
+    if (!UUID.test(eventId)) return { error: "Choose a job." };
+    const { data: ev } = await ctx.supabase.from("events").select("id, number, name, customer_id").eq("organisation_id", ctx.org.id).eq("id", eventId).maybeSingle();
+    if (!ev) return { error: "That job no longer exists." };
+    if (ev.customer_id !== inv.customer_id) return { error: "That job is for a different client." };
+    name = `EV-${ev.number} ${ev.name}`;
+  }
+  const { error } = await ctx.supabase.from("invoices").update({ event_id: eventId }).eq("id", inv.id).eq("organisation_id", ctx.org.id);
+  if (error) return { error: error.message };
+  await logActivity(ctx.supabase, {
+    orgId: ctx.org.id, actorId: ctx.user.id, action: "invoice.linked", entityType: "invoice", entityId: inv.id, eventId: eventId ?? inv.event_id, customerId: inv.customer_id,
+    summary: eventId ? `${actorName(ctx.profile)} linked ${inv.number} to ${name}` : `${actorName(ctx.profile)} took ${inv.number} off its job`,
+  });
+  revalidateInvoice(inv.id, eventId ?? inv.event_id, inv.customer_id);
+  if (inv.event_id && inv.event_id !== eventId) revalidatePath(`/events/${inv.event_id}`);
+  return { ok: eventId ? `Linked to ${name}.` : "Taken off the job." };
+}

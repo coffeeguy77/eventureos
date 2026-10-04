@@ -24,6 +24,8 @@ export interface EntryStaff {
   past: boolean;
   people: EntryStaffPerson[];
   options: { id: string; name: string }[];
+  /** A Google booking with no job: jobs on the same day it might be (best guess first) */
+  jobs?: { id: string; label: string; likely: boolean }[];
 }
 
 async function office() {
@@ -71,7 +73,16 @@ export async function loadEntryStaff(ref: string): Promise<R<EntryStaff>> {
       const { data: shifts } = await supabase.from("staff_shifts").select("id, crew_member_id, payment_id, member:crew_members(name)").eq("organisation_id", org.id).eq("source_calendar_event_id", r.booking.id);
       const people = ((shifts ?? []) as unknown as { id: string; crew_member_id: string; payment_id: string | null; member: { name: string } | null }[])
         .map((s) => ({ key: `c:${s.id}`, crewId: s.crew_member_id, name: s.member?.name ?? "?", status: "shift" as const, paid: !!s.payment_id }));
-      return { ok: true, data: { kind: "booking", past: localDate(r.booking.starts_at, org.timezone) < today, people, options } };
+      // Jobs on the same day — so the booking can be linked to the job it is (no duplicates, staff go on the job)
+      const day = localDate(r.booking.starts_at, org.timezone);
+      const { data: sameDay } = await supabase.from("events").select("id, number, name, venue, customer:customers(name)").eq("organisation_id", org.id).eq("event_date", day).neq("status", "cancelled").limit(20);
+      const words = (s: string | null | undefined) => (s ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+      const hay = `${r.booking.title} ${r.booking.location ?? ""}`.toLowerCase();
+      const jobs = ((sameDay ?? []) as unknown as { id: string; number: number; name: string; venue: string | null; customer: { name: string } | null }[]).map((j) => {
+        const likely = [...words(j.customer?.name), ...words(j.venue)].some((w) => hay.includes(w));
+        return { id: j.id, label: `EV-${j.number} · ${j.name}`, likely };
+      }).sort((a, b) => Number(b.likely) - Number(a.likely));
+      return { ok: true, data: { kind: "booking", past: day < today, people, options, jobs } };
     }
     return { ok: true, data: { kind: "none", note: "note" in r ? r.note : undefined, past: false, people: [], options: [] } };
   } catch (e) { return fail(e); }
@@ -154,5 +165,40 @@ export async function removeEntryStaff(key: string): Promise<R<string>> {
     revalidatePath("/calendar");
     revalidatePath("/wages");
     return { ok: true, data: "Removed." };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * This Google booking IS that job: link them, so the calendar shows one entry, staff go on the job, and accepting the
+ * quote doesn't add a second booking. Any shifts already added to the booking move onto the job's crew.
+ */
+export async function linkBookingToJob(calendarEntryId: string, eventId: string): Promise<R<string>> {
+  try {
+    const { supabase, org, user, profile } = await office();
+    if (!UUID.test(calendarEntryId) || !UUID.test(eventId)) throw new Error("Choose a job.");
+    const [{ data: ce }, { data: ev }] = await Promise.all([
+      supabase.from("calendar_events").select("id, title, event_id, kind").eq("organisation_id", org.id).eq("id", calendarEntryId).maybeSingle(),
+      supabase.from("events").select("id, number, name, customer_id").eq("organisation_id", org.id).eq("id", eventId).maybeSingle(),
+    ]);
+    if (!ce || !ev) throw new Error("Refresh and try again.");
+    if (ce.event_id) throw new Error("This booking is already linked to a job.");
+    const { data: has } = await supabase.from("calendar_events").select("id").eq("organisation_id", org.id).eq("event_id", ev.id).eq("kind", "event").limit(1);
+    if (has?.length) throw new Error(`EV-${ev.number} already has a booking on the calendar — delete one of them instead.`);
+    const { error } = await supabase.from("calendar_events").update({ event_id: ev.id, kind: "event", sync_status: "pending" }).eq("id", ce.id).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    // Shifts already put on the booking become crew on the job
+    const { data: shifts } = await supabase.from("staff_shifts").select("id, crew_member_id, payment_id").eq("organisation_id", org.id).eq("source_calendar_event_id", ce.id);
+    for (const sh of (shifts ?? []) as { id: string; crew_member_id: string; payment_id: string | null }[]) {
+      if (sh.payment_id) continue; // paid already — leave it as it is
+      await supabase.from("event_crew").upsert({ organisation_id: org.id, event_id: ev.id, crew_member_id: sh.crew_member_id, status: "confirmed", responded_at: new Date().toISOString() }, { onConflict: "event_id,crew_member_id", ignoreDuplicates: true });
+      await removeShiftCalendar(supabase, org.id, [sh.id]);
+      await supabase.from("staff_shifts").delete().eq("id", sh.id).eq("organisation_id", org.id);
+    }
+    await resyncJobCalendar(supabase, org.id, ev.id).catch(() => undefined);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "calendar.linked", entityType: "event", entityId: ev.id, eventId: ev.id, customerId: ev.customer_id,
+      summary: `${actorName(profile)} linked the Google Calendar booking “${ce.title}” to EV-${ev.number}` });
+    revalidatePath("/calendar");
+    revalidatePath(`/events/${ev.id}`);
+    return { ok: true, data: `Linked to EV-${ev.number} — one entry on the calendar now.` };
   } catch (e) { return fail(e); }
 }

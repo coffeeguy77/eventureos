@@ -1,4 +1,5 @@
 import "server-only";
+import { linkInvoicesToJobs } from "@/lib/invoices/link-jobs";
 import { applyContactFill, planContactFill, type ContactNow, type CustomerNow, type XeroContactFull } from "./xero-contact-details";
 import { localDate } from "@/lib/ai/classify";
 import { customerRecord, loadCustomersForMatching, upsertCandidate, type CustomerForMatch } from "@/lib/integrations/gmail-import";
@@ -206,6 +207,10 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     if (complete) complete = await pagedPhase<XeroContactFull>(ctx, "contacts", deadline,
       async (page, since) => (await xeroGet<{ Contacts?: XeroContactFull[] }>(ctx, "/Contacts", { page: String(page), pageSize: "100", includeArchived: "true", order: "UpdatedDateUTC ASC" }, since)).Contacts ?? [],
       async (list) => { counts.details += await fillFromContacts(ctx, list, R!.linked); });
+
+    // 3c. Put invoices raised in Xero onto the job they name (e.g. "Saturday 7 November")
+    const toJobs = await linkInvoicesToJobs(ctx.db, ctx.org.id).catch(() => 0);
+    if (toJobs) await logIntegration(ctx, { action: "xero.invoices_linked", entityType: "integration", entityId: ctx.integration.id, summary: `${toJobs} Xero invoice${toJobs === 1 ? "" : "s"} linked to their job by the date they name` });
 
     // 4. Push new EventureOS invoices
     if (complete && s.push_invoices && s.push_invoices !== "off") {

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, UserPlus, Users, X } from "lucide-react";
-import { addEntryStaff, loadEntryStaff, removeEntryStaff, type EntryStaff } from "@/app/(app)/calendar/staff-actions";
+import { Link2, Loader2, UserPlus, Users, X } from "lucide-react";
+import { addEntryStaff, linkBookingToJob, loadEntryStaff, removeEntryStaff, type EntryStaff } from "@/app/(app)/calendar/staff-actions";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
@@ -50,9 +50,30 @@ export function StaffSection({ refKey }: { refKey: string }) {
   );
   if (data.kind === "none") return data.note ? <p className="rounded-lg border border-line p-3 text-[0.78rem] text-ink-muted">{data.note}</p> : null;
 
+  const link = (eventId: string) => start(async () => {
+    setErr(null); setMsg(null);
+    const r = await linkBookingToJob(refKey, eventId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    if (!r.ok) { setErr(r.error); return; }
+    setMsg(r.data); router.refresh();
+  });
   const onIt = new Set(data.people.filter((p) => p.status !== "interested").map((p) => p.crewId));
   const choices = data.options.filter((o) => !onIt.has(o.id));
   return (
+    <div className="space-y-3">
+    {data.kind === "booking" && !!data.jobs?.length && (
+      <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-3 text-[0.8125rem]">
+        <p className="font-semibold text-ink">Is this one of your jobs?</p>
+        <p className="text-[0.75rem] text-ink-muted">Link it so there&apos;s one entry, staff go on the job, and accepting the quote won&apos;t book it twice.</p>
+        <ul className="mt-2 space-y-1.5">
+          {data.jobs.map((j) => (
+            <li key={j.id} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-ink">{j.label}{j.likely && <span className="ml-1.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.6875rem] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">Likely</span>}</span>
+              <Button size="sm" disabled={pending} onClick={() => link(j.id)}><Link2 className="h-3.5 w-3.5" />Link</Button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     <div className="rounded-lg border border-line p-3">
       <p className="flex items-center gap-1.5 text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint"><Users className="h-3.5 w-3.5" />Staff</p>
       {data.people.length === 0 ? <p className="mt-1.5 text-[0.8125rem] text-amber-700">Nobody on this yet.</p> : (
@@ -84,6 +105,7 @@ export function StaffSection({ refKey }: { refKey: string }) {
       </p>
       {msg && <p className="mt-1.5 text-[0.75rem] text-emerald-700">{msg}</p>}
       {err && <p className="mt-1.5 text-[0.75rem] text-rose-700">{err}</p>}
+    </div>
     </div>
   );
 }

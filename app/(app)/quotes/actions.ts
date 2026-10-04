@@ -1000,7 +1000,8 @@ export async function adminAcceptQuote(quoteId: string, acceptedBy: string, how:
     revalidatePath("/invoices");
     revalidatePath("/calendar");
     // Acceptance runs the "Quote accepted" automation, which may already have raised the (deposit) invoice
-    const { data: inv } = await supabase.from("invoices").select("id, number").eq("organisation_id", org.id).eq("quote_id", q.id).neq("status", "void").order("created_at", { ascending: false }).limit(1);
+    // The quote's invoice, else one already on the job (e.g. raised in Xero and linked)
+    const { data: inv } = await supabase.from("invoices").select("id, number").eq("organisation_id", org.id).or(`quote_id.eq.${q.id},event_id.eq.${q.event_id}`).neq("status", "void").order("created_at", { ascending: false }).limit(1);
     return inv?.length ? { invoiceHref: `/invoices/${inv[0].id}`, invoiceNumber: inv[0].number as string } : { invoiceHref: `/invoices/new?quote=${q.id}`, invoiceNumber: null };
   });
 }

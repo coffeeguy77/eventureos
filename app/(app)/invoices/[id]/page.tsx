@@ -14,6 +14,7 @@ import { daysBetween, fmtDate, fmtDateTime, money, relative, todayISO, zonedTime
 import type { ActivityLog, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { EmailInvoiceButton, InvoiceActions } from "./controls";
+import { InvoiceJobPicker } from "@/components/invoices/link-job";
 import { OldLines } from "@/components/history/old-lines";
 import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
@@ -65,6 +66,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     // Before the 0047 database update there's no credits table — treat as none
     supabase.from("invoice_credits").select("id, number, amount, credit_date, reason, xero_credit_note_id, created_by").eq("organisation_id", org.id).eq("invoice_id", inv.id).order("credit_date", { ascending: false }),
   ]);
+  // The client's jobs, newest first, to link this invoice to
+  const { data: jobRows } = inv.customer ? await supabase.from("events").select("id, number, name, event_date").eq("organisation_id", org.id).eq("customer_id", inv.customer.id).order("event_date", { ascending: false, nullsFirst: false }).limit(40) : { data: [] };
+  const jobs = ((jobRows ?? []) as { id: string; number: number; name: string; event_date: string | null }[]).map((j) => ({ id: j.id, label: `EV-${j.number} · ${j.event_date ? fmtDate(j.event_date) : "no date"} · ${j.name}` }));
   const credits = (creditRes.error ? [] : creditRes.data ?? []) as { id: string; number: string; amount: number; credit_date: string; reason: string; xero_credit_note_id: string | null; created_by: string | null }[];
   const credited = credits.reduce((t, c) => t + Number(c.amount), 0);
   const received = Math.max(0, Number(inv.amount_paid) - credited);
@@ -265,7 +269,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 </div>
                 <ArrowUpRight className="h-4 w-4 shrink-0 text-ink-faint" />
               </Link>
-            ) : <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Not linked to an event.</p>}
+            ) : !canManage(role) || !jobs.length ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Not linked to an event.</p> : null}
+            {canManage(role) && jobs.length > 0 && <InvoiceJobPicker invoiceId={inv.id} current={inv.event?.id ?? null} jobs={jobs} />}
           </Card>
 
         </div>

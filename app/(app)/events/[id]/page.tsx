@@ -28,6 +28,8 @@ import type { ActivityLog, EmailMessage, EmailThread, EventRecord, InvoiceStatus
 import { cn } from "@/lib/cn";
 import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { deleteJob } from "../actions";
+import { rankForJob, type InvoiceForMatch } from "@/lib/invoices/match-job";
+import { LinkInvoiceButton } from "@/components/invoices/link-job";
 
 export const metadata = { title: "Event" };
 
@@ -119,6 +121,15 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const quotes = (quotesRes.data ?? []) as QuoteRow[];
   const versions = (versionsRes.data ?? []) as unknown as VersionRow[];
   const invoices = (invoicesRes.data ?? []) as InvoiceRow[];
+  // The client's invoices that aren't on any job yet (usually raised in Xero) — ones naming this job's date first
+  type Loose = InvoiceForMatch & { number: string; total: number; status: InvoiceStatus; xero_invoice_id: string | null };
+  const loose: (Loose & { namesDate: boolean })[] = [];
+  if (tab === "invoice") {
+    const { data: lr } = await supabase.from("invoices").select("id, number, customer_id, issue_date, total, status, line_items, reference, xero_invoice_id")
+      .eq("organisation_id", org.id).eq("customer_id", e.customer.id).is("event_id", null).neq("status", "void").order("issue_date", { ascending: false }).limit(30);
+    const byId = new Map(((lr ?? []) as Loose[]).map((x) => [x.id, x]));
+    for (const r of rankForJob({ id: e.id, customer_id: e.customer.id, event_date: e.event_date }, [...byId.values()])) loose.push({ ...byId.get(r.id)!, namesDate: r.namesDate });
+  }
   const payments = (paymentsRes.data ?? []) as unknown as (PaymentRow & { invoice: { number: string } })[];
   const threads = (threadsRes.data ?? []) as EmailThread[];
   const tasks = (tasksRes.data ?? []) as Task[];
@@ -451,9 +462,26 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
         {tab === "invoice" && (
           <Card>
-            <CardHeader title="Invoices" subtitle="Xero will be the accounting source of truth once connected"
+            <CardHeader title="Invoices" subtitle={integrations.xero === "connected" ? "Invoices for this job — raised here or in Xero" : "Xero will be the accounting source of truth once connected"}
               action={<span className="text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected · demo invoices"}</span>} />
-            {invoices.length === 0 ? <EmptyState title="No invoices yet">When the quote is accepted, EventureOS can raise a deposit or full invoice automatically.</EmptyState> : (<>
+            {loose.length > 0 && (
+              <div className="border-t border-line bg-amber-50/40 px-5 py-3">
+                <p className="text-[0.8125rem] font-semibold text-ink">{e.customer.name} has {loose.length === 1 ? "an invoice" : `${loose.length} invoices`} not linked to a job</p>
+                <p className="text-[0.75rem] text-ink-muted">Usually raised in Xero before this job was booked here. Link the one for this job so it shows here and isn&apos;t invoiced twice.</p>
+                <ul className="mt-2 divide-y divide-amber-200/60">
+                  {loose.slice(0, 8).map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 text-[0.8125rem]">
+                      <Link href={`/invoices/${i.id}`} className="font-medium text-ink hover:text-brand-700">{i.number}</Link>
+                      <span className="text-ink-muted">{fmtDate(i.issue_date)} · {money(i.total, cur)}</span>
+                      <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>
+                      {i.namesDate && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[0.7rem] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">Names {fmtDate(e.event_date)} — likely this job</span>}
+                      <span className="ml-auto"><LinkInvoiceButton invoiceId={i.id} eventId={e.id} /></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {invoices.length === 0 ? <EmptyState title="No invoices on this job yet">{loose.length ? "Link one above if it was raised in Xero, or" : "When the quote is accepted,"} EventureOS can raise a deposit or full invoice automatically.</EmptyState> : (<>
               <ul className="divide-y divide-line border-t border-line md:hidden">
                 {invoices.map((i) => (
                   <li key={i.id} className="relative px-5 py-3 active:bg-zinc-50">
