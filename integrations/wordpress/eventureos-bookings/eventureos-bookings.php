@@ -41,7 +41,7 @@ function eos_render($atts) {
   $attrs .= ' data-min-height="' . $h . '"';
   // A link inside works without JavaScript too
   $url = eos_host() . '/book/' . rawurlencode($slug) . ($a['page'] === 'gift' ? '/gift' : ($a['course'] ? '/' . rawurlencode($a['course']) : ''));
-  return '<div class="eventureos-booking"' . $attrs . ' style="min-height:' . $h . 'px"><p><a href="' . esc_url($url) . '">Book online</a></p></div>';
+  return '<div class="eventureos-booking"' . $attrs . '><p><a href="' . esc_url($url) . '">Book online</a></p></div>';
 }
 add_shortcode('eventureos_booking', 'eos_render');
 

@@ -53,6 +53,7 @@
     for (var i = 0; i < frames.length; i++) if (frames[i].contentWindow === e.source) f = frames[i];
     if (!f) return;
     if (e.data.type === "eventureos:height" && typeof e.data.height === "number") {
+      f.style.minHeight = "0"; // the starting height is only a placeholder until the page says how tall it is
       f.style.height = Math.max(200, Math.min(20000, e.data.height)) + "px";
     } else if (e.data.type === "eventureos:navigate" && typeof e.data.url === "string") {
       // Only to Stripe's payment page or back to EventureOS
