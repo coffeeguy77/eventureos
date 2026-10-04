@@ -1,5 +1,5 @@
 import { requireOrg, canManage } from "@/lib/context";
-import { addDaysISO, fmtDate, fmtDateTime, todayISO, zonedMidnightUTC } from "@/lib/format";
+import { addDaysISO, fmtDate, fmtDateTime, todayISO, zonedMidnightUTC, zonedTimeUTC } from "@/lib/format";
 import { CalendarShell, type EventOption } from "@/components/calendar/calendar-shell";
 import {
   daysIn, findConflicts, isISODate, localParts, segmentsFor, viewRange,
@@ -79,6 +79,28 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       segments: segs,
     };
   });
+
+  // Jobs with a date in this view that aren't booked on the calendar yet (e.g. still being quoted) — shown dashed
+  const defaultRes = resources.find((r) => r.isDefault) ?? resources[0];
+  if (defaultRes) {
+    const { data: unbooked } = await supabase.from("events")
+      .select("id, number, name, event_date, start_time, finish_time, venue, status, customer:customers(name), calendar_events(id, kind)")
+      .eq("organisation_id", org.id).gte("event_date", range.start).lt("event_date", range.end).not("status", "in", "(cancelled)").limit(300);
+    for (const e of (unbooked ?? []) as unknown as EventRow[]) {
+      if (!e.event_date || e.calendar_events.some((c) => c.kind === "event")) continue;
+      const st = e.start_time?.slice(0, 5), fin = e.finish_time?.slice(0, 5);
+      const timed = !!st && !!fin && fin > st;
+      const startsAt = timed ? zonedTimeUTC(e.event_date, st!, tz) : zonedMidnightUTC(e.event_date, tz);
+      const endsAt = timed ? zonedTimeUTC(e.event_date, fin!, tz) : zonedMidnightUTC(addDaysISO(e.event_date, 1), tz);
+      entries.push({
+        id: `job:${e.id}`, title: e.name, kind: "event", startsAt, endsAt, allDay: !timed, lane: timed ? "timed" : "allday", location: e.venue,
+        resourceId: defaultRes.id, eventId: e.id, eventName: e.name, eventNumber: e.number, customerName: e.customer?.name ?? null,
+        syncStatus: "local", externalEventId: null, lastSyncedAt: null,
+        timeLabel: timed ? `${st}–${fin}` : "Time not set", dateLabel: fmtDate(e.event_date, "weekday"), conflictsWith: [],
+        segments: segmentsFor(startsAt, endsAt, days, tz), ghost: { status: e.status },
+      });
+    }
+  }
 
   const events = (evRes.data ?? []) as unknown as EventRow[];
   const eventOptions: EventOption[] = events.map((e) => ({

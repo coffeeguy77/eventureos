@@ -36,6 +36,8 @@ export interface Entry {
   resourceId: string; eventId: string | null; eventName: string | null; eventNumber: number | null;
   customerName: string | null; syncStatus: SyncStatus; externalEventId: string | null; lastSyncedAt: string | null;
   timeLabel: string; dateLabel: string; conflictsWith: string[]; segments: Segment[];
+  /** A job with a date that isn't booked on the calendar yet (shown dashed so it can still be seen and staffed) */
+  ghost?: { status: string };
 }
 
 export const AGENDA_DAYS = 60;

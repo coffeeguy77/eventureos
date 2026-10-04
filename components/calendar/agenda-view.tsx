@@ -43,7 +43,8 @@ export function AgendaView({ days, today, entries, resources, onOpen }: {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="truncate text-[0.8438rem] font-medium text-ink">{entry.title}</span>
-                        {entry.kind !== "event" && <span className="shrink-0 rounded bg-zinc-100 px-1.5 text-[0.6562rem] font-medium text-ink-muted">{KIND_LABEL[entry.kind]}</span>}
+                        {entry.ghost ? <span className="shrink-0 rounded border border-dashed border-ink-faint px-1.5 text-[0.6562rem] font-medium text-ink-muted">Not booked yet</span>
+                          : entry.kind !== "event" && <span className="shrink-0 rounded bg-zinc-100 px-1.5 text-[0.6562rem] font-medium text-ink-muted">{KIND_LABEL[entry.kind]}</span>}
                       </span>
                       <span className="block truncate text-[0.75rem] text-ink-muted">
                         {[res?.name, entry.customerName, entry.location].filter(Boolean).join(" · ")}

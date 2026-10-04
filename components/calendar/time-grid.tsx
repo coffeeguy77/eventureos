@@ -124,11 +124,11 @@ export function TimeGrid({ days, today, nowMin, entries, resources, hide, onOpen
                     <button key={p.entry.id} type="button" onClick={() => onOpen(p.entry.id)}
                       title={`${p.entry.title} · ${p.entry.timeLabel} · ${res?.name ?? ""}${conflict ? " · CONFLICT" : ""}`}
                       className={cn("absolute overflow-hidden rounded-md px-1.5 py-1 text-left text-[0.7188rem] leading-tight shadow-sm transition hover:z-10 hover:shadow-pop",
-                        conflict ? "bg-rose-50 text-rose-900 ring-2 ring-rose-500" : "text-ink ring-1 ring-surface")}
+                        p.entry.ghost ? "border border-dashed border-ink-faint/70 bg-surface/80 text-ink-muted" : conflict ? "bg-rose-50 text-rose-900 ring-2 ring-rose-500" : "text-ink ring-1 ring-surface")}
                       style={{
                         top: p.top + 1, height: p.height,
                         left: `calc(${(p.col / p.cols) * 100}% + 2px)`, width: `calc(${100 / p.cols}% - 4px)`,
-                        ...(conflict ? {} : { backgroundColor: tint(colour, "24"), boxShadow: `inset 3px 0 0 ${colour}` }),
+                        ...(conflict || p.entry.ghost ? {} : { backgroundColor: tint(colour, "24"), boxShadow: `inset 3px 0 0 ${colour}` }),
                       }}>
                       <span className="flex items-center gap-1 font-semibold">
                         {conflict && <AlertTriangle className="h-3 w-3 shrink-0 text-rose-600" />}

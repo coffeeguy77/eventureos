@@ -10,6 +10,8 @@ import { FormError, Select } from "@/components/ui/form";
 import { Drawer } from "./drawer";
 import { FALLBACK_COLOUR } from "./entry-chip";
 import { KIND_LABEL, type Entry, type Resource } from "./model";
+import { StaffSection } from "./staff-section";
+import { AddToCalendarButton } from "./add-to-calendar";
 import type { GoogleStatus } from "./calendar-shell";
 
 export function syncText(entry: Entry, res: Resource | undefined, google: GoogleStatus): { label: string; tone: "neutral" | "amber" | "green" | "red"; note: string } {
@@ -55,9 +57,7 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
       <>
         <div className="flex items-center gap-2 text-[0.75rem] text-ink-muted">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: res?.colour ?? FALLBACK_COLOUR }} />
-          {res?.name ?? "Unknown resource"}
-          <span className="text-ink-faint">·</span>
-          {KIND_LABEL[entry.kind]}
+          {entry.ghost ? "Not booked on the calendar yet" : <>{res?.name ?? "Unknown resource"}<span className="text-ink-faint">·</span>{KIND_LABEL[entry.kind]}</>}
         </div>
         <h2 className="mt-1 break-words text-[1rem] font-semibold leading-snug text-ink">{entry.title}</h2>
       </>
@@ -94,7 +94,7 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
               <div className="min-w-0"><dt className="sr-only">Location</dt><dd className="break-words text-ink">{entry.location}</dd></div>
             </div>
           )}
-          <div className="flex gap-3">
+          {!entry.ghost && <div className="flex gap-3">
             <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
             <div>
               <dt className="sr-only">Sync</dt>
@@ -102,8 +102,15 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
               <dd className="mt-1 text-[0.75rem] text-ink-muted">{sync.note}</dd>
               {entry.externalEventId && <dd className="mt-0.5 break-all text-[0.7188rem] text-ink-faint">Google event ID {entry.externalEventId}</dd>}
             </div>
-          </div>
+          </div>}
         </dl>
+
+        {entry.ghost && (
+          <div className="rounded-lg border border-dashed border-line-strong p-3 text-[0.8125rem]">
+            <p className="text-ink">This job has a date but isn&apos;t booked on the calendar yet{entry.ghost.status ? ` (it's ${entry.ghost.status.replace(/_/g, " ")})` : ""}. Jobs are booked automatically when the quote is accepted.</p>
+            {canManage && entry.eventId && <AddToCalendarButton eventId={entry.eventId} onCalendar={false} hasDate className="mt-2" />}
+          </div>
+        )}
 
         {entry.eventId && (
           <div className="rounded-lg border border-line p-3">
@@ -116,7 +123,9 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
           </div>
         )}
 
-        {canManage ? (
+        {canManage && <StaffSection refKey={entry.id} />}
+
+        {entry.ghost ? null : canManage ? (
           <div className="space-y-2 border-t border-line pt-4">
             <p className="text-[0.7812rem] font-medium text-ink">Calendar</p>
             <p className="text-[0.75rem] text-ink-muted">The resource an entry sits on decides which Google calendar it syncs to.</p>
@@ -138,7 +147,7 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
           {entry.eventId ? <ButtonLink href={`/events/${entry.eventId}?tab=schedule`} size="sm" className="h-10 w-full sm:h-8 sm:w-auto">Open event schedule</ButtonLink> : <span />}
-          {canManage && (confirming ? (
+          {canManage && !entry.ghost && (confirming ? (
             <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-rose-50 px-2 py-1.5 ring-1 ring-inset ring-rose-100 sm:w-auto">
               <span className="w-full px-1 text-[0.7812rem] text-rose-800 sm:w-auto sm:px-0">Delete this entry?</span>
               <Button size="sm" variant="danger" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={remove} disabled={pending}>{pending ? "Deleting…" : "Delete"}</Button>

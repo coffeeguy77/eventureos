@@ -22,16 +22,17 @@ export function EntryChip({ entry, resource, onOpen, showTime = true, timeText }
     <button
       type="button"
       onClick={() => onOpen(entry.id)}
-      title={`${entry.title} · ${entry.timeLabel} · ${resource?.name ?? ""}${conflict ? " · CONFLICT" : ""}`}
+      title={entry.ghost ? `${entry.title} · not booked on the calendar yet` : `${entry.title} · ${entry.timeLabel} · ${resource?.name ?? ""}${conflict ? " · CONFLICT" : ""}`}
       className={cn(
         "flex w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-[0.7188rem] leading-tight transition-colors",
-        conflict ? "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-300 hover:bg-rose-100"
+        entry.ghost ? "border border-dashed border-ink-faint/60 text-ink-muted hover:bg-zinc-100"
+          : conflict ? "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-300 hover:bg-rose-100"
           : bar ? "text-ink hover:brightness-95" : "text-ink hover:bg-zinc-100"
       )}
-      style={bar && !conflict ? { backgroundColor: tint(colour, "26"), boxShadow: `inset 3px 0 0 ${colour}` } : undefined}
+      style={bar && !conflict && !entry.ghost ? { backgroundColor: tint(colour, "26"), boxShadow: `inset 3px 0 0 ${colour}` } : undefined}
     >
       {conflict ? <AlertTriangle className="h-3 w-3 shrink-0 text-rose-600" />
-        : !bar && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colour }} />}
+        : !bar && <span className={cn("h-2 w-2 shrink-0 rounded-full", entry.ghost && "border border-dashed border-ink-faint bg-transparent")} style={entry.ghost ? undefined : { backgroundColor: colour }} />}
       {showTime && !bar && <span className="tabular shrink-0 text-ink-muted">{timeText}</span>}
       <span className="truncate font-medium">{entry.title}</span>
     </button>
