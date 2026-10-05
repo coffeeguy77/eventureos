@@ -153,7 +153,7 @@ export function SessionGenerator({ courses }: { courses: { id: string; name: str
     if (r.ok) router.refresh();
   });
   return (
-    <div className="sticky top-20 space-y-4">
+    <div className="space-y-4">
       <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
         <p className="flex items-center gap-2 text-[0.9375rem] font-semibold text-ink"><CalendarPlus className="h-4 w-4" />Add repeating dates</p>
         <div className="mt-3 grid gap-2.5">

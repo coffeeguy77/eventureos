@@ -87,3 +87,19 @@ test("spreadsheet dates and times", () => {
   assert.equal(parseTime("10/10/2026 9am"), "09:00");
   assert.equal(parseTime("2026-10-10"), null);
 });
+
+test("weekly timetable: Saturdays for 60 days, skipping a closed period", async () => {
+  const { readSchedules, readClosures, scheduleDates } = await import("./core");
+  const [sc] = readSchedules([{ course_id: "11111111-1111-1111-1111-111111111111", weekdays: [6, "6", 9], times: ["14:30", "10:00", "25:00"] }]);
+  assert.deepEqual(sc.weekdays, [6]);
+  assert.deepEqual(sc.times, ["10:00", "14:30"]);
+  assert.equal(sc.days_ahead, 60);
+  const cl = readClosures([{ from: "2026-10-24", to: "2026-10-31", label: "Break" }, { from: "bad" }]);
+  assert.equal(cl.length, 1);
+  const d = scheduleDates(sc, cl, "2026-10-05");
+  assert.equal(d[0], "2026-10-10");
+  assert.ok(!d.includes("2026-10-24") && !d.includes("2026-10-31"));
+  assert.ok(d.includes("2026-11-07") && d.includes("2026-12-04") === false && d.includes("2026-11-28"));
+  assert.ok(d.every((x) => new Date(x + "T00:00:00Z").getUTCDay() === 6));
+  assert.equal(readSchedules([{ course_id: "x", weekdays: [1], times: ["10:00"] }]).length, 0);
+});

@@ -6,7 +6,7 @@ import { actorName, logActivity } from "@/lib/activity";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { newIntakeKey } from "@/lib/intake/keys";
 import { zonedTimeUTC } from "@/lib/format";
-import { cleanEmail, cleanPhone, normCode, readSettings, repeatDates, slugify, type Question } from "@/lib/bookings/core";
+import { cleanEmail, cleanPhone, normCode, readClosures, readSchedules, readSettings, repeatDates, slugify, type Closure, type Question, type Schedule } from "@/lib/bookings/core";
 import { deliverGift, finalizeBooking, newGiftCode, orgById, refreshAgencyDraft, syncSessionBlock } from "@/lib/bookings/server";
 import { importCsv, type CsvRow } from "@/lib/bookings/import";
 
@@ -157,7 +157,11 @@ export async function deleteSession(id: string): Promise<Result> {
     if (count) throw new Error("This session has bookings — cancel it instead, so the bookings are kept.");
     const db = createServiceClient();
     await supabase.from("booking_sessions").update({ status: "cancelled" }).eq("organisation_id", org.id).eq("id", id);
-    await syncSessionBlock(db, await orgById(db, org.id), id).catch(() => undefined);
+    const o = await orgById(db, org.id);
+    await syncSessionBlock(db, o, id).catch(() => undefined);
+    // A course on a weekly timetable would get this date back, so keep it as cancelled instead
+    const { data: sess } = await supabase.from("booking_sessions").select("course_id").eq("organisation_id", org.id).eq("id", id).maybeSingle();
+    if (sess && o.settings.schedules.some((x) => x.active && x.course_id === sess.course_id)) { refresh(); return "Session cancelled (kept as cancelled so the weekly timetable doesn't add it back)."; }
     const { error } = await supabase.from("booking_sessions").delete().eq("organisation_id", org.id).eq("id", id);
     if (error) throw new Error(error.message);
     refresh();
@@ -382,6 +386,26 @@ export async function saveBookingSettings(s: Record<string, unknown>): Promise<R
     if (error) throw new Error(error.message);
     refresh();
     return "Settings saved.";
+  });
+}
+
+/** Weekly timetables and closed periods; saving fills in the dates straight away. */
+export async function saveSchedules(schedules: Schedule[], closures: Closure[]): Promise<Result> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const sc = readSchedules(schedules), cl = readClosures(closures);
+    const { data: own } = await supabase.from("booking_courses").select("id").eq("organisation_id", org.id);
+    const ids = new Set(((own ?? []) as { id: string }[]).map((c) => c.id));
+    const { data: o, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    if (e1) throw new Error(e1.message);
+    const current = (o.settings ?? {}) as Record<string, unknown>;
+    const booking = { ...((current.booking as Record<string, unknown>) ?? {}), schedules: sc.filter((x) => ids.has(x.course_id)), closures: cl };
+    const { error } = await supabase.from("organisations").update({ settings: { ...current, booking } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    const { fillSchedules } = await import("@/lib/bookings/schedules");
+    const made = await fillSchedules(createServiceClient(), org.id);
+    refresh();
+    return `Timetable saved${made ? ` — ${made} new date${made === 1 ? "" : "s"} opened for booking` : ""}.`;
   });
 }
 

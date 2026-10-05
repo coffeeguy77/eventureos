@@ -646,6 +646,12 @@ export async function runBookingJobs(db: SupabaseClient) {
   const orgs = new Map<string, PublicOrg>();
   const getOrg = async (id: string) => { if (!orgs.has(id)) orgs.set(id, await orgById(db, id)); return orgs.get(id)!; };
 
+  // Weekly timetables: keep dates open the set number of days ahead
+  try {
+    const { fillAllSchedules } = await import("./schedules");
+    (out as Record<string, number>).timetable = await fillAllSchedules(db);
+  } catch { /* never block the other jobs */ }
+
   // Reminders: confirmed bookings for sessions in the next 14 days
   const { data: soon } = await db.from("bookings").select(FULL_INNER).eq("status", "confirmed").is("reminder_sent_at", null).in("source", ["website", "wordpress", "office"])
     .gt("session.starts_at", new Date(now).toISOString()).lt("session.starts_at", new Date(now + 14 * 86400e3).toISOString()).not("contact_email", "is", null).limit(200);

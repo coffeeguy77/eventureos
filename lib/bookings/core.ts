@@ -38,6 +38,39 @@ export interface BookingSettings {
   faqs: { q: string; a: string }[];
   /** The public booking page as a landing page: search title/description, headline, photo, highlights and text sections */
   landing: Landing;
+  /** Weekly timetable per course: sessions are kept open this many days ahead automatically */
+  schedules: Schedule[];
+  /** Closed periods (e.g. Christmas): no timetable sessions are created on these dates */
+  closures: Closure[];
+}
+
+export interface Schedule { course_id: string; weekdays: number[]; times: string[]; days_ahead: number; active: boolean }
+export interface Closure { from: string; to: string; label: string | null }
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+export function readSchedules(raw: unknown): Schedule[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 30).map((x) => {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    const weekdays = Array.isArray(o.weekdays) ? [...new Set(o.weekdays.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort() : [];
+    const times = Array.isArray(o.times) ? [...new Set(o.times.filter((t): t is string => typeof t === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t)))].sort().slice(0, 6) : [];
+    const n = Number(o.days_ahead);
+    return { course_id: typeof o.course_id === "string" ? o.course_id : "", weekdays, times, days_ahead: Number.isFinite(n) ? Math.max(14, Math.min(365, Math.round(n))) : 60, active: o.active !== false };
+  }).filter((x) => /^[0-9a-f-]{36}$/i.test(x.course_id) && x.weekdays.length && x.times.length);
+}
+export function readClosures(raw: unknown): Closure[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 40).map((x) => {
+    const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+    const from = typeof o.from === "string" && DATE.test(o.from) ? o.from : "", to0 = typeof o.to === "string" && DATE.test(o.to) ? o.to : from;
+    return { from, to: to0 < from ? from : to0, label: typeof o.label === "string" && o.label.trim() ? o.label.trim().slice(0, 80) : null };
+  }).filter((x) => x.from);
+}
+/** Dates (YYYY-MM-DD) a timetable should have sessions on, from `today` for its days ahead, skipping closures. */
+export function scheduleDates(sc: Schedule, closures: Closure[], today: string) {
+  const end = new Date(Date.parse(today + "T00:00:00Z") + sc.days_ahead * 86400e3).toISOString().slice(0, 10);
+  const closed = (d: string) => closures.some((c) => d >= c.from && d <= c.to);
+  return sc.weekdays.flatMap((w) => repeatDates(today, end, w, 1)).filter((d) => !closed(d)).sort();
 }
 
 export interface Landing {
@@ -63,7 +96,7 @@ export function readLanding(raw: unknown): Landing {
 
 export const DEFAULT_SETTINGS: BookingSettings = {
   enabled: true, hold_minutes: 30, cancel_hours: 48, reminder_hours: 48, followup: true, review_url: null,
-  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [], landing: DEFAULT_LANDING,
+  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [], landing: DEFAULT_LANDING, schedules: [], closures: [],
 };
 
 const num = (v: unknown, d: number, min: number, max: number) => {
@@ -94,6 +127,7 @@ export function readSettings(orgSettings: unknown): BookingSettings {
     faqs: Array.isArray(raw.faqs) ? (raw.faqs as unknown[]).map((f) => (f && typeof f === "object" ? { q: str((f as Record<string, unknown>).q, 200) ?? "", a: str((f as Record<string, unknown>).a, 2000) ?? "" } : null))
       .filter((f): f is { q: string; a: string } => !!f && !!f.q && !!f.a).slice(0, 12) : [],
     landing: readLanding(raw.landing),
+    schedules: readSchedules(raw.schedules), closures: readClosures(raw.closures),
   };
 }
 
