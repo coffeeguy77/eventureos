@@ -78,10 +78,16 @@ export async function updateCaseManager(id: string, p: { name: string; email: st
     const { cleanEmail } = await import("@/lib/bookings/core");
     const email = cleanEmail(p.email), name = p.name.trim().replace(/\s+/g, " ").slice(0, 160);
     if (!email || name.length < 2) return { ok: false, error: "Enter a name and a valid email." };
-    const { error } = await createServiceClient().from("booking_case_managers").update({ name, email, phone: cleanPhone(p.phone), site: p.site.trim().slice(0, 160) || null, active: p.active }).eq("id", id).eq("organisation_id", org.id);
+    const db = createServiceClient();
+    const { data: before } = await db.from("booking_case_managers").select("email").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    if (!before) return { ok: false, error: "Not found." };
+    const { error } = await db.from("booking_case_managers").update({ name, email, phone: cleanPhone(p.phone), site: p.site.trim().slice(0, 160) || null, active: p.active }).eq("id", id).eq("organisation_id", org.id);
     if (error) return { ok: false, error: /duplicate|unique/i.test(error.message) ? "Another case manager at this agency already has that email." : msg(error) };
-    // Signing someone off ends their sessions straight away
-    if (!p.active) await createServiceClient().from("booking_case_manager_sessions").delete().eq("case_manager_id", id);
+    // Removing someone, or changing their email, ends their sign-ins straight away
+    if (!p.active || String(before.email).toLowerCase() !== email.toLowerCase()) {
+      await db.from("booking_case_manager_sessions").delete().eq("case_manager_id", id).eq("organisation_id", org.id);
+      await db.from("booking_case_manager_logins").delete().eq("case_manager_id", id).eq("organisation_id", org.id).is("used_at", null);
+    }
     revalidatePath("/bookings/agencies");
     return { ok: true, data: p.active ? "Saved." : "Removed from the list — they can't book or sign in." };
   } catch (e) { return { ok: false, error: msg(e) }; }

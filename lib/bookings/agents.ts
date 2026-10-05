@@ -39,10 +39,11 @@ export async function agencyByCode(db: SupabaseClient, orgId: string, code: stri
 
 /** The pick-your-name list for an agency (most recently used first). */
 export async function caseManagerList(db: SupabaseClient, agencyId: string) {
-  const { data, error } = await db.from("booking_case_managers").select("id, name, site, last_used_at").eq("agency_id", agencyId).eq("active", true)
+  const { data, error } = await db.from("booking_case_managers").select("id, name, email, site, last_used_at").eq("agency_id", agencyId).eq("active", true)
     .order("last_used_at", { ascending: false, nullsFirst: false }).order("name").limit(300);
   if (error) return null; // before the 0052 update
-  return ((data ?? []) as { id: string; name: string; site: string | null }[]).map((c) => ({ id: c.id, label: listName(c.name), site: c.site }));
+  // The masked email sits under each name, so a look-alike entry with someone else's address stands out
+  return ((data ?? []) as { id: string; name: string; email: string; site: string | null }[]).map((c) => ({ id: c.id, label: listName(c.name), site: [c.site, maskEmail(c.email)].filter(Boolean).join(" · ") }));
 }
 
 export async function caseManagerById(db: SupabaseClient, orgId: string, id: string, agencyId?: string): Promise<CaseManager | null> {

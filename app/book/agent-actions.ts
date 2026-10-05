@@ -53,8 +53,11 @@ export async function agentJoinAction(slug: string, code: string, p: CaseManager
   try {
     const x = await orgAndAgency(slug, code);
     if (!x) return { ok: false, error: "That agency code isn't recognised." };
-    const r = await addCaseManager(createServiceClient(), x.org.id, x.agency.id, p, "self");
+    const db = createServiceClient();
+    const r = await addCaseManager(db, x.org.id, x.agency.id, p, "self");
     if (!r.ok) return r;
+    await db.from("activity_logs").insert({ organisation_id: x.org.id, actor_type: "system", actor_label: "Bookings", action: "agency.case_manager_self_added", entity_type: "booking_case_manager", entity_id: r.data.id,
+      summary: `${r.data.name} (${r.data.email}) signed in as a case manager for ${x.agency.name}` });
     await startAgentSession(x.org, r.data.id, "book");
     return { ok: true, data: r.data.name.split(/\s+/)[0] };
   } catch (e) { return fail(e); }
@@ -140,7 +143,7 @@ export async function agentDetailsAction(slug: string, p: { phone: string; site:
   try {
     const org = await publicOrg(slug);
     const agent = org ? await currentAgent(org) : null;
-    if (!agent) return { ok: false, error: "Please sign in again." };
+    if (!agent || agent.scope !== "portal") return { ok: false, error: "Please sign in with your emailed link first." };
     const { error } = await createServiceClient().from("booking_case_managers").update({ phone: cleanPhone(p.phone), site: p.site.trim().slice(0, 160) || null }).eq("id", agent.cm.id);
     return error ? { ok: false, error: "Couldn't save." } : { ok: true, data: "Saved." };
   } catch (e) { return fail(e); }

@@ -14,8 +14,9 @@ export async function startBookingAction(input: StartBookingInput): Promise<Star
       const org = await publicOrg(input.orgSlug);
       const { currentAgent } = await import("@/lib/bookings/agents");
       const agent = org ? await currentAgent(org).catch(() => null) : null;
-      if (agent && agent.agency.code === normCode(input.agencyCode)) input = { ...input, caseManagerId: agent.cm.id, newCaseManager: null };
-    } else input = { ...input, caseManagerId: null, newCaseManager: null };
+      if (agent && agent.agency.code === normCode(input.agencyCode)) input = { ...input, caseManagerId: agent.cm.id, newCaseManager: null, agentBooking: true };
+      else input = { ...input, agentBooking: false };
+    } else input = { ...input, caseManagerId: null, newCaseManager: null, agentBooking: false };
     return await startBooking(input);
   }
   catch (e) { return notReady(String(e)) ? { ok: false, error: "Online booking is being set up — please try again soon." } : fail(e); }

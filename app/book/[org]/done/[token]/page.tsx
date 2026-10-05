@@ -6,6 +6,7 @@ import { shareLink } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
 import { currentAgent } from "@/lib/bookings/agents";
+import { createServiceClient } from "@/lib/integrations/runtime";
 import { AutoRefresh } from "@/components/book/auto-refresh";
 import { ShareBox } from "@/components/book/share";
 
@@ -29,7 +30,11 @@ export default async function DonePage({ params, searchParams }: P) {
   const confirmed = ["confirmed", "attended"].includes(b.status);
   const courseUrl = shareLink(bookUrl(org, `/${b.course.slug}`), "share", "referral");
   // A case manager who just booked a job seeker (agency bookings only)
-  const agent = b.payment_method === "agency" ? await currentAgent(org).catch(() => null) : null;
+  let agent = b.payment_method === "agency" ? await currentAgent(org).catch(() => null) : null;
+  if (agent) {
+    const { data: own } = await createServiceClient().from("bookings").select("case_manager_id").eq("id", b.id).maybeSingle();
+    if (own?.case_manager_id !== agent.cm.id) agent = null;
+  }
 
   return (
     <BookShell org={org} embed={false}>

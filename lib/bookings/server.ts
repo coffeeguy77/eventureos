@@ -133,6 +133,8 @@ export interface StartBookingInput {
   waitlist?: boolean; utm?: Record<string, string>; source?: "website" | "wordpress";
   /** Agency bookings: the case manager (picked from the list, or the signed-in one), or a new one typed in */
   caseManagerId?: string | null; newCaseManager?: { name: string; email: string; phone?: string | null; site?: string | null } | null;
+  /** Set only by the server action when a signed-in case manager is booking (their job seeker's email is then optional) */
+  agentBooking?: boolean;
 }
 export type StartResult = { ok: true; redirect: string } | { ok: false; error: string; soldOut?: boolean };
 
@@ -155,7 +157,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   const phone = cleanPhone(input.phone);
   if (name.length < 2) return { ok: false, error: "Enter your name." };
   // A case manager booking a job seeker may not have their email — everything then goes to the case manager
-  const viaCaseManager = !!input.agencyCode?.trim() && !!(input.caseManagerId || input.newCaseManager);
+  const viaCaseManager = !!input.agentBooking && !!input.agencyCode?.trim() && !!input.caseManagerId;
   if (!email && (!viaCaseManager || (input.email ?? "").trim())) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
   const seats = Math.max(1, Math.min(course.max_seats_per_booking, Math.round(Number(input.seats) || 1)));
   const attendees = (input.attendees ?? []).map((a) => (a ?? "").trim().slice(0, 160)).slice(0, seats);
@@ -188,7 +190,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
       caseManager = r.data;
     }
   }
-  if (!email && !caseManager) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
+  if (!email && !(caseManager && viaCaseManager)) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
   const priceEach = agency ? Number(agency.price ?? course.agency_price ?? session.price ?? course.price) : Number(session.price ?? course.price);
 
   // No email (booked by a case manager): reuse a student with the same name and phone rather than making a duplicate
