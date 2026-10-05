@@ -35,6 +35,7 @@ export default async function CertificatePage({ params }: P) {
   return (
     <BookShell org={org} embed={false} wide>
       <style>{CERT_FONT_CSS}</style>
+      <div className="mx-auto max-w-6xl">
       <div className={`mb-5 flex items-center gap-3 rounded-2xl px-5 py-4 ${valid ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900"}`}>
         <BadgeCheck className="h-7 w-7 shrink-0" />
         <p className="text-[0.9375rem]">{valid ? <><b>Genuine certificate.</b> Issued by {org.name} to <b>{c.person_name}</b> for completing {c.course_name} on {certDate(c.completed_on)}.</> : <><b>This certificate has been withdrawn</b> by {org.name}.</>}</p>
@@ -49,6 +50,7 @@ export default async function CertificatePage({ params }: P) {
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Certificate {c.number}. Add it to your résumé or LinkedIn — this page proves it&apos;s real.</p>
         </>
       )}
+      </div>
     </BookShell>
   );
 }

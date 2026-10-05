@@ -29,11 +29,13 @@ export default async function GiftPage({ params, searchParams }: P) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
   return (
     <BookShell org={org} embed={embed} back={embed ? undefined : { href: `/book/${org.slug}`, label: "All classes" }}>
+      <div className={embed ? "" : "mx-auto max-w-3xl"}>
       <h1 className="text-[1.625rem] font-bold tracking-tight text-ink">Give a class as a gift</h1>
       <p className="mb-5 mt-1 text-[0.9375rem] text-ink-muted">Perfect for birthdays, Christmas and Father&apos;s Day. Valid for {Math.round(org.settings.gift_expiry_months / 12)} years — they choose their own date.</p>
       {!org.stripeReady || !options.length
         ? <p className="rounded-2xl border border-line bg-surface p-6 text-center text-ink-muted">Gift certificates aren&apos;t available online right now. Please contact {org.name}.</p>
         : <GiftForm orgSlug={org.slug} currency={org.currency} options={options} minDate={today} />}
+      </div>
     </BookShell>
   );
 }

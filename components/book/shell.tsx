@@ -14,6 +14,9 @@ export function brandStyle(org: Pick<PublicOrg, "brand_colour">): React.CSSPrope
   return { ["--b" as string]: b, ["--on-b" as string]: onColour(b) };
 }
 
+/** Desktop page width for public pages (phones and tablets get the full width with side padding). */
+export const PAGE = "mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10";
+
 /** The frame around every public booking page. In the website widget (embed) there's no header, and the frame resizes itself. */
 export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean }) {
   const q = embed ? "?embed=1" : "";
@@ -22,7 +25,7 @@ export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg
       {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important;min-height:0!important;height:auto!important}"}</style></>}
       {!embed && (
         <header className="border-b border-line bg-surface">
-          <div className={`mx-auto flex h-16 items-center gap-3 px-4 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>
+          <div className={`${PAGE} flex h-16 items-center gap-3`}>
             <Link href={`/book/${org.slug}`} className="flex min-w-0 items-center gap-3">
               {org.logo_url && /^https:\/\//.test(org.logo_url)
                 ? <img src={org.logo_url} alt={org.name} className="h-9 max-w-[160px] object-contain" />
@@ -33,7 +36,7 @@ export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg
           </div>
         </header>
       )}
-      <main className={`mx-auto ${wide ? "max-w-5xl" : "max-w-3xl"} ${embed ? "" : "px-4 py-6 sm:py-10"}`}>
+      <main className={embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
         {back && <Link href={back.href + q} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {back.label}</Link>}
         {children}
       </main>

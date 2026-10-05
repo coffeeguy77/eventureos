@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { JobsOrg } from "@/lib/jobs/server";
-import { brandStyle } from "@/components/book/shell";
+import { brandStyle, PAGE } from "@/components/book/shell";
 
 type Nav = { href: string; label: string; badge?: number }[];
 
@@ -10,7 +10,7 @@ export function JobsShell({ org, children, nav, side, wide = true }: { org: Jobs
   return (
     <div style={brandStyle(org)} className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-surface">
-        <div className={`mx-auto flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>
+        <div className={`${PAGE} flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 py-2`}>
           <Link href={side === "employer" ? `${base}/employers` : base} className="flex min-w-0 items-center gap-3">
             {org.logo_url && /^https:\/\//.test(org.logo_url)
               ? <img src={org.logo_url} alt={org.name} className="h-9 max-w-[140px] object-contain" />
@@ -30,7 +30,7 @@ export function JobsShell({ org, children, nav, side, wide = true }: { org: Jobs
           )}
         </div>
       </header>
-      <main className={`mx-auto px-4 py-6 sm:py-10 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>{children}</main>
+      <main className={`${PAGE} py-6 sm:py-10`}><div className={wide ? "" : "mx-auto max-w-4xl"}>{children}</div></main>
       <footer className="pb-10 pt-4 text-center text-[0.75rem] text-ink-faint">
         <p>{org.jobs.name} · {[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}</p>
         <p className="mt-1">Phone numbers and emails stay private unless the barista chooses to share them.</p>

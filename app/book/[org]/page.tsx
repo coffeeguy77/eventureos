@@ -51,7 +51,7 @@ export default async function BookHome({ params, searchParams }: P) {
       ) : data.courses.length === 0 ? (
         <p className="rounded-2xl border border-line bg-surface p-6 text-center text-[0.9375rem] text-ink-muted">No classes are open for booking right now — check back soon.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {data.courses.map((c) => {
             const next = data.sessions.filter((s) => s.course_id === c.id);
             const open = next.filter((s) => !s.full);
