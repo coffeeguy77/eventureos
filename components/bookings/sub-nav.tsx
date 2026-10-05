@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/bookings/students", label: "Students" },
   { href: "/bookings/gifts", label: "Gift certificates" },
   { href: "/bookings/certificates", label: "Certificates" },
+  { href: "/bookings/jobs", label: "Barista jobs" },
   { href: "/bookings/agencies", label: "Agencies" },
   { href: "/bookings/website", label: "Website & settings" },
 ];

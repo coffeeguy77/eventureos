@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { appBaseUrl } from "@/lib/integrations/registry";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { cleanEmail } from "./core";
 import { loginEmail } from "./emails";
@@ -20,17 +21,27 @@ export const cookieName = (orgId: string) => `eos_student_${orgId.slice(0, 8)}`;
 
 export type LoginResult = { ok: true; message: string } | { ok: false; error: string };
 
-export async function requestLogin(orgSlug: string, rawEmail: string): Promise<LoginResult> {
+export async function requestLogin(orgSlug: string, rawEmail: string, opts: { target?: "account" | "jobs"; signupName?: string | null } = {}): Promise<LoginResult> {
   const db = createServiceClient();
   const org = await publicOrg(orgSlug, db);
   if (!org) return { ok: false, error: "Not found." };
   const email = cleanEmail(rawEmail);
   if (!email) return { ok: false, error: "Enter the email address you booked with." };
-  const sent = { ok: true as const, message: `If ${email} has booked with ${org.name}, a sign-in link is on its way. Check your inbox (and junk folder).` };
+  const sent = { ok: true as const, message: opts.signupName?.trim()
+    ? `Check your inbox — we've emailed a link to ${email} to finish signing up (have a look in junk too).`
+    : `If ${email} has booked with ${org.name}, a sign-in link is on its way. Check your inbox (and junk folder).` };
 
   let { data: st } = await db.from("booking_students").select("id, name").eq("organisation_id", org.id).ilike("email", email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
   if (!st) {
     // Booked before students were tracked (e.g. a booking with this email but no student record)
+    const { data: b } = await db.from("bookings").select("contact_name, contact_phone").eq("organisation_id", org.id).eq("contact_email", email).limit(1).maybeSingle();
+    if (!b && opts.signupName?.trim()) {
+      // New barista signing up for the job board
+      const id = await ensureStudent(db, org.id, { name: opts.signupName.trim().slice(0, 160), email, phone: null, source: "jobs" });
+      st = { id, name: opts.signupName.trim() };
+    }
+  }
+  if (!st) {
     const { data: b } = await db.from("bookings").select("contact_name, contact_phone").eq("organisation_id", org.id).eq("contact_email", email).limit(1).maybeSingle();
     if (!b) return sent; // don't reveal who has booked
     const id = await ensureStudent(db, org.id, { name: b.contact_name as string, email, phone: (b.contact_phone as string) ?? null, source: "website" });
@@ -43,7 +54,8 @@ export async function requestLogin(orgSlug: string, rawEmail: string): Promise<L
   const { error } = await db.from("booking_student_logins").insert({ organisation_id: org.id, student_id: st.id, token_hash: sha(token), expires_at: new Date(Date.now() + LINK_MINUTES * 60e3).toISOString() });
   if (error) return { ok: false, error: /booking_student_logins/.test(error.message) ? "Sign-in is being set up — please try again soon." : error.message };
   if (!emailConfigured()) return { ok: false, error: "Email isn't set up yet — please contact us." };
-  const m = loginEmail(brandOf(org), { firstName: String(st.name).split(/\s+/)[0] || "there", url: bookUrl(org, `/account/verify?t=${token}`), minutes: LINK_MINUTES });
+  const url = opts.target === "jobs" ? `${appBaseUrl()}/jobs/${org.slug}/verify?t=${token}` : bookUrl(org, `/account/verify?t=${token}`);
+  const m = loginEmail(brandOf(org), { firstName: String(st.name).split(/\s+/)[0] || "there", url, minutes: LINK_MINUTES });
   try { await sendEmail({ to: email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name }); }
   catch { return { ok: false, error: "We couldn't send the email just now — please try again." }; }
   return sent;
@@ -65,7 +77,8 @@ export async function consumeLogin(org: PublicOrg, token: string): Promise<{ ok:
 }
 
 export async function setSessionCookie(org: PublicOrg, session: string) {
-  (await cookies()).set(cookieName(org.id), session, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: `/book/${org.slug}`, maxAge: SESSION_DAYS * 86400 });
+  // One sign-in for this business's booking pages and job board
+  (await cookies()).set(cookieName(org.id), session, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 86400 });
 }
 
 export interface Student { id: string; name: string; email: string | null; phone: string | null; marketing_ok: boolean; certificate_requested_at: string | null }
@@ -86,5 +99,12 @@ export async function signOut(org: PublicOrg) {
   const jar = await cookies();
   const token = jar.get(cookieName(org.id))?.value;
   if (token && /^[0-9a-f]{64}$/.test(token)) await createServiceClient().from("booking_student_sessions").delete().eq("organisation_id", org.id).eq("token_hash", sha(token));
-  jar.set(cookieName(org.id), "", { path: `/book/${org.slug}`, maxAge: 0 });
+  jar.set(cookieName(org.id), "", { path: "/", maxAge: 0 });
+}
+
+/** Start a session for a student directly (used when they arrive from their own welcome-letter link). */
+export async function startSessionFor(org: PublicOrg, studentId: string) {
+  const session = randomBytes(32).toString("hex");
+  await createServiceClient().from("booking_student_sessions").insert({ organisation_id: org.id, student_id: studentId, token_hash: sha(session), expires_at: new Date(Date.now() + SESSION_DAYS * 86400e3).toISOString() });
+  await setSessionCookie(org, session);
 }

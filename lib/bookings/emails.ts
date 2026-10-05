@@ -14,9 +14,9 @@ function onColour(hex: string) {
 
 export interface Brand { businessName: string; logoUrl?: string | null; brand?: string | null; contactEmail?: string | null; contactPhone?: string | null }
 interface Row { label: string; value: string }
-interface Btn { label: string; url: string }
+export interface Btn { label: string; url: string }
 
-function shell(b: Brand, o: { title: string; heading: string; intro: string[]; rows?: Row[]; buttons?: Btn[]; after?: string[]; footer?: string; badge?: string; big?: string }) {
+export function shell(b: Brand, o: { title: string; heading: string; intro: string[]; rows?: Row[]; buttons?: Btn[]; after?: string[]; footer?: string; badge?: string; big?: string }) {
   const colour = safeColour(b.brand);
   const logo = b.logoUrl && /^https:\/\//.test(b.logoUrl)
     ? `<img src="${esc(b.logoUrl)}" alt="${esc(b.businessName)}" height="44" style="display:block;height:44px;max-width:220px;border:0">`
