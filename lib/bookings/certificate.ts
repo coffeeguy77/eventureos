@@ -37,6 +37,9 @@ export interface CertDesign {
   panelWords: string;      // poster: small words, one per line
   sealTop: string;         // words around the top of the seal
   sealBottom: string;      // words around the bottom of the seal
+  /** Finished artwork per style (https, A4 landscape): everything that's the same on every certificate is in the picture,
+   *  and only the student's details are printed on top, in the places that style uses. */
+  arts: Partial<Record<"latte" | "botanical" | "poster" | "elegant", string>>;
 }
 
 export const DEFAULT_DESIGN: CertDesign = {
@@ -46,7 +49,7 @@ export const DEFAULT_DESIGN: CertDesign = {
   signerName: "", signerTitle: "", signature: null, background: null,
   showLogo: true, showQr: true, showNumber: true, showSeal: true, sealText: "Completed",
   skills: {}, showSkills: true, emailAuto: false,
-  eyebrow: "", tagline: "{business}", hoursLine: "{hours}", photo: null, panelTitle: "", panelWords: "", sealTop: "{business}", sealBottom: "",
+  eyebrow: "", tagline: "{business}", hoursLine: "{hours}", photo: null, panelTitle: "", panelWords: "", sealTop: "{business}", sealBottom: "", arts: {},
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -71,8 +74,21 @@ export function readDesign(raw: unknown): CertDesign {
     eyebrow: s(o.eyebrow, "", 40), tagline: s(o.tagline, DEFAULT_DESIGN.tagline, 120), hoursLine: s(o.hoursLine, DEFAULT_DESIGN.hoursLine, 60),
     photo: typeof o.photo === "string" && /^https:\/\/[^\s"'<>]+$/.test(o.photo) && o.photo.length < 600 ? o.photo : null,
     panelTitle: s(o.panelTitle, "", 40), panelWords: s(o.panelWords, "", 160), sealTop: s(o.sealTop, DEFAULT_DESIGN.sealTop, 40), sealBottom: s(o.sealBottom, "", 30),
+    arts: readArts(o.arts),
   };
 }
+
+function readArts(raw: unknown): CertDesign["arts"] {
+  const out: CertDesign["arts"] = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const k of ["latte", "botanical", "poster", "elegant"] as const) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (typeof v === "string" && /^https:\/\/[^\s"'<>]+$/.test(v) && v.length < 600) out[k] = v;
+  }
+  return out;
+}
+/** The artwork for the chosen style, if the business has one. */
+export const artFor = (d: Pick<CertDesign, "style" | "arts">) => (d.style in d.arts ? d.arts[d.style as keyof CertDesign["arts"]] ?? null : null);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function readSkills(raw: unknown): Record<string, string[]> {
@@ -92,21 +108,21 @@ export function fill(text: string, d: CertData) {
   return text.replace(/\{(name|course|date|hours|business|number)\}/g, (_, k: "name" | "course" | "date" | "hours" | "business" | "number") => (k === "hours" ? d.hours ?? "" : d[k]) ?? "");
 }
 
-export type Font = "script" | "serif" | "serifItalic" | "sans" | "sansBold" | "light" | "body" | "display" | "condensed" | "serifRegular" | "medium";
+export type Font = "script" | "serif" | "serifItalic" | "sans" | "sansBold" | "light" | "body" | "display" | "condensed" | "serifRegular" | "medium" | "scriptCasual" | "scriptFormal";
 export type Item =
   | { t: "rect"; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number; opacity?: number }
   | { t: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number }
   | { t: "circle"; cx: number; cy: number; r: number; fill?: string; stroke?: string; sw?: number }
   | { t: "text"; x: number; y: number; text: string; font: Font; size: number; color: string; align: "left" | "center" | "right"; spacing?: number; rotate?: number }
-  | { t: "image"; x: number; y: number; w: number; h: number; src: "logo" | "signature" | "qr" | "background" | "photo"; fit?: "contain" | "cover"; align?: "center" | "right"; opacity?: number }
+  | { t: "image"; x: number; y: number; w: number; h: number; src: "logo" | "signature" | "qr" | "background" | "photo" | "art"; fit?: "contain" | "cover" | "fill"; align?: "center" | "right"; opacity?: number }
   | { t: "path"; d: string; fill: string; opacity?: number };
 
 export const W = 842, H = 595;
-import { NEW_STYLES } from "./certificate-styles";
+import { ART_STYLES, NEW_STYLES } from "./certificate-styles";
 // Average glyph widths (share of the font size), measured from the actual font files, for lower-case and capitals.
 // Used to wrap and shrink text identically in the preview and the PDF. A small safety margin is added.
-const LOWER: Record<Font, number> = { script: 0.33, serif: 0.48, serifItalic: 0.44, sans: 0.45, sansBold: 0.46, light: 0.44, body: 0.44, display: 0.45, condensed: 0.38, serifRegular: 0.47, medium: 0.45 };
-const UPPER: Record<Font, number> = { script: 0.86, serif: 0.62, serifItalic: 0.59, sans: 0.58, sansBold: 0.58, light: 0.54, body: 0.54, display: 0.54, condensed: 0.43, serifRegular: 0.59, medium: 0.55 };
+const LOWER: Record<Font, number> = { script: 0.33, serif: 0.48, serifItalic: 0.44, sans: 0.45, sansBold: 0.46, light: 0.44, body: 0.44, display: 0.45, condensed: 0.38, serifRegular: 0.47, medium: 0.45, scriptCasual: 0.26, scriptFormal: 0.4 };
+const UPPER: Record<Font, number> = { script: 0.86, serif: 0.62, serifItalic: 0.59, sans: 0.58, sansBold: 0.58, light: 0.54, body: 0.54, display: 0.54, condensed: 0.43, serifRegular: 0.59, medium: 0.55, scriptCasual: 0.62, scriptFormal: 0.71 };
 export const approxWidth = (text: string, font: Font, size: number, spacing = 0) => {
   let em = 0;
   for (const ch of text) em += ch >= "A" && ch <= "Z" ? UPPER[font] : ch === " " ? 0.25 : /[0-9]/.test(ch) ? 0.52 : LOWER[font];
@@ -150,12 +166,15 @@ export function tint(hex: string, amount: number) {
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function layout(d: CertDesign, data: CertData, has: { logo: boolean }): Item[] {
+export function layout(d: CertDesign, data: CertData, has: { logo: boolean; art?: boolean }): Item[] {
   const ink = "#1F1A17", muted = "#5B544E", items: Item[] = [];
   const A = d.accent;
   items.push({ t: "rect", x: 0, y: 0, w: W, h: H, fill: d.paper });
   if (d.style === "swoosh") return swoosh(d, data, has, items);
-  if (d.style === "latte" || d.style === "botanical" || d.style === "poster" || d.style === "elegant") return NEW_STYLES[d.style](d, data, has, items);
+  if (d.style === "latte" || d.style === "botanical" || d.style === "poster" || d.style === "elegant") {
+    if (has.art && artFor(d)) return ART_STYLES[d.style](d, data, items);
+    return NEW_STYLES[d.style](d, data, has, items);
+  }
   let cx = W / 2, textW = 600;
 
   if (d.style === "classic") {
@@ -349,10 +368,10 @@ export const hoursLabel = (minutes: number | null | undefined) => (minutes ? `${
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const FAMILY: Record<Font, string> = {
   script: "'EOS Script'", serif: "'EOS Serif'", serifItalic: "'EOS Serif Italic'", sans: "'EOS Sans'", sansBold: "'EOS Sans Bold'",
-  light: "'EOS Light'", body: "'EOS Body'", display: "'EOS Display'", condensed: "'EOS Condensed'", serifRegular: "'EOS Serif Regular'", medium: "'EOS Medium'",
+  light: "'EOS Light'", body: "'EOS Body'", display: "'EOS Display'", condensed: "'EOS Condensed'", serifRegular: "'EOS Serif Regular'", medium: "'EOS Medium'", scriptCasual: "'EOS Script Casual'", scriptFormal: "'EOS Script Formal'",
 };
 /** The preview: an SVG string using the same fonts as the PDF (loaded from /fonts/cert). */
-export function toSvg(items: Item[], src: { logo?: string | null; signature?: string | null; qr?: string | null; background?: string | null; photo?: string | null }) {
+export function toSvg(items: Item[], src: { logo?: string | null; signature?: string | null; qr?: string | null; background?: string | null; photo?: string | null; art?: string | null }) {
   const out: string[] = [];
   for (const it of items) {
     if (it.t === "rect") out.push(`<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${it.fill ?? "none"}"${it.opacity != null ? ` fill-opacity="${it.opacity}"` : ""}${it.stroke ? ` stroke="${it.stroke}" stroke-width="${it.sw ?? 1}"` : ""}/>`);
@@ -362,7 +381,7 @@ export function toSvg(items: Item[], src: { logo?: string | null; signature?: st
     else if (it.t === "path") out.push(`<path d="${it.d}" fill="${it.fill}"${it.opacity != null ? ` fill-opacity="${it.opacity}"` : ""}/>`);
     else if (it.t === "image") {
       const href = src[it.src];
-      if (href) out.push(`<image x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" href="${esc(href)}" preserveAspectRatio="${it.fit === "cover" ? "xMidYMid slice" : it.align === "right" ? "xMaxYMid meet" : "xMidYMid meet"}"${it.opacity != null ? ` opacity="${it.opacity}"` : ""}/>`);
+      if (href) out.push(`<image x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" href="${esc(href)}" preserveAspectRatio="${it.fit === "fill" ? "none" : it.fit === "cover" ? "xMidYMid slice" : it.align === "right" ? "xMaxYMid meet" : "xMidYMid meet"}"${it.opacity != null ? ` opacity="${it.opacity}"` : ""}/>`);
     }
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%">${out.join("")}</svg>`;
@@ -379,4 +398,6 @@ export const CERT_FONT_CSS = `
 @font-face{font-family:'EOS Display';src:url(/fonts/cert/Barlow-SemiBold.ttf)}
 @font-face{font-family:'EOS Condensed';src:url(/fonts/cert/BarlowCondensed-Bold.ttf)}
 @font-face{font-family:'EOS Serif Regular';src:url(/fonts/cert/PlayfairDisplay-Variable.ttf);font-weight:400}
-@font-face{font-family:'EOS Medium';src:url(/fonts/cert/Barlow-Medium.ttf)}`;
+@font-face{font-family:'EOS Medium';src:url(/fonts/cert/Barlow-Medium.ttf)}
+@font-face{font-family:'EOS Script Casual';src:url(/fonts/cert/Allison-Regular.ttf)}
+@font-face{font-family:'EOS Script Formal';src:url(/fonts/cert/PinyonScript-Regular.ttf)}`;

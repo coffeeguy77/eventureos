@@ -419,3 +419,119 @@ function elegant(d: CertDesign, data: CertData, has: Has, items: Item[]): Item[]
 }
 
 export const NEW_STYLES: Record<"latte" | "botanical" | "poster" | "elegant", (d: CertDesign, data: CertData, has: Has, items: Item[]) => Item[]> = { latte, botanical, poster, elegant };
+
+/* ───────────────────────── artwork versions ─────────────────────────
+ * When a business has finished artwork for one of these styles (the design with its photo, panels, seal, logo and the
+ * wording that never changes), only the student's details are printed on top — at the same places as in that artwork.
+ * Positions are in points on A4 landscape.
+ */
+interface ArtSpec {
+  name: { x: number; y: number; w: number; size: number; font: Font; align: "center" | "left" };
+  swash?: boolean;              // pink stroke under the name (latte)
+  course: { x: number; y: number; w: number; size: number; font: Font; align: "center" | "left" };
+  hours: { x: number; y: number; w: number; align: "center" | "left" };
+  skills?: { x0: number; x1: number; y: number };
+  sig: { x: number; y: number; w: number; h: number };
+  date: { x: number; y: number; w: number };
+  qr: { x: number; y: number; size: number };
+  number: { x: number; y: number };
+  signer: { x: number; y1: number; y2: number; line: [number, number, number] };   // name and title under the signature line (x0, x1, y)
+  dateCap: { x: number; y: number };               // "Date of completion"
+  verify: { x: number; y: number[] };              // "Verify this credential" and two short lines
+  words: { x: number; align: "center" | "left"; sub: [number, number]; lead: [number, number]; tag: [number, number] }; // [baseline, width] of the small capitals lines
+}
+const ART: Record<"latte" | "botanical" | "poster" | "elegant", ArtSpec> = {
+  latte: {
+    name: { x: 578.6, y: 234, w: 368, size: 100, font: "scriptCasual", align: "center" }, swash: true,
+    course: { x: 578.6, y: 317.5, w: 372, size: 24, font: "serif", align: "center" },
+    hours: { x: 578.6, y: 359.5, w: 330, align: "center" },
+    skills: { x0: 354, x1: 763, y: 397 },
+    sig: { x: 304, y: 487, w: 135, h: 43 }, date: { x: 607.4, y: 526.3, w: 96 },
+    qr: { x: 671.6, y: 502.6, size: 49 }, number: { x: 732.4, y: 554.4 },
+    signer: { x: 370.6, y1: 551, y2: 562, line: [303, 434, 536.4] }, dateCap: { x: 606.3, y: 542 }, verify: { x: 732.4, y: [512.7, 527.4, 538.7] },
+    words: { x: 578.6, align: "center", sub: [163.4, 147], lead: [289.6, 229], tag: [342.6, 315] },
+  },
+  botanical: {
+    name: { x: 420.5, y: 279.5, w: 436, size: 86, font: "scriptFormal", align: "center" },
+    course: { x: 421.6, y: 362.9, w: 420, size: 26, font: "serif", align: "center" },
+    hours: { x: 421.6, y: 409, w: 360, align: "center" },
+    sig: { x: 88, y: 444, w: 180, h: 56 }, date: { x: 524.8, y: 492.4, w: 104 },
+    qr: { x: 603.9, y: 463.2, size: 60 }, number: { x: 677.2, y: 525 },
+    signer: { x: 176, y1: 526.3, y2: 538.7, line: [76.7, 274.3, 506] }, dateCap: { x: 524.8, y: 509.4 }, verify: { x: 677.2, y: [476.7, 492.5, 504.9] },
+    words: { x: 421, align: "center", sub: [192.7, 169], lead: [332.4, 262], tag: [392.2, 335] },
+  },
+  poster: {
+    name: { x: 344.3, y: 210.3, w: 352, size: 58, font: "serif", align: "left" },
+    course: { x: 344.3, y: 288.2, w: 352, size: 22, font: "serif", align: "left" },
+    hours: { x: 344.3, y: 334, w: 330, align: "left" },
+    skills: { x0: 342, x1: 772, y: 371 },
+    sig: { x: 306.8, y: 481, w: 126, h: 48 }, date: { x: 608, y: 523.3, w: 90 },
+    qr: { x: 667.6, y: 496, size: 55 }, number: { x: 731.6, y: 559 },
+    signer: { x: 369.7, y1: 551.7, y2: 564, line: [309, 432.6, 534.4] }, dateCap: { x: 608, y: 540.6 }, verify: { x: 731.6, y: [509.6, 525.7, 538] },
+    words: { x: 345.4, align: "left", sub: [147.2, 136], lead: [259.8, 209], tag: [315.4, 306] },
+  },
+  elegant: {
+    name: { x: 423.3, y: 280.5, w: 368, size: 62, font: "serifRegular", align: "center" },
+    course: { x: 422, y: 360.3, w: 366, size: 24, font: "serifRegular", align: "center" },
+    hours: { x: 422, y: 406, w: 330, align: "center" },
+    sig: { x: 76.9, y: 433, w: 181, h: 55 }, date: { x: 516.5, y: 481.3, w: 96 },
+    qr: { x: 601.3, y: 454.3, size: 62 }, number: { x: 675.9, y: 518.9 },
+    signer: { x: 166.1, y1: 510.7, y2: 523.6, line: [71, 260, 494.2] }, dateCap: { x: 516.5, y: 497.8 }, verify: { x: 675.9, y: [466, 482.5, 495.4] },
+    words: { x: 423.3, align: "center", sub: [217, 164], lead: [331, 251], tag: [387.4, 314] },
+  },
+};
+/** Skill labels on two short lines like "Espresso / extraction", "Cleaning / & maintenance". */
+function labelLines(p: string) {
+  const w = p.split(/\s+/).filter(Boolean);
+  if (w.length < 2) return [p];
+  let best = 1, diff = Infinity;
+  for (let i = 1; i < w.length; i++) { const a = w.slice(0, i).join(" ").length, b = w.slice(i).join(" ").length; if (Math.abs(a - b) < diff) { diff = Math.abs(a - b); best = i; } }
+  return [w.slice(0, best).join(" "), w.slice(best).join(" ")];
+}
+function artStyle(style: keyof typeof ART) {
+  return (d: CertDesign, data: CertData, items: Item[]): Item[] => {
+    const S = ART[style], A = d.accent, ink = "#141414", grey = "#3A3735";
+    items.push({ t: "image", x: 0, y: 0, w: W, h: H, src: "art", fit: "fill" });
+    const smallCaps = (t: string, [y, w]: [number, number], color: string) => {
+      const u = caps(t).trim();
+      if (u) items.push({ t: "text", x: S.words.x, y, text: u, font: "display", size: fit(u, "display", 12, w, 5, 2), color, align: S.words.align, spacing: 2 });
+    };
+    if (d.subtitle) smallCaps(fill(d.subtitle, data), S.words.sub, "#1F1C1A");
+    smallCaps(leadLine(d, data), S.words.lead, "#1F1C1A");
+    smallCaps(fill(d.tagline, data), S.words.tag, "#2A2725");
+    const nz = fit(data.name, S.name.font, S.name.size, S.name.w, S.name.size * 0.42);
+    items.push({ t: "text", x: S.name.x, y: S.name.y, text: data.name, font: S.name.font, size: nz, color: ink, align: S.name.align });
+    if (S.swash) {
+      const nw = Math.min(S.name.w + 40, approxWidth(data.name, S.name.font, nz) + 70), x0 = S.name.x - nw / 2 - 6, x1 = S.name.x + nw / 2 + 24, y = S.name.y + 21;
+      swash(items, x0, y + 3, [x0 + nw * 0.35, y - 1], [x0 + nw * 0.7, y + 4], x1, y - 4, 2.2, shade(A, 0.08), 0.9);
+    }
+    const cz = fit(data.course, S.course.font, S.course.size, S.course.w, S.course.size * 0.55);
+    items.push({ t: "text", x: S.course.x, y: S.course.y, text: data.course, font: S.course.font, size: cz, color: ink, align: S.course.align });
+    const hrs = data.hours ? caps(fill(d.hoursLine, data)).trim() : "";
+    if (hrs) items.push({ t: "text", x: S.hours.x, y: S.hours.y, text: hrs, font: "display", size: fit(hrs, "display", 10.2, S.hours.w, 5.5, 1.7), color: "#2A2725", align: S.hours.align, spacing: 1.7 });
+    if (S.skills && d.showSkills && data.points?.length) {
+      const pts = data.points.slice(0, 6), { x0, x1, y } = S.skills, cell = (x1 - x0) / pts.length, ic = shade(A, 0.12);
+      pts.forEach((p, i) => {
+        const mx = x0 + cell * i + cell / 2;
+        icon(items, iconFor(p), mx, y + 14, 30, ic, "#FFFFFF");
+        labelLines(p).forEach((l, j) => items.push({ t: "text", x: mx, y: y + 49 + j * 12, text: l, font: "medium", size: fit(l, "medium", 11, cell - 6, 6), color: "#1F1C1A", align: "center" }));
+        if (i > 0) items.push({ t: "line", x1: x0 + cell * i, y1: y - 2, x2: x0 + cell * i, y2: y + 66, stroke: tint(A, 0.55), sw: 0.6 });
+      });
+    }
+    if (d.signature) items.push({ t: "image", x: S.sig.x, y: S.sig.y, w: S.sig.w, h: S.sig.h, src: "signature", fit: "contain" });
+    items.push({ t: "line", x1: S.signer.line[0], y1: S.signer.line[2], x2: S.signer.line[1], y2: S.signer.line[2], stroke: "#B9B1AA", sw: 0.7 });
+    items.push({ t: "text", x: S.date.x, y: S.date.y, text: data.date, font: "serifRegular", size: fit(data.date, "serifRegular", 13, S.date.w, 8), color: ink, align: "center" });
+    if (d.showQr) items.push({ t: "image", x: S.qr.x, y: S.qr.y, w: S.qr.size, h: S.qr.size, src: "qr" });
+    if (d.showNumber) items.push({ t: "text", x: S.number.x, y: S.number.y, text: data.number, font: "display", size: 8.6, color: grey, align: "left", spacing: 0.3 });
+    if (d.signerName) items.push({ t: "text", x: S.signer.x, y: S.signer.y1, text: caps(d.signerName), font: "display", size: fit(caps(d.signerName), "display", 9.2, 130, 5, 0.6), color: ink, align: "center", spacing: 0.6 });
+    if (d.signerTitle) items.push({ t: "text", x: S.signer.x, y: d.signerName ? S.signer.y2 : S.signer.y1, text: d.signerTitle, font: "body", size: fit(d.signerTitle, "body", 8.8, 130, 5), color: grey, align: "center" });
+    items.push({ t: "text", x: S.dateCap.x, y: S.dateCap.y, text: "Date of completion", font: "body", size: 8.4, color: "#77716C", align: "center" });
+    if (d.showQr) {
+      items.push({ t: "text", x: S.verify.x, y: S.verify.y[0], text: "Verify this credential", font: "display", size: 10.2, color: ink, align: "left" });
+      items.push({ t: "text", x: S.verify.x, y: S.verify.y[1], text: "Scan to confirm authenticity,", font: "body", size: 8.1, color: grey, align: "left" });
+      items.push({ t: "text", x: S.verify.x, y: S.verify.y[2], text: "course and completion date.", font: "body", size: 8.1, color: grey, align: "left" });
+    }
+    return items;
+  };
+}
+export const ART_STYLES = { latte: artStyle("latte"), botanical: artStyle("botanical"), poster: artStyle("poster"), elegant: artStyle("elegant") };

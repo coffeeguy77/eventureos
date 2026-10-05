@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { Eraser, ImageUp, Loader2, PenLine, Upload } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { CERT_FONT_CSS, layout, toSvg, type CertDesign, type CertStyle } from "@/lib/bookings/certificate";
+import { artFor, CERT_FONT_CSS, layout, toSvg, type CertDesign, type CertStyle } from "@/lib/bookings/certificate";
 import { saveCertificateDesign } from "@/app/(app)/bookings/certificate-actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/form";
@@ -60,20 +60,22 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
     hours: pc?.minutes ? `${Math.round((pc.minutes / 60) * 10) / 10} hour${pc.minutes === 60 ? "" : "s"}` : "2 hours", number: "C-1001", business, verifyUrl: "https://www.eventureos.com.au/verify/example",
     points: pc ? d.skills[pc.id] ?? [] : [] }), [name, sampleCourse, business, pc, d.skills]);
   useEffect(() => { QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null)); }, [data.verifyUrl]);
-  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr, background: d.background, photo: d.photo }), [d, data, logoUrl, qr]);
+  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl, art: !!artFor(d) }), { logo: logoUrl, signature: d.signature, qr, background: d.background, photo: d.photo, art: artFor(d) }), [d, data, logoUrl, qr]);
   const [upErr, setUpErr] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const uploadArtwork = async (f: File, key: "background" | "photo" = "background") => {
+  const uploadArtwork = async (f: File, key: "background" | "photo" | "art" = "background") => {
     setUpErr(null);
     if (!/^image\/(png|jpeg)$/.test(f.type)) { setUpErr("Use a PNG or JPG image."); return; }
-    if (f.size > 2 * 1024 * 1024) { setUpErr("That image is over 2 MB — save it smaller (about 2500 px wide is plenty)."); return; }
+    if (f.size > (key === "art" ? 4 : 2) * 1024 * 1024) { setUpErr(`That image is over ${key === "art" ? 4 : 2} MB — save it smaller (about 2500 px wide is plenty).`); return; }
     setUploading(true);
     try {
       const supabase = createClient();
       const path = `${orgId}/certificate/${key}-${Date.now()}.${f.type === "image/png" ? "png" : "jpg"}`;
       const { error } = await supabase.storage.from("branding").upload(path, f, { contentType: f.type, cacheControl: "31536000", upsert: false });
       if (error) throw new Error(/row-level|policy/i.test(error.message) ? "Only owners and admins can upload artwork." : error.message);
-      set(key, supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);
+      const url = supabase.storage.from("branding").getPublicUrl(path).data.publicUrl;
+      if (key === "art") setD((x) => ({ ...x, arts: { ...x.arts, [x.style]: url } }));
+      else set(key, url);
     } catch (e) { setUpErr(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(false); }
   };
 
@@ -121,7 +123,21 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
           </section>
         )}
 
-        {(d.style === "latte" || d.style === "poster") && (
+        {NEW.includes(d.style) && (
+          <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+            <p className="text-[0.8438rem] font-semibold text-ink">Finished artwork</p>
+            <p className="mb-2 text-[0.75rem] text-ink-muted">Optional: a complete A4 landscape design for this style, with the student&apos;s name, course, hours, skills, signature, date and QR code left blank. Those are printed on top in this style&apos;s places.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {artFor(d) && <><img src={artFor(d)!} alt="" className="h-12 w-[68px] rounded object-cover ring-1 ring-line" /><Button size="sm" onClick={() => { const a = { ...d.arts }; delete a[d.style as keyof typeof a]; set("arts", a); }}>Use the drawn version</Button></>}
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}{artFor(d) ? "Replace artwork" : "Upload artwork"}
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadArtwork(f, "art"); e.target.value = ""; }} />
+              </label>
+            </div>
+          </section>
+        )}
+
+        {(d.style === "latte" || d.style === "poster") && !artFor(d) && (
           <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
             <p className="text-[0.8438rem] font-semibold text-ink">Photo</p>
             <p className="mb-2 text-[0.75rem] text-ink-muted">{d.style === "latte" ? "Fills the panel on the left — a latte or a barista at work looks great." : "Shown at the bottom of the colour panel, washed in your colour."} PNG or JPG, under 2 MB.</p>

@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { appBaseUrl } from "@/lib/integrations/registry";
-import { certDate, hoursLabel, readDesign, type CertData, type CertDesign } from "./certificate";
+import { artFor, certDate, hoursLabel, readDesign, type CertData, type CertDesign } from "./certificate";
 import { certificatePdf, fetchImage } from "./certificate-pdf";
 import { orgById, type PublicOrg } from "./server";
 
@@ -104,8 +104,9 @@ export async function renderCertificate(db: SupabaseClient, c: CertRow) {
   const org = await orgById(db, c.organisation_id);
   const tpl = await loadTemplate(db, c.organisation_id);
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
-  const [logo, background, photo] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null, design.photo ? fetchImage(design.photo) : null]);
-  return { bytes: await certificatePdf(design, certData(org, c, design), logo, background, photo), org };
+  const art = artFor(design);
+  const [logo, background, photo, artBytes] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null, design.photo ? fetchImage(design.photo) : null, art ? fetchImage(art) : null]);
+  return { bytes: await certificatePdf(design, certData(org, c, design), logo, background, photo, artBytes), org };
 }
 
 /** Certificates for a student: theirs by student id, plus any issued on their bookings. */

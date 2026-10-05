@@ -26,3 +26,16 @@ test("older designs keep working and unknown styles fall back", () => {
   assert.equal(readDesign({}).tagline, "{business}");
   assert.equal(readDesign({ photo: "http://insecure" }).photo, null);
 });
+
+test("with finished artwork only the student's details are printed on top", () => {
+  const d = readDesign({ style: "latte", signerName: "Shaun Matthews", signerTitle: "Director", arts: { latte: "https://x.test/a.jpg" } });
+  const items = layout(d, data, { logo: true, art: true });
+  assert.equal(items[1].t, "image");
+  assert.ok(items.some((i) => i.t === "image" && i.src === "art"));
+  const texts = (items.filter((i) => i.t === "text") as Extract<(typeof items)[number], { t: "text" }>[]).map((t) => t.text);
+  assert.ok(texts.includes(data.name) && texts.includes(data.course) && texts.includes("4 HOURS"));
+  assert.ok(!texts.includes("CERTIFICATE OF ACHIEVEMENT"), "static wording comes from the artwork");
+  // Without the picture available (e.g. it failed to download) the drawn version is used
+  assert.ok(!layout(d, data, { logo: true, art: false }).some((i) => i.t === "image" && i.src === "art"));
+  assert.equal(readDesign({ arts: { latte: "http://x" } }).arts.latte, undefined);
+});

@@ -4,7 +4,7 @@ import { BadgeCheck, Download } from "lucide-react";
 import QRCode from "qrcode";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { publicOrg } from "@/lib/bookings/server";
-import { CERT_FONT_CSS, certDate, layout, readDesign, toSvg } from "@/lib/bookings/certificate";
+import { artFor, CERT_FONT_CSS, certDate, layout, readDesign, toSvg } from "@/lib/bookings/certificate";
 import { certData, certificateByToken, loadTemplate } from "@/lib/bookings/certificates";
 import { BookShell } from "@/components/book/shell";
 import { ShareBox } from "@/components/book/share";
@@ -29,7 +29,7 @@ export default async function CertificatePage({ params }: P) {
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
   const data = certData(org, c, design);
   const qr = design.showQr ? await QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 240 }) : null;
-  const svg = toSvg(layout(design, data, { logo: !!org.logo_url }), { logo: org.logo_url, signature: design.signature, qr, background: design.background, photo: design.photo });
+  const svg = toSvg(layout(design, data, { logo: !!org.logo_url, art: !!artFor(design) }), { logo: org.logo_url, signature: design.signature, qr, background: design.background, photo: design.photo, art: artFor(design) });
   const valid = c.status === "issued";
 
   return (

@@ -18,7 +18,7 @@ export function brandStyle(org: Pick<PublicOrg, "brand_colour">): React.CSSPrope
 export const PAGE = "mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10";
 
 /** The frame around every public booking page. In the website widget (embed) there's no header, and the frame resizes itself. */
-export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean }) {
+export function BookShell({ org, embed, children, back, wide, bare }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean; bare?: boolean }) {
   const q = embed ? "?embed=1" : "";
   return (
     <div data-book-root style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
@@ -32,11 +32,11 @@ export function BookShell({ org, embed, children, back, wide }: { org: PublicOrg
                 : <span className="truncate text-[1.0625rem] font-semibold text-ink">{org.name}</span>}
             </Link>
             <span className="flex-1" />
-            {org.website && /^https?:\/\//.test(org.website) && <a href={org.website} className="text-[0.8125rem] font-medium text-ink-muted hover:text-ink">Back to website</a>}
+            {org.website && /^https?:\/\//.test(org.website) && <a href={org.website} className="inline-flex items-center gap-2 text-[0.875rem] font-medium text-ink-muted hover:text-ink"><span aria-hidden>←</span>Back to website</a>}
           </div>
         </header>
       )}
-      <main className={embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
+      <main className={bare && !embed ? "" : embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
         {back && <Link href={back.href + q} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {back.label}</Link>}
         {children}
       </main>

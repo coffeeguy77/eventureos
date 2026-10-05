@@ -94,10 +94,11 @@ export interface Landing {
   locationPoints: string[];      // e.g. "Free parking" (only things that are true)
   locationImage: string | null;  // photo beside the map
   giftImage: string | null;      // photo beside the gift voucher
+  giftHero: string | null;       // background picture for the gift certificate page
   copy: Record<string, string>;  // headings and short texts that override the defaults (see LANDING_COPY)
 }
 export const DEFAULT_LANDING: Landing = { title: null, description: null, headline: null, heroImage: null, highlights: [], sections: [],
-  eyebrow: null, phone: null, notes: [], stats: [], reviews: [], reviewsSource: null, gallery: [], benefits: [], courses: {}, locationPoints: [], locationImage: null, giftImage: null, copy: {} };
+  eyebrow: null, phone: null, notes: [], stats: [], reviews: [], reviewsSource: null, gallery: [], benefits: [], courses: {}, locationPoints: [], locationImage: null, giftImage: null, giftHero: null, copy: {} };
 
 /** Headings and short texts on the booking page that a business can reword (key → default). */
 export const LANDING_COPY: Record<string, { label: string; def: string; long?: boolean }> = {
@@ -122,6 +123,8 @@ export const LANDING_COPY: Record<string, { label: string; def: string; long?: b
   ctaEyebrow: { label: "Final call — small heading", def: "Ready?" },
   ctaTitle: { label: "Final call — heading", def: "Book your spot today" },
   ctaText: { label: "Final call — text", def: "", long: true },
+  giftPageEyebrow: { label: "Gift page — small heading", def: "" },
+  giftPageTitle: { label: "Gift page — heading (*stars* colour words)", def: "Give a class *as a gift*" },
 };
 export const landingCopy = (L: Landing, k: keyof typeof LANDING_COPY | string) => (L.copy[k] ?? LANDING_COPY[k]?.def ?? "").replace(/\\n/g, "\n");
 
@@ -151,7 +154,7 @@ export function readLanding(raw: unknown): Landing {
     reviewsSource: src && str(src.label, 40) ? { label: str(src.label, 40)!, url: url(src.url) } : null,
     gallery: objs(o.gallery, 12).map((x) => ({ image: url(x.image) ?? "", caption: str(x.caption, 40) })).filter((x) => x.image),
     benefits: objs(o.benefits, 8).map((x) => ({ title: str(x.title, 40) ?? "", body: str(x.body, 240) ?? "" })).filter((x) => x.title && x.body),
-    courses, locationPoints: list(o.locationPoints, 6, 60), locationImage: url(o.locationImage), giftImage: url(o.giftImage), copy,
+    courses, locationPoints: list(o.locationPoints, 6, 60), locationImage: url(o.locationImage), giftImage: url(o.giftImage), giftHero: url(o.giftHero), copy,
   };
 }
 
