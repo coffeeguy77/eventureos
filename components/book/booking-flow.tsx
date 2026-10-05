@@ -18,6 +18,10 @@ interface Props {
   source: "website" | "wordpress";
   /** A case manager booking a job seeker (signed in through the agency page) */
   agent?: { code: string; agency: string; price: number | null; poRequired: boolean; name: string; site: string | null } | null;
+  /** "cards": dates as big tiles (landing page); "list": compact rows grouped by month */
+  dateStyle?: "list" | "cards";
+  /** Added to the step numbers when the page shows its own step before these (e.g. choosing the course) */
+  stepOffset?: number;
 }
 
 type Pay = "card" | "gift" | "agency";
@@ -25,10 +29,11 @@ type Pay = "card" | "gift" | "agency";
 const input = "h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-[var(--b)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--b)_25%,transparent)]";
 const label = "mb-1.5 block text-[0.8125rem] font-medium text-ink";
 
-export function BookingFlow({ org, course, sessions, preselect, utm, source, agent }: Props) {
+export function BookingFlow({ org, course, sessions, preselect, utm, source, agent, dateStyle = "list", stepOffset = 0 }: Props) {
   const fmt = useMemo(() => ({
     month: new Intl.DateTimeFormat("en-AU", { month: "long", year: "numeric", timeZone: org.timezone }),
     day: new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: org.timezone }),
+    parts: new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: org.timezone }),
     long: new Intl.DateTimeFormat("en-AU", { weekday: "long", day: "numeric", month: "long", timeZone: org.timezone }),
     time: new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", timeZone: org.timezone }),
     money: new Intl.NumberFormat("en-AU", { style: "currency", currency: org.currency }),
@@ -124,7 +129,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
     <form onSubmit={submit} className="space-y-4">
       {/* 1. Date */}
       <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-        <Step n={1} title="Choose a date" done={!!session} />
+        <Step n={1 + stepOffset} title="Choose a date" done={!!session} />
         {session && !picking ? (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_7%,transparent)] px-4 py-3">
             <span className="min-w-0 flex-1">
@@ -137,6 +142,28 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
           </div>
         ) : (<>
         {session && <button type="button" onClick={() => setPicking(false)} className="mb-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]"><ChevronLeft className="h-4 w-4" />Keep {fmt.day.format(new Date(session.starts_at))}</button>}
+        {dateStyle === "cards" ? (
+          <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4" role="list">
+            {visible.map((s) => {
+              const on = s.id === sessionId;
+              const few = !s.full && s.left <= 2;
+              const p = Object.fromEntries(fmt.parts.formatToParts(new Date(s.starts_at)).map((x) => [x.type, x.value]));
+              return (
+                <button key={s.id} type="button" role="listitem" aria-pressed={on} disabled={s.full && !org.waitlist}
+                  onClick={() => { setSessionId(s.id); setErr(null); if (!s.full || org.waitlist) setPicking(false); }}
+                  className={`relative w-[44%] min-w-[150px] shrink-0 snap-start rounded-2xl border p-4 text-left transition duration-200 sm:w-auto sm:min-w-0 ${on ? "border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_8%,transparent)] ring-2 ring-[var(--b)]" : s.full ? "border-line bg-zinc-50 opacity-70" : "border-line bg-surface hover:-translate-y-0.5 hover:border-line-strong hover:shadow-card"}`}>
+                  {on && <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-[var(--b)] text-[var(--on-b)]"><Check className="h-3.5 w-3.5" strokeWidth={3} /></span>}
+                  <span className="block text-[0.75rem] font-bold uppercase tracking-[0.12em] text-ink-muted">{p.weekday}</span>
+                  <span className="mt-0.5 block text-[1.625rem] font-bold leading-tight tracking-tight text-ink">{p.day} <span className="text-[1rem] font-semibold uppercase tracking-wide">{p.month}</span></span>
+                  <span className="mt-1 block text-[0.8438rem] text-ink-muted">{t(s.starts_at)} – {t(s.ends_at)}{s.price !== course.price ? ` · ${$(s.price)}` : ""}</span>
+                  <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.75rem] font-semibold ${s.full ? "bg-zinc-200 text-ink-muted" : few ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
+                    {s.full ? (org.waitlist ? "Full · waitlist" : "Full") : org.showSeatsLeft || few ? `${s.left} spot${s.left === 1 ? "" : "s"} left` : "Available"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
         <div className="space-y-4">
           {months.map(([month, list]) => (
             <div key={month}>
@@ -162,6 +189,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
             </div>
           ))}
         </div>
+        )}
         {sessions.length > visible.length && (
           <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]">
             Show {sessions.length - visible.length} more dates<ChevronDown className="h-4 w-4" />
@@ -175,7 +203,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
         <>
           {/* 2. People */}
           <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-            <Step n={2} title={agent ? "Who's the job seeker?" : "Who's coming?"} done={name.length > 1 && (!!agent || /@/.test(email))} />
+            <Step n={2 + stepOffset} title={agent ? "Who's the job seeker?" : "Who's coming?"} done={name.length > 1 && (!!agent || /@/.test(email))} />
             {agent && <p className="mb-4 rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted">Booking as <span className="font-semibold text-ink">{agent.name}</span> · {agent.agency}. You&apos;ll get the course details to pass on, and their certificate after the course.</p>}
             {waitlist && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900">This date is full. Join the waitlist and we&apos;ll email you if a seat opens up — nothing to pay now.</p>}
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -224,7 +252,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
           {/* 3. Pay */}
           {!waitlist && (
             <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-              <Step n={3} title="Payment" />
+              <Step n={3 + stepOffset} title="Payment" />
               {!agent && <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="How are you paying?">
                 {([["card", "Card", CreditCard, "Apple Pay, Google Pay & cards"], ["gift", "Gift certificate", Gift, "Use a code"], ["agency", "Employment agency", Building2, "Purchase order"]] as const).map(([k, l, Icon, hint]) => (
                   <button key={k} type="button" role="radio" aria-checked={pay === k} onClick={() => { setPay(k); setCheckMsg(null); setErr(null); }}

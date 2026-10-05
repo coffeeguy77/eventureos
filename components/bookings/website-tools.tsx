@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, ExternalLink, KeyRound, Loader2, Upload } from "lucide-react";
 import { createPluginKey, importCsvAction, revokePluginKey, saveBookingSettings } from "@/app/(app)/bookings/actions";
-import type { BookingSettings, Landing } from "@/lib/bookings/core";
+import type { BookingSettings } from "@/lib/bookings/core";
 import type { CsvRow } from "@/lib/bookings/import";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/form";
@@ -206,54 +206,6 @@ export function SettingsForm({ initial }: { initial: BookingSettings }) {
         setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error });
         if (r.ok) router.refresh();
       })}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save settings</Button>
-    </div>
-  );
-}
-
-/** The public booking page as a landing page: what search engines show, the headline, photo, highlights and text sections. */
-export function LandingForm({ initial, pageUrl }: { initial: Landing; pageUrl: string }) {
-  const router = useRouter();
-  const [l, setL] = useState({ ...initial, highlightsText: initial.highlights.join("\n"), heroImage: initial.heroImage ?? "", title: initial.title ?? "", description: initial.description ?? "", headline: initial.headline ?? "" });
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [pending, start] = useTransition();
-  const sections = l.sections;
-  const setSection = (i: number, k: "heading" | "body", v: string) => setL({ ...l, sections: sections.map((x, j) => (j === i ? { ...x, [k]: v } : x)) });
-  return (
-    <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[0.9375rem] font-semibold text-ink">Booking page &amp; search (SEO)</h2>
-        <a href={pageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-700 hover:underline">Open the page <ExternalLink className="h-3.5 w-3.5" /></a>
-      </div>
-      <p className="mt-1 text-[0.8125rem] text-ink-muted">Your booking page is a full landing page: courses with photos, the booking form, and these words — so people searching (e.g. &ldquo;barista course Canberra&rdquo;) can find it.</p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <div><Label hint={`${l.title.length}/70`}>Search title</Label><Input value={l.title} maxLength={70} onChange={(e) => setL({ ...l, title: e.target.value })} placeholder="Barista Courses Canberra | Your Business" /></div>
-        <div><Label>Headline on the page</Label><Input value={l.headline} maxLength={120} onChange={(e) => setL({ ...l, headline: e.target.value })} placeholder="Barista courses in Canberra" /></div>
-        <div className="lg:col-span-2"><Label hint={`${l.description.length}/160 suggested`}>Search description</Label><Textarea value={l.description} maxLength={300} className="min-h-[60px]" onChange={(e) => setL({ ...l, description: e.target.value })} /></div>
-        <div><Label hint="https://… (leave blank to use the first course photo)">Top photo</Label><Input value={l.heroImage} onChange={(e) => setL({ ...l, heroImage: e.target.value })} /></div>
-        <div><Label hint="one per line, up to 6">Highlights</Label><Textarea value={l.highlightsText} className="min-h-[96px]" onChange={(e) => setL({ ...l, highlightsText: e.target.value })} placeholder={"Small groups\nDigital certificate"} /></div>
-      </div>
-      <div className="mt-5">
-        <p className="mb-2 text-[0.8125rem] font-semibold text-ink">Text sections <span className="font-normal text-ink-muted">(shown under the courses — up to 8)</span></p>
-        <div className="space-y-3">
-          {sections.map((x, i) => (
-            <div key={i} className="grid gap-2 rounded-lg border border-line p-3">
-              <div className="flex gap-2"><Input value={x.heading} placeholder="Heading" onChange={(e) => setSection(i, "heading", e.target.value)} />
-                <button type="button" onClick={() => setL({ ...l, sections: sections.filter((_, j) => j !== i) })} className="rounded px-2 text-[0.75rem] font-medium text-rose-700 hover:bg-rose-50">Remove</button></div>
-              <Textarea value={x.body} placeholder="Text (blank line = new paragraph)" className="min-h-[110px]" onChange={(e) => setSection(i, "body", e.target.value)} />
-            </div>
-          ))}
-          {sections.length < 8 && <Button size="sm" onClick={() => setL({ ...l, sections: [...sections, { heading: "", body: "" }] })}>Add a section</Button>}
-        </div>
-      </div>
-      {msg && <p className={cn("mt-3 text-[0.8125rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
-      <Button variant="primary" className="mt-4" disabled={pending} onClick={() => start(async () => {
-        setMsg(null);
-        const landing: Landing = { title: l.title || null, description: l.description || null, headline: l.headline || null, heroImage: l.heroImage || null,
-          highlights: l.highlightsText.split(/\n/).map((x) => x.trim()).filter(Boolean), sections: sections.filter((x) => x.heading.trim() && x.body.trim()) };
-        const r = await saveBookingSettings({ landing }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
-        setMsg(r.ok ? { ok: true, text: "Saved — the page is updated." } : { ok: false, text: r.error });
-        if (r.ok) router.refresh();
-      })}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save page</Button>
     </div>
   );
 }

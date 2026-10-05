@@ -195,7 +195,7 @@ export function SessionGenerator({ courses }: { courses: { id: string; name: str
 }
 
 /** Upload a course photo: shrunk to at most 1800px wide in the browser, stored in the business's public "branding" files. */
-function PhotoUpload({ orgId, onUploaded }: { orgId: string; onUploaded: (url: string) => void }) {
+export function PhotoUpload({ orgId, onUploaded, folder = "courses" }: { orgId: string; onUploaded: (url: string) => void; folder?: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const pick = async (f: File) => {
@@ -209,7 +209,7 @@ function PhotoUpload({ orgId, onUploaded }: { orgId: string; onUploaded: (url: s
       URL.revokeObjectURL(src);
       const blob = await new Promise<Blob>((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't prepare the image."))), "image/jpeg", 0.85));
       const supabase = createClient();
-      const path = `${orgId}/courses/${Date.now()}.jpg`;
+      const path = `${orgId}/${folder}/${Date.now()}.jpg`;
       const { error } = await supabase.storage.from("branding").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
       if (error) throw new Error(/row-level|policy/i.test(error.message) ? "Only owners and admins can upload photos." : error.message);
       onUploaded(supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);

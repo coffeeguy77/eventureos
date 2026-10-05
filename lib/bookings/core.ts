@@ -73,24 +73,85 @@ export function scheduleDates(sc: Schedule, closures: Closure[], today: string) 
   return sc.weekdays.flatMap((w) => repeatDates(today, end, w, 1)).filter((d) => !closed(d)).sort();
 }
 
+export interface LandingReview { name: string; date: string | null; rating: number; text: string; course: string | null }
+export interface LandingCourse { badge: string | null; points: string[]; bestFor: string | null; level: string | null; focus: string | null }
 export interface Landing {
   title: string | null;          // search result title, e.g. "Barista Courses Canberra | Bean Culture"
   description: string | null;    // search result description (about 150 characters)
-  headline: string | null;       // big heading at the top of the page
+  headline: string | null;       // big heading at the top of the page; wrap words in *stars* to colour them
   heroImage: string | null;      // https photo for the top of the page (falls back to the first course photo)
   highlights: string[];          // short selling points under the headline
   sections: { heading: string; body: string }[]; // text further down the page (helps people find it in search)
+  eyebrow: string | null;        // small line above the headline, e.g. "Hands-on, real-world training"
+  phone: string | null;          // phone number shown on this page (falls back to the business phone)
+  notes: string[];               // short handwritten-style notes on the photo, e.g. "Learn. Create. Belong."
+  stats: { value: string; label: string }[];   // trust strip, e.g. "280+" / "students certified"
+  reviews: LandingReview[];      // real reviews only
+  reviewsSource: { label: string; url: string | null } | null; // where the reviews come from, e.g. ClassBento
+  gallery: { image: string; caption: string | null }[];         // photos for "the experience"
+  benefits: { title: string; body: string }[]; // "why train with us"
+  courses: Record<string, LandingCourse>;      // extra selling details per course id
+  locationPoints: string[];      // e.g. "Free parking" (only things that are true)
+  locationImage: string | null;  // photo beside the map
+  giftImage: string | null;      // photo beside the gift voucher
+  copy: Record<string, string>;  // headings and short texts that override the defaults (see LANDING_COPY)
 }
-export const DEFAULT_LANDING: Landing = { title: null, description: null, headline: null, heroImage: null, highlights: [], sections: [] };
+export const DEFAULT_LANDING: Landing = { title: null, description: null, headline: null, heroImage: null, highlights: [], sections: [],
+  eyebrow: null, phone: null, notes: [], stats: [], reviews: [], reviewsSource: null, gallery: [], benefits: [], courses: {}, locationPoints: [], locationImage: null, giftImage: null, copy: {} };
+
+/** Headings and short texts on the booking page that a business can reword (key → default). */
+export const LANDING_COPY: Record<string, { label: string; def: string; long?: boolean }> = {
+  coursesEyebrow: { label: "Courses — small heading", def: "Our courses" },
+  coursesTitle: { label: "Courses — heading", def: "Choose your course" },
+  coursesIntro: { label: "Courses — intro", def: "", long: true },
+  helpTitle: { label: "Not sure panel — heading", def: "Not sure which course?" },
+  helpText: { label: "Not sure panel — text", def: "Tell us what you're trying to achieve and we'll point you in the right direction.", long: true },
+  bookEyebrow: { label: "Booking — small heading", def: "Booking" },
+  bookTitle: { label: "Booking — heading", def: "Book your spot" },
+  bookIntro: { label: "Booking — intro", def: "Choose your course and find a date that works for you.", long: true },
+  bookPoints: { label: "Booking — ticks (one per line)", def: "Instant confirmation\nSecure online booking\nChange your date if required", long: true },
+  reviewsEyebrow: { label: "Reviews — small heading", def: "Real stories" },
+  reviewsTitle: { label: "Reviews — heading", def: "What our students say" },
+  giftTitle: { label: "Gift — heading", def: "Give the gift of a class" },
+  giftText: { label: "Gift — text", def: "A gift certificate makes a brilliant present. They choose their own date.", long: true },
+  whyTitle: { label: "Why us — heading", def: "Why train with us" },
+  galleryTitle: { label: "Photos — heading", def: "The experience" },
+  compareTitle: { label: "Compare — heading", def: "Which course is right for me?" },
+  faqTitle: { label: "Questions — heading", def: "Questions?" },
+  locationTitle: { label: "Location — heading", def: "Where we are" },
+  ctaEyebrow: { label: "Final call — small heading", def: "Ready?" },
+  ctaTitle: { label: "Final call — heading", def: "Book your spot today" },
+  ctaText: { label: "Final call — text", def: "", long: true },
+};
+export const landingCopy = (L: Landing, k: keyof typeof LANDING_COPY | string) => (L.copy[k] ?? LANDING_COPY[k]?.def ?? "").replace(/\\n/g, "\n");
 
 export function readLanding(raw: unknown): Landing {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const list = (v: unknown, max: number, len: number) => (Array.isArray(v) ? v.map((x) => str(x, len)).filter((x): x is string => !!x).slice(0, max) : []);
+  const objs = (v: unknown, max: number) => (Array.isArray(v) ? (v as unknown[]).filter((x): x is Record<string, unknown> => !!x && typeof x === "object").slice(0, max) : []);
+  const courses: Record<string, LandingCourse> = {};
+  if (o.courses && typeof o.courses === "object") {
+    for (const [id, v] of Object.entries(o.courses as Record<string, unknown>).slice(0, 30)) {
+      if (!/^[0-9a-f-]{36}$/i.test(id) || !v || typeof v !== "object") continue;
+      const c = v as Record<string, unknown>;
+      courses[id] = { badge: str(c.badge, 40), points: list(c.points, 12, 80), bestFor: str(c.bestFor, 80), level: str(c.level, 60), focus: str(c.focus, 80) };
+    }
+  }
+  const copy: Record<string, string> = {};
+  if (o.copy && typeof o.copy === "object") for (const [k, v] of Object.entries(o.copy as Record<string, unknown>)) { const t = str(v, LANDING_COPY[k]?.long ? 600 : 120); if (LANDING_COPY[k] && t) copy[k] = t; }
+  const src = o.reviewsSource && typeof o.reviewsSource === "object" ? o.reviewsSource as Record<string, unknown> : null;
   return {
     title: str(o.title, 70), description: str(o.description, 300), headline: str(o.headline, 120), heroImage: url(o.heroImage),
     highlights: list(o.highlights, 6, 60),
-    sections: Array.isArray(o.sections) ? (o.sections as unknown[]).map((x) => (x && typeof x === "object" ? { heading: str((x as Record<string, unknown>).heading, 120) ?? "", body: str((x as Record<string, unknown>).body, 3000) ?? "" } : null))
-      .filter((x): x is { heading: string; body: string } => !!x && !!x.heading && !!x.body).slice(0, 8) : [],
+    sections: objs(o.sections, 8).map((x) => ({ heading: str(x.heading, 120) ?? "", body: str(x.body, 3000) ?? "" })).filter((x) => x.heading && x.body),
+    eyebrow: str(o.eyebrow, 60), phone: str(o.phone, 30), notes: list(o.notes, 3, 40),
+    stats: objs(o.stats, 6).map((x) => ({ value: str(x.value, 16) ?? "", label: str(x.label, 50) ?? "" })).filter((x) => x.value && x.label),
+    reviews: objs(o.reviews, 120).map((x) => ({ name: str(x.name, 60) ?? "", date: str(x.date, 20), rating: Math.max(1, Math.min(5, Math.round(Number(x.rating) || 5))), text: str(x.text, 1500) ?? "", course: str(x.course, 80) }))
+      .filter((x) => x.name && x.text),
+    reviewsSource: src && str(src.label, 40) ? { label: str(src.label, 40)!, url: url(src.url) } : null,
+    gallery: objs(o.gallery, 12).map((x) => ({ image: url(x.image) ?? "", caption: str(x.caption, 40) })).filter((x) => x.image),
+    benefits: objs(o.benefits, 8).map((x) => ({ title: str(x.title, 40) ?? "", body: str(x.body, 240) ?? "" })).filter((x) => x.title && x.body),
+    courses, locationPoints: list(o.locationPoints, 6, 60), locationImage: url(o.locationImage), giftImage: url(o.giftImage), copy,
   };
 }
 

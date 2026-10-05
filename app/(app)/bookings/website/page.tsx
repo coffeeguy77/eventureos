@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { readSettings, shareLink } from "@/lib/bookings/core";
 import { relative } from "@/lib/format";
-import { CopyField, PluginKeys, CsvImport, LandingForm, SettingsForm } from "@/components/bookings/website-tools";
+import { CopyField, PluginKeys, CsvImport, SettingsForm } from "@/components/bookings/website-tools";
+import { LandingForm } from "@/components/bookings/landing-form";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function WebsitePage() {
   const bookUrl = `${base}/book/${org.slug}`;
   const [{ data: o }, { data: courses }, { data: keys }, { data: lastSync }] = await Promise.all([
     supabase.from("organisations").select("settings, website").eq("id", org.id).single(),
-    supabase.from("booking_courses").select("slug, name").eq("organisation_id", org.id).eq("active", true).order("position"),
+    supabase.from("booking_courses").select("id, slug, name").eq("organisation_id", org.id).eq("active", true).order("position"),
     supabase.from("inbound_connections").select("id, label, key_prefix, created_at, last_used_at, revoked_at").eq("organisation_id", org.id).eq("provider", "wordpress").order("created_at", { ascending: false }),
     supabase.from("bookings").select("created_at").eq("organisation_id", org.id).in("source", ["bookly", "classbento"]).order("created_at", { ascending: false }).limit(1),
   ]);
@@ -90,7 +91,7 @@ export default async function WebsitePage() {
         </Card>
 
         <div className="xl:col-span-2">
-          <LandingForm initial={settings.landing} pageUrl={`${appBaseUrl()}/book/${org.slug}`} />
+          <LandingForm initial={settings.landing} pageUrl={`${appBaseUrl()}/book/${org.slug}`} orgId={org.id} courses={((courses ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name }))} />
           <SettingsForm initial={settings} />
         </div>
       </div>
