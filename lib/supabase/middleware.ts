@@ -1,3 +1,4 @@
+import { isShortLink } from "@/lib/short-links";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -44,7 +45,7 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   // "/" is the public sales page; robots/sitemap for search engines
-  const isPublic = path === "/" || path === "/robots.txt" || path === "/sitemap.xml" || PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  const isPublic = path === "/" || path === "/robots.txt" || path === "/sitemap.xml" || PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/")) || isShortLink(path);
 
   if (!user && !isPublic) {
     const redirect = request.nextUrl.clone();

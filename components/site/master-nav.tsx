@@ -10,7 +10,7 @@ export function MasterNav({ org, active }: { org: PublicOrg; active?: SiteSectio
   const labels = readSiteNav(org.rawSettings);
   const base = org.slug;
   const items: { key: SiteSection; href: string; on: boolean }[] = [
-    { key: "lessons", href: `/book/${base}`, on: org.settings.enabled },
+    { key: "lessons", href: `/${base}`, on: org.settings.enabled },
     { key: "jobs", href: `/jobs/${base}`, on: readJobSettings(org.rawSettings, org.name).enabled },
     { key: "shop", href: `/shop/${base}`, on: readShop(org.rawSettings).enabled },
     { key: "gifts", href: `/book/${base}/gift`, on: org.settings.enabled && org.stripeReady },
@@ -20,7 +20,7 @@ export function MasterNav({ org, active }: { org: PublicOrg; active?: SiteSectio
   return (
     <div className="relative z-50 border-b border-white/10 bg-[#141011] text-white" data-master-nav>
       <div className={`${PAGE} flex min-h-[60px] flex-wrap items-center gap-x-8 gap-y-0`}>
-        <Link href={`/book/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
+        <Link href={`/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
           {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[1.0625rem] font-semibold">{org.name}</span>}
         </Link>
         <nav aria-label={org.name} className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] items-center gap-1 overflow-x-auto px-3 pb-2 sm:mx-0 sm:w-auto sm:flex-1 sm:justify-end sm:px-0 sm:pb-0">
