@@ -28,7 +28,8 @@ test("job settings defaults and limits", () => {
   const s = readJobSettings({}, "Bean Culture");
   assert.equal(s.name, "Bean Culture Barista Jobs");
   assert.equal(s.enabled, true);
-  assert.equal(s.dailyLimit, 80);
+  assert.equal(s.dailyLimit, 40);
+  assert.equal(s.employerApproval, false);
   assert.equal(readJobSettings({ jobs: { batchSize: 9999, dailyLimit: 1 } }, "X").batchSize, 200);
   assert.equal(readJobSettings({ jobs: { dailyLimit: 1 } }, "X").dailyLimit, 10);
   assert.equal(readJobSettings({ jobs: { enabled: false } }, "X").enabled, false);
@@ -44,4 +45,15 @@ test("welcome letter: placeholders, pixel, unsubscribe link, escaping", () => {
   assert.match(m.html, /&lt;jobs&gt;/);
   assert.ok(!m.html.includes("<jobs>"));
   assert.match(m.text, /Set up: https:\/\/x\.test\/api\/jobs\/c\/abc/);
+});
+
+test("instagram usernames and websites are cleaned", async () => {
+  const { cleanInstagram, cleanWebsite, readEquipment } = await import("./core");
+  assert.equal(cleanInstagram("@bean.culture"), "bean.culture");
+  assert.equal(cleanInstagram("https://www.instagram.com/beanculture/?hl=en"), "beanculture");
+  assert.equal(cleanInstagram("not a username!"), null);
+  assert.equal(cleanWebsite("beanculture.com.au"), "https://beanculture.com.au");
+  assert.equal(cleanWebsite("nonsense"), null);
+  assert.deepEqual(readEquipment([{ type: "machine", brand: " La Marzocco ", model: "Linea PB" }, { type: "toaster", brand: "x" }, { type: "grinder", brand: "" }]),
+    [{ type: "machine", brand: "La Marzocco", model: "Linea PB" }]);
 });

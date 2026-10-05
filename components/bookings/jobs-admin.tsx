@@ -95,3 +95,24 @@ export function WelcomeLetter({ initial, previewHtml, eligible, queued, publicUr
     </div>
   );
 }
+
+/** Whether new businesses need approval before they can search baristas and post jobs. */
+export function EmployerApprovalToggle({ initial }: { initial: boolean }) {
+  const router = useRouter();
+  const [on, setOn] = useState(initial);
+  const [m, setM] = useState<Msg>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      <label className="flex min-w-0 flex-1 items-start gap-2 text-[0.8125rem] text-ink">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={on} disabled={pending} onChange={(e) => {
+          const v = e.target.checked; setOn(v);
+          start(async () => { const r = await saveJobSettings({ employerApproval: v }); setM(r.ok ? { ok: true, text: v ? "New businesses now wait for your approval." : "New businesses can start straight away." } : { ok: false, text: r.error }); if (!r.ok) setOn(!v); router.refresh(); });
+        }} />
+        <span><b className="font-semibold">Approve new businesses first</b>
+          <span className="block text-ink-muted">Off: businesses can search baristas and post jobs as soon as they sign up (you get an email and can block anyone). Turn on if you start getting random sign-ups.</span></span>
+      </label>
+      <Note m={m} />
+    </div>
+  );
+}

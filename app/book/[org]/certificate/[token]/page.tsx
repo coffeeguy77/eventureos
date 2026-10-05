@@ -27,9 +27,9 @@ export default async function CertificatePage({ params }: P) {
   if (!org || !c || c.organisation_id !== org.id) notFound();
   const tpl = await loadTemplate(db, org.id);
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
-  const data = certData(org, c);
+  const data = certData(org, c, design);
   const qr = design.showQr ? await QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 240 }) : null;
-  const svg = toSvg(layout(design, data, { logo: !!org.logo_url }), { logo: org.logo_url, signature: design.signature, qr });
+  const svg = toSvg(layout(design, data, { logo: !!org.logo_url }), { logo: org.logo_url, signature: design.signature, qr, background: design.background });
   const valid = c.status === "issued";
 
   return (

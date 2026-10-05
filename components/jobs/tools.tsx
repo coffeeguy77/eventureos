@@ -8,7 +8,7 @@ import {
   jobsLoginAction, jobsSignInAction, postJobAction, requestContactAction, saveEmployerAction, saveProfileAction, setPostStatusAction, shareContactAction,
   unsubscribeAction, uploadPhotoAction, type PostInput,
 } from "@/app/jobs/actions";
-import { DAY_LABEL, DAYS, EXPERIENCE, JOB_KINDS, SKILLS, SLOT_LABEL, SLOTS, WORK_TYPES, type Availability } from "@/lib/jobs/core";
+import { DAY_LABEL, DAYS, EQUIPMENT_BRANDS, EQUIPMENT_TYPES, EXPERIENCE, JOB_KINDS, SKILLS, SLOT_LABEL, SLOTS, WORK_TYPES, equipmentLabel, type Availability, type Equipment, type EquipmentType } from "@/lib/jobs/core";
 import type { Profile } from "@/lib/jobs/server";
 import { btn2Cls as btn2, btnCls as btn, inputCls as input } from "./shell";
 
@@ -322,13 +322,13 @@ export function RequestContactButton({ slug, threadId }: { slug: string; threadI
 
 /* ------------------------------------------------------------------ employers */
 
-export function EmployerAuth({ slug }: { slug: string }) {
+export function EmployerAuth({ slug, approval = false }: { slug: string; approval?: boolean }) {
   const [mode, setMode] = useState<"signin" | "signup">("signup");
-  const [f, setF] = useState({ business: "", name: "", email: "", phone: "", website: "", suburb: "", about: "" });
+  const [f, setF] = useState({ business: "", name: "", email: "", phone: "", website: "", instagram: "", address: "", suburb: "", state: "", postcode: "", about: "" });
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const up = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const up = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   if (done) return <div className="rounded-xl bg-emerald-50 p-4 text-[0.9375rem] text-emerald-900"><Mail className="mb-2 h-6 w-6" />{done}</div>;
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); setErr(null); start(async () => {
@@ -347,31 +347,113 @@ export function EmployerAuth({ slug }: { slug: string }) {
       {mode === "signup" && (<>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><Label htmlFor="em-p">Phone</Label><input id="em-p" type="tel" className={input} value={f.phone} onChange={up("phone")} /></div>
-          <div><Label htmlFor="em-s">Suburb</Label><input id="em-s" className={input} value={f.suburb} onChange={up("suburb")} /></div>
         </div>
-        <div><Label htmlFor="em-w">Website or Instagram</Label><input id="em-w" className={input} value={f.website} onChange={up("website")} /></div>
+        <AddressFields idp="em" f={f} up={up as UpFn} />
+        <LinkFields idp="em" f={f} up={up as UpFn} />
         <div><Label htmlFor="em-a">About your business</Label><textarea id="em-a" rows={3} maxLength={1500} className={`${input} h-auto py-3`} value={f.about} onChange={up("about")} placeholder="Café, coffee cart, events… what kind of staff you need." /></div>
       </>)}
       <button type="submit" disabled={pending} className={`${btn} w-full`}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "signup" ? "Sign up" : "Email me a sign-in link"}</button>
       {err && <p className="text-[0.875rem] font-medium text-rose-700">{err}</p>}
-      <p className="text-[0.8125rem] text-ink-muted">{mode === "signup" ? "We check every employer before they can search or post — usually within a day." : "No password — we email you a link."}</p>
+      <p className="text-[0.8125rem] text-ink-muted">{mode === "signup" ? (approval ? "We check every employer before they can search or post — usually within a day." : "No password — we email you a link to sign in, and you can start searching straight away.") : "No password — we email you a link."}</p>
     </form>
   );
 }
 
-export function EmployerDetailsForm({ slug, initial }: { slug: string; initial: { business: string; name: string; phone: string; website: string; suburb: string; about: string } }) {
+type Addr = { address: string; suburb: string; state: string; postcode: string };
+type UpFn = (k: never) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+
+/** Street address — baristas see where the business is (and distance search uses it). */
+function AddressFields({ idp, f, up }: { idp: string; f: Addr; up: UpFn }) {
+  const u = up as unknown as (k: keyof Addr) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  return (
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_100px_110px]">
+      <div className="sm:col-span-3"><Label htmlFor={`${idp}-ad`}>Street address</Label><input id={`${idp}-ad`} className={input} value={f.address} onChange={u("address")} autoComplete="street-address" maxLength={200} placeholder="e.g. Shop 2, 15 Lonsdale St" /></div>
+      <div><Label htmlFor={`${idp}-s`}>Suburb</Label><input id={`${idp}-s`} className={input} value={f.suburb} onChange={u("suburb")} autoComplete="address-level2" maxLength={80} /></div>
+      <div><Label htmlFor={`${idp}-st`}>State</Label><select id={`${idp}-st`} className={input} value={f.state} onChange={u("state")}><option value="">—</option>{["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"].map((x) => <option key={x}>{x}</option>)}</select></div>
+      <div><Label htmlFor={`${idp}-pc`}>Postcode</Label><input id={`${idp}-pc`} inputMode="numeric" maxLength={4} className={input} value={f.postcode} onChange={u("postcode")} autoComplete="postal-code" /></div>
+    </div>
+  );
+}
+
+/** Website and Instagram as separate fields — only the Instagram username is needed. */
+function LinkFields({ idp, f, up }: { idp: string; f: { website: string; instagram: string }; up: UpFn }) {
+  const u = up as unknown as (k: "website" | "instagram") => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div><Label htmlFor={`${idp}-w`}>Website <span className="font-normal text-ink-faint">(optional)</span></Label><input id={`${idp}-w`} className={input} value={f.website} onChange={u("website")} inputMode="url" placeholder="yourcafe.com.au" maxLength={200} /></div>
+      <div><Label htmlFor={`${idp}-ig`}>Instagram username <span className="font-normal text-ink-faint">(optional)</span></Label>
+        <div className="flex items-center rounded-xl border border-line-strong bg-surface focus-within:border-[var(--b)] focus-within:ring-2 focus-within:ring-[color-mix(in_srgb,var(--b)_25%,transparent)]">
+          <span className="pl-3.5 text-base text-ink-faint">@</span>
+          <input id={`${idp}-ig`} className="h-12 min-w-0 flex-1 rounded-xl bg-transparent px-1.5 text-base text-ink focus:outline-none" value={f.instagram} onChange={u("instagram")} autoCapitalize="none" autoCorrect="off" maxLength={60} placeholder="yourcafe" />
+        </div></div>
+    </div>
+  );
+}
+
+/** The business's coffee gear: pick from leading brands or type your own. */
+export function EquipmentPicker({ value, onChange }: { value: Equipment[]; onChange: (v: Equipment[]) => void }) {
+  const [type, setType] = useState<EquipmentType>("machine");
+  const [brand, setBrand] = useState("");
+  const [own, setOwn] = useState("");
+  const [model, setModel] = useState("");
+  const chosen = brand === "__own" ? own.trim() : brand;
+  const add = () => {
+    if (!chosen) return;
+    onChange([...value, { type, brand: chosen.slice(0, 60), model: model.trim().slice(0, 60) || null }].slice(0, 12));
+    setBrand(""); setOwn(""); setModel("");
+  };
+  return (
+    <div className="space-y-3">
+      {value.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {value.map((e, i) => (
+            <li key={i} className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-1.5 pl-3 pr-1.5 text-[0.8438rem] text-ink">
+              <span className="text-ink-muted">{EQUIPMENT_TYPES.find((t) => t.id === e.type)?.label}:</span> {equipmentLabel(e)}
+              <button type="button" aria-label={`Remove ${equipmentLabel(e)}`} onClick={() => onChange(value.filter((_, j) => j !== i))} className="grid h-6 w-6 place-items-center rounded-full text-ink-muted hover:bg-zinc-200 hover:text-ink"><Trash2 className="h-3.5 w-3.5" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="grid gap-2 sm:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <select aria-label="Type of equipment" className={input} value={type} onChange={(e) => { setType(e.target.value as EquipmentType); setBrand(""); }}>
+          {EQUIPMENT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        {brand === "__own"
+          ? <input aria-label="Brand" className={input} value={own} onChange={(e) => setOwn(e.target.value)} placeholder="Brand" maxLength={60} autoFocus />
+          : <select aria-label="Brand" className={input} value={brand} onChange={(e) => setBrand(e.target.value)}>
+              <option value="">Choose a brand…</option>
+              {EQUIPMENT_BRANDS[type].map((b) => <option key={b} value={b}>{b}</option>)}
+              <option value="__own">Other — type it in</option>
+            </select>}
+        <input aria-label="Model (optional)" className={input} value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model (optional) e.g. Linea PB" maxLength={60} />
+        <button type="button" onClick={add} disabled={!chosen || value.length >= 12} className={btn2}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+type EmpForm = { business: string; name: string; phone: string; website: string; instagram: string; address: string; suburb: string; state: string; postcode: string; about: string; equipment: Equipment[] };
+
+export function EmployerDetailsForm({ slug, initial }: { slug: string; initial: EmpForm }) {
   const [f, setF] = useState(initial);
   const [m, setM] = useState<Msg>(null);
   const [pending, start] = useTransition();
-  const up = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  const up = (k: keyof EmpForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
-    <form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await saveEmployerAction(slug, f); setM(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error }); }); }}>
-      <div><Label htmlFor="ed-b">Business name</Label><input id="ed-b" className={input} value={f.business} onChange={up("business")} /></div>
-      <div><Label htmlFor="ed-n">Your name</Label><input id="ed-n" className={input} value={f.name} onChange={up("name")} /></div>
-      <div><Label htmlFor="ed-p">Phone</Label><input id="ed-p" type="tel" className={input} value={f.phone} onChange={up("phone")} /></div>
-      <div><Label htmlFor="ed-s">Suburb</Label><input id="ed-s" className={input} value={f.suburb} onChange={up("suburb")} /></div>
-      <div><Label htmlFor="ed-w">Website or Instagram</Label><input id="ed-w" className={input} value={f.website} onChange={up("website")} /></div>
-      <div><Label htmlFor="ed-a">About</Label><textarea id="ed-a" rows={3} className={`${input} h-auto py-3`} value={f.about} onChange={up("about")} /></div>
+    <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await saveEmployerAction(slug, f); setM(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error }); }); }}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label htmlFor="ed-b">Business name</Label><input id="ed-b" className={input} value={f.business} onChange={up("business")} /></div>
+        <div><Label htmlFor="ed-n">Your name</Label><input id="ed-n" className={input} value={f.name} onChange={up("name")} /></div>
+        <div><Label htmlFor="ed-p">Phone</Label><input id="ed-p" type="tel" className={input} value={f.phone} onChange={up("phone")} /></div>
+      </div>
+      <AddressFields idp="ed" f={f} up={up as UpFn} />
+      <LinkFields idp="ed" f={f} up={up as UpFn} />
+      <div><Label htmlFor="ed-a">About your business</Label><textarea id="ed-a" rows={3} className={`${input} h-auto py-3`} value={f.about} onChange={up("about")} placeholder="Café, coffee cart, events… the vibe, how busy you are, what you're looking for." /></div>
+      <div>
+        <p className="mb-1 text-[0.8125rem] font-medium text-ink">Your coffee gear</p>
+        <p className="mb-2 text-[0.75rem] text-ink-muted">Baristas like to know what they&apos;ll be working on.</p>
+        <EquipmentPicker value={f.equipment} onChange={(v) => setF({ ...f, equipment: v })} />
+      </div>
       <div className="flex items-center gap-3"><button type="submit" disabled={pending} className={btn}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save</button><Note m={m} /></div>
     </form>
   );

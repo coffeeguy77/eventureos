@@ -21,8 +21,9 @@ export async function loadTemplate(db: SupabaseClient, orgId: string): Promise<{
 export const verifyUrl = (org: Pick<PublicOrg, "slug">, token: string) => `${appBaseUrl()}/book/${org.slug}/certificate/${token}`;
 export const pdfUrl = (token: string) => `${appBaseUrl()}/api/book/certificate/${token}`;
 
-export function certData(org: PublicOrg, c: Pick<CertRow, "person_name" | "course_name" | "completed_on" | "hours" | "number" | "verify_token">): CertData {
-  return { name: c.person_name, course: c.course_name, date: certDate(c.completed_on), hours: c.hours ? hoursLabel(Number(c.hours) * 60) : null, number: c.number, business: org.name, verifyUrl: verifyUrl(org, c.verify_token) };
+export function certData(org: PublicOrg, c: Pick<CertRow, "person_name" | "course_name" | "completed_on" | "hours" | "number" | "verify_token" | "course_id">, design?: CertDesign | null): CertData {
+  return { name: c.person_name, course: c.course_name, date: certDate(c.completed_on), hours: c.hours ? hoursLabel(Number(c.hours) * 60) : null, number: c.number, business: org.name, verifyUrl: verifyUrl(org, c.verify_token),
+    points: c.course_id ? design?.skills[c.course_id] ?? [] : [] };
 }
 
 async function nextNumber(db: SupabaseClient, orgId: string) {
@@ -104,7 +105,7 @@ export async function renderCertificate(db: SupabaseClient, c: CertRow) {
   const tpl = await loadTemplate(db, c.organisation_id);
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
   const [logo, background] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null]);
-  return { bytes: await certificatePdf(design, certData(org, c), logo, background), org };
+  return { bytes: await certificatePdf(design, certData(org, c, design), logo, background), org };
 }
 
 /** Certificates for a student: theirs by student id, plus any issued on their bookings. */
@@ -130,7 +131,12 @@ export async function sendCertificateEmails(db: SupabaseClient) {
   const byBooking = new Map<string, Row[]>();
   for (const r of (data ?? []) as unknown as Row[]) byBooking.set(r.booking.id, [...(byBooking.get(r.booking.id) ?? []), r]);
   let sent = 0;
+  // Only for businesses that have switched on "Email certificates automatically"
+  const on = new Map<string, boolean>();
   for (const [bookingId, certs] of byBooking) {
+    const orgId = certs[0].organisation_id;
+    if (!on.has(orgId)) on.set(orgId, !!(await loadTemplate(db, orgId))?.design.emailAuto);
+    if (!on.get(orgId)) continue;
     const b = certs[0].booking;
     const ids = certs.map((c) => c.id);
     if (!b.contact_email) { await db.from("booking_certificates").update({ emailed_at: new Date().toISOString() }).in("id", ids); continue; }

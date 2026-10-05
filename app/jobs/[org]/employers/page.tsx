@@ -29,12 +29,12 @@ export default async function EmployerHome({ params, searchParams }: { params: P
             <p className="mt-3 max-w-xl text-[1.0625rem] text-ink-muted">Search baristas trained by {org.name} by suburb and availability, message them, and post one-off shifts, events or regular spots.</p>
             {(count ?? 0) > 0 && <p className="mt-4 text-[0.9375rem] font-semibold text-ink">{count} baristas on the board right now.</p>}
             <ul className="mt-6 space-y-2 text-[0.9375rem] text-ink">
-              <li>• Free for approved businesses.</li>
+              <li>• Free for cafés, coffee carts and event businesses.</li>
               <li>• Baristas choose whether to share their phone and email — message them through the board first.</li>
               <li>• When a job is filled, mark it filled and it comes off the board.</li>
             </ul>
           </div>
-          <div className={card}><h2 className="mb-4 text-[1.25rem] font-bold text-ink">Employers</h2><EmployerAuth slug={slug} /></div>
+          <div className={card}><h2 className="mb-4 text-[1.25rem] font-bold text-ink">Employers</h2><EmployerAuth slug={slug} approval={org.jobs.employerApproval} /></div>
         </div>
       </JobsShell>
     );
@@ -58,7 +58,7 @@ export default async function EmployerHome({ params, searchParams }: { params: P
       </div>
       {!approved && <div className="mb-6 flex items-start gap-3 rounded-2xl bg-amber-50 p-5 text-amber-950"><Clock className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-semibold">Thanks for signing up — we&apos;re checking your details.</p><p className="text-[0.9375rem]">We&apos;ll email you as soon as you can search baristas and post jobs (usually within a day).</p></div></div>}
       {(await searchParams).posted && approved && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-[0.9375rem] text-emerald-900">Your job is live — baristas can see it now.</p>}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="space-y-6">
         <div className="min-w-0 space-y-4">
           {approved && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -89,11 +89,12 @@ export default async function EmployerHome({ params, searchParams }: { params: P
             </section>
           )}
         </div>
-        <aside className={card}>
-          <h2 className="mb-3 text-[1rem] font-semibold text-ink">Your business</h2>
-          <p className="mb-3 text-[0.8125rem] text-ink-muted">Baristas see these details when you get in touch.</p>
-          <EmployerDetailsForm slug={slug} initial={{ business: emp.business_name, name: emp.contact_name, phone: emp.phone ?? "", website: emp.website ?? "", suburb: emp.suburb ?? "", about: emp.about ?? "" }} />
-        </aside>
+        <section className={card}>
+          <h2 className="mb-1 text-[1rem] font-semibold text-ink">Your business</h2>
+          <p className="mb-4 text-[0.8125rem] text-ink-muted">Baristas see these details on your jobs and when you get in touch, so they know who you are.</p>
+          <EmployerDetailsForm slug={slug} initial={{ business: emp.business_name, name: emp.contact_name, phone: emp.phone ?? "", website: emp.website ?? "", instagram: emp.instagram ?? "",
+            address: emp.address ?? "", suburb: emp.suburb ?? "", state: emp.state ?? "", postcode: emp.postcode ?? "", about: emp.about ?? "", equipment: emp.equipment }} />
+        </section>
       </div>
     </JobsShell>
   );

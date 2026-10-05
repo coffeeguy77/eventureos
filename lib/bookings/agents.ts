@@ -218,7 +218,12 @@ export async function sendCaseManagerCertificates(db: SupabaseClient) {
   const { certDate } = await import("./certificate");
   type Row = Parameters<typeof renderCertificate>[1] & { booking: { case_manager_id: string } };
   let sent = 0;
+  const { loadTemplate } = await import("./certificates");
+  const on = new Map<string, boolean>();
   for (const c of (data ?? []) as unknown as Row[]) {
+    // Only when the business has switched on "Email certificates automatically"
+    if (!on.has(c.organisation_id)) on.set(c.organisation_id, !!(await loadTemplate(db, c.organisation_id))?.design.emailAuto);
+    if (!on.get(c.organisation_id)) continue;
     const org = await orgById(db, c.organisation_id);
     const cm = await caseManagerById(db, org.id, c.booking.case_manager_id);
     const now = new Date().toISOString();

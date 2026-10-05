@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { currentStudent } from "@/lib/bookings/student-auth";
-import { jobsOrg, loadMessages, loadThreads, profileFor, unreadFor } from "@/lib/jobs/server";
+import { employerRow, jobsOrg, loadMessages, loadThreads, profileFor, unreadFor } from "@/lib/jobs/server";
 import { baristaNav, JobsShell } from "@/components/jobs/shell";
 import { ThreadsView, threadWhen, type Active } from "@/components/jobs/threads-view";
 
@@ -22,10 +22,9 @@ export default async function BaristaMessages({ params, searchParams }: { params
   let active: Active | null = null;
   if (t) {
     if (t.barista_unread) { await db.from("job_threads").update({ barista_unread: 0 }).eq("id", t.id); t.barista_unread = 0; }
-    const { data: emp } = await db.from("job_employers").select("business_name, contact_name, suburb, website, phone, email").eq("id", t.employer_id).single();
-    const e = emp as { business_name: string; contact_name: string; suburb: string | null; website: string | null; phone: string | null; email: string };
-    active = { id: t.id, heading: e.business_name, sub: [t.post?.title, e.suburb].filter(Boolean).join(" · "), contactShared: t.contact_shared, contactRequested: t.contact_requested,
-      employerLines: [`${e.contact_name}${e.phone ? ` · ${e.phone}` : ""} · ${e.email}`, ...(e.website ? [e.website] : [])], messages: await loadMessages(db, t.id) };
+    const e = (await employerRow(db, t.employer_id))!;
+    active = { id: t.id, heading: e.business_name, sub: t.post?.title ?? "General enquiry", contactShared: t.contact_shared, contactRequested: t.contact_requested,
+      employerLines: [`${e.contact_name}${e.phone ? ` · ${e.phone}` : ""} · ${e.email}`], employer: e, messages: await loadMessages(db, t.id) };
   }
   const unread = await unreadFor(db, "barista", prof?.id);
   return (

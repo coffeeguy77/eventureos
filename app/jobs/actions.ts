@@ -7,8 +7,9 @@ import { consumeLogin, currentStudent, requestLogin, setSessionCookie, signOut, 
 import { JOB_KINDS } from "@/lib/jobs/core";
 import {
   consumeEmployerLogin, currentEmployer, employerSignOut, geocode, jobsOrg, postMessage, profileFor, registerEmployer, requestEmployerLogin, saveProfile, startThread,
-  THREAD_COLS, type ProfileInput, type R, type Thread,
+  employerExtras, THREAD_COLS, type EmployerDetails, type ProfileInput, type R, type Thread,
 } from "@/lib/jobs/server";
+import { cleanWebsite } from "@/lib/jobs/core";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const fail = (e: unknown): { ok: false; error: string } => {
@@ -164,7 +165,7 @@ export async function unsubscribeAction(slug: string, inviteToken: string): Prom
 
 /* ------------------------------------------------------------------ employers */
 
-export async function employerRegisterAction(slug: string, f: { business: string; name: string; email: string; phone?: string; website?: string; suburb?: string; about?: string }): Promise<R> {
+export async function employerRegisterAction(slug: string, f: { business: string; name: string; email: string; phone?: string; website?: string; suburb?: string; about?: string } & EmployerDetails): Promise<R> {
   try { return await registerEmployer(slug, f); } catch (e) { return fail(e); }
 }
 
@@ -195,7 +196,7 @@ async function employer(slug: string, needApproved = true) {
   return { org, emp, error: null };
 }
 
-export async function saveEmployerAction(slug: string, f: { business: string; name: string; phone: string; website: string; suburb: string; about: string }): Promise<R> {
+export async function saveEmployerAction(slug: string, f: { business: string; name: string; phone: string; website: string; suburb: string; about: string } & EmployerDetails): Promise<R> {
   try {
     const { org, emp, error } = await employer(slug, false);
     if (!emp) return { ok: false, error: error! };
@@ -203,9 +204,15 @@ export async function saveEmployerAction(slug: string, f: { business: string; na
     if (business.length < 2 || name.length < 2) return { ok: false, error: "Enter your business and your name." };
     const db = createServiceClient();
     const suburb = f.suburb.trim().slice(0, 80) || null;
-    const g = suburb && suburb !== emp.suburb ? await geocode(db, suburb) : null;
-    const { error: e } = await db.from("job_employers").update({ business_name: business, contact_name: name, phone: cleanPhone(f.phone), website: f.website.trim().slice(0, 200) || null, suburb,
-      about: f.about.trim().slice(0, 1500) || null, ...(suburb !== emp.suburb ? { lat: g?.lat ?? null, lng: g?.lng ?? null } : {}) }).eq("id", emp.id).eq("organisation_id", org.id);
+    const extras = employerExtras(f);
+    if (f.website?.trim() && !cleanWebsite(f.website)) return { ok: false, error: "That website doesn't look right — e.g. beanculture.com.au" };
+    if (f.instagram?.trim() && !extras.instagram) return { ok: false, error: "Enter just your Instagram username, e.g. beanculture" };
+    const moved = suburb !== emp.suburb || extras.address !== emp.address || extras.postcode !== emp.postcode;
+    const g = moved && suburb ? await geocode(db, [extras.address, suburb, extras.postcode].filter(Boolean).join(" "), extras.state) ?? await geocode(db, suburb, extras.state) : null;
+    const base = { business_name: business, contact_name: name, phone: cleanPhone(f.phone), website: cleanWebsite(f.website), suburb,
+      about: f.about.trim().slice(0, 1500) || null, ...(moved ? { lat: g?.lat ?? null, lng: g?.lng ?? null } : {}) };
+    let { error: e } = await db.from("job_employers").update({ ...base, ...extras }).eq("id", emp.id).eq("organisation_id", org.id);
+    if (e && /column .* does not exist|schema cache/i.test(e.message)) ({ error: e } = await db.from("job_employers").update(base).eq("id", emp.id).eq("organisation_id", org.id));
     return e ? fail(e) : { ok: true, data: "Saved." };
   } catch (e) { return fail(e); }
 }

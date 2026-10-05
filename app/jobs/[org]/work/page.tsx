@@ -7,6 +7,7 @@ import { JOB_KINDS } from "@/lib/jobs/core";
 import { jobsOrg, openPosts, profileFor, unreadFor } from "@/lib/jobs/server";
 import { baristaNav, card, JobsShell } from "@/components/jobs/shell";
 import { InterestButton } from "@/components/jobs/tools";
+import { EmployerInfo } from "@/components/jobs/employer-info";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs & shifts", robots: { index: false, follow: false } };
@@ -49,6 +50,7 @@ export default async function Work({ params }: { params: Promise<{ org: string }
                 {p.positions > 1 && <li className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-ink-faint" />{p.positions} baristas</li>}
               </ul>
               {p.description && <p className="mt-3 whitespace-pre-line text-[0.9063rem] text-ink">{p.description}</p>}
+              {p.employer && <div className="mt-3 rounded-xl bg-zinc-50 p-3"><p className="mb-1 text-[0.75rem] font-semibold uppercase tracking-wider text-ink-faint">About {p.employer.business_name}</p><EmployerInfo e={p.employer} /></div>}
               <div className="mt-4">
                 {applied.has(p.id)
                   ? <Link href={`/jobs/${slug}/messages?t=${applied.get(p.id)}`} className="inline-flex h-11 items-center rounded-xl px-4 text-[0.875rem] font-semibold text-ink ring-1 ring-line-strong hover:bg-zinc-50">You&apos;ve been in touch — open messages</Link>

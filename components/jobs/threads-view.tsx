@@ -2,11 +2,12 @@ import Link from "next/link";
 import { Lock, MessageSquare } from "lucide-react";
 import { card } from "./shell";
 import { Composer, RequestContactButton, ShareContactButton } from "./tools";
+import { EmployerInfo, type EmployerInfoData } from "./employer-info";
 
 export interface ThreadItem { id: string; title: string; subtitle: string; photo?: string | null; unread: number; when: string }
 export interface Active {
   id: string; heading: string; sub: string; href?: string | null; contactShared: boolean; contactRequested: boolean;
-  contact?: { email: string | null; phone: string | null } | null; employerLines?: string[];
+  contact?: { email: string | null; phone: string | null } | null; employerLines?: string[]; employer?: EmployerInfoData | null;
   messages: { id: string; sender: "employer" | "barista" | "system"; body: string; created_at: string }[];
 }
 
@@ -38,6 +39,7 @@ export function ThreadsView({ slug, side, items, active, base }: { slug: string;
             <p className="text-[1.0625rem] font-semibold text-ink">{active.href ? <Link href={active.href} className="hover:underline">{active.heading}</Link> : active.heading}</p>
             <p className="text-[0.8125rem] text-ink-muted">{active.sub}</p>
             {active.employerLines?.map((l) => <p key={l} className="text-[0.8125rem] text-ink-muted">{l}</p>)}
+            {active.employer && <div className="mt-2"><EmployerInfo e={active.employer} compact /></div>}
             <div className="mt-3">
               {side === "employer" ? (
                 active.contact && (active.contact.email || active.contact.phone)

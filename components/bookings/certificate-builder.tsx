@@ -26,8 +26,9 @@ const PALETTES: { name: string; accent: string; paper: string }[] = [
   { name: "Charcoal", accent: "#2B2B2B", paper: "#FFFFFF" },
 ];
 
-export function CertificateBuilder({ initial, autoIssue, brand, business, logoUrl, sampleCourse, hasTemplate, orgId }: {
+export function CertificateBuilder({ initial, autoIssue, brand, business, logoUrl, sampleCourse, hasTemplate, orgId, courses = [] }: {
   initial: CertDesign; autoIssue: boolean; brand: string | null; business: string; logoUrl: string | null; sampleCourse: string; hasTemplate: boolean; orgId: string;
+  courses?: { id: string; name: string; minutes: number }[];
 }) {
   const router = useRouter();
   const [d, setD] = useState<CertDesign>(initial);
@@ -37,9 +38,22 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof CertDesign>(k: K, v: CertDesign[K]) => setD({ ...d, [k]: v });
+  // Which course the preview shows (so its skills appear)
+  const [previewCourse, setPreviewCourse] = useState(courses[0]?.id ?? "");
+  const pc = courses.find((c) => c.id === previewCourse) ?? null;
+  const [skillText, setSkillText] = useState<Record<string, string>>(() => Object.fromEntries(courses.map((c) => [c.id, (initial.skills[c.id] ?? []).join("\n")])));
+  const setSkills = (id: string, text: string) => {
+    setSkillText({ ...skillText, [id]: text });
+    const pts = text.split(/\n/).map((x) => x.replace(/^[\s•*·-]+/, "").trim()).filter(Boolean).slice(0, 10);
+    const next = { ...d.skills };
+    if (pts.length) next[id] = pts; else delete next[id];
+    setD({ ...d, skills: next });
+  };
 
-  const data = useMemo(() => ({ name: name || "Alex Example", course: sampleCourse, date: new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long", year: "numeric" }).format(new Date()),
-    hours: "2 hours", number: "C-1001", business, verifyUrl: "https://www.eventureos.com.au/verify/example" }), [name, sampleCourse, business]);
+  const data = useMemo(() => ({ name: name || "Alex Example", course: pc ? pc.name.replace(/\s*\(\d+\s*hrs?\)\s*$/i, "") : sampleCourse,
+    date: new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long", year: "numeric" }).format(new Date()),
+    hours: pc?.minutes ? `${Math.round((pc.minutes / 60) * 10) / 10} hour${pc.minutes === 60 ? "" : "s"}` : "2 hours", number: "C-1001", business, verifyUrl: "https://www.eventureos.com.au/verify/example",
+    points: pc ? d.skills[pc.id] ?? [] : [] }), [name, sampleCourse, business, pc, d.skills]);
   useEffect(() => { QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null)); }, [data.verifyUrl]);
   const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr, background: d.background }), [d, data, logoUrl, qr]);
   const [upErr, setUpErr] = useState<string | null>(null);
@@ -119,6 +133,29 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
           </div>
         </section>
 
+        {courses.length > 0 && (
+          <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="text-[0.8438rem] font-semibold text-ink">What each course covers</p>
+              <label className="flex items-center gap-1.5 text-[0.75rem] text-ink-muted"><input type="checkbox" checked={d.showSkills} onChange={(e) => set("showSkills", e.target.checked)} />Show on certificate</label>
+            </div>
+            <p className="mb-3 text-[0.75rem] text-ink-muted">One skill per line (up to 10). Printed under &ldquo;Skills covered&rdquo; with the course length — handy for job applications.</p>
+            <div className="space-y-3">
+              {courses.map((c) => (
+                <div key={c.id}>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <Label>{c.name}</Label>
+                    <button type="button" onClick={() => setPreviewCourse(c.id)} className={cn("text-[0.72rem] font-semibold", previewCourse === c.id ? "text-ink-muted" : "text-brand-700 hover:underline")}>{previewCourse === c.id ? "In preview" : "Preview this"}</button>
+                  </div>
+                  <textarea rows={4} value={skillText[c.id] ?? ""} onChange={(e) => setSkills(c.id, e.target.value)} onFocus={() => setPreviewCourse(c.id)}
+                    className="w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    placeholder={"For example:\nEspresso extraction\nMilk texturing\nLatte art basics"} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
           <p className="mb-2 text-[0.8438rem] font-semibold text-ink">Show</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[0.8125rem] text-ink">
@@ -132,7 +169,9 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
 
         <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
           <label className="flex items-start gap-2 text-[0.8125rem] text-ink"><input type="checkbox" className="mt-0.5" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
-            <span><b className="font-semibold">Give certificates automatically</b><span className="block text-ink-muted">Everyone gets one after their class (with a link in the thank-you email){hasTemplate ? "" : ", and all past students get theirs when you save"}.</span></span></label>
+            <span><b className="font-semibold">Give certificates automatically</b><span className="block text-ink-muted">Everyone gets one after their class, ready in their account{hasTemplate ? "" : ", and all past students get theirs when you save"}.</span></span></label>
+          <label className="mt-3 flex items-start gap-2 text-[0.8125rem] text-ink"><input type="checkbox" className="mt-0.5" checked={d.emailAuto} onChange={(e) => set("emailAuto", e.target.checked)} />
+            <span><b className="font-semibold">Email certificates automatically</b><span className="block text-ink-muted">About an hour after each class, students (and their case manager) get the PDF by email. Leave off until you&apos;re happy with the design.</span></span></label>
           {msg && <p className={cn("mt-2 text-[0.8125rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
           <Button variant="primary" className="mt-3 w-full" disabled={pending} onClick={() => start(async () => {
             setMsg(null);
@@ -146,7 +185,10 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
       <div className="xl:sticky xl:top-20">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[0.8438rem] font-semibold text-ink">Preview</p>
-          <label className="flex items-center gap-2 text-[0.78rem] text-ink-muted">Try a name <Input value={name} onChange={(e) => setName(e.target.value)} className="h-8 w-48 py-1" maxLength={60} /></label>
+          <div className="flex flex-wrap items-center gap-2">
+            {courses.length > 1 && <select aria-label="Course in preview" value={previewCourse} onChange={(e) => setPreviewCourse(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[0.78rem] text-ink">{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+            <label className="flex items-center gap-2 text-[0.78rem] text-ink-muted">Try a name <Input value={name} onChange={(e) => setName(e.target.value)} className="h-8 w-48 py-1" maxLength={60} /></label>
+          </div>
         </div>
         <div className="overflow-hidden rounded-xl bg-white shadow-pop ring-1 ring-line" dangerouslySetInnerHTML={{ __html: svg }} />
         <p className="mt-2 text-[0.75rem] text-ink-faint">A4 landscape. The PDF people download looks exactly like this. The QR code opens a page proving the certificate is genuine.</p>

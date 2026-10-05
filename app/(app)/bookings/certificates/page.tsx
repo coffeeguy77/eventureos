@@ -16,17 +16,18 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; cq = cq.or(`person_name.ilike.${like},number.ilike.${like},course_name.ilike.${like}`); }
   const [{ data: certs, count }, { data: courses }, { data: requests }] = await Promise.all([
     cq,
-    supabase.from("booking_courses").select("id, name").eq("organisation_id", org.id).order("position"),
+    supabase.from("booking_courses").select("id, name, duration_minutes, active").eq("organisation_id", org.id).order("position"),
     supabase.from("booking_students").select("id, name, email, notes, certificate_requested_at").eq("organisation_id", org.id).not("certificate_requested_at", "is", null).order("certificate_requested_at"),
   ]);
   const design = tpl ? readDesign(tpl.design) : { ...DEFAULT_DESIGN, accent: org.brand_colour && /^#[0-9a-f]{6}$/i.test(org.brand_colour) ? org.brand_colour : DEFAULT_DESIGN.accent };
-  const courseList = (courses ?? []) as { id: string; name: string }[];
+  const courseList = (courses ?? []) as { id: string; name: string; duration_minutes: number; active: boolean }[];
 
   return (
     <>
       <PageHeader title="Certificates" subtitle="Design your course certificate. Students download it from their account, and the QR code proves it's genuine." />
       <CertificateBuilder initial={design} autoIssue={tpl ? !!tpl.auto_issue : true} brand={org.brand_colour ?? null} business={org.name} logoUrl={org.logo_url ?? null}
-        sampleCourse={(courseList[0]?.name ?? "Barista Course").replace(/\s*\(\d+\s*hrs?\)\s*$/i, "")} hasTemplate={!!tpl} orgId={org.id} />
+        sampleCourse={(courseList[0]?.name ?? "Barista Course").replace(/\s*\(\d+\s*hrs?\)\s*$/i, "")} hasTemplate={!!tpl} orgId={org.id}
+        courses={courseList.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name, minutes: c.duration_minutes }))} />
 
       {(requests ?? []).length > 0 && (
         <section className="mt-8">

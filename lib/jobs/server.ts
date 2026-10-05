@@ -7,7 +7,7 @@ import { appBaseUrl } from "@/lib/integrations/registry";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { cleanEmail, cleanPhone } from "@/lib/bookings/core";
 import { brandOf, publicOrg, type PublicOrg } from "@/lib/bookings/server";
-import { availabilitySummary, DAYS, fillLetter, km, publicName, readAvailability, readJobSettings, SKILLS, WORK_TYPES, type Availability, type JobSettings } from "./core";
+import { availabilitySummary, cleanInstagram, cleanWebsite, DAYS, fillLetter, km, publicName, readAvailability, readEquipment, readJobSettings, SKILLS, WORK_TYPES, type Availability, type Equipment, type JobSettings } from "./core";
 import { employerLoginEmail, jobNoticeEmail, welcomeLetterEmail } from "./emails";
 
 export type R<T = string> = { ok: true; data: T } | { ok: false; error: string };
@@ -108,14 +108,17 @@ export async function saveProfile(db: SupabaseClient, org: JobsOrg, studentId: s
 
 /* ------------------------------------------------------------------ jobs */
 
-export interface Post { id: string; employer_id: string; title: string; kind: string; description: string | null; suburb: string | null; lat: number | null; lng: number | null; starts_on: string | null; ends_on: string | null; times: string | null; pay: string | null; positions: number; status: string; created_at: string; employer?: { business_name: string; suburb: string | null } | null }
+export interface PostEmployer { business_name: string; suburb: string | null; address?: string | null; state?: string | null; postcode?: string | null; website?: string | null; instagram?: string | null; equipment?: unknown; about?: string | null }
+export interface Post { id: string; employer_id: string; title: string; kind: string; description: string | null; suburb: string | null; lat: number | null; lng: number | null; starts_on: string | null; ends_on: string | null; times: string | null; pay: string | null; positions: number; status: string; created_at: string; employer?: PostEmployer | null }
 export const POST_COLS = "id, employer_id, title, kind, description, suburb, lat, lng, starts_on, ends_on, times, pay, positions, status, created_at";
 
 /** Open jobs (filled, closed and past ones are hidden). Nearest first when a position is given. */
 export async function openPosts(db: SupabaseClient, orgId: string, near?: { lat: number; lng: number } | null) {
   const today = new Date().toISOString().slice(0, 10);
-  const { data } = await db.from("job_posts").select(`${POST_COLS}, employer:job_employers!inner(business_name, suburb, status)`).eq("organisation_id", orgId).eq("status", "open")
+  const q = (cols: string) => db.from("job_posts").select(`${POST_COLS}, employer:job_employers!inner(${cols})`).eq("organisation_id", orgId).eq("status", "open")
     .eq("employer.status", "approved").or(`ends_on.is.null,ends_on.gte.${today}`).order("created_at", { ascending: false }).limit(200);
+  let { data, error } = await q("business_name, suburb, status, website, about, address, state, postcode, instagram, equipment");
+  if (error && missingCol(error.message)) ({ data } = await q("business_name, suburb, status, website, about"));
   const list = ((data ?? []) as unknown as (Post & { distance?: number | null })[]).filter((p) => !(p.kind === "one_off" || p.kind === "event") || !p.starts_on || (p.ends_on ?? p.starts_on) >= today);
   for (const p of list) p.distance = near && p.lat != null && p.lng != null ? Math.round(km(near, { lat: p.lat, lng: p.lng })) : null;
   if (near) list.sort((a, b) => (a.distance ?? 9999) - (b.distance ?? 9999));
@@ -126,8 +129,34 @@ export async function openPosts(db: SupabaseClient, orgId: string, near?: { lat:
 
 const EMP_LINK_MIN = 30, EMP_SESSION_DAYS = 60;
 export const employerCookie = (orgId: string) => `eos_employer_${orgId.slice(0, 8)}`;
-export interface Employer { id: string; business_name: string; contact_name: string; email: string; phone: string | null; website: string | null; suburb: string | null; lat: number | null; lng: number | null; about: string | null; status: "pending" | "approved" | "blocked" }
-const EMP_COLS = "id, business_name, contact_name, email, phone, website, suburb, lat, lng, about, status";
+export interface Employer {
+  id: string; business_name: string; contact_name: string; email: string; phone: string | null; website: string | null; suburb: string | null; lat: number | null; lng: number | null; about: string | null;
+  status: "pending" | "approved" | "blocked"; address: string | null; state: string | null; postcode: string | null; instagram: string | null; equipment: Equipment[];
+}
+const EMP_BASE = "id, business_name, contact_name, email, phone, website, suburb, lat, lng, about, status";
+const EMP_COLS = `${EMP_BASE}, address, state, postcode, instagram, equipment`;
+const missingCol = (m?: string) => !!m && /column .* does not exist|schema cache/i.test(m);
+/** Load an employer (works before the 0053 update too — the newer details are then blank). */
+async function employerRow(db: SupabaseClient, id: string): Promise<Employer | null> {
+  let { data, error } = await db.from("job_employers").select(EMP_COLS).eq("id", id).maybeSingle();
+  if (error && missingCol(error.message)) ({ data, error } = await db.from("job_employers").select(EMP_BASE).eq("id", id).maybeSingle());
+  if (!data) return null;
+  const e = data as Record<string, unknown>;
+  return { ...(e as unknown as Employer), address: (e.address as string) ?? null, state: (e.state as string) ?? null, postcode: (e.postcode as string) ?? null, instagram: (e.instagram as string) ?? null, equipment: readEquipment(e.equipment) };
+}
+export { employerRow };
+
+export interface EmployerDetails { address?: string; state?: string; postcode?: string; website?: string; instagram?: string; equipment?: unknown }
+/** The newer business details, cleaned (address, Instagram username, website, gear). */
+export function employerExtras(f: EmployerDetails) {
+  return {
+    address: f.address?.trim().replace(/\s+/g, " ").slice(0, 200) || null,
+    state: f.state?.trim().toUpperCase().slice(0, 10) || null,
+    postcode: f.postcode && /^\d{4}$/.test(f.postcode.trim()) ? f.postcode.trim() : null,
+    instagram: cleanInstagram(f.instagram),
+    equipment: readEquipment(f.equipment),
+  };
+}
 
 async function emailEmployerLink(db: SupabaseClient, org: JobsOrg, emp: { id: string; contact_name: string; email: string }) {
   const { count } = await db.from("job_employer_logins").select("id", { count: "exact", head: true }).eq("employer_id", emp.id).gt("created_at", new Date(Date.now() - 15 * 60e3).toISOString());
@@ -140,7 +169,7 @@ async function emailEmployerLink(db: SupabaseClient, org: JobsOrg, emp: { id: st
   return null;
 }
 
-export async function registerEmployer(slug: string, f: { business: string; name: string; email: string; phone?: string; website?: string; suburb?: string; about?: string }): Promise<R> {
+export async function registerEmployer(slug: string, f: { business: string; name: string; email: string; phone?: string; website?: string; suburb?: string; about?: string } & EmployerDetails): Promise<R> {
   const db = createServiceClient();
   const org = await jobsOrg(slug, db);
   if (!org?.jobs.enabled) return { ok: false, error: "The job board isn't open." };
@@ -153,15 +182,27 @@ export async function registerEmployer(slug: string, f: { business: string; name
   type Emp = { id: string; contact_name: string; email: string; status: string };
   let emp = existing as Emp | null;
   if (!emp) {
-    const g = f.suburb?.trim() ? await geocode(db, f.suburb) : null;
-    const { data, error } = await db.from("job_employers").insert({ organisation_id: org.id, business_name: business, contact_name: name, email, phone: cleanPhone(f.phone), website: f.website?.trim().slice(0, 200) || null,
-      suburb: f.suburb?.trim().slice(0, 80) || null, lat: g?.lat ?? null, lng: g?.lng ?? null, about: f.about?.trim().slice(0, 1500) || null }).select("id, contact_name, email, status").single();
+    const extras = employerExtras(f);
+    const suburb = f.suburb?.trim().slice(0, 80) || null;
+    // Map position from the street address when there is one, else the suburb
+    const g = suburb ? await geocode(db, [extras.address, suburb, extras.postcode].filter(Boolean).join(" "), extras.state) ?? await geocode(db, suburb, extras.state) : null;
+    const needsApproval = org.jobs.employerApproval;
+    const base = { organisation_id: org.id, business_name: business, contact_name: name, email, phone: cleanPhone(f.phone), website: cleanWebsite(f.website),
+      suburb, lat: g?.lat ?? null, lng: g?.lng ?? null, about: f.about?.trim().slice(0, 1500) || null,
+      status: needsApproval ? "pending" : "approved", approved_at: needsApproval ? null : new Date().toISOString() };
+    let { data, error } = await db.from("job_employers").insert({ ...base, ...extras }).select("id, contact_name, email, status").single();
+    if (error && missingCol(error.message)) ({ data, error } = await db.from("job_employers").insert(base).select("id, contact_name, email, status").single());
     if (error) return { ok: false, error: /job_employers/.test(error.message) ? "The job board is being set up — try again soon." : error.message };
     emp = data as Emp;
-    await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Barista jobs", action: "jobs.employer_signed_up", entity_type: "job_employer", entity_id: emp!.id, summary: `${business} (${name}) signed up as an employer — waiting for approval` });
+    await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Barista jobs", action: "jobs.employer_signed_up", entity_type: "job_employer", entity_id: emp!.id,
+      summary: `${business} (${name}) signed up as an employer${needsApproval ? " — waiting for approval" : ""}` });
     const to = org.settings.notify_email ?? org.contact_email;
     if (to && emailConfigured()) {
-      const m = jobNoticeEmail(brandOf(org), { heading: `New employer to approve: ${business}`, lines: [`${name} · ${email}${f.phone ? ` · ${f.phone}` : ""}`, f.suburb ? `Suburb: ${f.suburb}` : "", f.website ? `Website: ${f.website}` : "", f.about ?? ""].filter(Boolean), button: { label: "Review in EventureOS", url: `${appBaseUrl()}/bookings/jobs` } });
+      const where = [extras.address, suburb, extras.state, extras.postcode].filter(Boolean).join(", ");
+      const m = jobNoticeEmail(brandOf(org), { heading: needsApproval ? `New employer to approve: ${business}` : `New employer on the job board: ${business}`,
+        lines: [`${name} · ${email}${f.phone ? ` · ${f.phone}` : ""}`, where ? `Address: ${where}` : "", base.website ? `Website: ${base.website}` : "", extras.instagram ? `Instagram: @${extras.instagram}` : "", f.about ?? "",
+          needsApproval ? "" : "They can search and post straight away. You can block them from Bookings → Barista jobs."].filter(Boolean),
+        button: { label: needsApproval ? "Review in EventureOS" : "Open in EventureOS", url: `${appBaseUrl()}/bookings/jobs` } });
       await sendEmail({ to, subject: m.subject, html: m.html, text: m.text, fromName: "EventureOS" }).catch(() => undefined);
     }
   }
@@ -202,13 +243,13 @@ export async function currentEmployer(org: PublicOrg): Promise<Employer | null> 
   const db = createServiceClient();
   const { data: s } = await db.from("job_employer_sessions").select("id, employer_id, expires_at, last_seen_at").eq("organisation_id", org.id).eq("token_hash", sha(token)).maybeSingle();
   if (!s || Date.parse(s.expires_at as string) < Date.now()) return null;
-  const { data: e } = await db.from("job_employers").select(EMP_COLS).eq("id", s.employer_id).maybeSingle();
+  const e = await employerRow(db, s.employer_id as string);
   if (!e || e.status === "blocked") return null;
   if (Date.now() - Date.parse(s.last_seen_at as string) > 3600e3) {
     await db.from("job_employer_sessions").update({ last_seen_at: new Date().toISOString() }).eq("id", s.id);
     await db.from("job_employers").update({ last_active_at: new Date().toISOString() }).eq("id", e.id);
   }
-  return e as Employer;
+  return e;
 }
 
 export async function employerSignOut(org: PublicOrg) {

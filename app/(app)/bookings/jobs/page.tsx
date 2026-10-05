@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { JOB_KINDS, publicName, readJobSettings } from "@/lib/jobs/core";
 import { jobsOrg, jobsUrl, jobStats, welcomeEligible, welcomeEmailFor } from "@/lib/jobs/server";
-import { EmployerButtons, RemovePostButton, WelcomeLetter } from "@/components/bookings/jobs-admin";
+import { EmployerApprovalToggle, EmployerButtons, RemovePostButton, WelcomeLetter } from "@/components/bookings/jobs-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +74,8 @@ export default async function JobsAdmin({ searchParams }: { searchParams: Promis
         ))}
       </div>
       <p className="mt-2 text-[0.75rem] text-ink-faint">“Opened” is a guide: some email apps load images automatically (counts as opened) and some block them (won&apos;t count). Clicks are reliable.</p>
+
+      {canManage && <Card className="mt-6 p-4"><EmployerApprovalToggle initial={settings.employerApproval} /></Card>}
 
       {pending.length > 0 && (
         <section className="mt-8">

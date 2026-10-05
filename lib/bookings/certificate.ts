@@ -21,7 +21,12 @@ export interface CertDesign {
   showQr: boolean;
   showNumber: boolean;
   showSeal: boolean;
-  sealText: string;        // words around the seal
+  sealText: string;        // words on the seal
+  /** What each course covers, printed on its certificates — course id → points (e.g. "Milk texturing") */
+  skills: Record<string, string[]>;
+  showSkills: boolean;
+  /** Email each student their certificate automatically after the class */
+  emailAuto: boolean;
 }
 
 export const DEFAULT_DESIGN: CertDesign = {
@@ -30,6 +35,7 @@ export const DEFAULT_DESIGN: CertDesign = {
   body: "Has successfully completed the {course} at {business}.", footer: "",
   signerName: "", signerTitle: "", signature: null, background: null,
   showLogo: true, showQr: true, showNumber: true, showSeal: true, sealText: "Completed",
+  skills: {}, showSkills: true, emailAuto: false,
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -50,13 +56,26 @@ export function readDesign(raw: unknown): CertDesign {
     signature: sig, background: bg,
     showLogo: o.showLogo !== false, showQr: o.showQr !== false, showNumber: o.showNumber !== false, showSeal: o.showSeal !== false,
     sealText: s(o.sealText, DEFAULT_DESIGN.sealText, 24),
+    skills: readSkills(o.skills), showSkills: o.showSkills !== false, emailAuto: o.emailAuto === true,
   };
 }
 
-export interface CertData { name: string; course: string; date: string; hours: string | null; number: string; business: string; verifyUrl: string }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function readSkills(raw: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 60)) {
+    if (!UUID.test(k) || !Array.isArray(v)) continue;
+    const pts = v.filter((x): x is string => typeof x === "string").map((x) => x.trim().replace(/\s+/g, " ").slice(0, 60)).filter(Boolean).slice(0, 10);
+    if (pts.length) out[k] = pts;
+  }
+  return out;
+}
+
+export interface CertData { name: string; course: string; date: string; hours: string | null; number: string; business: string; verifyUrl: string; points?: string[] }
 
 export function fill(text: string, d: CertData) {
-  return text.replace(/\{(name|course|date|hours|business|number)\}/g, (_, k: keyof CertData) => (k === "hours" ? d.hours ?? "" : d[k]) ?? "");
+  return text.replace(/\{(name|course|date|hours|business|number)\}/g, (_, k: "name" | "course" | "date" | "hours" | "business" | "number") => (k === "hours" ? d.hours ?? "" : d[k]) ?? "");
 }
 
 export type Font = "script" | "serif" | "serifItalic" | "sans" | "sansBold" | "light" | "body" | "display";
@@ -69,9 +88,15 @@ export type Item =
   | { t: "path"; d: string; fill: string; opacity?: number };
 
 export const W = 842, H = 595;
-// Average glyph width as a share of the font size — used to wrap and shrink text the same way in the preview and the PDF
-const AVG: Record<Font, number> = { script: 0.42, serif: 0.56, serifItalic: 0.5, sans: 0.5, sansBold: 0.54, light: 0.47, body: 0.48, display: 0.52 };
-export const approxWidth = (text: string, font: Font, size: number, spacing = 0) => text.length * (AVG[font] * size + spacing);
+// Average glyph widths (share of the font size), measured from the actual font files, for lower-case and capitals.
+// Used to wrap and shrink text identically in the preview and the PDF. A small safety margin is added.
+const LOWER: Record<Font, number> = { script: 0.33, serif: 0.48, serifItalic: 0.44, sans: 0.45, sansBold: 0.46, light: 0.44, body: 0.44, display: 0.45 };
+const UPPER: Record<Font, number> = { script: 0.86, serif: 0.62, serifItalic: 0.59, sans: 0.58, sansBold: 0.58, light: 0.54, body: 0.54, display: 0.54 };
+export const approxWidth = (text: string, font: Font, size: number, spacing = 0) => {
+  let em = 0;
+  for (const ch of text) em += ch >= "A" && ch <= "Z" ? UPPER[font] : ch === " " ? 0.25 : /[0-9]/.test(ch) ? 0.52 : LOWER[font];
+  return (em * size + text.length * spacing) * 1.04;
+};
 
 export function wrap(text: string, font: Font, size: number, maxWidth: number, maxLines = 3) {
   const words = text.split(/\s+/).filter(Boolean);
@@ -85,9 +110,21 @@ export function wrap(text: string, font: Font, size: number, maxWidth: number, m
   return lines.slice(0, maxLines);
 }
 
-function fit(text: string, font: Font, size: number, maxWidth: number, min = size * 0.55) {
+/** Wrap a list of short items with " · " between them, never splitting an item across lines. */
+export function wrapItems(items: string[], font: Font, size: number, maxWidth: number, maxLines = 4) {
+  const lines: string[] = [];
+  let line = "";
+  for (const it of items) {
+    const next = line ? `${line}  ·  ${it}` : it;
+    if (line && approxWidth(next, font, size) > maxWidth) { lines.push(line); line = it; } else line = next;
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, maxLines);
+}
+
+function fit(text: string, font: Font, size: number, maxWidth: number, min = size * 0.55, spacing = 0) {
   let z = size;
-  while (z > min && approxWidth(text, font, z) > maxWidth) z -= 1;
+  while (z > min && approxWidth(text, font, z, spacing) > maxWidth) z -= 0.25;
   return z;
 }
 
@@ -138,6 +175,15 @@ export function layout(d: CertDesign, data: CertData, has: { logo: boolean }): I
   items.push({ t: "line", x1: cx - 200, y1: y, x2: cx + 200, y2: y, stroke: tint(A, 0.45), sw: 0.75 });
   y += 34;
   for (const line of wrap(fill(d.body, data), "sans", 15, textW - 60, 3)) { items.push({ t: "text", x: cx, y, text: line, font: "sans", size: 15, color: muted, align: "center" }); y += 22; }
+  if (d.showSkills && data.points?.length) {
+    // Skills covered: one or two lines, only where there's room above the signature row
+    const lines = wrapItems(data.points, "sans", 10.5, textW - 40, 2);
+    if (y + 6 + lines.length * 15 < H - 170) {
+      y += 6;
+      items.push({ t: "text", x: cx, y, text: `SKILLS COVERED${data.hours ? `  ·  ${data.hours.toUpperCase()}` : ""}`, font: "sansBold", size: 8, color: A, align: "center", spacing: 1.5 }); y += 15;
+      for (const l of lines) { items.push({ t: "text", x: cx, y, text: l, font: "sans", size: 10.5, color: muted, align: "center" }); y += 15; }
+    }
+  }
 
   // Signature (left), seal (middle), date (right)
   const baseY = H - 112;
@@ -155,7 +201,7 @@ export function layout(d: CertDesign, data: CertData, has: { logo: boolean }): I
     const sy = baseY - 12;
     items.push({ t: "circle", cx, cy: sy, r: 40, fill: A });
     items.push({ t: "circle", cx, cy: sy, r: 34, stroke: tint(A, 0.55), sw: 1 });
-    items.push({ t: "text", x: cx, y: sy + 4, text: d.sealText.toUpperCase(), font: "sansBold", size: fit(d.sealText.toUpperCase(), "sansBold", 9, 54, 6), color: "#FFFFFF", align: "center", spacing: 1.2 });
+    items.push({ t: "text", x: cx, y: sy + 4, text: d.sealText.toUpperCase(), font: "sansBold", size: fit(d.sealText.toUpperCase(), "sansBold", 9, 52, 5, 1.2), color: "#FFFFFF", align: "center", spacing: 1.2 });
     if (data.hours) items.push({ t: "text", x: cx, y: sy + 16, text: data.hours, font: "sans", size: 7.5, color: "#FFFFFF", align: "center" });
   }
 
@@ -169,28 +215,43 @@ export function layout(d: CertDesign, data: CertData, has: { logo: boolean }): I
   return items;
 }
 
-/** Scalloped rosette with two ribbon tails (the "award" badge). */
-function rosette(cx: number, cy: number, r: number, color: string, items: Item[]) {
-  const dark = shade(color, 0.18);
+/** Scalloped rosette with two ribbon tails (the "award" badge), with its words fitted inside the centre. */
+function rosette(cx: number, cy: number, r: number, color: string, words: string, sub: string | null, items: Item[]) {
+  const dark = shade(color, 0.2);
   // Ribbons first (behind)
-  items.push({ t: "path", d: `M${cx - r * 0.55},${cy + r * 0.3} L${cx - r * 0.95},${cy + r * 1.75} L${cx - r * 0.55},${cy + r * 1.5} L${cx - r * 0.3},${cy + r * 1.85} L${cx - r * 0.05},${cy + r * 0.55} Z`, fill: dark });
-  items.push({ t: "path", d: `M${cx + r * 0.55},${cy + r * 0.3} L${cx + r * 0.95},${cy + r * 1.75} L${cx + r * 0.55},${cy + r * 1.5} L${cx + r * 0.3},${cy + r * 1.85} L${cx + r * 0.05},${cy + r * 0.55} Z`, fill: dark });
-  const n = 22, pts: string[] = [];
+  items.push({ t: "path", d: `M${cx - r * 0.5},${cy + r * 0.35} L${cx - r * 0.85},${cy + r * 1.55} L${cx - r * 0.5},${cy + r * 1.35} L${cx - r * 0.28},${cy + r * 1.65} L${cx - r * 0.02},${cy + r * 0.6} Z`, fill: dark });
+  items.push({ t: "path", d: `M${cx + r * 0.5},${cy + r * 0.35} L${cx + r * 0.85},${cy + r * 1.55} L${cx + r * 0.5},${cy + r * 1.35} L${cx + r * 0.28},${cy + r * 1.65} L${cx + r * 0.02},${cy + r * 0.6} Z`, fill: dark });
+  const n = 24, pts: string[] = [];
   for (let i = 0; i <= n * 2; i++) {
-    const a = (Math.PI * i) / n - Math.PI / 2, rr = i % 2 ? r * 0.88 : r;
+    const a = (Math.PI * i) / n - Math.PI / 2, rr = i % 2 ? r * 0.9 : r;
     pts.push(`${(cx + Math.cos(a) * rr).toFixed(2)},${(cy + Math.sin(a) * rr).toFixed(2)}`);
   }
   items.push({ t: "path", d: `M${pts.join(" L")} Z`, fill: color });
-  items.push({ t: "circle", cx, cy, r: r * 0.7, stroke: "#FFFFFF", sw: 1.2 });
-  items.push({ t: "circle", cx, cy, r: r * 0.62, fill: tint(color, 0.15) });
+  items.push({ t: "circle", cx, cy, r: r * 0.76, stroke: "#FFFFFF", sw: 1 });
+  items.push({ t: "circle", cx, cy, r: r * 0.7, fill: tint(color, 0.12) });
+  // Words: one line if it fits at a readable size, otherwise two lines (split at a space)
+  const inner = r * 0.7 * 2 * 0.8, up = words.toUpperCase().trim();
+  if (!up) return;
+  const sp = 0.6, one = fit(up, "display", r * 0.24, inner, 4, sp);
+  const parts = up.split(/\s+/);
+  if (one >= r * 0.2 || parts.length < 2) {
+    items.push({ t: "text", x: cx, y: cy + one * 0.36 - (sub ? 3 : 0), text: up, font: "display", size: one, color: "#FFFFFF", align: "center", spacing: sp });
+  } else {
+    const mid = Math.ceil(parts.length / 2), l1 = parts.slice(0, mid).join(" "), l2 = parts.slice(mid).join(" ");
+    const z = Math.min(fit(l1, "display", r * 0.24, inner, 4, sp), fit(l2, "display", r * 0.24, inner, 4, sp));
+    items.push({ t: "text", x: cx, y: cy - z * 0.25, text: l1, font: "display", size: z, color: "#FFFFFF", align: "center", spacing: sp });
+    items.push({ t: "text", x: cx, y: cy + z * 0.95, text: l2, font: "display", size: z, color: "#FFFFFF", align: "center", spacing: sp });
+  }
+  if (sub && (one >= r * 0.2 || parts.length < 2)) items.push({ t: "text", x: cx, y: cy + r * 0.4, text: sub, font: "body", size: fit(sub, "body", r * 0.17, inner, 4), color: "#FFFFFF", align: "center" });
 }
 
 /**
  * "Swoosh": flowing layered curves down the left in tints of the brand colour, logo top-right, right-aligned type,
- * rosette and signature along the bottom. Your own artwork (background) replaces the curves.
+ * then a bottom row of rosette · date · signature, each in its own space. The verify QR sits on a white card bottom-left.
+ * Your own artwork (background) replaces the curves.
  */
 function swoosh(d: CertDesign, data: CertData, has: { logo: boolean }, items: Item[]): Item[] {
-  const A = d.accent, ink = "#1D1D1F", muted = "#55555C";
+  const A = d.accent, ink = "#1D1D1F", muted = "#55555C", faint = "#8E8E95";
   if (d.background) items.push({ t: "image", x: 0, y: 0, w: W, h: H, src: "background", fit: "cover" });
   else {
     const bands: [string, string, number?][] = [
@@ -205,39 +266,55 @@ function swoosh(d: CertDesign, data: CertData, has: { logo: boolean }, items: It
     for (const [path, fillc, op] of bands) items.push({ t: "path", d: path, fill: fillc, opacity: op });
     items.push({ t: "path", d: `M362,0 L372,0 C282,210 250,400 316,${H} L300,${H} C238,395 270,205 362,0 Z`, fill: "#FFFFFF", opacity: 0.85 });
   }
-  const R = W - 52; // right edge of the text column
-  let y = 34;
-  if (d.showLogo && has.logo) { items.push({ t: "image", x: R - 250, y, w: 250, h: 190, src: "logo", fit: "contain", align: "right" }); y += 212; }
-  else { items.push({ t: "text", x: R, y: y + 40, text: data.business.toUpperCase(), font: "display", size: 30, color: ink, align: "right", spacing: 2 }); y += 90; }
-  y = Math.max(y, 250);
+  // Text column on the right
+  const R = W - 56, L = 410, CW = R - L;
+  let y = 36;
+  if (d.showLogo && has.logo) { items.push({ t: "image", x: R - 240, y, w: 240, h: 118, src: "logo", fit: "contain", align: "right" }); y = 190; }
+  else { items.push({ t: "text", x: R, y: y + 44, text: data.business.toUpperCase(), font: "display", size: fit(data.business.toUpperCase(), "display", 28, CW, 16, 2), color: ink, align: "right", spacing: 2 }); y = 150; }
+  // Centre the text block in the space between the logo and the bottom row
+  const by = H - 92, rosR = 38, rosX = L + rosR + 4, rosY = by - 18, contentLimit = rosY - rosR - 14;
+  const bodyLines = wrap(fill(d.body, data), "body", 11, CW, 3);
+  const skillLines = d.showSkills && data.points?.length ? wrapItems(data.points, "body", 10.5, CW, 4) : [];
+  const blockH = 34 + (d.subtitle ? 40 : 22) + 36 + bodyLines.length * 16 + (skillLines.length ? 14 + 15 + skillLines.length * 15 : 0);
+  y += Math.max(0, Math.min(46, (contentLimit - y - blockH) / 2));
   const title = d.title.toUpperCase();
-  items.push({ t: "text", x: R, y: y + 18, text: title, font: "display", size: fit(title, "display", 21, 400, 13), color: ink, align: "right" });
-  y += 40;
-  if (d.subtitle) { items.push({ t: "text", x: R, y, text: fill(d.subtitle, data), font: "body", size: 11.5, color: muted, align: "right" }); y += 36; }
-  const nSize = fit(data.name, "light", 32, 380, 20);
-  items.push({ t: "text", x: R, y: y + 10, text: data.name, font: "light", size: nSize, color: A, align: "right" });
-  y += 54;
-  for (const line of wrap(fill(d.body, data), "body", 10.5, 330, 7)) { items.push({ t: "text", x: R, y, text: line, font: "body", size: 10.5, color: ink, align: "right" }); y += 15; }
+  items.push({ t: "text", x: R, y: y + 12, text: title, font: "display", size: fit(title, "display", 22, CW, 13), color: ink, align: "right" });
+  y += 34;
+  if (d.subtitle) { items.push({ t: "text", x: R, y, text: fill(d.subtitle, data), font: "body", size: fit(fill(d.subtitle, data), "body", 11.5, CW, 8), color: muted, align: "right" }); y += 40; } else y += 22;
+  const nSize = fit(data.name, "light", 36, CW, 20);
+  items.push({ t: "text", x: R, y, text: data.name, font: "light", size: nSize, color: A, align: "right" });
+  y += 14;
+  items.push({ t: "line", x1: R - 70, y1: y, x2: R, y2: y, stroke: A, sw: 1.2 });
+  y += 22;
+  for (const line of bodyLines) { items.push({ t: "text", x: R, y, text: line, font: "body", size: 11, color: ink, align: "right" }); y += 16; }
 
-  const by = H - 76;
-  items.push({ t: "text", x: 578, y: by - 8, text: data.date, font: "body", size: 12, color: ink, align: "center" });
-  items.push({ t: "line", x1: 520, y1: by, x2: 636, y2: by, stroke: "#8E8E95", sw: 0.6 });
-  items.push({ t: "text", x: 578, y: by + 11, text: "Date of completion", font: "body", size: 7.5, color: "#8E8E95", align: "center" });
-  if (d.showSeal) {
-    rosette(690, by - 22, 26, A, items);
-    items.push({ t: "text", x: 690, y: by - 19, text: d.sealText.toUpperCase(), font: "display", size: fit(d.sealText.toUpperCase(), "display", 7.5, 34, 5), color: "#FFFFFF", align: "center", spacing: 0.6 });
+  // What the course covered
+  if (skillLines.length) {
+    y = Math.min(y + 14, contentLimit - (15 + skillLines.length * 15) + 4);
+    items.push({ t: "text", x: R, y, text: `SKILLS COVERED${data.hours ? `  ·  ${data.hours.toUpperCase()}` : ""}`, font: "display", size: 7.5, color: A, align: "right", spacing: 1.4 });
+    y += 16;
+    for (const l of skillLines) { items.push({ t: "text", x: R, y, text: l, font: "body", size: 10.5, color: muted, align: "right" }); y += 15; }
   }
-  if (d.signature) items.push({ t: "image", x: R - 150, y: by - 62, w: 150, h: 54, src: "signature", fit: "contain", align: "right" });
-  if (d.signerName || d.signerTitle) {
-    items.push({ t: "line", x1: R - 140, y1: by, x2: R, y2: by, stroke: "#8E8E95", sw: 0.6 });
-    if (d.signerName) items.push({ t: "text", x: R - 70, y: by + 11, text: d.signerName, font: "display", size: 8.5, color: ink, align: "center" });
-    if (d.signerTitle) items.push({ t: "text", x: R - 70, y: by + 21, text: d.signerTitle, font: "body", size: 7.5, color: "#8E8E95", align: "center" });
-  }
+
+  // Bottom row: rosette | date | signature — fixed, non-overlapping zones
+  if (d.showSeal) rosette(rosX, rosY, rosR, A, d.sealText, data.hours, items);
+  const dateL = (d.showSeal ? rosX + rosR + 26 : L), dateR = R - 168, dateC = (dateL + dateR) / 2;
+  items.push({ t: "text", x: dateC, y: by - 8, text: data.date, font: "body", size: fit(data.date, "body", 12, dateR - dateL, 9), color: ink, align: "center" });
+  items.push({ t: "line", x1: dateL, y1: by, x2: dateR, y2: by, stroke: faint, sw: 0.6 });
+  items.push({ t: "text", x: dateC, y: by + 12, text: "Date of completion", font: "body", size: 7.5, color: faint, align: "center" });
+  const sigL = R - 150;
+  if (d.signature) items.push({ t: "image", x: sigL, y: by - 58, w: 150, h: 54, src: "signature", fit: "contain", align: "center" });
+  items.push({ t: "line", x1: sigL, y1: by, x2: R, y2: by, stroke: faint, sw: 0.6 });
+  if (d.signerName) items.push({ t: "text", x: sigL + 75, y: by + 12, text: d.signerName, font: "display", size: fit(d.signerName, "display", 8.5, 150, 6), color: ink, align: "center" });
+  if (d.signerTitle) items.push({ t: "text", x: sigL + 75, y: by + (d.signerName ? 23 : 12), text: d.signerTitle, font: "body", size: fit(d.signerTitle, "body", 7.5, 150, 5.5), color: faint, align: "center" });
+
+  // Footer and the verify QR on a white card (bottom-left, over the artwork)
   const foot = [d.footer ? fill(d.footer, data) : null, d.showNumber ? `Certificate ${data.number}` : null].filter(Boolean).join("  ·  ");
-  if (foot) items.push({ t: "text", x: R, y: H - 22, text: foot, font: "body", size: 7.5, color: muted, align: "right" });
+  if (foot) items.push({ t: "text", x: R, y: H - 22, text: foot, font: "body", size: fit(foot, "body", 7.5, CW, 5.5), color: muted, align: "right" });
   if (d.showQr) {
-    items.push({ t: "image", x: 452, y: by - 34, w: 44, h: 44, src: "qr" });
-    items.push({ t: "text", x: 474, y: by + 20, text: "Scan to verify", font: "body", size: 6, color: "#8E8E95", align: "center" });
+    items.push({ t: "rect", x: 28, y: H - 120, w: 80, h: 94, fill: "#FFFFFF" });
+    items.push({ t: "image", x: 38, y: H - 112, w: 60, h: 60, src: "qr" });
+    items.push({ t: "text", x: 68, y: H - 40, text: "Scan to verify", font: "body", size: 7, color: muted, align: "center" });
   }
   return items;
 }
