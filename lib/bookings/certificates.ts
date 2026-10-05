@@ -104,8 +104,8 @@ export async function renderCertificate(db: SupabaseClient, c: CertRow) {
   const org = await orgById(db, c.organisation_id);
   const tpl = await loadTemplate(db, c.organisation_id);
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
-  const [logo, background] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null]);
-  return { bytes: await certificatePdf(design, certData(org, c, design), logo, background), org };
+  const [logo, background, photo] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null, design.photo ? fetchImage(design.photo) : null]);
+  return { bytes: await certificatePdf(design, certData(org, c, design), logo, background, photo), org };
 }
 
 /** Certificates for a student: theirs by student id, plus any issued on their bookings. */

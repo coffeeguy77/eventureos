@@ -4,7 +4,8 @@
  * A4 landscape in PDF points (842 × 595); origin top-left.
  */
 
-export type CertStyle = "swoosh" | "classic" | "modern" | "minimal";
+export type CertStyle = "swoosh" | "classic" | "modern" | "minimal" | "latte" | "botanical" | "poster" | "elegant";
+export const CERT_STYLES: CertStyle[] = ["swoosh", "classic", "modern", "minimal", "latte", "botanical", "poster", "elegant"];
 export interface CertDesign {
   style: CertStyle;
   accent: string;          // borders, title, seal
@@ -27,6 +28,15 @@ export interface CertDesign {
   showSkills: boolean;
   /** Email each student their certificate automatically after the class */
   emailAuto: boolean;
+  // Used by the newer styles (latte, botanical, poster, elegant)
+  eyebrow: string;         // small line above the title, e.g. "Barista training"
+  tagline: string;         // under the course, e.g. "{business} · Canberra"
+  hoursLine: string;       // e.g. "{hours} practical training"
+  photo: string | null;    // https photo for the side panel (latte, poster)
+  panelTitle: string;      // poster: big words under the business name, e.g. "Barista training"
+  panelWords: string;      // poster: small words, one per line
+  sealTop: string;         // words around the top of the seal
+  sealBottom: string;      // words around the bottom of the seal
 }
 
 export const DEFAULT_DESIGN: CertDesign = {
@@ -36,6 +46,7 @@ export const DEFAULT_DESIGN: CertDesign = {
   signerName: "", signerTitle: "", signature: null, background: null,
   showLogo: true, showQr: true, showNumber: true, showSeal: true, sealText: "Completed",
   skills: {}, showSkills: true, emailAuto: false,
+  eyebrow: "", tagline: "{business}", hoursLine: "{hours}", photo: null, panelTitle: "", panelWords: "", sealTop: "{business}", sealBottom: "",
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -45,7 +56,7 @@ export function readDesign(raw: unknown): CertDesign {
   const sig = typeof o.signature === "string" && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(o.signature) && o.signature.length < 600_000 ? o.signature : null;
   const bg = typeof o.background === "string" && /^https:\/\/[^\s"'<>]+$/.test(o.background) && o.background.length < 600 ? o.background : null;
   return {
-    style: o.style === "modern" || o.style === "minimal" || o.style === "classic" ? o.style : "swoosh",
+    style: CERT_STYLES.includes(o.style as CertStyle) ? (o.style as CertStyle) : "swoosh",
     accent: typeof o.accent === "string" && HEX.test(o.accent) ? o.accent : DEFAULT_DESIGN.accent,
     paper: typeof o.paper === "string" && HEX.test(o.paper) ? o.paper : DEFAULT_DESIGN.paper,
     title: s(o.title, DEFAULT_DESIGN.title, 80) || DEFAULT_DESIGN.title,
@@ -57,6 +68,9 @@ export function readDesign(raw: unknown): CertDesign {
     showLogo: o.showLogo !== false, showQr: o.showQr !== false, showNumber: o.showNumber !== false, showSeal: o.showSeal !== false,
     sealText: s(o.sealText, DEFAULT_DESIGN.sealText, 24),
     skills: readSkills(o.skills), showSkills: o.showSkills !== false, emailAuto: o.emailAuto === true,
+    eyebrow: s(o.eyebrow, "", 40), tagline: s(o.tagline, DEFAULT_DESIGN.tagline, 120), hoursLine: s(o.hoursLine, DEFAULT_DESIGN.hoursLine, 60),
+    photo: typeof o.photo === "string" && /^https:\/\/[^\s"'<>]+$/.test(o.photo) && o.photo.length < 600 ? o.photo : null,
+    panelTitle: s(o.panelTitle, "", 40), panelWords: s(o.panelWords, "", 160), sealTop: s(o.sealTop, DEFAULT_DESIGN.sealTop, 40), sealBottom: s(o.sealBottom, "", 30),
   };
 }
 
@@ -78,20 +92,21 @@ export function fill(text: string, d: CertData) {
   return text.replace(/\{(name|course|date|hours|business|number)\}/g, (_, k: "name" | "course" | "date" | "hours" | "business" | "number") => (k === "hours" ? d.hours ?? "" : d[k]) ?? "");
 }
 
-export type Font = "script" | "serif" | "serifItalic" | "sans" | "sansBold" | "light" | "body" | "display";
+export type Font = "script" | "serif" | "serifItalic" | "sans" | "sansBold" | "light" | "body" | "display" | "condensed" | "serifRegular" | "medium";
 export type Item =
   | { t: "rect"; x: number; y: number; w: number; h: number; fill?: string; stroke?: string; sw?: number; opacity?: number }
   | { t: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number }
   | { t: "circle"; cx: number; cy: number; r: number; fill?: string; stroke?: string; sw?: number }
-  | { t: "text"; x: number; y: number; text: string; font: Font; size: number; color: string; align: "left" | "center" | "right"; spacing?: number }
-  | { t: "image"; x: number; y: number; w: number; h: number; src: "logo" | "signature" | "qr" | "background"; fit?: "contain" | "cover"; align?: "center" | "right" }
+  | { t: "text"; x: number; y: number; text: string; font: Font; size: number; color: string; align: "left" | "center" | "right"; spacing?: number; rotate?: number }
+  | { t: "image"; x: number; y: number; w: number; h: number; src: "logo" | "signature" | "qr" | "background" | "photo"; fit?: "contain" | "cover"; align?: "center" | "right"; opacity?: number }
   | { t: "path"; d: string; fill: string; opacity?: number };
 
 export const W = 842, H = 595;
+import { NEW_STYLES } from "./certificate-styles";
 // Average glyph widths (share of the font size), measured from the actual font files, for lower-case and capitals.
 // Used to wrap and shrink text identically in the preview and the PDF. A small safety margin is added.
-const LOWER: Record<Font, number> = { script: 0.33, serif: 0.48, serifItalic: 0.44, sans: 0.45, sansBold: 0.46, light: 0.44, body: 0.44, display: 0.45 };
-const UPPER: Record<Font, number> = { script: 0.86, serif: 0.62, serifItalic: 0.59, sans: 0.58, sansBold: 0.58, light: 0.54, body: 0.54, display: 0.54 };
+const LOWER: Record<Font, number> = { script: 0.33, serif: 0.48, serifItalic: 0.44, sans: 0.45, sansBold: 0.46, light: 0.44, body: 0.44, display: 0.45, condensed: 0.38, serifRegular: 0.47, medium: 0.45 };
+const UPPER: Record<Font, number> = { script: 0.86, serif: 0.62, serifItalic: 0.59, sans: 0.58, sansBold: 0.58, light: 0.54, body: 0.54, display: 0.54, condensed: 0.43, serifRegular: 0.59, medium: 0.55 };
 export const approxWidth = (text: string, font: Font, size: number, spacing = 0) => {
   let em = 0;
   for (const ch of text) em += ch >= "A" && ch <= "Z" ? UPPER[font] : ch === " " ? 0.25 : /[0-9]/.test(ch) ? 0.52 : LOWER[font];
@@ -122,7 +137,7 @@ export function wrapItems(items: string[], font: Font, size: number, maxWidth: n
   return lines.slice(0, maxLines);
 }
 
-function fit(text: string, font: Font, size: number, maxWidth: number, min = size * 0.55, spacing = 0) {
+export function fit(text: string, font: Font, size: number, maxWidth: number, min = size * 0.55, spacing = 0) {
   let z = size;
   while (z > min && approxWidth(text, font, z, spacing) > maxWidth) z -= 0.25;
   return z;
@@ -140,6 +155,7 @@ export function layout(d: CertDesign, data: CertData, has: { logo: boolean }): I
   const A = d.accent;
   items.push({ t: "rect", x: 0, y: 0, w: W, h: H, fill: d.paper });
   if (d.style === "swoosh") return swoosh(d, data, has, items);
+  if (d.style === "latte" || d.style === "botanical" || d.style === "poster" || d.style === "elegant") return NEW_STYLES[d.style](d, data, has, items);
   let cx = W / 2, textW = 600;
 
   if (d.style === "classic") {
@@ -333,20 +349,20 @@ export const hoursLabel = (minutes: number | null | undefined) => (minutes ? `${
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const FAMILY: Record<Font, string> = {
   script: "'EOS Script'", serif: "'EOS Serif'", serifItalic: "'EOS Serif Italic'", sans: "'EOS Sans'", sansBold: "'EOS Sans Bold'",
-  light: "'EOS Light'", body: "'EOS Body'", display: "'EOS Display'",
+  light: "'EOS Light'", body: "'EOS Body'", display: "'EOS Display'", condensed: "'EOS Condensed'", serifRegular: "'EOS Serif Regular'", medium: "'EOS Medium'",
 };
 /** The preview: an SVG string using the same fonts as the PDF (loaded from /fonts/cert). */
-export function toSvg(items: Item[], src: { logo?: string | null; signature?: string | null; qr?: string | null; background?: string | null }) {
+export function toSvg(items: Item[], src: { logo?: string | null; signature?: string | null; qr?: string | null; background?: string | null; photo?: string | null }) {
   const out: string[] = [];
   for (const it of items) {
-    if (it.t === "rect") out.push(`<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${it.fill ?? "none"}"${it.stroke ? ` stroke="${it.stroke}" stroke-width="${it.sw ?? 1}"` : ""}/>`);
+    if (it.t === "rect") out.push(`<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${it.fill ?? "none"}"${it.opacity != null ? ` fill-opacity="${it.opacity}"` : ""}${it.stroke ? ` stroke="${it.stroke}" stroke-width="${it.sw ?? 1}"` : ""}/>`);
     else if (it.t === "line") out.push(`<line x1="${it.x1}" y1="${it.y1}" x2="${it.x2}" y2="${it.y2}" stroke="${it.stroke}" stroke-width="${it.sw}"/>`);
     else if (it.t === "circle") out.push(`<circle cx="${it.cx}" cy="${it.cy}" r="${it.r}" fill="${it.fill ?? "none"}"${it.stroke ? ` stroke="${it.stroke}" stroke-width="${it.sw ?? 1}"` : ""}/>`);
-    else if (it.t === "text") out.push(`<text x="${it.x}" y="${it.y}" font-family="${FAMILY[it.font]}" font-size="${it.size}" fill="${it.color}" text-anchor="${it.align === "center" ? "middle" : it.align === "right" ? "end" : "start"}"${it.spacing ? ` letter-spacing="${it.spacing}"` : ""}>${esc(it.text)}</text>`);
+    else if (it.t === "text") out.push(`<text x="${it.x}" y="${it.y}" font-family="${FAMILY[it.font]}" font-size="${it.size}" fill="${it.color}" text-anchor="${it.align === "center" ? "middle" : it.align === "right" ? "end" : "start"}"${it.spacing ? ` letter-spacing="${it.spacing}"` : ""}${it.rotate ? ` transform="rotate(${it.rotate.toFixed(2)} ${it.x.toFixed(2)} ${it.y.toFixed(2)})"` : ""}>${esc(it.text)}</text>`);
     else if (it.t === "path") out.push(`<path d="${it.d}" fill="${it.fill}"${it.opacity != null ? ` fill-opacity="${it.opacity}"` : ""}/>`);
     else if (it.t === "image") {
       const href = src[it.src];
-      if (href) out.push(`<image x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" href="${esc(href)}" preserveAspectRatio="${it.fit === "cover" ? "xMidYMid slice" : it.align === "right" ? "xMaxYMid meet" : "xMidYMid meet"}"/>`);
+      if (href) out.push(`<image x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" href="${esc(href)}" preserveAspectRatio="${it.fit === "cover" ? "xMidYMid slice" : it.align === "right" ? "xMaxYMid meet" : "xMidYMid meet"}"${it.opacity != null ? ` opacity="${it.opacity}"` : ""}/>`);
     }
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%">${out.join("")}</svg>`;
@@ -360,4 +376,7 @@ export const CERT_FONT_CSS = `
 @font-face{font-family:'EOS Sans Bold';src:url(/fonts/cert/Lato-Bold.ttf)}
 @font-face{font-family:'EOS Light';src:url(/fonts/cert/Barlow-Light.ttf)}
 @font-face{font-family:'EOS Body';src:url(/fonts/cert/Barlow-Regular.ttf)}
-@font-face{font-family:'EOS Display';src:url(/fonts/cert/Barlow-SemiBold.ttf)}`;
+@font-face{font-family:'EOS Display';src:url(/fonts/cert/Barlow-SemiBold.ttf)}
+@font-face{font-family:'EOS Condensed';src:url(/fonts/cert/BarlowCondensed-Bold.ttf)}
+@font-face{font-family:'EOS Serif Regular';src:url(/fonts/cert/PlayfairDisplay-Variable.ttf);font-weight:400}
+@font-face{font-family:'EOS Medium';src:url(/fonts/cert/Barlow-Medium.ttf)}`;

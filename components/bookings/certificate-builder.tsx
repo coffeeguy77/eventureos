@@ -16,7 +16,12 @@ const STYLES: { id: CertStyle; name: string; hint: string }[] = [
   { id: "classic", name: "Classic", hint: "Double border, script name" },
   { id: "modern", name: "Modern", hint: "Colour band, bold type" },
   { id: "minimal", name: "Minimal", hint: "Clean and light" },
+  { id: "latte", name: "Photo panel", hint: "Your photo, big title, skill icons" },
+  { id: "botanical", name: "Botanical", hint: "Coffee branches, ornate border" },
+  { id: "poster", name: "Poster", hint: "Bold colour panel, skill icons" },
+  { id: "elegant", name: "Elegant", hint: "Fine border, serif name" },
 ];
+const NEW = ["latte", "botanical", "poster", "elegant"];
 const PALETTES: { name: string; accent: string; paper: string }[] = [
   { name: "Gold", accent: "#9A7B4F", paper: "#FFFDF7" },
   { name: "Espresso", accent: "#5B3A29", paper: "#FBF7F2" },
@@ -55,20 +60,20 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
     hours: pc?.minutes ? `${Math.round((pc.minutes / 60) * 10) / 10} hour${pc.minutes === 60 ? "" : "s"}` : "2 hours", number: "C-1001", business, verifyUrl: "https://www.eventureos.com.au/verify/example",
     points: pc ? d.skills[pc.id] ?? [] : [] }), [name, sampleCourse, business, pc, d.skills]);
   useEffect(() => { QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null)); }, [data.verifyUrl]);
-  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr, background: d.background }), [d, data, logoUrl, qr]);
+  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr, background: d.background, photo: d.photo }), [d, data, logoUrl, qr]);
   const [upErr, setUpErr] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const uploadArtwork = async (f: File) => {
+  const uploadArtwork = async (f: File, key: "background" | "photo" = "background") => {
     setUpErr(null);
     if (!/^image\/(png|jpeg)$/.test(f.type)) { setUpErr("Use a PNG or JPG image."); return; }
     if (f.size > 2 * 1024 * 1024) { setUpErr("That image is over 2 MB — save it smaller (about 2500 px wide is plenty)."); return; }
     setUploading(true);
     try {
       const supabase = createClient();
-      const path = `${orgId}/certificate/background-${Date.now()}.${f.type === "image/png" ? "png" : "jpg"}`;
+      const path = `${orgId}/certificate/${key}-${Date.now()}.${f.type === "image/png" ? "png" : "jpg"}`;
       const { error } = await supabase.storage.from("branding").upload(path, f, { contentType: f.type, cacheControl: "31536000", upsert: false });
       if (error) throw new Error(/row-level|policy/i.test(error.message) ? "Only owners and admins can upload artwork." : error.message);
-      set("background", supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);
+      set(key, supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);
     } catch (e) { setUpErr(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(false); }
   };
 
@@ -116,11 +121,35 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
           </section>
         )}
 
+        {(d.style === "latte" || d.style === "poster") && (
+          <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+            <p className="text-[0.8438rem] font-semibold text-ink">Photo</p>
+            <p className="mb-2 text-[0.75rem] text-ink-muted">{d.style === "latte" ? "Fills the panel on the left — a latte or a barista at work looks great." : "Shown at the bottom of the colour panel, washed in your colour."} PNG or JPG, under 2 MB.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {d.photo && <><img src={d.photo} alt="" className="h-12 w-[68px] rounded object-cover ring-1 ring-line" /><Button size="sm" onClick={() => set("photo", null)}>Remove</Button></>}
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}{d.photo ? "Change photo" : "Upload photo"}
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadArtwork(f, "photo"); e.target.value = ""; }} />
+              </label>
+            </div>
+            {upErr && <p className="mt-1.5 text-[0.75rem] text-rose-700">{upErr}</p>}
+          </section>
+        )}
+
         <section className="space-y-2.5 rounded-xl border border-line bg-surface p-4 shadow-card">
           <p className="text-[0.8438rem] font-semibold text-ink">Wording</p>
+          {d.style === "latte" && <div><Label hint="optional">Small line above the title</Label><Input value={d.eyebrow} onChange={(e) => set("eyebrow", e.target.value)} maxLength={40} placeholder="Barista training" /></div>}
           <div><Label>Title</Label><Input value={d.title} onChange={(e) => set("title", e.target.value)} maxLength={80} /></div>
           <div><Label>Line above the name</Label><Input value={d.subtitle} onChange={(e) => set("subtitle", e.target.value)} maxLength={80} /></div>
           <div><Label hint="{course} {date} {hours} {business}">Main text</Label><Textarea value={d.body} onChange={(e) => set("body", e.target.value)} maxLength={300} className="min-h-[64px]" /></div>
+          {NEW.includes(d.style) && <>
+            <div><Label hint="{business} {hours}">Line under the course</Label><Input value={d.tagline} onChange={(e) => set("tagline", e.target.value)} maxLength={120} placeholder="{business} · Canberra" /></div>
+            <div><Label hint="shown when the course has a length">Hours line</Label><Input value={d.hoursLine} onChange={(e) => set("hoursLine", e.target.value)} maxLength={60} placeholder="{hours} practical training" /></div>
+          </>}
+          {d.style === "poster" && <>
+            <div><Label>Big words on the colour panel</Label><Input value={d.panelTitle} onChange={(e) => set("panelTitle", e.target.value)} maxLength={40} placeholder="Barista training" /></div>
+            <div><Label hint="one per line">Small words on the panel</Label><Textarea value={d.panelWords} onChange={(e) => set("panelWords", e.target.value)} maxLength={160} className="min-h-[64px]" placeholder={"Coffee\nPeople\nSkills"} /></div>
+          </>}
           <div><Label hint="optional">Small print at the bottom</Label><Input value={d.footer} onChange={(e) => set("footer", e.target.value)} maxLength={160} placeholder="U5, 47-49 Vicars St, Mitchell ACT" /></div>
         </section>
 
@@ -165,6 +194,12 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
             <label className="flex items-center gap-2"><input type="checkbox" checked={d.showNumber} onChange={(e) => set("showNumber", e.target.checked)} />Certificate number</label>
           </div>
           {d.showSeal && <div className="mt-2"><Label>Seal word</Label><Input value={d.sealText} onChange={(e) => set("sealText", e.target.value)} maxLength={24} /></div>}
+          {d.showSeal && NEW.includes(d.style) && (
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div><Label>Around the top</Label><Input value={d.sealTop} onChange={(e) => set("sealTop", e.target.value)} maxLength={40} placeholder="{business}" /></div>
+              <div><Label>Around the bottom</Label><Input value={d.sealBottom} onChange={(e) => set("sealBottom", e.target.value)} maxLength={30} placeholder="Barista" /></div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-line bg-surface p-4 shadow-card">

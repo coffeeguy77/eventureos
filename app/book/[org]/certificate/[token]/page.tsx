@@ -29,7 +29,7 @@ export default async function CertificatePage({ params }: P) {
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
   const data = certData(org, c, design);
   const qr = design.showQr ? await QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 240 }) : null;
-  const svg = toSvg(layout(design, data, { logo: !!org.logo_url }), { logo: org.logo_url, signature: design.signature, qr, background: design.background });
+  const svg = toSvg(layout(design, data, { logo: !!org.logo_url }), { logo: org.logo_url, signature: design.signature, qr, background: design.background, photo: design.photo });
   const valid = c.status === "issued";
 
   return (
