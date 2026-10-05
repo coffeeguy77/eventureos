@@ -16,7 +16,7 @@ function fromAddress(displayName?: string) {
   return `${displayName.replace(/[<>"\r\n]/g, "").slice(0, 70)} <${addr}>`;
 }
 
-export async function sendEmail(m: { to: string; subject: string; html: string; text: string; replyTo?: string | null; fromName?: string }) {
+export async function sendEmail(m: { to: string; subject: string; html: string; text: string; replyTo?: string | null; fromName?: string; attachments?: { filename: string; content: string }[]; headers?: Record<string, string> }) {
   const key = process.env.RESEND_API_KEY?.trim();
   if (!key) throw new Error("Email isn't set up — RESEND_API_KEY is missing in Vercel.");
   const res = await fetch("https://api.resend.com/emails", {
@@ -25,6 +25,9 @@ export async function sendEmail(m: { to: string; subject: string; html: string; 
     body: JSON.stringify({
       from: fromAddress(m.fromName), to: [m.to], subject: m.subject.slice(0, 200), html: m.html, text: m.text,
       ...(m.replyTo ? { reply_to: m.replyTo } : {}),
+      // base64 file contents (e.g. a certificate PDF)
+      ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+      ...(m.headers ? { headers: m.headers } : {}),
     }),
     cache: "no-store",
   });

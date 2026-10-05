@@ -103,8 +103,8 @@ export async function renderCertificate(db: SupabaseClient, c: CertRow) {
   const org = await orgById(db, c.organisation_id);
   const tpl = await loadTemplate(db, c.organisation_id);
   const design = tpl?.design ?? readDesign({ accent: org.brand_colour ?? undefined });
-  const logo = design.showLogo ? await fetchImage(org.logo_url) : null;
-  return { bytes: await certificatePdf(design, certData(org, c), logo), org };
+  const [logo, background] = await Promise.all([design.showLogo ? fetchImage(org.logo_url) : null, design.background ? fetchImage(design.background) : null]);
+  return { bytes: await certificatePdf(design, certData(org, c), logo, background), org };
 }
 
 /** Certificates for a student: theirs by student id, plus any issued on their bookings. */
@@ -112,4 +112,48 @@ export async function certificatesForStudent(db: SupabaseClient, orgId: string, 
   const q = db.from("booking_certificates").select(CERT_COLS).eq("organisation_id", orgId).eq("status", "issued");
   const { data } = bookingIds.length ? await q.or(`student_id.eq.${studentId},booking_id.in.(${bookingIds.join(",")})`) : await q.eq("student_id", studentId);
   return ((data ?? []) as CertRow[]).sort((a, b) => b.completed_on.localeCompare(a.completed_on));
+}
+
+/**
+ * Same-day certificate emails: about an hour after a class, each booking with new certificates gets a thank-you email
+ * with the PDFs attached (any booking source — website, office, Bookly, ClassBento). Never for imported history.
+ */
+export async function sendCertificateEmails(db: SupabaseClient) {
+  const { emailConfigured, sendEmail } = await import("@/lib/email/send");
+  const { thankYouEmail } = await import("./emails");
+  const { bookUrl, brandOf } = await import("./server");
+  if (!emailConfigured()) return 0;
+  const since = new Date(Date.now() - 3 * 86400e3).toISOString(), until = new Date(Date.now() - 45 * 60e3).toISOString();
+  const { data } = await db.from("booking_certificates").select(`${CERT_COLS}, booking:bookings!inner(id, contact_name, contact_email, followup_sent_at, session:booking_sessions!inner(ends_at), course:booking_courses(gift_enabled))`)
+    .is("emailed_at", null).eq("status", "issued").gt("booking.session.ends_at", since).lt("booking.session.ends_at", until).limit(200);
+  type Row = CertRow & { booking: { id: string; contact_name: string; contact_email: string | null; followup_sent_at: string | null; course: { gift_enabled: boolean } | null } };
+  const byBooking = new Map<string, Row[]>();
+  for (const r of (data ?? []) as unknown as Row[]) byBooking.set(r.booking.id, [...(byBooking.get(r.booking.id) ?? []), r]);
+  let sent = 0;
+  for (const [bookingId, certs] of byBooking) {
+    const b = certs[0].booking;
+    const ids = certs.map((c) => c.id);
+    if (!b.contact_email) { await db.from("booking_certificates").update({ emailed_at: new Date().toISOString() }).in("id", ids); continue; }
+    const org = await orgById(db, certs[0].organisation_id);
+    const attachments: { filename: string; content: string }[] = [];
+    for (const c of certs) {
+      try { const { bytes } = await renderCertificate(db, c); attachments.push({ filename: `${c.course_name} - ${c.person_name}.pdf`.replace(/[^\w\s.-]+/g, ""), content: Buffer.from(bytes).toString("base64") }); }
+      catch (e) { console.error("certificate attach", e); }
+    }
+    const m = thankYouEmail(brandOf(org), {
+      firstName: b.contact_name.split(/\s+/)[0], course: certs[0].course_name, reviewUrl: org.settings.review_url, bookUrl: bookUrl(org),
+      giftUrl: b.course?.gift_enabled ? bookUrl(org, "/gift") : null, social: org.settings.social,
+      certificateUrl: bookUrl(org, `/certificate/${certs[0].verify_token}`), accountUrl: bookUrl(org, "/account"),
+    });
+    try {
+      await sendEmail({ to: b.contact_email, subject: certs.length > 1 ? `Your certificates — ${certs[0].course_name}` : `Your certificate — ${certs[0].course_name}`,
+        html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments });
+      const now = new Date().toISOString();
+      await db.from("booking_certificates").update({ emailed_at: now }).in("id", ids);
+      // This is the thank-you email too
+      if (!b.followup_sent_at) await db.from("bookings").update({ followup_sent_at: now }).eq("id", bookingId);
+      sent++;
+    } catch (e) { console.error("certificate email", e); }
+  }
+  return sent;
 }

@@ -7,6 +7,7 @@ import { H, W, layout, type CertData, type CertDesign, type Font } from "./certi
 
 const FILES: Record<Font, string> = {
   script: "GreatVibes.ttf", serif: "PlayfairDisplay-Bold.ttf", serifItalic: "PlayfairDisplay-Italic.ttf", sans: "Lato-Regular.ttf", sansBold: "Lato-Bold.ttf",
+  light: "Barlow-Light.ttf", body: "Barlow-Regular.ttf", display: "Barlow-SemiBold.ttf",
 };
 const cache = new Map<string, Uint8Array>();
 async function fontBytes(name: string) {
@@ -42,7 +43,7 @@ function drawText(page: PDFPage, font: PDFFont, text: string, x: number, y: numb
 }
 
 /** One certificate as a PDF (A4 landscape). */
-export async function certificatePdf(design: CertDesign, data: CertData, logo: Uint8Array | null) {
+export async function certificatePdf(design: CertDesign, data: CertData, logo: Uint8Array | null, background: Uint8Array | null = null) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(`${data.course} — ${data.name}`);
@@ -50,12 +51,15 @@ export async function certificatePdf(design: CertDesign, data: CertData, logo: U
   doc.setSubject(`Certificate ${data.number}`);
   const page = doc.addPage([W, H]);
   const fonts = {} as Record<Font, PDFFont>;
-  for (const k of Object.keys(FILES) as Font[]) fonts[k] = await doc.embedFont(await fontBytes(FILES[k]), { subset: k !== "script" }); // subsetting breaks the script font's joined letters
+  const items = layout(design, data, { logo: !!logo });
+  const used = new Set(items.flatMap((i) => (i.t === "text" ? [i.font] : [])));
+  for (const k of [...used] as Font[]) fonts[k] = await doc.embedFont(await fontBytes(FILES[k]), { subset: k !== "script" }); // subsetting breaks the script font's joined letters
   const logoImg = await image(doc, logo);
   const sigImg = design.signature ? await image(doc, Uint8Array.from(Buffer.from(design.signature.split(",")[1], "base64"))) : null;
+  const bgImg = design.background ? await image(doc, background) : null;
   const qrImg = design.showQr ? await doc.embedPng(await QRCode.toBuffer(data.verifyUrl, { margin: 0, width: 300, errorCorrectionLevel: "M" })) : null;
 
-  for (const it of layout(design, data, { logo: !!logoImg })) {
+  for (const it of items) {
     if (it.t === "rect") {
       page.drawRectangle({ x: it.x, y: H - it.y - it.h, width: it.w, height: it.h, ...(it.fill ? { color: color(it.fill) } : {}), ...(it.stroke ? { borderColor: color(it.stroke), borderWidth: it.sw ?? 1 } : {}) });
     } else if (it.t === "line") {
@@ -64,12 +68,15 @@ export async function certificatePdf(design: CertDesign, data: CertData, logo: U
       page.drawCircle({ x: it.cx, y: H - it.cy, size: it.r, ...(it.fill ? { color: color(it.fill) } : {}), ...(it.stroke ? { borderColor: color(it.stroke), borderWidth: it.sw ?? 1 } : {}) });
     } else if (it.t === "text") {
       drawText(page, fonts[it.font], it.text, it.x, it.y, it.size, color(it.color), it.align, it.spacing);
+    } else if (it.t === "path") {
+      page.drawSvgPath(it.d, { x: 0, y: H, color: color(it.fill), opacity: it.opacity ?? 1, borderWidth: 0 });
     } else if (it.t === "image") {
-      const img = it.src === "logo" ? logoImg : it.src === "signature" ? sigImg : qrImg;
+      const img = it.src === "logo" ? logoImg : it.src === "signature" ? sigImg : it.src === "background" ? bgImg : qrImg;
       if (!img) continue;
-      const scale = Math.min(it.w / img.width, it.h / img.height);
+      const scale = it.fit === "cover" ? Math.max(it.w / img.width, it.h / img.height) : Math.min(it.w / img.width, it.h / img.height);
       const w = img.width * scale, h = img.height * scale;
-      page.drawImage(img, { x: it.x + (it.w - w) / 2, y: H - it.y - it.h + (it.h - h) / 2, width: w, height: h });
+      const x = it.fit === "cover" ? it.x + (it.w - w) / 2 : it.align === "right" ? it.x + it.w - w : it.x + (it.w - w) / 2;
+      page.drawImage(img, { x, y: H - it.y - it.h + (it.h - h) / 2, width: w, height: h });
     }
   }
   return doc.save();

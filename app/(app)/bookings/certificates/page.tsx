@@ -26,7 +26,7 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
     <>
       <PageHeader title="Certificates" subtitle="Design your course certificate. Students download it from their account, and the QR code proves it's genuine." />
       <CertificateBuilder initial={design} autoIssue={tpl ? !!tpl.auto_issue : true} brand={org.brand_colour ?? null} business={org.name} logoUrl={org.logo_url ?? null}
-        sampleCourse={(courseList[0]?.name ?? "Barista Course").replace(/\s*\(\d+\s*hrs?\)\s*$/i, "")} hasTemplate={!!tpl} />
+        sampleCourse={(courseList[0]?.name ?? "Barista Course").replace(/\s*\(\d+\s*hrs?\)\s*$/i, "")} hasTemplate={!!tpl} orgId={org.id} />
 
       {(requests ?? []).length > 0 && (
         <section className="mt-8">

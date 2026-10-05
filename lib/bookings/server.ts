@@ -624,7 +624,11 @@ export async function runBookingJobs(db: SupabaseClient) {
   }
 
   // Certificates for finished classes (before the thank-you, so it can link to them)
-  try { const { runCertificateJobs } = await import("./certificates"); (out as Record<string, number>).certificates = await runCertificateJobs(db); } catch { /* before the 0050 update */ }
+  try {
+    const { runCertificateJobs, sendCertificateEmails } = await import("./certificates");
+    (out as Record<string, number>).certificates = await runCertificateJobs(db);
+    (out as Record<string, number>).certificateEmails = await sendCertificateEmails(db);
+  } catch { /* before the 0050 update */ }
 
   // Thank-you: 2+ hours after the session ended, within 3 days (not imported history)
   const { data: done } = await db.from("bookings").select(FULL_INNER).in("status", ["confirmed", "attended"]).is("followup_sent_at", null).in("source", ["website", "wordpress", "office"])

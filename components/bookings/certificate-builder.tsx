@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { Eraser, Loader2, PenLine } from "lucide-react";
+import { Eraser, ImageUp, Loader2, PenLine, Upload } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { CERT_FONT_CSS, layout, toSvg, type CertDesign, type CertStyle } from "@/lib/bookings/certificate";
 import { saveCertificateDesign } from "@/app/(app)/bookings/certificate-actions";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Input, Label, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 
 const STYLES: { id: CertStyle; name: string; hint: string }[] = [
+  { id: "swoosh", name: "Swoosh", hint: "Flowing curves, right-aligned" },
   { id: "classic", name: "Classic", hint: "Double border, script name" },
   { id: "modern", name: "Modern", hint: "Colour band, bold type" },
   { id: "minimal", name: "Minimal", hint: "Clean and light" },
@@ -24,8 +26,8 @@ const PALETTES: { name: string; accent: string; paper: string }[] = [
   { name: "Charcoal", accent: "#2B2B2B", paper: "#FFFFFF" },
 ];
 
-export function CertificateBuilder({ initial, autoIssue, brand, business, logoUrl, sampleCourse, hasTemplate }: {
-  initial: CertDesign; autoIssue: boolean; brand: string | null; business: string; logoUrl: string | null; sampleCourse: string; hasTemplate: boolean;
+export function CertificateBuilder({ initial, autoIssue, brand, business, logoUrl, sampleCourse, hasTemplate, orgId }: {
+  initial: CertDesign; autoIssue: boolean; brand: string | null; business: string; logoUrl: string | null; sampleCourse: string; hasTemplate: boolean; orgId: string;
 }) {
   const router = useRouter();
   const [d, setD] = useState<CertDesign>(initial);
@@ -39,7 +41,22 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
   const data = useMemo(() => ({ name: name || "Alex Example", course: sampleCourse, date: new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long", year: "numeric" }).format(new Date()),
     hours: "2 hours", number: "C-1001", business, verifyUrl: "https://www.eventureos.com.au/verify/example" }), [name, sampleCourse, business]);
   useEffect(() => { QRCode.toDataURL(data.verifyUrl, { margin: 0, width: 200 }).then(setQr).catch(() => setQr(null)); }, [data.verifyUrl]);
-  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr }), [d, data, logoUrl, qr]);
+  const svg = useMemo(() => toSvg(layout(d, data, { logo: !!logoUrl }), { logo: logoUrl, signature: d.signature, qr, background: d.background }), [d, data, logoUrl, qr]);
+  const [upErr, setUpErr] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const uploadArtwork = async (f: File) => {
+    setUpErr(null);
+    if (!/^image\/(png|jpeg)$/.test(f.type)) { setUpErr("Use a PNG or JPG image."); return; }
+    if (f.size > 2 * 1024 * 1024) { setUpErr("That image is over 2 MB — save it smaller (about 2500 px wide is plenty)."); return; }
+    setUploading(true);
+    try {
+      const supabase = createClient();
+      const path = `${orgId}/certificate/background-${Date.now()}.${f.type === "image/png" ? "png" : "jpg"}`;
+      const { error } = await supabase.storage.from("branding").upload(path, f, { contentType: f.type, cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(/row-level|policy/i.test(error.message) ? "Only owners and admins can upload artwork." : error.message);
+      set("background", supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);
+    } catch (e) { setUpErr(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(false); }
+  };
 
   return (
     <div className="grid items-start gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -47,7 +64,7 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
       <div className="space-y-4">
         <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
           <p className="mb-2 text-[0.8438rem] font-semibold text-ink">Style</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {STYLES.map((s) => (
               <button key={s.id} type="button" onClick={() => set("style", s.id)} className={cn("rounded-lg px-2 py-2.5 text-left ring-1 ring-inset", d.style === s.id ? "bg-brand-50 ring-brand-500" : "ring-line hover:bg-zinc-50")}>
                 <span className="block text-[0.8125rem] font-semibold text-ink">{s.name}</span><span className="block text-[0.6875rem] leading-tight text-ink-muted">{s.hint}</span>
@@ -68,6 +85,22 @@ export function CertificateBuilder({ initial, autoIssue, brand, business, logoUr
             <div><Label>Paper</Label><Input type="color" value={d.paper} onChange={(e) => set("paper", e.target.value)} className="h-9 p-1" /></div>
           </div>
         </section>
+
+        {d.style === "swoosh" && (
+          <section className="rounded-xl border border-line bg-surface p-4 shadow-card">
+            <p className="text-[0.8438rem] font-semibold text-ink">Artwork</p>
+            <p className="mb-2 text-[0.75rem] text-ink-muted">The curves are drawn in your colours. Or upload your own full-page background (A4 landscape, PNG or JPG) — keep the right-hand side plain for the text.</p>
+            {d.background ? (
+              <div className="flex items-center gap-2"><img src={d.background} alt="" className="h-12 w-[68px] rounded object-cover ring-1 ring-line" /><Button size="sm" onClick={() => set("background", null)}>Use the built-in curves</Button></div>
+            ) : (
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.78rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}Upload background
+                <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadArtwork(f); e.target.value = ""; }} />
+              </label>
+            )}
+            {upErr && <p className="mt-1.5 text-[0.75rem] text-rose-700">{upErr}</p>}
+          </section>
+        )}
 
         <section className="space-y-2.5 rounded-xl border border-line bg-surface p-4 shadow-card">
           <p className="text-[0.8438rem] font-semibold text-ink">Wording</p>
@@ -150,7 +183,11 @@ function SignaturePad({ value, onChange }: { value: string | null; onChange: (v:
         onPointerMove={(e) => { if (!drawing.current) return; const ctx = e.currentTarget.getContext("2d")!; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); dirty.current = true; }}
         onPointerUp={() => { drawing.current = false; if (dirty.current && ref.current) onChange(ref.current.toDataURL("image/png")); }} />
       <div className="mt-1 flex items-center justify-between text-[0.72rem] text-ink-faint">
-        <span>Sign above with your finger or mouse</span>
+        <span className="flex items-center gap-2">Sign above, or
+          <label className="inline-flex cursor-pointer items-center gap-1 font-semibold text-brand-700 hover:underline"><ImageUp className="h-3 w-3" />upload an image
+            <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void shrinkImage(f).then((url) => { onChange(url); setEditing(false); }).catch(() => undefined); }} />
+          </label>
+        </span>
         <span className="flex items-center gap-3">
           <button type="button" onClick={() => { const c = ref.current; c?.getContext("2d")?.clearRect(0, 0, c.width, c.height); dirty.current = false; onChange(null); }} className="inline-flex items-center gap-1 hover:text-ink"><Eraser className="h-3 w-3" />Clear</button>
           {value && <button type="button" onClick={() => setEditing(false)} className="font-semibold text-brand-700 hover:underline">Done</button>}
@@ -158,4 +195,21 @@ function SignaturePad({ value, onChange }: { value: string | null; onChange: (v:
       </div>
     </div>
   );
+}
+
+/** Resize an uploaded signature/logotype to at most 800 px wide and keep it as a PNG (transparency preserved). */
+function shrinkImage(f: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 800 / img.width);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL(f.type === "image/jpeg" ? "image/jpeg" : "image/png", 0.9));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(f);
+  });
 }
