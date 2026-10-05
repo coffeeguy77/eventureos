@@ -35,6 +35,18 @@ export async function POST(req: Request, { params }: P) {
       const recs = readResponses(await req.text(), stage);
       return json(req, await importLegacyCertificates(db, org, recs));
     }
+    if (kind === "stash") {
+      // Raw export from another system (e.g. WooCommerce), kept privately until it's imported. Never public.
+      const org = await importOrg(db, req, "shop");
+      if (!org) return json(req, { error: "Not allowed" }, 401);
+      const name = (url.searchParams.get("name") ?? "").toLowerCase();
+      if (!/^[a-z0-9-]{1,40}$/.test(name)) return json(req, { error: "Bad name" }, 400);
+      const body = await req.text();
+      JSON.parse(body); // must be JSON
+      const { error } = await db.storage.from("certificates").upload(`${org}/imports/${name}.json`, body, { contentType: "application/json", upsert: true });
+      if (error) throw new Error(error.message);
+      return json(req, { ok: true, bytes: body.length });
+    }
     if (kind === "certificate-file") {
       const org = await importOrg(db, req, "certificates");
       if (!org) return json(req, { error: "Not allowed" }, 401);
