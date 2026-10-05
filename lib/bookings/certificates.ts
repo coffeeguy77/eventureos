@@ -9,8 +9,9 @@ import { orgById, type PublicOrg } from "./server";
 export interface CertRow {
   id: string; organisation_id: string; number: string; booking_id: string | null; student_id: string | null; course_id: string | null; person_name: string; course_name: string;
   completed_on: string; hours: number | null; attendee_index: number; verify_token: string; status: string; created_at: string;
+  file_path?: string | null; // original file for certificates made before EventureOS
 }
-export const CERT_COLS = "id, organisation_id, number, booking_id, student_id, course_id, person_name, course_name, completed_on, hours, attendee_index, verify_token, status, created_at";
+export const CERT_COLS = "id, organisation_id, number, booking_id, student_id, course_id, person_name, course_name, completed_on, hours, attendee_index, verify_token, status, created_at, file_path";
 
 export async function loadTemplate(db: SupabaseClient, orgId: string): Promise<{ id: string; design: CertDesign; auto_issue: boolean } | null> {
   const { data, error } = await db.from("booking_certificate_templates").select("id, design, auto_issue").eq("organisation_id", orgId).eq("is_default", true).maybeSingle();

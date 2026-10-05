@@ -45,6 +45,7 @@ export default async function CertificatePage({ params }: P) {
           <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-card" dangerouslySetInnerHTML={{ __html: svg }} />
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <a href={`/api/book/certificate/${c.verify_token}`} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[var(--b)] px-5 text-[0.9375rem] font-semibold text-[var(--on-b)]"><Download className="h-4 w-4" />Download PDF</a>
+            {c.file_path && <a href={`/api/book/certificate/${c.verify_token}?original=1`} className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-ink ring-1 ring-line-strong hover:bg-zinc-50"><Download className="h-4 w-4" />Original certificate</a>}
             <ShareBox url={data.verifyUrl} text={`I completed ${c.course_name} with ${org.name}!`} />
           </div>
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Certificate {c.number}. Add it to your résumé or LinkedIn — this page proves it&apos;s real.</p>

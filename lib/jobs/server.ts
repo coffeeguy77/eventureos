@@ -532,6 +532,9 @@ export async function publicBaristas(db: SupabaseClient, orgId: string, limit = 
 
 /** How many people have finished a class (certificates issued) — for "N+ trained students". */
 export async function trainedCount(db: SupabaseClient, orgId: string) {
+  // Each person counted once, including certificates from before EventureOS
+  const { data, error } = await db.rpc("trained_students", { p_org: orgId });
+  if (!error && typeof data === "number") return data;
   const { count } = await db.from("booking_certificates").select("id", { count: "exact", head: true }).eq("organisation_id", orgId).eq("status", "issued");
   return count ?? 0;
 }
