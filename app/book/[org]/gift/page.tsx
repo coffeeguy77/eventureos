@@ -71,7 +71,7 @@ export default async function GiftPage({ params, searchParams }: P) {
         <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(26,18,13,.12),rgba(26,18,13,0)_45%)] xl:block" />
         <div className="mx-auto max-w-[1536px] px-4 pb-6 pt-10 sm:px-8 xl:grid xl:grid-cols-[minmax(0,1fr)_754px] xl:gap-10 xl:pb-6 xl:pl-[97px] xl:pr-5 xl:pt-[93px]">
           <div className="relative isolate -mx-4 -mt-10 px-4 pt-10 text-white sm:-mx-8 sm:px-8 xl:m-0 xl:p-0 xl:pt-[8px]">
-            {hero && <img src={hero} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover object-[18%_bottom] xl:hidden" />}
+            {hero && <img src={hero} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover object-[6%_bottom] xl:hidden" />}
             {hero && <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(26,18,13,.35),rgba(26,18,13,.1)_55%,rgba(26,18,13,0)_90%,#1a120d)] xl:hidden" />}
             {eyebrow && <p className="text-[0.8125rem] font-medium uppercase tracking-[0.42em] sm:text-[0.9375rem]">{eyebrow}</p>}
             <h1 className="mt-3 text-[3.75rem] font-bold leading-[0.92] tracking-[-0.01em] sm:text-[5rem] xl:mt-[12px] xl:text-[5.8rem]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>{title.split(/(\*[^*]+\*)/).map((part, i) => (/^\*[^*]+\*$/.test(part) ? <span key={i} className="block text-[var(--b)]">{part.slice(1, -1)}</span> : part))}</h1>
