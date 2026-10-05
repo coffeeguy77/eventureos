@@ -12,6 +12,8 @@ import { bookUrl } from "@/lib/bookings/server";
 import type { Agent } from "@/lib/bookings/agents";
 import { money } from "@/lib/format";
 import { brandStyle, PAGE } from "./shell";
+import { MasterNav } from "@/components/site/master-nav";
+import { readSiteNav } from "@/lib/site-nav";
 import { AgentBanner } from "./agent-banner";
 import { BookCourseButton, LandingBooking } from "./landing-booking";
 import { LandingNav, RevealOnScroll, ReviewWall, Stars, StickyBook } from "./landing-client";
@@ -121,7 +123,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
       <style>{LANDING_CSS}</style>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <RevealOnScroll />
-      <LandingNav logo={org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null} name={org.name} phone={phone} links={links} />
+      <MasterNav org={org} active="lessons" />
+      <LandingNav logo={null} name={readSiteNav(org.rawSettings).lessons} phone={phone} links={links} />
 
       {/* ───────── Hero ───────── */}
       <header className="relative isolate overflow-hidden bg-[#1d1915] text-[#FFFDFC]">

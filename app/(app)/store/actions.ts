@@ -209,3 +209,20 @@ export async function voidShopGift(id: string): Promise<Result> {
     return "Voided.";
   });
 }
+
+/* ------------------------------------------------------------------ website menu */
+
+export async function saveSiteNav(labels: Record<string, string>): Promise<Result> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const { readSiteNav } = await import("@/lib/site-nav");
+    const { data } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = (data?.settings ?? {}) as Record<string, unknown>;
+    const site = (settings.site && typeof settings.site === "object" ? settings.site : {}) as Record<string, unknown>;
+    const nav = readSiteNav({ site: { nav: labels } });
+    const { error } = await supabase.from("organisations").update({ settings: { ...settings, site: { ...site, nav } } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/store/settings");
+    return "Saved.";
+  });
+}

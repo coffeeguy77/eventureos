@@ -126,6 +126,7 @@ export const LANDING_COPY: Record<string, { label: string; def: string; long?: b
   ctaText: { label: "Final call — text", def: "", long: true },
   giftPageEyebrow: { label: "Gift page — small heading", def: "" },
   giftPageTitle: { label: "Gift page — heading (*stars* colour words)", def: "Give a class *as a gift*" },
+  giftPageBadge: { label: "Gift page — small badge beside “Choose a gift” (blank = none)", def: "" },
 };
 export const landingCopy = (L: Landing, k: keyof typeof LANDING_COPY | string) => (L.copy[k] ?? LANDING_COPY[k]?.def ?? "").replace(/\\n/g, "\n");
 

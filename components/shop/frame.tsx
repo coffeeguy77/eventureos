@@ -5,6 +5,8 @@ import { ArrowRight, UserRound } from "lucide-react";
 import { brandStyle, PAGE } from "@/components/book/shell";
 import type { Banner, ShopOrg } from "@/lib/shop/server";
 import { CartButton } from "./cart-button";
+import { MasterNav } from "@/components/site/master-nav";
+import { readSiteNav } from "@/lib/site-nav";
 
 export const serif = "shop-serif";
 export const hand = "shop-hand";
@@ -34,6 +36,7 @@ export function ShopFrame({ org, children, active, topBanners = [], dark = false
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FAF7F3] text-[#171714]">
       <style>{CSS}</style>
+      <MasterNav org={org} active="shop" />
       {strip && (
         <div className="bg-[#171411] text-[#F7F1EA]">
           <div className={`${PAGE} flex min-h-10 items-center justify-center gap-3 py-2 text-center text-[0.875rem]`}>
@@ -45,9 +48,7 @@ export function ShopFrame({ org, children, active, topBanners = [], dark = false
       <header className={`sticky top-0 z-40 border-b backdrop-blur-md ${dark ? "border-white/10 bg-[#171411]/90 text-[#F7F1EA]" : "border-[#EAE1D7] bg-[#FAF7F3]/90"}`}>
         <div className={`${PAGE} flex h-[68px] items-center gap-4`}>
           <Link href={base} className="flex min-w-0 shrink-0 items-center gap-3">
-            {org.logo_url && /^https:\/\//.test(org.logo_url)
-              ? <img src={org.logo_url} alt={org.name} className={`h-9 max-w-[150px] object-contain ${dark ? "brightness-0 invert" : ""}`} />
-              : <span className={`${serif} truncate text-[1.25rem] font-semibold`}>{org.name}</span>}
+            <span className={`${serif} truncate text-[1.25rem] font-semibold`}>{readSiteNav(org.rawSettings).shop}</span>
           </Link>
           <nav className="hidden flex-1 items-center justify-center gap-1 md:flex" aria-label="Shop">
             {nav.map((n) => (

@@ -25,7 +25,7 @@ export default async function GiftView({ params, searchParams }: { params: Promi
   const bookHref = g.course ? `/book/${org.slug}/${g.course.slug}` : `/book/${org.slug}`;
 
   return (
-    <BookShell org={org} embed={false}>
+    <BookShell org={org} embed={false} section="gifts">
       <div className={`mx-auto ${org.settings.landing.giftCard ? "max-w-3xl" : "max-w-xl"}`}>
         {g.status === "pending" ? (
           <div className="py-10 text-center">

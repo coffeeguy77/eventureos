@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { EmbedBridge } from "./embed-bridge";
+import { MasterNav } from "@/components/site/master-nav";
+import type { SiteSection } from "@/lib/site-nav";
 
 export const safeColour = (c?: string | null) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : "#6028EC");
 /** Readable text on the brand colour */
@@ -18,24 +20,12 @@ export function brandStyle(org: Pick<PublicOrg, "brand_colour">): React.CSSPrope
 export const PAGE = "mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10";
 
 /** The frame around every public booking page. In the website widget (embed) there's no header, and the frame resizes itself. */
-export function BookShell({ org, embed, children, back, wide, bare }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean; bare?: boolean }) {
+export function BookShell({ org, embed, children, back, wide, bare, section = "lessons" }: { org: PublicOrg; embed: boolean; children: React.ReactNode; back?: { href: string; label: string }; wide?: boolean; bare?: boolean; section?: SiteSection }) {
   const q = embed ? "?embed=1" : "";
   return (
     <div data-book-root style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
       {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important;min-height:0!important;height:auto!important}"}</style></>}
-      {!embed && (
-        <header className="border-b border-line bg-surface">
-          <div className={`${PAGE} flex h-16 items-center gap-3`}>
-            <Link href={`/book/${org.slug}`} className="flex min-w-0 items-center gap-3">
-              {org.logo_url && /^https:\/\//.test(org.logo_url)
-                ? <img src={org.logo_url} alt={org.name} className="h-9 max-w-[160px] object-contain" />
-                : <span className="truncate text-[1.0625rem] font-semibold text-ink">{org.name}</span>}
-            </Link>
-            <span className="flex-1" />
-            {org.website && /^https?:\/\//.test(org.website) && <a href={org.website} className="inline-flex items-center gap-2 text-[0.875rem] font-medium text-ink-muted hover:text-ink"><span aria-hidden>←</span>Back to website</a>}
-          </div>
-        </header>
-      )}
+      {!embed && <MasterNav org={org} active={section} />}
       <main className={bare && !embed ? "" : embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
         {back && <Link href={back.href + q} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {back.label}</Link>}
         {children}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { JobsOrg } from "@/lib/jobs/server";
 import { brandStyle, PAGE } from "@/components/book/shell";
+import { MasterNav } from "@/components/site/master-nav";
 
 type Nav = { href: string; label: string; badge?: number }[];
 
@@ -9,12 +10,10 @@ export function JobsShell({ org, children, nav, side, wide = true }: { org: Jobs
   const base = `/jobs/${org.slug}`;
   return (
     <div style={brandStyle(org)} className="min-h-screen bg-canvas">
+      <MasterNav org={org} active="jobs" />
       <header className="border-b border-line bg-surface">
         <div className={`${PAGE} flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 py-2`}>
           <Link href={side === "employer" ? `${base}/employers` : base} className="flex min-w-0 items-center gap-3">
-            {org.logo_url && /^https:\/\//.test(org.logo_url)
-              ? <img src={org.logo_url} alt={org.name} className="h-9 max-w-[140px] object-contain" />
-              : null}
             <span className="truncate text-[1rem] font-semibold text-ink">{org.jobs.name}</span>
           </Link>
           <span className="flex-1" />

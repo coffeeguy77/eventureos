@@ -28,7 +28,7 @@ export default async function EmployerHome({ params, searchParams }: { params: P
     ];
     return (
       <EmployerShell org={org}>
-        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 xl:gap-24">
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_390px] lg:gap-10">
           <div className="lg:pt-8">
             <p className="text-[0.875rem] font-semibold uppercase tracking-[0.04em] text-[var(--b)]">For cafés, carts &amp; events</p>
             <h1 className="mt-3 text-balance text-[3rem] font-extrabold leading-[0.98] tracking-[-0.035em] sm:text-[4rem] xl:text-[4.25rem]">Find trained <span className="text-[var(--b)]">baristas</span> near you</h1>

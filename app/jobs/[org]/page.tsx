@@ -7,6 +7,7 @@ import { currentStudent } from "@/lib/bookings/student-auth";
 import { JOB_KINDS } from "@/lib/jobs/core";
 import { jobsOrg, openPosts, publicBaristas, trainedCount } from "@/lib/jobs/server";
 import { brandStyle, PAGE } from "@/components/book/shell";
+import { MasterNav } from "@/components/site/master-nav";
 import { BaristaAuth } from "@/components/jobs/tools";
 import { BaristaBoard } from "@/components/jobs/board";
 
@@ -47,6 +48,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
 
   return (
     <div style={brandStyle(org)} className="min-h-screen bg-[#0E0B0A] text-white">
+      <MasterNav org={org} active="jobs" />
       {/* Top: photo, headline, sign-in */}
       <div className="relative isolate overflow-hidden">
         {org.jobs.heroImage
@@ -57,7 +59,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
         <header className="border-b border-white/10">
           <div className={`${PAGE} flex h-16 items-center gap-4`}>
             <Link href={`/jobs/${slug}`} className="flex min-w-0 items-center gap-3">
-              {logo ? <img src={logo} alt={org.name} className="h-10 max-w-[200px] object-contain" /> : <span className="truncate text-[1.0625rem] font-semibold">{org.jobs.name}</span>}
+              <span className="truncate text-[1.0625rem] font-semibold">{org.jobs.name}</span>
             </Link>
             <span className="flex-1" />
             {me ? (

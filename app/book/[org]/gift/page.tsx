@@ -5,7 +5,8 @@ import { CalendarDays, Gift, Mail, Users } from "lucide-react";
 import { catalogue, publicOrg } from "@/lib/bookings/server";
 import { landingCopy } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
-import { BookShell, PAGE } from "@/components/book/shell";
+import { BookShell, PAGE, brandStyle } from "@/components/book/shell";
+import { MasterNav } from "@/components/site/master-nav";
 import { GiftForm } from "@/components/book/gift-form";
 
 export const dynamic = "force-dynamic";
@@ -41,71 +42,70 @@ export default async function GiftPage({ params, searchParams }: P) {
   const title = landingCopy(L, "giftPageTitle");
   const hero = L.giftHero;
   const available = org.stripeReady && options.length > 0;
-  const site = org.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || null;
-  const card = L.giftCard ? { front: L.giftCard, back: L.giftCard, redeem: `Book at ${site ?? `eventureos.com.au/book/${org.slug}`} and enter the code at checkout.` } : null;
+  const badge = landingCopy(L, "giftPageBadge") || null;
   const form = available
-    ? <GiftForm orgSlug={org.slug} currency={org.currency} options={options} minDate={today} years={years ?? undefined} business={org.name} card={card} />
-    : <p className="rounded-[28px] bg-[#FFFDFB] p-8 text-center text-ink-muted shadow-card">Gift certificates aren&apos;t available online right now. Please contact {org.name}{org.contact_phone ? ` on ${org.contact_phone}` : ""}.</p>;
+    ? <GiftForm orgSlug={org.slug} currency={org.currency} options={options} minDate={today} years={years ?? undefined} business={org.name} badge={badge} />
+    : <p className="rounded-[22px] bg-[#F8F1EE] p-8 text-center text-[#6E6560]">Gift certificates aren&apos;t available online right now. Please contact {org.name}{org.contact_phone ? ` on ${org.contact_phone}` : ""}.</p>;
 
   if (embed) return <BookShell org={org} embed>{form}</BookShell>;
 
   const features = [
-    { icon: Gift, text: "Beautiful gift certificate", sub: "Your message on the back" },
-    { icon: CalendarDays, text: `Valid for ${valid}`, sub: "Plenty of time to book" },
-    { icon: Users, text: "They choose the date", sub: "Any class, any session" },
-    { icon: Mail, text: "Instant email", sub: "Or print at home" },
+    { icon: Gift, a: "Beautiful", b: "gift certificate" },
+    { icon: CalendarDays, a: "Valid for", b: valid },
+    { icon: Users, a: "Choose their", b: "own date" },
+    { icon: Mail, a: "Instant email", b: "or print at home" },
   ];
   const steps = [
-    { n: "1", t: "Choose a class or amount", d: "Pick a course, or a dollar value they can put towards any class." },
-    { n: "2", t: "Add your message", d: "It's printed on the back of the certificate — see it as you type." },
+    { n: "1", t: "Choose a class", d: "Pick the course you'd like to give." },
+    { n: "2", t: "Add your message", d: "We'll put it on the certificate for you." },
     { n: "3", t: "Send it your way", d: "Emailed to you to print or forward, or straight to them on the day you choose." },
   ];
 
   return (
-    <BookShell org={org} embed={false} bare>
-      <div className="relative bg-[#F5EEE7]">
-        {/* Photo: a banner on phones and tablets; on big screens the whole hero, with the wording over the wall and the form over the café */}
-        <section className="relative isolate xl:h-[940px]">
-          {hero && (
-            <div className="relative h-[300px] overflow-hidden sm:h-[440px] xl:absolute xl:inset-0 xl:h-auto">
-              <img src={hero} alt="" className="h-full w-full object-cover object-[30%_75%] xl:object-[left_bottom]" />
-              <div className="absolute inset-x-0 top-0 hidden h-[340px] bg-[linear-gradient(180deg,rgba(250,246,241,.78),rgba(250,246,241,0))] xl:block" />
-              <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#F5EEE7] to-transparent xl:hidden" />
-            </div>
-          )}
-          <div className={`${PAGE} relative -mt-8 pb-8 xl:mt-0 xl:pb-0 xl:pt-10`}>
-            <div className="xl:max-w-[660px]">
-            {eyebrow && <p className="text-[0.875rem] font-semibold uppercase tracking-[0.32em] text-[#2A2522]">{eyebrow}</p>}
-            <h1 className="mt-3 text-balance text-[2.9rem] font-bold leading-[0.98] tracking-[-0.015em] text-[#141110] sm:text-[4rem] xl:whitespace-nowrap xl:text-[4.25rem]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>{accent(title)}</h1>
-            <p className="mt-4 max-w-[34rem] text-[1.125rem] leading-relaxed text-[#2F2925] sm:text-[1.25rem] xl:max-w-[44rem] xl:text-[1.1875rem]">
-              Perfect for birthdays, Christmas and Father&apos;s Day. Valid for {valid} — they choose their own date.
+    <div data-book-root style={brandStyle(org)} className="min-h-screen bg-[#1a120d]">
+      <MasterNav org={org} active="gifts" />
+      <section className="relative isolate overflow-hidden xl:h-[max(1000px,66.667vw)] xl:overflow-visible">
+        {hero
+          ? <img src={hero} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[left_bottom] xl:block" />
+          : <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_left,color-mix(in_srgb,var(--b)_30%,#2a1c14),#1a120d)]" />}
+        <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(26,18,13,.12),rgba(26,18,13,0)_45%)] xl:block" />
+        <div className="mx-auto max-w-[1536px] px-4 pb-6 pt-10 sm:px-8 xl:grid xl:grid-cols-[minmax(0,1fr)_754px] xl:gap-10 xl:pb-6 xl:pl-[97px] xl:pr-5 xl:pt-[93px]">
+          <div className="relative isolate -mx-4 -mt-10 px-4 pt-10 text-white sm:-mx-8 sm:px-8 xl:m-0 xl:p-0 xl:pt-[8px]">
+            {hero && <img src={hero} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover object-[18%_bottom] xl:hidden" />}
+            {hero && <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(26,18,13,.35),rgba(26,18,13,.1)_55%,rgba(26,18,13,0)_90%,#1a120d)] xl:hidden" />}
+            {eyebrow && <p className="text-[0.8125rem] font-medium uppercase tracking-[0.42em] sm:text-[0.9375rem]">{eyebrow}</p>}
+            <h1 className="mt-3 text-[3.75rem] font-bold leading-[0.92] tracking-[-0.01em] sm:text-[5rem] xl:mt-[12px] xl:text-[5.8rem]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>{title.split(/(\*[^*]+\*)/).map((part, i) => (/^\*[^*]+\*$/.test(part) ? <span key={i} className="block text-[var(--b)]">{part.slice(1, -1)}</span> : part))}</h1>
+            <p className="mt-6 max-w-[33rem] text-[1.125rem] leading-[1.4] sm:text-[1.25rem] xl:mt-[26px]">
+              Perfect for birthdays, Christmas and Father&apos;s Day.<br className="hidden sm:block" /> Valid for {valid} — they choose their own date.
             </p>
-            <ul className="mt-6 grid max-w-[40rem] grid-cols-2 gap-2.5 sm:gap-3 xl:max-w-[620px] xl:gap-2.5">
+            <ul className="mt-7 grid max-w-[552px] grid-cols-4 gap-0 xl:-ml-[23px] xl:mt-[22px]">
               {features.map((f) => (
-                <li key={f.text} className="flex items-center gap-3 rounded-2xl bg-white/80 p-3 shadow-[0_8px_24px_-16px_rgba(40,25,15,.5)] ring-1 ring-white/70 backdrop-blur-md sm:p-3.5 xl:gap-2.5 xl:rounded-full xl:py-2 xl:pl-2 xl:pr-5">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--b)] text-[var(--on-b)] sm:h-12 sm:w-12 xl:h-9 xl:w-9"><f.icon className="h-5 w-5 sm:h-6 sm:w-6 xl:h-[18px] xl:w-[18px]" strokeWidth={1.8} /></span>
-                  <span className="min-w-0"><span className="block text-[0.9063rem] font-semibold leading-tight text-[#1d1916] sm:text-[0.9688rem] xl:whitespace-nowrap xl:text-[0.875rem]">{f.text}</span><span className="mt-0.5 block text-[0.8125rem] leading-tight text-[#5f5852] xl:hidden">{f.sub}</span></span>
+                <li key={f.a} className="flex flex-col items-center text-center">
+                  <span className="grid h-14 w-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--b)_26%,white)] text-[var(--b)] sm:h-16 sm:w-16"><f.icon className="h-7 w-7 sm:h-[30px] sm:w-[30px]" strokeWidth={1.6} /></span>
+                  <span className="mt-2.5 text-[0.8125rem] font-semibold leading-[1.3] text-white sm:text-[0.9375rem]">{f.a}<br />{f.b}</span>
                 </li>
               ))}
             </ul>
-            </div>
+            {/* Room for the photographed certificate on small screens */}
+            <div className="h-[400px] sm:h-[520px] xl:hidden" />
           </div>
-        </section>
-        <div className={`${PAGE} pb-10 xl:absolute xl:right-0 xl:top-10 xl:z-10 xl:w-[680px] xl:pb-0 xl:pl-0`}>{form}</div>
-        <section className="bg-[#FBF8F4] pb-16 pt-14 xl:min-h-[1040px]">
-          <div className={`${PAGE} xl:pr-[720px]`}>
-            <h2 className="text-[2rem] font-bold leading-tight text-[#141110] sm:text-[2.5rem]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>How it works</h2>
-            <ol className="mt-6 grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
-              {steps.map((x) => (
-                <li key={x.n} className="flex gap-4 rounded-2xl bg-white p-5 ring-1 ring-[#EDE4DB]">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--b)_14%,white)] text-[1.0625rem] font-bold text-[var(--b)]">{x.n}</span>
-                  <span><span className="block text-[1.0625rem] font-semibold text-[#1d1916]">{x.t}</span><span className="mt-1 block text-[0.9375rem] leading-relaxed text-[#5f5852]">{x.d}</span></span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-      </div>
-    </BookShell>
+          <div className="mx-auto w-full max-w-[754px] xl:mx-0">{form}</div>
+        </div>
+      </section>
+      <section className="bg-[#FBF8F4] py-14 xl:pt-24">
+        <div className={PAGE}>
+          <h2 className="text-[2rem] font-bold leading-tight text-[#141110] sm:text-[2.5rem]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>How it works</h2>
+          <ol className="mt-6 grid gap-4 sm:grid-cols-3">
+            {steps.map((x) => (
+              <li key={x.n} className="flex gap-4 rounded-2xl bg-white p-5 ring-1 ring-[#EDE4DB]">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[color-mix(in_srgb,var(--b)_14%,white)] text-[1.0625rem] font-bold text-[var(--b)]">{x.n}</span>
+                <span><span className="block text-[1.0625rem] font-semibold text-[#1d1916]">{x.t}</span><span className="mt-1 block text-[0.9375rem] leading-relaxed text-[#5f5852]">{x.d}</span></span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+      <footer className="bg-[#FBF8F4] pb-10 text-center text-[0.75rem] text-[#8a817a]">{[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}<p className="mt-1">Secure booking by EventureOS</p></footer>
+    </div>
   );
 }

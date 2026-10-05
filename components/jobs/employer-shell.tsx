@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ChevronDown, LogOut } from "lucide-react";
 import type { JobsOrg } from "@/lib/jobs/server";
-import { brandStyle } from "@/components/book/shell";
+import { brandStyle, PAGE } from "@/components/book/shell";
+import { MasterNav } from "@/components/site/master-nav";
 import { employerSignOutAction } from "@/app/jobs/actions";
 
 export type EmpNavKey = "dashboard" | "search" | "post" | "messages";
@@ -13,8 +14,9 @@ export const glass = "rounded-2xl border border-white/[0.12] bg-[#141013]/80 sha
  * The frame around the employer pages: dark header, the café photo behind everything, and the business's colours.
  * `legacy` wraps older light-styled content in a light panel so it stays readable on the dark photo.
  */
-export function EmployerShell({ org, children, me, active, unread = 0, width = "max-w-[1140px]", legacy = false }: {
-  org: JobsOrg; children: React.ReactNode; me?: { name: string } | null; active?: EmpNavKey; unread?: number; width?: string; legacy?: boolean;
+export function EmployerShell({ org, children, me, active, unread = 0, legacy = false }: {
+  org: JobsOrg; children: React.ReactNode; me?: { name: string } | null; active?: EmpNavKey; unread?: number; legacy?: boolean;
+  /** @deprecated pages now use the full page width, same as the job board */ width?: string;
 }) {
   const base = `/jobs/${org.slug}`;
   const nav: { key: EmpNavKey; href: string; label: string; badge?: number }[] = [
@@ -29,10 +31,10 @@ export function EmployerShell({ org, children, me, active, unread = 0, width = "
     <div style={brandStyle(org)} className="relative min-h-screen bg-[#0d0a0b] text-white [color-scheme:dark]">
       {bg && <img src={bg} alt="" className="pointer-events-none fixed inset-0 h-full w-full object-cover" />}
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(90deg,rgba(12,9,10,.86)_0%,rgba(12,9,10,.5)_42%,rgba(12,9,10,.62)_100%)]" />
+      <div className="relative z-30"><MasterNav org={org} active="jobs" /></div>
       <header className="relative z-20 border-b border-white/10 bg-[#100c0e]/85 backdrop-blur-md">
-        <div className={`mx-auto flex min-h-[56px] ${width} flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 sm:px-6`}>
+        <div className={`${PAGE} flex min-h-[56px] flex-wrap items-center gap-x-5 gap-y-1 py-2`}>
           <Link href={me ? `${base}/employers` : base} className="flex min-w-0 items-center gap-3">
-            {org.logo_url && /^https:\/\//.test(org.logo_url) && <img src={org.logo_url} alt={org.name} className="h-8 max-w-[130px] object-contain" />}
             <span className="truncate text-[1rem] font-medium text-white">{org.jobs.name}</span>
           </Link>
           <span className="flex-1" />
@@ -63,7 +65,7 @@ export function EmployerShell({ org, children, me, active, unread = 0, width = "
           ) : <Link href={base} className="text-[0.875rem] font-medium text-white/85 hover:text-white">For baristas</Link>}
         </div>
       </header>
-      <main className={`relative z-10 mx-auto ${width} px-4 py-8 sm:px-6 sm:py-10`}>
+      <main className={`${PAGE} relative z-10 py-8 sm:py-10`}>
         {legacy ? <div className="rounded-3xl bg-canvas p-5 text-ink shadow-2xl sm:p-7">{children}</div> : children}
       </main>
       <footer className="relative z-10 pb-10 pt-4 text-center text-[0.75rem] text-white/50">
