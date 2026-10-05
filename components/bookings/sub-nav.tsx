@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/bookings/courses", label: "Courses" },
   { href: "/bookings/students", label: "Students" },
   { href: "/bookings/gifts", label: "Gift certificates" },
+  { href: "/bookings/certificates", label: "Certificates" },
   { href: "/bookings/agencies", label: "Agencies" },
   { href: "/bookings/website", label: "Website & settings" },
 ];

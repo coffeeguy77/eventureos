@@ -205,3 +205,64 @@ export async function importCsv(db: SupabaseClient, orgId: string, list: CsvRow[
   return { ...r, ignored, received: list.length };
 }
 
+
+/* ------------------------------------------------------------------ every Bookly customer → Students */
+
+export interface BooklyCustomer { id: number | string; name?: string | null; email?: string | null; phone?: string | null; created?: string | null }
+
+/**
+ * Bookly keeps its customer list even when old bookings have been deleted, so this is the full history of who has booked.
+ * Matched by Bookly customer id (external_ref), then by email; never creates a second student for the same email.
+ */
+export async function importBooklyCustomers(db: SupabaseClient, orgId: string, list: BooklyCustomer[], tz?: string | null) {
+  const out = { created: 0, linked: 0, skipped: 0, ignored: 0, errors: [] as string[] };
+  const rows = list.slice(0, 2000);
+  const refs = rows.map((c) => `bookly-customer:${c.id}`);
+  const emails = [...new Set(rows.map((c) => cleanEmail(c.email)).filter((e): e is string => !!e))];
+  const byRef = new Set<string>();
+  const byEmail = new Map<string, { id: string; external_ref: string | null }>();
+  for (let i = 0; i < refs.length; i += 300) {
+    const { data, error } = await db.from("booking_students").select("external_ref").eq("organisation_id", orgId).in("external_ref", refs.slice(i, i + 300));
+    if (error) throw new Error(error.message);
+    for (const r of data ?? []) byRef.add(r.external_ref as string);
+  }
+  for (let i = 0; i < emails.length; i += 200) {
+    // emails are stored lower-case by EventureOS; ilike would be slow over thousands, so match exact lower-case values
+    const { data, error } = await db.from("booking_students").select("id, email, external_ref").eq("organisation_id", orgId).in("email", emails.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as { id: string; email: string; external_ref: string | null }[]) byEmail.set(r.email.toLowerCase(), r);
+  }
+  const zone = tz && /^[A-Za-z_]+\/[A-Za-z_/+-]+$/.test(tz) ? tz : "Australia/Sydney";
+  const inserts: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const c of rows) {
+    const ref = `bookly-customer:${c.id}`;
+    if (byRef.has(ref)) { out.skipped++; continue; }
+    const email = cleanEmail(c.email);
+    const name = String(c.name ?? "").replace(/\s*\(class\s*bento\)\s*/i, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    if (!name && !email) { out.ignored++; continue; }
+    if (email) {
+      const hit = byEmail.get(email);
+      if (hit) {
+        if (!hit.external_ref) { await db.from("booking_students").update({ external_ref: ref }).eq("id", hit.id); out.linked++; } else out.skipped++;
+        continue;
+      }
+      if (seen.has(email)) { out.skipped++; continue; }
+      seen.add(email);
+    }
+    const created = c.created && LOCAL.test(c.created) ? zonedTimeUTC(c.created.slice(0, 10), c.created.slice(11, 16), zone) : null;
+    inserts.push({ organisation_id: orgId, name: name || email!.split("@")[0], email, phone: cleanPhone(c.phone), source: /class\s*bento/i.test(String(c.name ?? "")) ? "classbento" : "bookly",
+      external_ref: ref, ...(created ? { created_at: created } : {}) });
+  }
+  for (let i = 0; i < inserts.length; i += 200) {
+    const chunk = inserts.slice(i, i + 200);
+    const { error } = await db.from("booking_students").insert(chunk);
+    if (!error) { out.created += chunk.length; continue; }
+    // A clash inside the chunk (e.g. added by a booking a moment ago): fall back to one at a time
+    for (const r of chunk) {
+      const { error: e1 } = await db.from("booking_students").insert(r);
+      if (e1) { if (/duplicate|unique/i.test(e1.message)) out.skipped++; else if (out.errors.length < 10) out.errors.push(e1.message); } else out.created++;
+    }
+  }
+  return out;
+}

@@ -177,6 +177,20 @@ export function SettingsForm({ initial }: { initial: BookingSettings }) {
         <div className="sm:col-span-2 lg:col-span-4"><Label hint="top of the booking page">Welcome text</Label><Textarea value={s.intro ?? ""} onChange={txt("intro")} className="min-h-[60px]" /></div>
         <div className="sm:col-span-2 lg:col-span-4"><Label hint="customers tick to agree">Booking terms</Label><Textarea value={s.terms ?? ""} onChange={txt("terms")} className="min-h-[80px]" placeholder="Cancellation and refund policy…" /></div>
       </div>
+      <div className="mt-5 rounded-lg border border-line p-3">
+        <p className="text-[0.8438rem] font-semibold text-ink">Questions people ask</p>
+        <p className="mb-2 text-[0.75rem] text-ink-muted">Shown beside the booking form, e.g. “Do I get a certificate?”, “Is there parking?”. What to bring and where you are come from each course.</p>
+        <div className="space-y-2">
+          {s.faqs.map((f, i) => (
+            <div key={i} className="grid gap-1.5 rounded-lg bg-zinc-50 p-2 sm:grid-cols-[1fr_auto]">
+              <Input value={f.q} placeholder="Question" onChange={(e) => setS({ ...s, faqs: s.faqs.map((x, j) => (j === i ? { ...x, q: e.target.value } : x)) })} />
+              <button type="button" onClick={() => setS({ ...s, faqs: s.faqs.filter((_, j) => j !== i) })} className="rounded px-2 text-[0.75rem] font-medium text-rose-700 hover:bg-rose-50">Remove</button>
+              <Textarea value={f.a} placeholder="Answer" className="min-h-[56px] sm:col-span-2" onChange={(e) => setS({ ...s, faqs: s.faqs.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)) })} />
+            </div>
+          ))}
+          {s.faqs.length < 12 && <Button size="sm" onClick={() => setS({ ...s, faqs: [...s.faqs, { q: "", a: "" }] })}>Add a question</Button>}
+        </div>
+      </div>
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[0.8125rem] text-ink">
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.enabled} onChange={chk("enabled")} />Online booking on</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.show_seats_left} onChange={chk("show_seats_left")} />Show seats left</label>
@@ -187,7 +201,7 @@ export function SettingsForm({ initial }: { initial: BookingSettings }) {
       <Button variant="primary" className="mt-4" disabled={pending} onClick={() => start(async () => {
         setMsg(null);
         const { gift_amounts_text, facebook, instagram, ...rest } = s;
-        const r = await saveBookingSettings({ ...rest, gift_amounts: gift_amounts_text.split(/[,\s]+/).map(Number).filter((n) => n > 0), social: { facebook, instagram } }).catch(() => fail);
+        const r = await saveBookingSettings({ ...rest, faqs: rest.faqs.filter((f) => f.q.trim() && f.a.trim()), gift_amounts: gift_amounts_text.split(/[,\s]+/).map(Number).filter((n) => n > 0), social: { facebook, instagram } }).catch(() => fail);
         setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error });
         if (r.ok) router.refresh();
       })}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save settings</Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronDown, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2 } from "lucide-react";
 import type { PublicSession } from "@/lib/bookings/server";
 import type { Question } from "@/lib/bookings/core";
 import { checkAgencyAction, checkGiftAction, startBookingAction } from "@/app/book/actions";
@@ -35,6 +35,8 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
 
   const [sessionId, setSessionId] = useState<string | null>(preselect && sessions.some((s) => s.id === preselect) ? preselect : null);
   const [showAll, setShowAll] = useState(false);
+  // After choosing, the date list folds away to the chosen date with a "Change date" button
+  const [picking, setPicking] = useState(!(preselect && sessions.some((s) => s.id === preselect)));
   const session = sessions.find((s) => s.id === sessionId) ?? null;
   const waitlist = !!session?.full;
   const maxSeats = session ? Math.max(1, Math.min(course.maxSeats, session.full ? course.maxSeats : session.left)) : course.maxSeats;
@@ -113,6 +115,18 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
       {/* 1. Date */}
       <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
         <Step n={1} title="Choose a date" done={!!session} />
+        {session && !picking ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_7%,transparent)] px-4 py-3">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[1rem] font-semibold text-ink">{fmt.long.format(new Date(session.starts_at))}</span>
+              <span className="block text-[0.875rem] text-ink-muted">{t(session.starts_at)} – {t(session.ends_at)} · {session.full ? "Full — waitlist" : `${session.left} seat${session.left === 1 ? "" : "s"} left`}</span>
+            </span>
+            <button type="button" onClick={() => setPicking(true)} className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-surface px-4 text-[0.875rem] font-semibold text-ink ring-1 ring-line-strong hover:bg-zinc-50">
+              <ChevronLeft className="h-4 w-4" />Change date
+            </button>
+          </div>
+        ) : (<>
+        {session && <button type="button" onClick={() => setPicking(false)} className="mb-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]"><ChevronLeft className="h-4 w-4" />Keep {fmt.day.format(new Date(session.starts_at))}</button>}
         <div className="space-y-4">
           {months.map(([month, list]) => (
             <div key={month}>
@@ -122,7 +136,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
                   const on = s.id === sessionId;
                   const few = !s.full && s.left <= 2;
                   return (
-                    <button key={s.id} type="button" onClick={() => { setSessionId(s.id); setErr(null); }} aria-pressed={on}
+                    <button key={s.id} type="button" onClick={() => { setSessionId(s.id); setErr(null); if (!s.full || org.waitlist) setPicking(false); }} aria-pressed={on}
                       className={`flex min-h-[64px] items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${on ? "border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_7%,transparent)] ring-2 ring-[var(--b)]" : "border-line hover:border-line-strong hover:bg-zinc-50"}`}>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[0.9688rem] font-semibold text-ink">{fmt.day.format(new Date(s.starts_at))}</span>
@@ -143,6 +157,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
             Show {sessions.length - visible.length} more dates<ChevronDown className="h-4 w-4" />
           </button>
         )}
+        </>)}
         {session?.full && !org.waitlist && <p className="mt-3 text-[0.875rem] text-rose-700">That date is full — please choose another.</p>}
       </section>
 

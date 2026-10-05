@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Clock, MapPin, Users } from "lucide-react";
-import { catalogue, publicOrg } from "@/lib/bookings/server";
+import { catalogue, certificatesOffered, publicOrg } from "@/lib/bookings/server";
 import { pickUtm } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
 import { BookingFlow } from "@/components/book/booking-flow";
+import { InfoPanel } from "@/components/book/info-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,12 @@ export default async function CoursePage({ params, searchParams }: P) {
   const sessions = data!.sessions.filter((s) => s.course_id === course.id);
   const pre = typeof sp.session === "string" ? sp.session : null;
   const source = sp.source === "wordpress" ? "wordpress" : "website";
+  const certificate = await certificatesOffered(org.id);
 
   return (
-    <BookShell org={org} embed={embed} back={embed ? undefined : { href: `/book/${org.slug}`, label: "All classes" }}>
-      <div className="grid gap-6 lg:grid-cols-[1fr]">
+    <BookShell org={org} embed={embed} wide back={embed ? undefined : { href: `/book/${org.slug}`, label: "All classes" }}>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 space-y-6">
         <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           {course.image_url && !embed && <img src={course.image_url} alt="" className="aspect-[21/9] w-full object-cover" />}
           <div className="p-5 sm:p-6">
@@ -51,7 +54,6 @@ export default async function CoursePage({ params, searchParams }: P) {
               {course.location && <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{course.location}</span>}
             </div>
             {course.description && <div className="mt-4 whitespace-pre-line text-[0.9375rem] leading-relaxed text-ink">{course.description}</div>}
-            {course.what_to_bring && <p className="mt-3 rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted"><b className="font-semibold text-ink">What to bring:</b> {course.what_to_bring}</p>}
           </div>
         </section>
         <BookingFlow
@@ -59,6 +61,9 @@ export default async function CoursePage({ params, searchParams }: P) {
           course={{ id: course.id, name: course.name, price: Number(course.price), maxSeats: course.max_seats_per_booking, questions: course.questions ?? [] }}
           sessions={sessions} preselect={pre} utm={pickUtm(sp)} embed={embed} source={source}
         />
+        </div>
+        <InfoPanel orgSlug={org.slug} orgName={org.name} phone={org.contact_phone} location={course.location} whatToBring={course.what_to_bring} certificate={certificate}
+          gifts={course.gift_enabled && org.stripeReady} faqs={org.settings.faqs} terms={org.settings.terms} embed={embed} />
       </div>
     </BookShell>
   );

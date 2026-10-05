@@ -98,8 +98,9 @@ export function reminderEmail(b: Brand, o: BookingEmailInput) {
   });
 }
 
-export function thankYouEmail(b: Brand, o: { firstName: string; course: string; reviewUrl: string | null; bookUrl: string; giftUrl: string | null; social: { facebook?: string; instagram?: string } }) {
+export function thankYouEmail(b: Brand, o: { firstName: string; course: string; reviewUrl: string | null; bookUrl: string; giftUrl: string | null; social: { facebook?: string; instagram?: string }; certificateUrl?: string | null; accountUrl?: string | null }) {
   const buttons: Btn[] = [];
+  if (o.certificateUrl) buttons.push({ label: "Download your certificate", url: o.certificateUrl });
   if (o.reviewUrl) buttons.push({ label: "Leave a quick review", url: o.reviewUrl });
   if (o.giftUrl) buttons.push({ label: "Give it as a gift", url: o.giftUrl });
   buttons.push({ label: "Book another course", url: o.bookUrl });
@@ -108,8 +109,9 @@ export function thankYouEmail(b: Brand, o: { firstName: string; course: string; 
   return shell(b, {
     title: `Thanks for coming to ${o.course}!`,
     heading: `Thanks for coming, ${o.firstName}!`,
-    intro: [`We hope you enjoyed ${o.course}.${o.reviewUrl ? " If you have a minute, a review helps other people find us — it means a lot to a small business." : ""}`],
+    intro: [`We hope you enjoyed ${o.course}.${o.certificateUrl ? " Your certificate is ready." : ""}${o.reviewUrl ? " If you have a minute, a review helps other people find us — it means a lot to a small business." : ""}`],
     buttons,
+    after: o.accountUrl ? [`Your certificate is also kept in your account — sign in any time with just your email: ${o.accountUrl}`] : [],
   });
 }
 
@@ -140,4 +142,19 @@ export function seatOpenEmail(b: Brand, o: { firstName: string; course: string; 
     intro: [`A seat is free on ${o.course}, ${o.when} (${o.time}). Seats go to whoever books first, so be quick!`],
     buttons: [{ label: "Book my seat", url: o.bookUrl }],
   });
+}
+
+export function loginEmail(b: Brand, o: { firstName: string; url: string; minutes: number }) {
+  return shell(b, {
+    title: `Your sign-in link — ${b.businessName}`,
+    heading: `Hi ${o.firstName}, here's your sign-in link`,
+    intro: [`Tap the button to see your bookings and certificates with ${b.businessName}. No password needed.`],
+    buttons: [{ label: "Sign in", url: o.url }],
+    after: [`The link works once and expires in ${o.minutes} minutes. If you didn't ask for it, you can ignore this email.`],
+  });
+}
+
+export function certificateRequestEmail(b: Brand, o: { name: string; email: string; url: string }) {
+  return shell(b, { title: `Certificate request — ${o.name}`, heading: "A past student has asked for their certificate", intro: [`${o.name} (${o.email}) signed in and asked for a certificate, but there's no course on record for them. Check which course they did and issue it from Bookings → Certificates.`],
+    buttons: [{ label: "Open certificates", url: o.url }], footer: "Sent by EventureOS bookings." });
 }

@@ -3,7 +3,7 @@
  * Plugin Name:       EventureOS Bookings
  * Plugin URI:        https://www.eventureos.com.au
  * Description:       Your EventureOS booking form (block + [eventureos_booking] shortcode), and an optional read-only bridge that copies Bookly bookings into EventureOS.
- * Version:           1.0.0
+ * Version:           1.1.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            EventureOS
@@ -13,7 +13,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('EOS_BOOKINGS_VERSION', '1.0.0');
+define('EOS_BOOKINGS_VERSION', '1.1.0');
 define('EOS_BOOKINGS_HOST', 'https://www.eventureos.com.au');
 
 /* ---------------------------------------------------------------- settings */
@@ -127,6 +127,23 @@ function eos_bookly_services() {
   return $out;
 }
 
+/** Every Bookly customer (students), including people whose old bookings are no longer in Bookly. */
+function eos_bookly_customers($after, $limit) {
+  global $wpdb;
+  $T = eos_bookly_tables();
+  if (!$T['customers']['exists'] || !in_array('id', $T['customers']['columns'], true)) return new WP_Error('eos_no_customers', 'Bookly customers table not found');
+  $sel = array('c.`id` AS id', eos_col($T, 'customers', 'c', 'full_name', 'full_name'), eos_col($T, 'customers', 'c', 'first_name', 'first_name'), eos_col($T, 'customers', 'c', 'last_name', 'last_name'),
+    eos_col($T, 'customers', 'c', 'email', 'email'), eos_col($T, 'customers', 'c', 'phone', 'phone'), eos_col($T, 'customers', 'c', 'created_at', 'created'));
+  $rows = $wpdb->get_results($wpdb->prepare('SELECT ' . implode(', ', $sel) . ' FROM `' . $T['customers']['name'] . '` c WHERE c.id > %d ORDER BY c.id ASC LIMIT ' . intval($limit), array($after)), ARRAY_A);
+  if ($wpdb->last_error) return new WP_Error('eos_sql', $wpdb->last_error);
+  $out = array();
+  foreach ($rows as $r) {
+    $name = trim((string) ($r['full_name'] ?: trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''))));
+    $out[] = array('id' => $r['id'], 'name' => $name, 'email' => $r['email'], 'phone' => $r['phone'], 'created' => $r['created']);
+  }
+  return $out;
+}
+
 function eos_post($body) {
   $key = (string) eos_opt('key', '');
   if (!preg_match('/^eos_live_[0-9a-f]{48}$/', $key)) return new WP_Error('eos_key', 'Add your EventureOS plugin key first.');
@@ -151,9 +168,25 @@ function eos_sync($max_batches = 6) {
   $services = eos_bookly_services();
   $tz = function_exists('wp_timezone_string') ? wp_timezone_string() : get_option('timezone_string');
   $total = array('created' => 0, 'updated' => 0, 'skipped' => 0, 'ignored' => 0, 'errors' => array());
-  $last = intval(eos_opt('last_ca_id', 0));
   $fail = null;
-  for ($i = 0; $i < $max_batches; $i++) {
+  // 1. Students: every Bookly customer (sent once; new ones each run)
+  $lastCust = intval(eos_opt('last_customer_id', 0));
+  $total['students'] = 0;
+  for ($i = 0; $i < $max_batches * 2; $i++) {
+    $cust = eos_bookly_customers($lastCust, 500);
+    if (is_wp_error($cust)) { $total['errors'][] = 'Students: ' . $cust->get_error_message(); break; }
+    if (!$cust) break;
+    $r = eos_post(array('action' => 'bookly_customers', 'tz' => $tz, 'customers' => $cust));
+    // A problem copying students never stops bookings being copied (they count seats)
+    if (is_wp_error($r)) { $total['errors'][] = 'Students: ' . $r->get_error_message(); break; }
+    $total['students'] += intval($r['created'] ?? 0);
+    $lastCust = intval(end($cust)['id']);
+    update_option('eventureos_last_customer_id', $lastCust, false);
+    if (count($cust) < 500) break;
+  }
+  // 2. Bookings
+  $last = intval(eos_opt('last_ca_id', 0));
+  for ($i = 0; $i < $max_batches && !$fail; $i++) {
     $rows = eos_bookly_rows('ca.id > %d', array($last), 300);
     if (is_wp_error($rows)) { $fail = $rows; break; }
     if (!$rows) break;
@@ -226,7 +259,7 @@ add_action('admin_post_eos_sync', function () {
   if (!current_user_can('manage_options')) wp_die('Not allowed');
   check_admin_referer('eos_sync');
   $r = eos_sync(20);
-  set_transient('eos_notice', $r['ok'] ? array('success', sprintf('Bookly sync done: %d added, %d updated, %d already there.', $r['created'], $r['updated'], $r['skipped'])) : array('error', 'Bookly sync: ' . $r['error']), 60);
+  set_transient('eos_notice', $r['ok'] ? array('success', sprintf('Bookly sync done: %d new students, %d bookings added, %d updated, %d already there.', $r['students'] ?? 0, $r['created'], $r['updated'], $r['skipped'])) : array('error', 'Bookly sync: ' . $r['error']), 60);
   wp_safe_redirect(admin_url('options-general.php?page=eventureos-bookings'));
   exit;
 });
@@ -268,9 +301,9 @@ function eos_admin_page() {
     </p>
     <?php if ($last) : ?>
       <p><strong>Last sync:</strong> <?php echo esc_html(wp_date('j M Y g:i a', intval($last['at'] ?? 0))); ?> —
-        <?php echo !empty($last['ok']) ? esc_html(sprintf('%d added, %d updated, %d already there', $last['created'] ?? 0, $last['updated'] ?? 0, $last['skipped'] ?? 0)) : '<span style="color:#b32d2e">' . esc_html($last['error'] ?? 'failed') . '</span>'; ?>
+        <?php echo !empty($last['ok']) ? esc_html(sprintf('%d new students, %d bookings added, %d updated, %d already there', $last['students'] ?? 0, $last['created'] ?? 0, $last['updated'] ?? 0, $last['skipped'] ?? 0)) : '<span style="color:#b32d2e">' . esc_html($last['error'] ?? 'failed') . '</span>'; ?>
         <?php if (!empty($last['errors'])) echo '<br><small>' . esc_html(implode(' · ', array_slice((array) $last['errors'], 0, 3))) . '</small>'; ?></p>
-      <p><small>Copied up to Bookly booking #<?php echo intval(eos_opt('last_ca_id', 0)); ?>. Next automatic run: <?php $n = wp_next_scheduled('eos_bookly_sync_event'); echo $n ? esc_html(wp_date('g:i a', $n)) : 'not scheduled'; ?>.</small></p>
+      <p><small>Copied up to Bookly customer #<?php echo intval(eos_opt('last_customer_id', 0)); ?> and booking #<?php echo intval(eos_opt('last_ca_id', 0)); ?>. Next automatic run: <?php $n = wp_next_scheduled('eos_bookly_sync_event'); echo $n ? esc_html(wp_date('g:i a', $n)) : 'not scheduled'; ?>.</small></p>
     <?php endif; ?>
     <details><summary>Diagnostics</summary>
       <table class="widefat striped" style="max-width:900px;margin-top:8px"><thead><tr><th>Bookly table</th><th>Found</th><th>Columns</th></tr></thead><tbody>

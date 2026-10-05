@@ -92,6 +92,12 @@ export async function catalogue(org: PublicOrg, opts: { courseSlug?: string; day
   };
 }
 
+/** Does this business give certificates? (a certificate design exists and is switched on) */
+export async function certificatesOffered(orgId: string, db = createServiceClient()) {
+  const { data, error } = await db.from("booking_certificate_templates").select("auto_issue").eq("organisation_id", orgId).eq("is_default", true).maybeSingle();
+  return !error && !!data;
+}
+
 /* ------------------------------------------------------------------ students */
 
 export async function ensureStudent(db: SupabaseClient, orgId: string, p: { name: string; email: string | null; phone: string | null; marketing?: boolean; source?: string }) {
@@ -617,14 +623,19 @@ export async function runBookingJobs(db: SupabaseClient) {
     }
   }
 
+  // Certificates for finished classes (before the thank-you, so it can link to them)
+  try { const { runCertificateJobs } = await import("./certificates"); (out as Record<string, number>).certificates = await runCertificateJobs(db); } catch { /* before the 0050 update */ }
+
   // Thank-you: 2+ hours after the session ended, within 3 days (not imported history)
   const { data: done } = await db.from("bookings").select(FULL_INNER).in("status", ["confirmed", "attended"]).is("followup_sent_at", null).in("source", ["website", "wordpress", "office"])
     .lt("session.ends_at", new Date(now - 2 * 3600e3).toISOString()).gt("session.ends_at", new Date(now - 3 * 86400e3).toISOString()).not("contact_email", "is", null).limit(200);
   for (const b of ((done ?? []) as unknown as FullBooking[]).filter((x) => x.session)) {
     const org = await getOrg(b.organisation_id);
     if (!org.settings.followup) { await db.from("bookings").update({ followup_sent_at: new Date().toISOString() }).eq("id", b.id); continue; }
+    const { data: cert } = await db.from("booking_certificates").select("verify_token").eq("booking_id", b.id).eq("attendee_index", 0).eq("status", "issued").maybeSingle();
     const m = thankYouEmail(brandOf(org), { firstName: b.contact_name.split(/\s+/)[0], course: b.course.name, reviewUrl: org.settings.review_url, bookUrl: bookUrl(org),
-      giftUrl: b.course.gift_enabled ? bookUrl(org, "/gift") : null, social: org.settings.social });
+      giftUrl: b.course.gift_enabled ? bookUrl(org, "/gift") : null, social: org.settings.social,
+      certificateUrl: cert ? bookUrl(org, `/certificate/${cert.verify_token}`) : null, accountUrl: cert ? bookUrl(org, "/account") : null });
     if (await safeSend({ to: b.contact_email!, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
       await db.from("bookings").update({ followup_sent_at: new Date().toISOString() }).eq("id", b.id);
       out.thanks++;

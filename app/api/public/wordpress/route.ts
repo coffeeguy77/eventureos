@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { hashIntakeKey, KEY_PATTERN } from "@/lib/intake/keys";
-import { importBookly, type BooklyPayload } from "@/lib/bookings/import";
+import { importBookly, importBooklyCustomers, type BooklyCustomer, type BooklyPayload } from "@/lib/bookings/import";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -39,6 +39,15 @@ export async function POST(req: NextRequest) {
   if (body.action === "ping") {
     const base = (process.env.APP_URL?.trim() || "https://www.eventureos.com.au").replace(/\/+$/, "");
     return json({ ok: true, organisation: org?.name, slug: org?.slug, booking_page: `${base}/book/${org?.slug}`, embed_script: `${base}/embed.js` });
+  }
+  if (body.action === "bookly_customers") {
+    try {
+      const r = await importBooklyCustomers(db, conn.organisation_id, Array.isArray(body.customers) ? (body.customers as BooklyCustomer[]) : [], typeof body.tz === "string" ? body.tz : null);
+      return json({ ok: true, ...r });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return json({ ok: false, error: /external_ref/.test(msg) ? "EventureOS needs database update 0050 first" : msg }, 500);
+    }
   }
   if (body.action === "bookly_sync") {
     try {

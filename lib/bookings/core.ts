@@ -34,11 +34,13 @@ export interface BookingSettings {
   social: { facebook?: string; instagram?: string };
   show_seats_left: boolean;
   waitlist: boolean;
+  /** Questions people ask, shown beside the booking form */
+  faqs: { q: string; a: string }[];
 }
 
 export const DEFAULT_SETTINGS: BookingSettings = {
   enabled: true, hold_minutes: 30, cancel_hours: 48, reminder_hours: 48, followup: true, review_url: null,
-  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true,
+  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [],
 };
 
 const num = (v: unknown, d: number, min: number, max: number) => {
@@ -66,6 +68,8 @@ export function readSettings(orgSettings: unknown): BookingSettings {
     social: { facebook: url(social.facebook) ?? undefined, instagram: url(social.instagram) ?? undefined },
     show_seats_left: raw.show_seats_left !== false,
     waitlist: raw.waitlist !== false,
+    faqs: Array.isArray(raw.faqs) ? (raw.faqs as unknown[]).map((f) => (f && typeof f === "object" ? { q: str((f as Record<string, unknown>).q, 200) ?? "", a: str((f as Record<string, unknown>).a, 2000) ?? "" } : null))
+      .filter((f): f is { q: string; a: string } => !!f && !!f.q && !!f.a).slice(0, 12) : [],
   };
 }
 

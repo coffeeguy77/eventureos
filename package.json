@@ -2,7 +2,7 @@
   "name": "eventureos",
   "version": "0.1.0",
   "private": true,
-  "description": "EventureOS \u2014 the operating system for event businesses",
+  "description": "EventureOS — the operating system for event businesses",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,6 +11,7 @@
     "seed:generate": "python3 supabase/seed/generate_seed.py"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
     "clsx": "2.1.1",
