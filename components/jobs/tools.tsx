@@ -19,27 +19,38 @@ const chip = (on: boolean) => `inline-flex min-h-10 items-center gap-1.5 rounded
 
 /* ------------------------------------------------------------------ sign in / sign up */
 
-export function BaristaAuth({ slug, startWith = "signin" }: { slug: string; startWith?: "signin" | "signup" }) {
+export function BaristaAuth({ slug, startWith = "signin", tone = "light" }: { slug: string; startWith?: "signin" | "signup"; tone?: "light" | "dark" }) {
   const [mode, setMode] = useState(startWith);
   const [f, setF] = useState({ name: "", email: "" });
   const [done, setDone] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  if (done) return <div className="rounded-xl bg-emerald-50 p-4 text-[0.9375rem] text-emerald-900"><Mail className="mb-2 h-6 w-6" />{done}</div>;
+  const dark = tone === "dark";
+  const field = dark
+    ? "h-12 w-full rounded-xl border border-white/15 bg-white/5 pl-11 pr-3.5 text-base text-white placeholder:text-white/40 focus:border-[var(--b)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--b)_35%,transparent)]"
+    : input;
+  const lab = dark ? "mb-1.5 block text-[0.8438rem] font-medium text-white/85" : "mb-1 block text-[0.8125rem] font-medium text-ink";
+  if (done) return <div className={`rounded-xl p-4 text-[0.9375rem] ${dark ? "bg-emerald-500/15 text-emerald-100" : "bg-emerald-50 text-emerald-900"}`}><Mail className="mb-2 h-6 w-6" />{done}</div>;
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); setErr(null); start(async () => {
+    <form className="space-y-3.5" onSubmit={(e) => { e.preventDefault(); setErr(null); start(async () => {
       const r = await jobsLoginAction(slug, f.email, mode === "signup" ? f.name : undefined).catch(() => ({ ok: false as const, error: "Couldn't reach us — try again." }));
       if (r.ok) setDone(r.data); else setErr(r.error);
     }); }}>
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 text-[0.875rem] font-semibold">
-        <button type="button" onClick={() => setMode("signin")} className={`h-10 rounded-lg ${mode === "signin" ? "bg-surface text-ink shadow-sm" : "text-ink-muted"}`}>I trained with you</button>
-        <button type="button" onClick={() => setMode("signup")} className={`h-10 rounded-lg ${mode === "signup" ? "bg-surface text-ink shadow-sm" : "text-ink-muted"}`}>I&apos;m new here</button>
+      <div className={`grid grid-cols-2 gap-1 rounded-xl p-1 text-[0.9063rem] font-semibold ${dark ? "bg-white/5 ring-1 ring-white/10" : "bg-zinc-100"}`}>
+        {(["signin", "signup"] as const).map((m) => (
+          <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
+            className={`h-11 rounded-lg transition ${mode === m ? (dark ? "bg-[var(--b)] text-[var(--on-b)]" : "bg-surface text-ink shadow-sm") : (dark ? "text-white/80 hover:text-white" : "text-ink-muted")}`}>
+            {m === "signin" ? "I trained with you" : <>I&apos;m new here</>}
+          </button>
+        ))}
       </div>
-      {mode === "signup" && <div><Label htmlFor="ba-n">Your name</Label><input id="ba-n" required autoComplete="name" className={input} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>}
-      <div><Label htmlFor="ba-e">{mode === "signup" ? "Email" : "Email you booked with"}</Label><input id="ba-e" type="email" inputMode="email" autoComplete="email" required className={input} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
-      <button type="submit" disabled={pending} className={`${btn} w-full`}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "signup" ? "Create my free profile" : "Email me a sign-in link"}</button>
-      {err && <p className="text-[0.875rem] font-medium text-rose-700">{err}</p>}
-      <p className="text-[0.8125rem] text-ink-muted">No password — we email you a link that signs you in.</p>
+      {mode === "signup" && <div><label htmlFor="ba-n" className={lab}>Your name</label><input id="ba-n" required autoComplete="name" className={dark ? field.replace("pl-11", "pl-3.5") : input} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>}
+      <div><label htmlFor="ba-e" className={lab}>{mode === "signup" ? "Email" : "Email you booked with"}</label>
+        <div className="relative">{dark && <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-white/60" />}
+          <input id="ba-e" type="email" inputMode="email" autoComplete="email" required className={field} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div></div>
+      <button type="submit" disabled={pending} className={`${btn} w-full ${dark ? "h-[52px] text-[1rem]" : ""}`}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "signup" ? "Create my free profile" : "Email me a sign-in link"}{dark && !pending && <span aria-hidden>→</span>}</button>
+      {err && <p className={`text-[0.875rem] font-medium ${dark ? "text-rose-300" : "text-rose-700"}`}>{err}</p>}
+      <p className={`text-[0.8125rem] ${dark ? "text-white/60" : "text-ink-muted"}`}>No password — we email you a link that signs you in.</p>
     </form>
   );
 }
@@ -136,7 +147,7 @@ export function ProfileEditor({ slug, initial, student, certificates }: { slug: 
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[1.0625rem] font-semibold text-ink">{live ? "Your profile is on" : "Your profile is off"}</p>
-            <p className="text-[0.875rem] text-ink-muted">{live ? "Approved employers can find you and send you messages." : "Nobody can see it until you switch it on. Add your suburb first."}</p>
+            <p className="text-[0.875rem] text-ink-muted">{live ? "Your card is on the public job board (first name and initial, photo, suburb, skills and availability), and employers can message you. Your phone and email stay private." : "Nobody can see it until you switch it on. When it's on, your card (first name and initial, photo, suburb, skills and availability) shows on the public job board. Add your suburb first."}</p>
           </div>
           {live
             ? <button type="button" disabled={pending} onClick={() => save("hidden")} className={btn2}><EyeOff className="h-4 w-4" />Switch off</button>

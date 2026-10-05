@@ -65,7 +65,7 @@ export function looksLikeContact(text: string) {
   return /[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(text) || /(?:\+?61|0)[\s-]?4(?:[\s-]?\d){8}/.test(text);
 }
 
-export interface JobSettings { enabled: boolean; name: string; welcomeSubject: string; welcomeBody: string; batchSize: number; dailyLimit: number; employerApproval: boolean }
+export interface JobSettings { enabled: boolean; name: string; welcomeSubject: string; welcomeBody: string; batchSize: number; dailyLimit: number; employerApproval: boolean; heroImage: string | null }
 export function readJobSettings(orgSettings: unknown, orgName: string): JobSettings {
   const raw = (orgSettings && typeof orgSettings === "object" ? (orgSettings as Record<string, unknown>).jobs : null) as Record<string, unknown> | null;
   const r = raw && typeof raw === "object" ? raw : {};
@@ -82,6 +82,8 @@ export function readJobSettings(orgSettings: unknown, orgName: string): JobSetti
     dailyLimit: Number.isFinite(d) && d > 0 ? Math.max(10, Math.min(5000, Math.round(d))) : 40,
     // Off: businesses can search and post as soon as they sign up. On: the office approves each one first.
     employerApproval: r.employerApproval === true,
+    // Wide photo behind the top of the job board's front page
+    heroImage: typeof r.heroImage === "string" && /^https:\/\/[^\s"'<>]+$/.test(r.heroImage) && r.heroImage.length < 600 ? r.heroImage : null,
   };
 }
 

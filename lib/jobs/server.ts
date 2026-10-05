@@ -515,3 +515,23 @@ export async function unreadFor(db: SupabaseClient, side: "employer" | "barista"
   const { data } = await db.from("job_threads").select(col).eq(side === "employer" ? "employer_id" : "profile_id", id).gt(col, 0).limit(200);
   return ((data ?? []) as Record<string, number>[]).reduce((n, r) => n + (r[col] ?? 0), 0);
 }
+
+/** Baristas shown on the public front page: first name + initial, photo, suburb, skills and availability — never contact details. */
+export interface PublicCard { id: string; name: string; photo_url: string | null; suburb: string | null; state: string | null; tags: string[]; skills: string[]; work_types: string[]; availability: Availability; summary: string; note: string | null; active: boolean }
+export async function publicBaristas(db: SupabaseClient, orgId: string, limit = 60): Promise<PublicCard[]> {
+  const { data } = await db.from("job_profiles").select(`${PROFILE_COLS}, student:booking_students!inner(name)`).eq("organisation_id", orgId).eq("status", "active")
+    .order("last_active_at", { ascending: false, nullsFirst: false }).limit(limit);
+  const recent = Date.now() - 14 * 86400e3;
+  return ((data ?? []) as unknown as (Profile & { student: { name: string } })[]).map((p) => {
+    const av = readAvailability(p.availability);
+    const tags = [...p.skills.slice(0, 3), ...(p.work_types.includes("events") ? ["Events"] : [])].slice(0, 4);
+    return { id: p.id, name: publicName(p.student.name, p.display_name), photo_url: p.photo_url, suburb: p.suburb, state: p.state, tags, skills: p.skills, work_types: p.work_types,
+      availability: av, summary: availabilitySummary(av), note: p.availability_note, active: !!p.last_active_at && Date.parse(p.last_active_at) > recent };
+  });
+}
+
+/** How many people have finished a class (certificates issued) — for "N+ trained students". */
+export async function trainedCount(db: SupabaseClient, orgId: string) {
+  const { count } = await db.from("booking_certificates").select("id", { count: "exact", head: true }).eq("organisation_id", orgId).eq("status", "issued");
+  return count ?? 0;
+}
