@@ -5,6 +5,7 @@ import { bookingByToken, bookUrl, emailBits, publicOrg, settleFromStripe } from 
 import { shareLink } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
+import { currentAgent } from "@/lib/bookings/agents";
 import { AutoRefresh } from "@/components/book/auto-refresh";
 import { ShareBox } from "@/components/book/share";
 
@@ -27,6 +28,8 @@ export default async function DonePage({ params, searchParams }: P) {
   const bits = emailBits(org, b);
   const confirmed = ["confirmed", "attended"].includes(b.status);
   const courseUrl = shareLink(bookUrl(org, `/${b.course.slug}`), "share", "referral");
+  // A case manager who just booked a job seeker (agency bookings only)
+  const agent = b.payment_method === "agency" ? await currentAgent(org).catch(() => null) : null;
 
   return (
     <BookShell org={org} embed={false}>
@@ -82,7 +85,16 @@ export default async function DonePage({ params, searchParams }: P) {
           )}
         </div>
 
-        {confirmed && (
+        {agent ? (
+          <div className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
+            <p className="text-[1rem] font-semibold text-ink">Booked by {agent.cm.name.split(/\s+/)[0]}</p>
+            <p className="mb-3 text-[0.875rem] text-ink-muted">We&apos;ve emailed you the course details to pass on{b.contact_email ? `, and sent them to ${b.contact_name.split(/\s+/)[0]} too` : ""}.</p>
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/book/${org.slug}`} className="inline-flex h-11 items-center rounded-xl bg-[var(--b)] px-4 text-[0.875rem] font-semibold text-[var(--on-b)]">Book another job seeker</Link>
+              <Link href={`/book/${org.slug}/agency`} className="inline-flex h-11 items-center rounded-xl px-4 text-[0.875rem] font-semibold text-ink ring-1 ring-line-strong hover:bg-zinc-50">My job seekers</Link>
+            </div>
+          </div>
+        ) : confirmed && (
           <div className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
             <p className="text-[1rem] font-semibold text-ink">Bring a friend?</p>
             <p className="mb-3 text-[0.875rem] text-ink-muted">Share the class — it&apos;s more fun together.</p>

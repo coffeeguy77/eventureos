@@ -158,3 +158,54 @@ export function certificateRequestEmail(b: Brand, o: { name: string; email: stri
   return shell(b, { title: `Certificate request — ${o.name}`, heading: "A past student has asked for their certificate", intro: [`${o.name} (${o.email}) signed in and asked for a certificate, but there's no course on record for them. Check which course they did and issue it from Bookings → Certificates.`],
     buttons: [{ label: "Open certificates", url: o.url }], footer: "Sent by EventureOS bookings." });
 }
+
+/* ------------------------------------------------------------------ employment agency case managers */
+
+export interface CaseManagerBookingInput {
+  firstName: string; student: string; studentEmail: string | null; course: string; reference: string; when: string; time: string; location: string | null;
+  whatToBring: string | null; po: string | null; agency: string; manageUrl: string; googleUrl: string; portalUrl: string; waitlist?: boolean;
+}
+
+/** To the case manager: the course details, laid out so they can forward the email straight to their job seeker. */
+export function caseManagerBookingEmail(b: Brand, o: CaseManagerBookingInput) {
+  return shell(b, {
+    title: `${o.waitlist ? "Waitlisted" : "Booked"}: ${o.student} — ${o.course}, ${o.when}`,
+    heading: `${o.student} is ${o.waitlist ? "on the waitlist for" : "booked into"} ${o.course}`,
+    intro: [
+      `Hi ${o.firstName}, here are the course details for your job seeker. You can forward this email to them — everything they need is below.`,
+      ...(o.studentEmail ? [] : ["We don't have an email for them, so reminders and their certificate will come to you."]),
+    ],
+    badge: `Booking ${o.reference}`,
+    rows: [
+      { label: "Job seeker", value: o.student },
+      { label: "Course", value: o.course },
+      { label: "When", value: `${o.when}\n${o.time}` },
+      ...(o.location ? [{ label: "Where", value: o.location }] : []),
+      ...(o.whatToBring ? [{ label: "What to bring", value: o.whatToBring }] : []),
+      { label: "Invoiced to", value: `${o.agency}${o.po ? ` — PO ${o.po}` : ""}` },
+    ],
+    buttons: [{ label: "Add to calendar", url: o.googleUrl }, { label: "Change date or cancel", url: o.manageUrl }, { label: "All my job seekers", url: o.portalUrl }],
+    after: [`After the course, their certificate is emailed to you too, ready to attach to job applications.`],
+  });
+}
+
+/** To the case manager after the course: the job seeker's certificate (PDF attached). */
+export function caseManagerCertificateEmail(b: Brand, o: { firstName: string; student: string; course: string; date: string; certificateUrl: string; portalUrl: string }) {
+  return shell(b, {
+    title: `Certificate: ${o.student} — ${o.course}`,
+    heading: `${o.student} has completed ${o.course}`,
+    intro: [`Hi ${o.firstName}, ${o.student} finished ${o.course} on ${o.date}. Their certificate is attached as a PDF — ready to add to job applications and their resume.`,
+      "Employers can scan the QR code on the certificate, or open the link below, to check it's genuine."],
+    buttons: [{ label: "View certificate online", url: o.certificateUrl }, { label: "All my job seekers", url: o.portalUrl }],
+  });
+}
+
+export function caseManagerLoginEmail(b: Brand, o: { firstName: string; agency: string; url: string; minutes: number }) {
+  return shell(b, {
+    title: `Your sign-in link — ${b.businessName}`,
+    heading: `Hi ${o.firstName}, here's your sign-in link`,
+    intro: [`Tap the button to see your ${o.agency} job seekers, their bookings and certificates with ${b.businessName}. No password needed.`],
+    buttons: [{ label: "See my job seekers", url: o.url }],
+    after: [`The link works once and expires in ${o.minutes} minutes. If you didn't ask for it, you can ignore this email.`],
+  });
+}

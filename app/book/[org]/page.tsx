@@ -6,6 +6,8 @@ import { catalogue, publicOrg } from "@/lib/bookings/server";
 import { sessionWhen } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
+import { AgentBanner } from "@/components/book/agent-banner";
+import { currentAgent } from "@/lib/bookings/agents";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +36,10 @@ export default async function BookHome({ params, searchParams }: P) {
   try { data = await catalogue(org); } catch { notReady = true; }
   const giftable = data.courses.filter((c) => c.gift_enabled);
 
+  const agent = embed ? null : await currentAgent(org).catch(() => null);
   return (
     <BookShell org={org} embed={embed}>
+      {agent && <AgentBanner orgSlug={org.slug} agent={agent} />}
       {!embed && (
         <div className="mb-6">
           <h1 className="text-[1.625rem] font-bold tracking-tight text-ink sm:text-[2rem]">Book a class</h1>

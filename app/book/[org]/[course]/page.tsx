@@ -6,6 +6,8 @@ import { pickUtm } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
 import { BookingFlow } from "@/components/book/booking-flow";
+import { AgentBanner } from "@/components/book/agent-banner";
+import { currentAgent } from "@/lib/bookings/agents";
 import { InfoPanel } from "@/components/book/info-panel";
 
 export const dynamic = "force-dynamic";
@@ -38,9 +40,12 @@ export default async function CoursePage({ params, searchParams }: P) {
   const pre = typeof sp.session === "string" ? sp.session : null;
   const source = sp.source === "wordpress" ? "wordpress" : "website";
   const certificate = await certificatesOffered(org.id);
+  // A case manager booking a job seeker (not inside the website widget)
+  const agent = embed ? null : await currentAgent(org).catch(() => null);
 
   return (
     <BookShell org={org} embed={embed} wide back={embed ? undefined : { href: `/book/${org.slug}`, label: "All classes" }}>
+      {agent && <AgentBanner orgSlug={org.slug} agent={agent} />}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 space-y-6">
         <section className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
@@ -60,6 +65,7 @@ export default async function CoursePage({ params, searchParams }: P) {
           org={{ slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist && course.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours }}
           course={{ id: course.id, name: course.name, price: Number(course.price), maxSeats: course.max_seats_per_booking, questions: course.questions ?? [] }}
           sessions={sessions} preselect={pre} utm={pickUtm(sp)} embed={embed} source={source}
+          agent={agent ? { code: agent.agency.code, agency: agent.agency.name, price: agent.agency.price === null ? null : Number(agent.agency.price), poRequired: agent.agency.po_required, name: agent.cm.name, site: agent.cm.site } : null}
         />
         </div>
         <InfoPanel orgSlug={org.slug} orgName={org.name} phone={org.contact_phone} location={course.location} whatToBring={course.what_to_bring} certificate={certificate}

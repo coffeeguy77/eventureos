@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { Check, ChevronDown, ChevronLeft, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2 } from "lucide-react";
 import type { PublicSession } from "@/lib/bookings/server";
 import type { Question } from "@/lib/bookings/core";
-import { checkAgencyAction, checkGiftAction, startBookingAction } from "@/app/book/actions";
+import { checkGiftAction, startBookingAction } from "@/app/book/actions";
+import { agencyCodeAction } from "@/app/book/agent-actions";
 import { goTop } from "./embed-bridge";
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   utm: Record<string, string>;
   embed: boolean;
   source: "website" | "wordpress";
+  /** A case manager booking a job seeker (signed in through the agency page) */
+  agent?: { code: string; agency: string; price: number | null; poRequired: boolean; name: string; site: string | null } | null;
 }
 
 type Pay = "card" | "gift" | "agency";
@@ -22,7 +25,7 @@ type Pay = "card" | "gift" | "agency";
 const input = "h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-[var(--b)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--b)_25%,transparent)]";
 const label = "mb-1.5 block text-[0.8125rem] font-medium text-ink";
 
-export function BookingFlow({ org, course, sessions, preselect, utm, source }: Props) {
+export function BookingFlow({ org, course, sessions, preselect, utm, source, agent }: Props) {
   const fmt = useMemo(() => ({
     month: new Intl.DateTimeFormat("en-AU", { month: "long", year: "numeric", timeZone: org.timezone }),
     day: new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: org.timezone }),
@@ -47,10 +50,14 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
   const [guests, setGuests] = useState<string[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState(""); const [marketing, setMarketing] = useState(false); const [agree, setAgree] = useState(false);
-  const [pay, setPay] = useState<Pay>("card");
+  const [pay, setPay] = useState<Pay>(agent ? "agency" : "card");
   const [gift, setGift] = useState(""); const [giftOk, setGiftOk] = useState<{ balance: number; label: string } | null>(null);
-  const [agency, setAgency] = useState(""); const [agencyOk, setAgencyOk] = useState<{ name: string; price: number | null; poRequired: boolean } | null>(null);
-  const [po, setPo] = useState({ number: "", site: "", contact: "" });
+  const [agency, setAgency] = useState(agent?.code ?? "");
+  const [agencyOk, setAgencyOk] = useState<{ name: string; price: number | null; poRequired: boolean; managers: { id: string; label: string; site: string | null }[]; ready: boolean } | null>(
+    agent ? { name: agent.agency, price: agent.price, poRequired: agent.poRequired, managers: [], ready: true } : null);
+  const [po, setPo] = useState({ number: "", site: agent?.site ?? "", contact: "" });
+  // Public form: the job seeker picks their case manager from the agency's list, or adds them
+  const [cmId, setCmId] = useState(""); const [newCm, setNewCm] = useState({ name: "", email: "" });
   const [err, setErr] = useState<string | null>(null);
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
@@ -76,8 +83,8 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
   });
   const checkAgency = () => start(async () => {
     setCheckMsg(null); setAgencyOk(null);
-    const r = await checkAgencyAction(org.slug, agency).catch(() => ({ ok: false as const, error: "Couldn't check it — try again." }));
-    if (r.ok) setAgencyOk({ name: r.name, price: r.price, poRequired: r.poRequired }); else setCheckMsg(r.error);
+    const r = await agencyCodeAction(org.slug, agency).catch(() => ({ ok: false as const, error: "Couldn't check it — try again." }));
+    if (r.ok) { setAgencyOk(r.data); setCmId(r.data.managers.length ? "" : "new"); } else setCheckMsg(r.error);
   });
 
   const submit = (e: React.FormEvent) => {
@@ -86,11 +93,14 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
     if (org.terms && !agree) { setErr("Please tick to agree to the booking terms."); return; }
     if (pay === "gift" && !giftOk && !waitlist) { setErr("Check your gift certificate code first (tap Apply)."); return; }
     if (pay === "agency" && !agencyOk && !waitlist) { setErr("Check your agency code first (tap Apply)."); return; }
+    if (pay === "agency" && agencyOk?.ready && !agent && !waitlist && !cmId) { setErr("Choose your case manager (or add their details)."); return; }
     setErr(null); setFallback(null);
     start(async () => {
       const r = await startBookingAction({
         orgSlug: org.slug, sessionId: session.id, seats: n, name, email, phone, attendees: [name, ...guests].slice(0, n), answers, notes, marketing,
         giftCode: pay === "gift" ? gift : null, agencyCode: pay === "agency" ? agency : null, po: pay === "agency" ? po : null,
+        caseManagerId: pay === "agency" && !agent && cmId && cmId !== "new" ? cmId : null,
+        newCaseManager: pay === "agency" && !agent && cmId === "new" && newCm.email.trim() ? newCm : null,
         waitlist, utm, source,
       }).catch(() => ({ ok: false as const, error: "Couldn't reach the booking system — check your connection and try again." }));
       if (!r.ok) { setErr(r.error); return; }
@@ -165,7 +175,8 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
         <>
           {/* 2. People */}
           <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-            <Step n={2} title="Who's coming?" done={name.length > 1 && /@/.test(email)} />
+            <Step n={2} title={agent ? "Who's the job seeker?" : "Who's coming?"} done={name.length > 1 && (!!agent || /@/.test(email))} />
+            {agent && <p className="mb-4 rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted">Booking as <span className="font-semibold text-ink">{agent.name}</span> · {agent.agency}. You&apos;ll get the course details to pass on, and their certificate after the course.</p>}
             {waitlist && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900">This date is full. Join the waitlist and we&apos;ll email you if a seat opens up — nothing to pay now.</p>}
             <div className="mb-4 flex items-center justify-between gap-3">
               <span className="text-[0.9375rem] font-medium text-ink">Number of people</span>
@@ -176,9 +187,11 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
               </span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2"><label className={label} htmlFor="bk-name">Your name</label><input id="bk-name" className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={160} /></div>
-              <div><label className={label} htmlFor="bk-email">Email</label><input id="bk-email" type="email" inputMode="email" className={input} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required maxLength={254} /></div>
-              <div><label className={label} htmlFor="bk-phone">Mobile</label><input id="bk-phone" type="tel" inputMode="tel" className={input} value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" maxLength={40} /></div>
+              <div className="sm:col-span-2"><label className={label} htmlFor="bk-name">{agent ? "Job seeker's full name" : "Your name"}</label><input id="bk-name" className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete={agent ? "off" : "name"} required maxLength={160} />
+                {agent && <p className="mt-1 text-[0.75rem] text-ink-muted">As it should appear on their certificate.</p>}</div>
+              <div><label className={label} htmlFor="bk-email">{agent ? <>Their email <span className="font-normal text-ink-faint">(optional)</span></> : "Email"}</label><input id="bk-email" type="email" inputMode="email" className={input} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete={agent ? "off" : "email"} required={!agent} maxLength={254} />
+                {agent && <p className="mt-1 text-[0.75rem] text-ink-muted">For reminders and their certificate. Leave blank and we&apos;ll send everything to you.</p>}</div>
+              <div><label className={label} htmlFor="bk-phone">{agent ? "Their mobile" : "Mobile"}</label><input id="bk-phone" type="tel" inputMode="tel" className={input} value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete={agent ? "off" : "tel"} maxLength={40} /></div>
               {Array.from({ length: n - 1 }, (_, i) => (
                 <div key={i}><label className={label} htmlFor={`bk-g${i}`}>Person {i + 2} name <span className="font-normal text-ink-faint">(optional)</span></label>
                   <input id={`bk-g${i}`} className={input} value={guests[i] ?? ""} maxLength={160} onChange={(e) => { const g = [...guests]; g[i] = e.target.value; setGuests(g); }} /></div>
@@ -212,7 +225,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
           {!waitlist && (
             <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
               <Step n={3} title="Payment" />
-              <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="How are you paying?">
+              {!agent && <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="How are you paying?">
                 {([["card", "Card", CreditCard, "Apple Pay, Google Pay & cards"], ["gift", "Gift certificate", Gift, "Use a code"], ["agency", "Employment agency", Building2, "Purchase order"]] as const).map(([k, l, Icon, hint]) => (
                   <button key={k} type="button" role="radio" aria-checked={pay === k} onClick={() => { setPay(k); setCheckMsg(null); setErr(null); }}
                     className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left ${pay === k ? "border-[var(--b)] ring-2 ring-[var(--b)]" : "border-line hover:bg-zinc-50"}`}>
@@ -220,7 +233,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
                     <span><span className="block text-[0.9063rem] font-semibold text-ink">{l}</span><span className="block text-[0.75rem] text-ink-muted">{hint}</span></span>
                   </button>
                 ))}
-              </div>
+              </div>}
               {pay === "gift" && (
                 <div className="mt-4">
                   <label className={label} htmlFor="bk-gift">Gift certificate code</label>
@@ -233,20 +246,37 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source }: P
               )}
               {pay === "agency" && (
                 <div className="mt-4 space-y-3">
-                  <p className="text-[0.8438rem] text-ink-muted">Booked through an employment services provider? Enter the code and purchase order from your case manager — we&apos;ll invoice them, nothing to pay today.</p>
-                  <div>
+                  {agent
+                    ? <p className="text-[0.8438rem] text-ink-muted">Invoiced to <span className="font-semibold text-ink">{agent.agency}</span> against the purchase order — nothing to pay today.</p>
+                    : <p className="text-[0.8438rem] text-ink-muted">Booked through an employment services provider? Enter the code and purchase order from your case manager — we&apos;ll invoice them, nothing to pay today. Case manager booking for a job seeker? <a href={`/book/${org.slug}/agency`} className="font-semibold text-[var(--b)] hover:underline">Use the case manager page</a>.</p>}
+                  {!agent && <div>
                     <label className={label} htmlFor="bk-agency">Agency code</label>
                     <div className="flex gap-2">
                       <input id="bk-agency" className={`${input} uppercase tracking-wider`} value={agency} onChange={(e) => { setAgency(e.target.value); setAgencyOk(null); }} autoCapitalize="characters" maxLength={40} />
                       <button type="button" onClick={checkAgency} disabled={pending || agency.trim().length < 3} className="h-12 shrink-0 rounded-xl border border-line-strong px-4 text-[0.9375rem] font-semibold text-ink hover:bg-zinc-50 disabled:opacity-40">Apply</button>
                     </div>
                     {agencyOk && <p className="mt-2 text-[0.875rem] font-medium text-emerald-700">✓ {agencyOk.name}</p>}
-                  </div>
+                  </div>}
                   {agencyOk && (
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className={`grid gap-3 ${agent ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
                       <div><label className={label} htmlFor="po-n">Purchase order no.{agencyOk.poRequired ? "" : " (optional)"}</label><input id="po-n" className={input} value={po.number} onChange={(e) => setPo({ ...po, number: e.target.value })} required={agencyOk.poRequired} maxLength={60} placeholder="e.g. E0668613" /></div>
                       <div><label className={label} htmlFor="po-s">Office / site</label><input id="po-s" className={input} value={po.site} onChange={(e) => setPo({ ...po, site: e.target.value })} maxLength={160} placeholder="e.g. Belconnen" /></div>
-                      <div><label className={label} htmlFor="po-c">Case manager</label><input id="po-c" className={input} value={po.contact} onChange={(e) => setPo({ ...po, contact: e.target.value })} maxLength={160} /></div>
+                      {!agent && !agencyOk.ready && <div><label className={label} htmlFor="po-c">Case manager</label><input id="po-c" className={input} value={po.contact} onChange={(e) => setPo({ ...po, contact: e.target.value })} maxLength={160} /></div>}
+                      {!agent && agencyOk.ready && (
+                        <div><label className={label} htmlFor="po-c">Case manager</label>
+                          <select id="po-c" className={input} value={cmId} onChange={(e) => setCmId(e.target.value)}>
+                            {agencyOk.managers.length > 0 && <option value="">Choose…</option>}
+                            {agencyOk.managers.map((m) => <option key={m.id} value={m.id}>{m.label}{m.site ? ` — ${m.site}` : ""}</option>)}
+                            <option value="new">{agencyOk.managers.length ? "Not listed — add them" : "Add your case manager"}</option>
+                          </select></div>
+                      )}
+                    </div>
+                  )}
+                  {agencyOk?.ready && !agent && cmId === "new" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div><label className={label} htmlFor="cm-n">Case manager&apos;s name</label><input id="cm-n" className={input} value={newCm.name} onChange={(e) => setNewCm({ ...newCm, name: e.target.value })} maxLength={160} required /></div>
+                      <div><label className={label} htmlFor="cm-e">Case manager&apos;s work email</label><input id="cm-e" type="email" className={input} value={newCm.email} onChange={(e) => setNewCm({ ...newCm, email: e.target.value })} maxLength={254} required /></div>
+                      <p className="text-[0.75rem] text-ink-muted sm:col-span-2">We&apos;ll send them the course details and your certificate, so they can help with your job search.</p>
                     </div>
                   )}
                 </div>

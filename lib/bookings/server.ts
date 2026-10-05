@@ -131,6 +131,8 @@ export interface StartBookingInput {
   name: string; email: string; phone?: string | null; attendees?: string[]; answers?: Record<string, string>; notes?: string | null; marketing?: boolean;
   giftCode?: string | null; agencyCode?: string | null; po?: { number?: string | null; site?: string | null; contact?: string | null } | null;
   waitlist?: boolean; utm?: Record<string, string>; source?: "website" | "wordpress";
+  /** Agency bookings: the case manager (picked from the list, or the signed-in one), or a new one typed in */
+  caseManagerId?: string | null; newCaseManager?: { name: string; email: string; phone?: string | null; site?: string | null } | null;
 }
 export type StartResult = { ok: true; redirect: string } | { ok: false; error: string; soldOut?: boolean };
 
@@ -152,7 +154,9 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   const email = cleanEmail(input.email);
   const phone = cleanPhone(input.phone);
   if (name.length < 2) return { ok: false, error: "Enter your name." };
-  if (!email) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
+  // A case manager booking a job seeker may not have their email — everything then goes to the case manager
+  const viaCaseManager = !!input.agencyCode?.trim() && !!(input.caseManagerId || input.newCaseManager);
+  if (!email && (!viaCaseManager || (input.email ?? "").trim())) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
   const seats = Math.max(1, Math.min(course.max_seats_per_booking, Math.round(Number(input.seats) || 1)));
   const attendees = (input.attendees ?? []).map((a) => (a ?? "").trim().slice(0, 160)).slice(0, seats);
   while (attendees.length < seats) attendees.push(attendees.length === 0 ? name : "");
@@ -170,16 +174,38 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     agency = a as Agency;
     if (agency.po_required && !input.po?.number?.trim()) return { ok: false, error: "Enter the purchase order number from your agency." };
   }
+  // The agency's case manager for this job seeker
+  let caseManager: { id: string; name: string; site: string | null } | null = null;
+  if (agency && (input.caseManagerId || input.newCaseManager)) {
+    const { addCaseManager, caseManagerById } = await import("./agents");
+    if (input.caseManagerId) {
+      const cm = await caseManagerById(db, org.id, input.caseManagerId, agency.id);
+      if (!cm || !cm.active) return { ok: false, error: "Choose your case manager again." };
+      caseManager = cm;
+    } else if (input.newCaseManager) {
+      const r = await addCaseManager(db, org.id, agency.id, input.newCaseManager, "booking");
+      if (!r.ok) return { ok: false, error: r.error };
+      caseManager = r.data;
+    }
+  }
+  if (!email && !caseManager) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
   const priceEach = agency ? Number(agency.price ?? course.agency_price ?? session.price ?? course.price) : Number(session.price ?? course.price);
 
-  const studentId = await ensureStudent(db, org.id, { name, email, phone, marketing: input.marketing, source: input.source ?? "website" });
+  // No email (booked by a case manager): reuse a student with the same name and phone rather than making a duplicate
+  let studentId: string | null = null;
+  if (!email && phone) {
+    const { data: same } = await db.from("booking_students").select("id").eq("organisation_id", org.id).eq("phone", phone).ilike("name", name.replace(/[%_\\]/g, "\\$&")).limit(1).maybeSingle();
+    studentId = (same?.id as string) ?? null;
+  }
+  studentId ??= await ensureStudent(db, org.id, { name, email, phone, marketing: input.marketing, source: input.source ?? "website" });
   const holdMinutes = org.settings.hold_minutes;
   const payload = {
     student_id: studentId, contact_name: name, contact_email: email, contact_phone: phone,
     attendees: attendees.map((n, i) => ({ name: n || (i === 0 ? name : `Guest ${i + 1}`) })),
     answers: input.answers ?? {}, notes: input.notes?.trim().slice(0, 2000) || null, price_each: priceEach,
     payment_method: agency ? "agency" : "stripe", source: input.source ?? "website",
-    agency_id: agency?.id ?? null, po_number: input.po?.number?.trim().slice(0, 60) || null, po_site: input.po?.site?.trim().slice(0, 160) || null, po_contact: input.po?.contact?.trim().slice(0, 160) || null,
+    agency_id: agency?.id ?? null, po_number: input.po?.number?.trim().slice(0, 60) || null,
+    po_site: input.po?.site?.trim().slice(0, 160) || caseManager?.site || null, po_contact: caseManager?.name ?? (input.po?.contact?.trim().slice(0, 160) || null),
     utm: input.utm ?? {},
   };
   const reserve = (waitlist: boolean) => db.rpc("booking_reserve", {
@@ -193,6 +219,11 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     return { ok: false, error: msg, soldOut: /sold out|seats? left/i.test(msg) };
   }
   const bookingId = id as string;
+  if (caseManager) {
+    const { error: cmErr } = await db.from("bookings").update({ case_manager_id: caseManager.id }).eq("id", bookingId);
+    if (cmErr) console.error("case manager link", cmErr.message);
+    await db.from("booking_case_managers").update({ last_used_at: new Date().toISOString() }).eq("id", caseManager.id);
+  }
   const { data: b } = await db.from("bookings").select("id, reference, status, total, gift_amount, manage_token").eq("id", bookingId).single();
   const bk = b as { id: string; reference: string; status: string; total: number; gift_amount: number; manage_token: string };
   const doneUrl = bookUrl(org, `/done/${bk.manage_token}`);
@@ -334,6 +365,9 @@ export async function finalizeBooking(db: SupabaseClient, bookingId: string) {
     await db.from("bookings").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", b.id);
     await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: b.status === "waitlist" ? "booking.waitlisted" : "booking.confirmed",
       entity_type: "booking", entity_id: b.id, summary: `${b.reference} ${b.status === "waitlist" ? "joined the waitlist for" : "booked"} ${b.course.name} (${bits.w.short}) — ${b.contact_name}, ${b.seats} seat${b.seats === 1 ? "" : "s"}${notes.length ? ` · ${notes.join("; ")}` : ""}` });
+  }
+  if (b.agency_id && ["confirmed", "waitlist"].includes(b.status)) {
+    try { const { notifyCaseManager } = await import("./agents"); await notifyCaseManager(db, b.id); } catch (e) { console.error("case manager email", e); }
   }
   await syncSessionBlock(db, org, b.session_id).catch((e) => console.error("session block", e));
 }
@@ -629,6 +663,10 @@ export async function runBookingJobs(db: SupabaseClient) {
     (out as Record<string, number>).certificates = await runCertificateJobs(db);
     (out as Record<string, number>).certificateEmails = await sendCertificateEmails(db);
   } catch { /* before the 0050 update */ }
+  try {
+    const { sendCaseManagerCertificates } = await import("./agents");
+    (out as Record<string, number>).caseManagerCertificates = await sendCaseManagerCertificates(db);
+  } catch { /* before the 0052 update */ }
 
   // Thank-you: 2+ hours after the session ended, within 3 days (not imported history)
   const { data: done } = await db.from("bookings").select(FULL_INNER).in("status", ["confirmed", "attended"]).is("followup_sent_at", null).in("source", ["website", "wordpress", "office"])

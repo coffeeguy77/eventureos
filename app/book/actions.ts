@@ -8,7 +8,16 @@ const fail = (e: unknown): StartResult => ({ ok: false, error: e instanceof Erro
 const notReady = (m: string) => /booking_|relation .* does not exist|schema cache/i.test(m);
 
 export async function startBookingAction(input: StartBookingInput): Promise<StartResult> {
-  try { return await startBooking(input); }
+  try {
+    // A signed-in case manager booking with their own agency's code: the booking is theirs (never trust the browser for this)
+    if (input.agencyCode?.trim()) {
+      const org = await publicOrg(input.orgSlug);
+      const { currentAgent } = await import("@/lib/bookings/agents");
+      const agent = org ? await currentAgent(org).catch(() => null) : null;
+      if (agent && agent.agency.code === normCode(input.agencyCode)) input = { ...input, caseManagerId: agent.cm.id, newCaseManager: null };
+    } else input = { ...input, caseManagerId: null, newCaseManager: null };
+    return await startBooking(input);
+  }
   catch (e) { return notReady(String(e)) ? { ok: false, error: "Online booking is being set up — please try again soon." } : fail(e); }
 }
 

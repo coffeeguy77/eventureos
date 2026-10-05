@@ -4,6 +4,9 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
 import { money } from "@/lib/format";
 import { AgencyEditor, ApproveInvoice } from "@/components/bookings/agency-tools";
+import { CaseManagers, type CM } from "@/components/bookings/case-managers";
+import { createServiceClient } from "@/lib/integrations/runtime";
+import { appBaseUrl } from "@/lib/integrations/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +23,19 @@ export default async function AgenciesPage() {
   const agencies = (data ?? []) as unknown as A[];
   const list = (drafts ?? []) as unknown as D[];
   const canApprove = ["owner", "admin", "manager"].includes(role);
+  // Case managers per agency (quietly none before the 0052 update), how many job seekers each has booked, and CRM contacts to import
+  const { data: cms, error: cmErr } = await supabase.from("booking_case_managers").select("id, agency_id, name, email, phone, site, active, source, last_used_at").eq("organisation_id", org.id).order("active", { ascending: false }).order("name");
+  const counts = new Map<string, number>();
+  if (!cmErr && (cms ?? []).length) {
+    const { data: bk } = await supabase.from("bookings").select("case_manager_id").eq("organisation_id", org.id).not("case_manager_id", "is", null).limit(10000);
+    for (const r of (bk ?? []) as { case_manager_id: string }[]) counts.set(r.case_manager_id, (counts.get(r.case_manager_id) ?? 0) + 1);
+  }
+  const crm = new Map<string, number>();
+  for (const a of agencies.filter((x) => x.customer_id)) {
+    const { count } = await createServiceClient().from("contacts").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("customer_id", a.customer_id!).not("email", "is", null);
+    crm.set(a.id, count ?? 0);
+  }
+  const portalUrl = `${appBaseUrl()}/book/${org.slug}/agency`;
 
   return (
     <>
@@ -46,7 +62,15 @@ export default async function AgenciesPage() {
       </section>
       <h2 className="mb-2 text-[0.9375rem] font-semibold text-ink">Agencies</h2>
       <div className="space-y-3">
-        {agencies.map((a) => <AgencyEditor key={a.id} agency={{ ...a, customer_name: a.customer?.name ?? null }} />)}
+        {agencies.map((a) => (
+          <div key={a.id} className="space-y-2">
+            <AgencyEditor agency={{ ...a, customer_name: a.customer?.name ?? null }} />
+            {cmErr ? <p className="px-1 text-[0.75rem] text-ink-muted">Run the 0052 database update to add case managers.</p> : (
+              <CaseManagers agencyId={a.id} agencyName={a.name} portalUrl={portalUrl} canManage={canApprove} crmContacts={crm.get(a.id) ?? 0}
+                list={((cms ?? []) as (Omit<CM, "seekers"> & { agency_id: string })[]).filter((c) => c.agency_id === a.id).map((c) => ({ ...c, seekers: counts.get(c.id) ?? 0 }))} />
+            )}
+          </div>
+        ))}
         <AgencyEditor agency={null} />
       </div>
     </>
