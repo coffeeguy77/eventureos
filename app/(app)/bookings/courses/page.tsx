@@ -25,8 +25,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       <PageHeader title="Courses" subtitle="What people can book: price, seats, calendar and invoice details. Then add the dates." />
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-4">
-          {courses.map((c) => <CourseEditor key={c.id} course={c} calendars={calendars} upcoming={count.get(c.id) ?? 0} startOpen={sp.edit === c.id} orgSlug={org.slug} />)}
-          <CourseEditor course={null} calendars={calendars} upcoming={0} startOpen={courses.length === 0} orgSlug={org.slug} />
+          {courses.map((c) => <CourseEditor key={c.id} course={c} calendars={calendars} upcoming={count.get(c.id) ?? 0} startOpen={sp.edit === c.id} orgSlug={org.slug} orgId={org.id} />)}
+          <CourseEditor course={null} calendars={calendars} upcoming={0} startOpen={courses.length === 0} orgSlug={org.slug} orgId={org.id} />
         </div>
         <div>{courses.length > 0 && <SessionGenerator courses={courses.map((c) => ({ id: c.id, name: c.name, duration: c.duration_minutes }))} />}</div>
       </div>

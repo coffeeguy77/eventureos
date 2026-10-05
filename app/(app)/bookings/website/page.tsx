@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { readSettings, shareLink } from "@/lib/bookings/core";
 import { relative } from "@/lib/format";
-import { CopyField, PluginKeys, CsvImport, SettingsForm } from "@/components/bookings/website-tools";
+import { CopyField, PluginKeys, CsvImport, LandingForm, SettingsForm } from "@/components/bookings/website-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +90,7 @@ export default async function WebsitePage() {
         </Card>
 
         <div className="xl:col-span-2">
+          <LandingForm initial={settings.landing} pageUrl={`${appBaseUrl()}/book/${org.slug}`} />
           <SettingsForm initial={settings} />
         </div>
       </div>

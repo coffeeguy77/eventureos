@@ -36,11 +36,34 @@ export interface BookingSettings {
   waitlist: boolean;
   /** Questions people ask, shown beside the booking form */
   faqs: { q: string; a: string }[];
+  /** The public booking page as a landing page: search title/description, headline, photo, highlights and text sections */
+  landing: Landing;
+}
+
+export interface Landing {
+  title: string | null;          // search result title, e.g. "Barista Courses Canberra | Bean Culture"
+  description: string | null;    // search result description (about 150 characters)
+  headline: string | null;       // big heading at the top of the page
+  heroImage: string | null;      // https photo for the top of the page (falls back to the first course photo)
+  highlights: string[];          // short selling points under the headline
+  sections: { heading: string; body: string }[]; // text further down the page (helps people find it in search)
+}
+export const DEFAULT_LANDING: Landing = { title: null, description: null, headline: null, heroImage: null, highlights: [], sections: [] };
+
+export function readLanding(raw: unknown): Landing {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const list = (v: unknown, max: number, len: number) => (Array.isArray(v) ? v.map((x) => str(x, len)).filter((x): x is string => !!x).slice(0, max) : []);
+  return {
+    title: str(o.title, 70), description: str(o.description, 300), headline: str(o.headline, 120), heroImage: url(o.heroImage),
+    highlights: list(o.highlights, 6, 60),
+    sections: Array.isArray(o.sections) ? (o.sections as unknown[]).map((x) => (x && typeof x === "object" ? { heading: str((x as Record<string, unknown>).heading, 120) ?? "", body: str((x as Record<string, unknown>).body, 3000) ?? "" } : null))
+      .filter((x): x is { heading: string; body: string } => !!x && !!x.heading && !!x.body).slice(0, 8) : [],
+  };
 }
 
 export const DEFAULT_SETTINGS: BookingSettings = {
   enabled: true, hold_minutes: 30, cancel_hours: 48, reminder_hours: 48, followup: true, review_url: null,
-  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [],
+  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [], landing: DEFAULT_LANDING,
 };
 
 const num = (v: unknown, d: number, min: number, max: number) => {
@@ -70,6 +93,7 @@ export function readSettings(orgSettings: unknown): BookingSettings {
     waitlist: raw.waitlist !== false,
     faqs: Array.isArray(raw.faqs) ? (raw.faqs as unknown[]).map((f) => (f && typeof f === "object" ? { q: str((f as Record<string, unknown>).q, 200) ?? "", a: str((f as Record<string, unknown>).a, 2000) ?? "" } : null))
       .filter((f): f is { q: string; a: string } => !!f && !!f.q && !!f.a).slice(0, 12) : [],
+    landing: readLanding(raw.landing),
   };
 }
 

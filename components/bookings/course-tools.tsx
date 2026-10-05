@@ -2,18 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, ChevronDown, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import { CalendarPlus, ChevronDown, ExternalLink, ImageUp, Loader2, Plus, Trash2 } from "lucide-react";
 import { addSession, deleteCourse, generateSessions, saveCourse, type CourseInput } from "@/app/(app)/bookings/actions";
 import { parseDate, type CourseRow, type Question } from "@/lib/bookings/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
+import { createClient } from "@/lib/supabase/client";
 
 const fail = { ok: false as const, error: "Couldn't reach the server." };
 const BLANK: CourseInput = { name: "", duration_minutes: 120, price: "", capacity: 6, active: true, public: true, max_seats_per_booking: 6, waitlist: true, gift_enabled: true, questions: [], external_names: [] };
 
-export function CourseEditor({ course, calendars, upcoming, startOpen, orgSlug }: { course: CourseRow | null; calendars: { id: string; name: string }[]; upcoming: number; startOpen: boolean; orgSlug: string }) {
+export function CourseEditor({ course, calendars, upcoming, startOpen, orgSlug, orgId }: { course: CourseRow | null; calendars: { id: string; name: string }[]; upcoming: number; startOpen: boolean; orgSlug: string; orgId?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(startOpen);
   const [c, setC] = useState<CourseInput>(course ? { ...course, price: String(course.price), agency_price: course.agency_price === null ? "" : String(course.agency_price) } : BLANK);
@@ -69,7 +70,13 @@ export function CourseEditor({ course, calendars, upcoming, startOpen, orgSlug }
         <div className="sm:col-span-6"><Label>Full description</Label><Textarea value={c.description ?? ""} onChange={txt("description")} className="min-h-[110px]" /></div>
         <div className="sm:col-span-3"><Label>Location</Label><Input value={c.location ?? ""} onChange={txt("location")} /></div>
         <div className="sm:col-span-3"><Label>What to bring</Label><Input value={c.what_to_bring ?? ""} onChange={txt("what_to_bring")} /></div>
-        <div className="sm:col-span-4"><Label hint="https://…">Photo link</Label><Input value={c.image_url ?? ""} onChange={txt("image_url")} /></div>
+        <div className="sm:col-span-4"><Label hint="upload a photo, or paste a https:// link">Photo</Label>
+          <div className="flex gap-2">
+            <Input value={c.image_url ?? ""} onChange={txt("image_url")} placeholder="https://…" />
+            {orgId && <PhotoUpload orgId={orgId} onUploaded={(url) => set("image_url", url)} />}
+          </div>
+          {c.image_url && /^https:\/\//.test(c.image_url) && <img src={c.image_url} alt="" className="mt-2 h-24 w-40 rounded-lg object-cover ring-1 ring-line" />}
+        </div>
         <div className="sm:col-span-2"><Label>Colour</Label><Input type="color" value={c.colour ?? "#6028EC"} onChange={txt("colour")} className="h-[38px] p-1" /></div>
         <div className="sm:col-span-3"><Label hint="blocked when full">Calendar</Label>
           <Select value={c.calendar_connection_id ?? ""} onChange={txt("calendar_connection_id")}><option value="">None</option>{calendars.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}</Select></div>
@@ -184,5 +191,37 @@ export function SessionGenerator({ courses }: { courses: { id: string; name: str
       </div>
       {msg && <p className={cn("text-[0.8125rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
     </div>
+  );
+}
+
+/** Upload a course photo: shrunk to at most 1800px wide in the browser, stored in the business's public "branding" files. */
+function PhotoUpload({ orgId, onUploaded }: { orgId: string; onUploaded: (url: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const pick = async (f: File) => {
+    setErr(null); setBusy(true);
+    try {
+      const src = URL.createObjectURL(f);
+      const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Couldn't read that image.")); i.src = src; });
+      const k = Math.min(1, 1800 / img.width);
+      const cv = document.createElement("canvas"); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+      cv.getContext("2d")!.drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(src);
+      const blob = await new Promise<Blob>((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error("Couldn't prepare the image."))), "image/jpeg", 0.85));
+      const supabase = createClient();
+      const path = `${orgId}/courses/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("branding").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(/row-level|policy/i.test(error.message) ? "Only owners and admins can upload photos." : error.message);
+      onUploaded(supabase.storage.from("branding").getPublicUrl(path).data.publicUrl);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed"); } finally { setBusy(false); }
+  };
+  return (
+    <span className="shrink-0">
+      <label className="inline-flex h-[38px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}Upload
+        <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = ""; }} />
+      </label>
+      {err && <span className="mt-1 block text-[0.75rem] text-rose-700">{err}</span>}
+    </span>
   );
 }

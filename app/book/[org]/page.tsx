@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CalendarDays, Clock, Gift, MapPin, Users } from "lucide-react";
-import { catalogue, publicOrg } from "@/lib/bookings/server";
+import { bookUrl, catalogue, certificatesOffered, publicOrg } from "@/lib/bookings/server";
+import { BookLanding } from "@/components/book/landing";
 import { sessionWhen } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
@@ -16,9 +17,12 @@ type P = { params: Promise<{ org: string }>; searchParams: Promise<Record<string
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await publicOrg((await params).org).catch(() => null);
   if (!org) return { title: "Book" };
-  const title = `Book a class — ${org.name}`;
-  return { title: { absolute: title }, description: org.settings.intro ?? `See dates and book online with ${org.name}.`,
-    openGraph: { title, description: org.settings.intro ?? `See dates and book online with ${org.name}.`, siteName: org.name, ...(org.logo_url ? { images: [{ url: org.logo_url }] } : {}) } };
+  const L = org.settings.landing;
+  const title = L.title ?? `Book a class — ${org.name}`;
+  const description = L.description ?? org.settings.intro ?? `See dates and book online with ${org.name}.`;
+  const image = L.heroImage ?? org.logo_url;
+  return { title: { absolute: title }, description, alternates: { canonical: bookUrl(org) },
+    openGraph: { title, description, siteName: org.name, type: "website", url: bookUrl(org), ...(image ? { images: [{ url: image }] } : {}) } };
 }
 
 const dur = (m: number) => (m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : m > 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`);
@@ -37,6 +41,13 @@ export default async function BookHome({ params, searchParams }: P) {
   const giftable = data.courses.filter((c) => c.gift_enabled);
 
   const agent = embed ? null : await currentAgent(org).catch(() => null);
+  // The full landing page (courses, booking form, search content). The website widget keeps the compact list.
+  if (!embed && !notReady && org.settings.enabled && data.courses.length) {
+    const course = typeof sp.course === "string" ? sp.course : null;
+    const source = sp.source === "wordpress" ? "wordpress" : "website";
+    const utm = Object.fromEntries(Object.entries(sp).filter(([k, v]) => typeof v === "string" && (k.startsWith("utm_") || k === "fbclid" || k === "gclid" || k === "ref")) as [string, string][]);
+    return <BookLanding org={org} data={data} agent={agent} initialCourse={course} utm={utm} source={source} certificate={await certificatesOffered(org.id)} />;
+  }
   return (
     <BookShell org={org} embed={embed}>
       {agent && <AgentBanner orgSlug={org.slug} agent={agent} />}
