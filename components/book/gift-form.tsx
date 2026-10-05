@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { ArrowRight, Check, Gift, Loader2, Lock, Mail, MessageSquare, Printer, Send, UserRound } from "lucide-react";
 import { startGiftAction } from "@/app/book/actions";
 import { goTop } from "./embed-bridge";
+import { GiftCard } from "@/components/gifts/gift-card";
 
 interface Option { key: string; courseId: string | null; amount: number; label: string; hint: string }
 
@@ -33,7 +34,11 @@ function Radio({ on }: { on: boolean }) {
     : <span className="block h-7 w-7 shrink-0 rounded-full border-2 border-[#D9D2CC] bg-white" />;
 }
 
-export function GiftForm({ orgSlug, currency, options, minDate, years, business }: { orgSlug: string; currency: string; options: Option[]; minDate: string; years?: number; business?: string }) {
+export function GiftForm({ orgSlug, currency, options, minDate, years, business, card }: {
+  orgSlug: string; currency: string; options: Option[]; minDate: string; years?: number; business?: string;
+  /** Live preview of the certificate: front artwork + the back with their message */
+  card?: { front: string | null; back: string | null; redeem?: string | null } | null;
+}) {
   const $ = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n).replace(/\.00$/, "");
   const [pick, setPick] = useState(options[0]?.key ?? "");
   const [f, setF] = useState({ purchaserName: "", purchaserEmail: "", recipientName: "", recipientEmail: "", message: "", sendOn: "" });
@@ -41,7 +46,9 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business 
   const [err, setErr] = useState<string | null>(null);
   const [fallback, setFallback] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [showBack, setShowBack] = useState(false);
   const opt = options.find((o) => o.key === pick);
+  const toBack = () => setShowBack(true);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
 
   const submit = (e: React.FormEvent) => {
@@ -67,7 +74,7 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business 
         {options.map((o, i) => {
           const on = pick === o.key;
           return (
-            <button key={o.key} type="button" role="radio" aria-checked={on} onClick={() => setPick(o.key)} className={choice(on)}>
+            <button key={o.key} type="button" role="radio" aria-checked={on} onClick={() => { setPick(o.key); setShowBack(false); }} className={choice(on)}>
               <span className={`grid h-16 w-16 shrink-0 place-items-center rounded-full ${on ? "bg-white text-[var(--b)]" : "bg-[color-mix(in_srgb,var(--b)_8%,white)] text-[var(--b)]"}`}><OptionIcon i={i} amount={!o.courseId} /></span>
               <span className="min-w-0 flex-1 pr-7">
                 <span className="block text-[1rem] font-semibold leading-snug text-ink">{o.label}</span>
@@ -81,18 +88,26 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business 
       </div>
 
       <div className="my-6 h-px bg-[#EDE6E0]" />
+      {card && (
+        <div className="mb-6">
+          <p className="mb-3 text-[0.875rem] font-medium text-ink-muted">Your certificate — the back carries your message</p>
+          <GiftCard front={{ art: card.front }} flipped={showBack} onFlip={setShowBack} label="See the back"
+            back={{ to: f.recipientName.trim() || null, from: f.purchaserName.trim() || null, message: f.message.trim() || null, value: opt ? (opt.courseId ? opt.label : $(opt.amount)) : "",
+              valueNote: opt?.courseId ? `${$(opt.amount)} value` : null, code: "GIFT-XXXX-XXXX", business: business ?? "", redeem: card.redeem ?? null, art: card.back }} />
+        </div>
+      )}
       <h2 className="text-[1.375rem] font-semibold text-ink">Who&apos;s it for?</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div><label className={label} htmlFor="g-rn">Recipient&apos;s name</label>
-          <div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="g-rn" className={field} value={f.recipientName} onChange={set("recipientName")} maxLength={160} placeholder="Shown on the certificate" /></div></div>
+          <div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="g-rn" className={field} value={f.recipientName} onChange={set("recipientName")} onFocus={toBack} maxLength={160} placeholder="Shown on the certificate" /></div></div>
         <div><label className={label} htmlFor="g-pn">Your name</label>
-          <div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="g-pn" className={field} value={f.purchaserName} onChange={set("purchaserName")} required maxLength={160} autoComplete="name" placeholder="Your name" /></div></div>
+          <div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="g-pn" className={field} value={f.purchaserName} onChange={set("purchaserName")} onFocus={toBack} required maxLength={160} autoComplete="name" placeholder="Your name" /></div></div>
         <div className="sm:col-span-2"><label className={label} htmlFor="g-pe">Your email</label>
           <div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="g-pe" type="email" inputMode="email" className={field} value={f.purchaserEmail} onChange={set("purchaserEmail")} required maxLength={254} autoComplete="email" placeholder="The certificate will be sent to this email" /></div>
           <p className="mt-1.5 text-[0.8438rem] text-ink-muted">The certificate comes to you (or directly to them), ready to print or forward.</p></div>
         <div className="sm:col-span-2"><label className={label} htmlFor="g-m">Personal message <span className="font-normal text-ink-muted">(optional)</span></label>
           <div className="relative"><MessageSquare className="pointer-events-none absolute left-3.5 top-4 h-5 w-5 text-[#8F8984]" />
-            <textarea id="g-m" rows={3} className={`${field} h-auto py-3`} value={f.message} onChange={set("message")} maxLength={MAX_MESSAGE} placeholder="Happy Father's Day! Love, …" /></div>
+            <textarea id="g-m" rows={3} className={`${field} h-auto py-3`} value={f.message} onChange={set("message")} onFocus={toBack} maxLength={MAX_MESSAGE} placeholder="Happy Father's Day! Love, …" /></div>
           <p className="mt-1 text-right text-[0.8438rem] text-ink-muted" aria-live="polite">{f.message.length}/{MAX_MESSAGE}</p></div>
       </div>
 

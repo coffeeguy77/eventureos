@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
-import { CheckCircle2, Clock, Mail, Phone, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Mail, Phone, XCircle, Coffee, ArrowRight } from "lucide-react";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { QuoteDocument } from "@/components/quotes/quote-document";
 import type { QuoteSnapshotData } from "@/components/quotes/types";
 import { brandVars } from "@/app/p/[slug]/portal-data";
 import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { LinkResponse, PrintButton, ViewBeacon } from "./client";
+import { readShop } from "@/lib/shop/core";
 
 import { loadBillTo } from "@/lib/customers/bill-to";
 export const dynamic = "force-dynamic";
@@ -38,6 +39,17 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
     if (!qr) return null;
     return loadBillTo(db, qr.organisation_id, qr.customer_id, (qr.event as unknown as { primary_contact_id: string | null } | null)?.primary_contact_id ?? null).catch(() => null);
   })();
+  // Coffee shop: equipment-hire / event customers can add bags of coffee, delivered with their booking
+  const coffee = await (async () => {
+    if (!d.event || d.quote.expired) return null;
+    const db = createServiceClient();
+    const { data: qr } = await db.from("quotes").select("organisation:organisations(slug, settings)").eq("id", d.quote.id).maybeSingle();
+    const o = qr?.organisation as unknown as { slug: string; settings: unknown } | null;
+    if (!o) return null;
+    const shop = readShop(o.settings);
+    if (!shop.enabled || !shop.eventAddon) return null;
+    return { href: `/shop/${o.slug}?event=${token}`, roastNote: shop.roastNote };
+  })().catch(() => null);
   const cur = d.org.currency || "AUD";
   const tz = d.org.timezone || "Australia/Sydney";
   const v = d.version;
@@ -87,6 +99,15 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
             <LinkResponse token={token} versionNumber={v.number} total={total} defaultName={d.recipient.name ?? ""} businessName={d.org.name}
               needsApproval={d.org.approval_on_accept} />
           </div>
+        )}
+
+        {coffee && (
+          <a href={coffee.href} className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl bg-[#1d1915] p-5 text-white transition hover:brightness-110 print:hidden">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10"><Coffee className="h-6 w-6" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-[1rem] font-semibold">Need coffee for {d.event?.name ?? "your event"}?</span>
+              <span className="block text-[0.875rem] text-white/75">Add bags of our freshly roasted coffee and we&apos;ll bring them with your booking — no shipping.</span></span>
+            <span className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-white px-4 text-[0.9375rem] font-semibold text-[#1d1915]">Add coffee<ArrowRight className="h-4 w-4" /></span>
+          </a>
         )}
 
         <footer className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-5 text-[0.8125rem] text-ink-muted">

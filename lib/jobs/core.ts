@@ -65,7 +65,7 @@ export function looksLikeContact(text: string) {
   return /[^\s@]+@[^\s@]+\.[a-z]{2,}/i.test(text) || /(?:\+?61|0)[\s-]?4(?:[\s-]?\d){8}/.test(text);
 }
 
-export interface JobSettings { enabled: boolean; name: string; welcomeSubject: string; welcomeBody: string; batchSize: number; dailyLimit: number; employerApproval: boolean; heroImage: string | null }
+export interface JobSettings { enabled: boolean; name: string; welcomeSubject: string; welcomeBody: string; batchSize: number; dailyLimit: number; employerApproval: boolean; heroImage: string | null; employerImage: string | null }
 export function readJobSettings(orgSettings: unknown, orgName: string): JobSettings {
   const raw = (orgSettings && typeof orgSettings === "object" ? (orgSettings as Record<string, unknown>).jobs : null) as Record<string, unknown> | null;
   const r = raw && typeof raw === "object" ? raw : {};
@@ -84,6 +84,8 @@ export function readJobSettings(orgSettings: unknown, orgName: string): JobSetti
     employerApproval: r.employerApproval === true,
     // Wide photo behind the top of the job board's front page
     heroImage: typeof r.heroImage === "string" && /^https:\/\/[^\s"'<>]+$/.test(r.heroImage) && r.heroImage.length < 600 ? r.heroImage : null,
+    // Photo behind the employer pages (sign up, dashboard, post a job)
+    employerImage: typeof r.employerImage === "string" && /^https:\/\/[^\s"'<>]+$/.test(r.employerImage) && r.employerImage.length < 600 ? r.employerImage : null,
   };
 }
 

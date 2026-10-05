@@ -57,23 +57,48 @@ export function keyMode(key: string): "live" | "test" | null {
 }
 
 export interface CheckoutSession { id: string; url: string | null; payment_status: string; amount_total: number | null; currency: string | null;
-  payment_intent: string | null; metadata: Record<string, string> | null; customer_details?: { email?: string | null; name?: string | null } | null; created: number }
+  payment_intent: string | null; metadata: Record<string, string> | null; customer_details?: { email?: string | null; name?: string | null } | null; created: number; customer?: string | null }
 
 export function createCheckout(key: string, o: {
   amountCents: number; currency: string; name: string; description?: string; email?: string | null;
   successUrl: string; cancelUrl: string; metadata: Record<string, string>; idempotencyKey: string; account?: string | null;
   /** Unix seconds; Stripe allows 30 minutes to 24 hours from now. Used so a held booking seat can't be paid for after it's released. */
   expiresAt?: number;
+  /** Keep the card on file for later charges (subscriptions): reuse a Stripe customer, or create one. */
+  saveCard?: { customerId?: string | null } | null;
 }) {
+  const save = o.saveCard ?? null;
   return call<CheckoutSession>(key, "POST", "/checkout/sessions", {
     mode: "payment",
     success_url: o.successUrl,
     cancel_url: o.cancelUrl,
-    customer_email: o.email || undefined,
+    customer: save?.customerId || undefined,
+    customer_email: save?.customerId ? undefined : o.email || undefined,
+    customer_creation: save && !save.customerId ? "always" : undefined,
     line_items: [{ quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } }],
     metadata: o.metadata,
     expires_at: o.expiresAt,
-    payment_intent_data: { metadata: o.metadata, description: o.name },
+    payment_intent_data: { metadata: o.metadata, description: o.name, setup_future_usage: save ? "off_session" : undefined },
+  }, o.idempotencyKey, o.account);
+}
+
+export interface PaymentIntent {
+  id: string; status: string; amount: number; customer: string | null; latest_charge?: string | null;
+  payment_method: string | { id: string; card?: { brand?: string; last4?: string; exp_month?: number; exp_year?: number } | null } | null;
+  last_payment_error?: { message?: string; code?: string } | null; metadata?: Record<string, string>;
+}
+
+/** A payment with its card details (to remember which card a subscription uses). */
+export const getPaymentIntent = (key: string, id: string, account?: string | null) =>
+  call<PaymentIntent>(key, "GET", `/payment_intents/${encodeURIComponent(id)}?expand[]=payment_method`, undefined, undefined, account);
+
+/** Charge a saved card without the customer present (subscription deliveries). Throws StripeError when the card is declined. */
+export function chargeSavedCard(key: string, o: {
+  amountCents: number; currency: string; customer: string; paymentMethod: string; description: string; metadata: Record<string, string>; idempotencyKey: string; account?: string | null; email?: string | null;
+}) {
+  return call<PaymentIntent>(key, "POST", "/payment_intents", {
+    amount: o.amountCents, currency: o.currency.toLowerCase(), customer: o.customer, payment_method: o.paymentMethod,
+    off_session: true, confirm: true, description: o.description, metadata: o.metadata, receipt_email: o.email || undefined,
   }, o.idempotencyKey, o.account);
 }
 

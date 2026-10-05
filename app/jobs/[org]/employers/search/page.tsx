@@ -4,7 +4,8 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { DAY_LABEL, DAYS, EXPERIENCE, SKILLS, WORK_TYPES } from "@/lib/jobs/core";
 import { approvedEmployer } from "@/lib/jobs/guard";
 import { searchBaristas, unreadFor } from "@/lib/jobs/server";
-import { card, employerNav, inputCls, JobsShell } from "@/components/jobs/shell";
+import { card, inputCls } from "@/components/jobs/shell";
+import { EmployerShell } from "@/components/jobs/employer-shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Find baristas", robots: { index: false, follow: false } };
@@ -25,7 +26,7 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
   const box = "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[0.8125rem] ring-1 ring-line-strong has-[:checked]:bg-[var(--b)] has-[:checked]:text-[var(--on-b)] has-[:checked]:ring-[var(--b)]";
 
   return (
-    <JobsShell org={org} side="employer" nav={employerNav(slug, unread)}>
+    <EmployerShell org={org} me={{ name: emp.contact_name }} active="search" unread={unread} legacy>
       <h1 className="mb-4 text-[1.625rem] font-bold tracking-tight text-ink sm:text-[2rem]">Find baristas</h1>
       <div className="grid items-start gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <form method="get" className={`${card} space-y-4 lg:sticky lg:top-6`}>
@@ -67,6 +68,6 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           )}
         </div>
       </div>
-    </JobsShell>
+    </EmployerShell>
   );
 }

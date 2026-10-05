@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { publicName } from "@/lib/jobs/core";
 import { approvedEmployer } from "@/lib/jobs/guard";
 import { loadMessages, loadThreads, unreadFor } from "@/lib/jobs/server";
-import { employerNav, JobsShell } from "@/components/jobs/shell";
+import { EmployerShell } from "@/components/jobs/employer-shell";
 import { ThreadsView, threadWhen, type Active } from "@/components/jobs/threads-view";
 
 export const dynamic = "force-dynamic";
@@ -27,10 +27,10 @@ export default async function EmployerMessages({ params, searchParams }: { param
   }
   const unread = await unreadFor(db, "employer", emp.id);
   return (
-    <JobsShell org={org} side="employer" nav={employerNav(slug, unread)}>
+    <EmployerShell org={org} me={{ name: emp.contact_name }} active="messages" unread={unread} legacy>
       <h1 className="mb-4 text-[1.625rem] font-bold tracking-tight text-ink">Messages</h1>
       <ThreadsView slug={slug} side="employer" base={`/jobs/${slug}/employers/messages`} active={active}
         items={threads.map((x) => ({ id: x.id, title: publicName(x.profile.student.name, x.profile.display_name), subtitle: `${x.post?.title ?? "General enquiry"} · ${threadWhen(x.last_message_at)}`, photo: x.profile.photo_url, unread: x.employer_unread, when: x.last_message_at }))} />
-    </JobsShell>
+    </EmployerShell>
   );
 }

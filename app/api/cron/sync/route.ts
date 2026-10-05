@@ -70,6 +70,14 @@ export async function GET(req: NextRequest) {
     jobBoard = await runJobBoardJobs(db);
   } catch (e) { jobBoard = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Coffee shop: subscription deliveries due (card charged / prepaid used), pauses ending, unfinished checkouts, scheduled gift cards.
+  // Subscriptions still billed by WooCommerce are never charged here.
+  let shopJobs: unknown = null;
+  if (!only.length) try {
+    const { runShopJobs } = await import("@/lib/shop/server");
+    shopJobs = await runShopJobs(db);
+  } catch (e) { shopJobs = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -90,5 +98,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs });
 }

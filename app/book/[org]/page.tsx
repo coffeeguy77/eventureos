@@ -4,6 +4,11 @@ import type { Metadata } from "next";
 import { CalendarDays, Clock, Gift, MapPin, Users } from "lucide-react";
 import { bookUrl, catalogue, certificatesOffered, publicOrg } from "@/lib/bookings/server";
 import { BookLanding } from "@/components/book/landing";
+import { createServiceClient } from "@/lib/integrations/runtime";
+import { readJobSettings } from "@/lib/jobs/core";
+import { trainedCount } from "@/lib/jobs/server";
+import { readShop } from "@/lib/shop/core";
+import { activeBanners } from "@/lib/shop/server";
 import { sessionWhen } from "@/lib/bookings/core";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
@@ -46,7 +51,12 @@ export default async function BookHome({ params, searchParams }: P) {
     const course = typeof sp.course === "string" ? sp.course : null;
     const source = sp.source === "wordpress" ? "wordpress" : "website";
     const utm = Object.fromEntries(Object.entries(sp).filter(([k, v]) => typeof v === "string" && (k.startsWith("utm_") || k === "fbclid" || k === "gclid" || k === "ref")) as [string, string][]);
-    return <BookLanding org={org} data={data} agent={agent} initialCourse={course} utm={utm} source={source} certificate={await certificatesOffered(org.id)} />;
+    const db = createServiceClient();
+    const jobSettings = readJobSettings(org.rawSettings, org.name);
+    const jobs = jobSettings.enabled ? { name: jobSettings.name, url: `/jobs/${org.slug}`, trained: await trainedCount(db, org.id).catch(() => 0) } : null;
+    const shop = readShop(org.rawSettings);
+    const promos = shop.enabled ? await activeBanners(db, { ...org, shop }, ["course"]).catch(() => []) : [];
+    return <BookLanding org={org} data={data} agent={agent} initialCourse={course} utm={utm} source={source} certificate={await certificatesOffered(org.id)} jobs={jobs} promos={promos} />;
   }
   return (
     <BookShell org={org} embed={embed}>

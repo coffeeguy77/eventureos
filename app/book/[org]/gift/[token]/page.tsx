@@ -6,6 +6,7 @@ import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
 import { AutoRefresh } from "@/components/book/auto-refresh";
 import { PrintButton } from "@/components/book/print-button";
+import { GiftCard } from "@/components/gifts/gift-card";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Gift certificate", robots: { index: false, follow: false } };
@@ -25,7 +26,7 @@ export default async function GiftView({ params, searchParams }: { params: Promi
 
   return (
     <BookShell org={org} embed={false}>
-      <div className="mx-auto max-w-xl">
+      <div className={`mx-auto ${org.settings.landing.giftCard ? "max-w-3xl" : "max-w-xl"}`}>
         {g.status === "pending" ? (
           <div className="py-10 text-center">
             {sp.paid === "1" && <AutoRefresh />}
@@ -35,6 +36,15 @@ export default async function GiftView({ params, searchParams }: { params: Promi
         ) : (
           <>
             {sp.paid === "1" && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-center text-[0.9375rem] font-medium text-emerald-800 print:hidden">Thank you! The certificate is on its way to your inbox{g.recipient_email ? " (and theirs)" : ""}.</p>}
+            {org.settings.landing.giftCard ? (
+              <>
+                <GiftCard front={{ art: org.settings.landing.giftCard }} label="See your message"
+                  back={{ to: g.recipient_name, from: g.purchaser_name, message: g.message, value: g.course ? g.course.name : money(g.amount, org.currency), valueNote: g.course ? `${money(g.amount, org.currency)} value` : null,
+                    code: g.code, expires, business: org.name, art: org.settings.landing.giftCard, redeem: `Book at ${org.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || `eventureos.com.au/book/${org.slug}`} and enter the code at checkout.` }} />
+                {g.status === "redeemed" ? <p className="mt-3 text-center text-[0.875rem] font-semibold text-ink-muted">Used — thank you!</p> : Number(g.balance) < Number(g.amount) && Number(g.balance) > 0 ? <p className="mt-3 text-center text-[0.875rem] font-semibold text-ink">{money(g.balance, org.currency, { cents: true })} left to use</p> : null}
+                <p className="mt-2 text-center text-[0.8125rem] text-ink-muted print:hidden">Printing? You&apos;ll get the front and the back — cut them out and glue back to back, or fold.</p>
+              </>
+            ) : (
             <div className="relative overflow-hidden rounded-3xl border-2 border-[var(--b)] bg-surface p-8 text-center shadow-card print:shadow-none">
               <div className="absolute inset-x-0 top-0 h-2 bg-[var(--b)]" />
               {org.logo_url && /^https:\/\//.test(org.logo_url) ? <img src={org.logo_url} alt={org.name} className="mx-auto h-14 max-w-[200px] object-contain" /> : <p className="text-[1.25rem] font-bold text-ink">{org.name}</p>}
@@ -48,6 +58,7 @@ export default async function GiftView({ params, searchParams }: { params: Promi
               <p className="mt-3 text-[0.8125rem] text-ink-muted">Book at {org.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || `eventureos.com.au/book/${org.slug}`} and enter the code at checkout.{expires ? ` Valid until ${expires}.` : ""}</p>
               {g.status === "redeemed" ? <p className="mt-3 text-[0.875rem] font-semibold text-ink-muted">Used — thank you!</p> : Number(g.balance) < Number(g.amount) && Number(g.balance) > 0 ? <p className="mt-3 text-[0.875rem] font-semibold text-ink">{money(g.balance, org.currency, { cents: true })} left to use</p> : null}
             </div>
+            )}
             <div className="mt-5 flex flex-wrap justify-center gap-2 print:hidden">
               <PrintButton />
               {g.status === "active" && <Link href={bookHref} className="inline-flex h-12 items-center rounded-xl bg-[var(--b)] px-5 text-[0.9375rem] font-semibold text-[var(--on-b)]">Book with this code</Link>}

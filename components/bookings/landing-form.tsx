@@ -39,7 +39,7 @@ export function LandingForm({ initial, pageUrl, courses, orgId }: { initial: Lan
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof Landing>(k: K, v: Landing[K]) => setL((x) => ({ ...x, [k]: v }));
-  const txt = (k: "title" | "description" | "headline" | "heroImage" | "eyebrow" | "phone" | "locationImage" | "giftImage" | "giftHero") => ({ value: l[k] ?? "", onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(k, e.target.value || null) });
+  const txt = (k: "title" | "description" | "headline" | "heroImage" | "eyebrow" | "phone" | "locationImage" | "giftImage" | "giftHero" | "giftCard") => ({ value: l[k] ?? "", onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => set(k, e.target.value || null) });
   const course = (id: string) => l.courses[id] ?? blankCourse;
   const setCourse = (id: string, p: Partial<LandingCourse>) => set("courses", { ...l.courses, [id]: { ...course(id), ...p } });
   const setReview = (i: number, p: Partial<LandingReview>) => set("reviews", l.reviews.map((r, j) => (j === i ? { ...r, ...p } : r)));
@@ -170,6 +170,7 @@ export function LandingForm({ initial, pageUrl, courses, orgId }: { initial: Lan
               <div><Label>Photo beside the map</Label><div className="flex gap-2"><Input {...txt("locationImage")} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="page" onUploaded={(u) => set("locationImage", u)} /></div></div>
               <div><Label hint="blank = a course photo">Gift voucher photo</Label><div className="flex gap-2"><Input {...txt("giftImage")} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="page" onUploaded={(u) => set("giftImage", u)} /></div></div>
               <div><Label hint="wide picture behind the gift certificate page">Gift page background</Label><div className="flex gap-2"><Input {...txt("giftHero")} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="page" onUploaded={(u) => set("giftHero", u)} /></div></div>
+              <div><Label hint="finished artwork for the front of the certificate — the back shows their message">Gift certificate artwork</Label><div className="flex gap-2"><Input {...txt("giftCard")} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="page" onUploaded={(u) => set("giftCard", u)} /></div></div>
             </div>
           </div>
         </Group>

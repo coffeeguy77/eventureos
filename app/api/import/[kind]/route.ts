@@ -47,6 +47,31 @@ export async function POST(req: Request, { params }: P) {
       if (error) throw new Error(error.message);
       return json(req, { ok: true, bytes: body.length });
     }
+    if (kind === "woo") {
+      // WooCommerce shop data (wc/v3 objects). ?type=products|customers|orders|subscriptions|coupons. Body: JSON array, or ?from=stash to use a saved export.
+      const org = await importOrg(db, req, "shop");
+      if (!org) return json(req, { error: "Not allowed" }, 401);
+      const type = url.searchParams.get("type") ?? "";
+      let rows: unknown;
+      if (url.searchParams.get("from") === "stash") {
+        const { data, error } = await db.storage.from("certificates").download(`${org}/imports/woo-${type}.json`);
+        if (error || !data) return json(req, { error: `No saved ${type} export` }, 404);
+        rows = JSON.parse(await data.text());
+      } else rows = await req.json();
+      if (!Array.isArray(rows)) return json(req, { error: "Send a JSON array" }, 400);
+      const woo = await import("@/lib/shop/woo");
+      const list = rows as Record<string, unknown>[];
+      if (type === "products") return json(req, await woo.importProducts(db, org, list));
+      if (type === "customers") return json(req, await woo.importCustomers(db, org, list));
+      if (type === "orders") return json(req, await woo.importOrders(db, org, list));
+      if (type === "coupons") return json(req, await woo.importCoupons(db, org, list));
+      if (type === "subscriptions") {
+        const { data: o } = await db.from("organisations").select("settings").eq("id", org).single();
+        const { readShop } = await import("@/lib/shop/core");
+        return json(req, await woo.importSubscriptions(db, org, list, readShop(o?.settings).subDiscount));
+      }
+      return json(req, { error: "Unknown type" }, 400);
+    }
     if (kind === "certificate-file") {
       const org = await importOrg(db, req, "certificates");
       if (!org) return json(req, { error: "Not allowed" }, 401);

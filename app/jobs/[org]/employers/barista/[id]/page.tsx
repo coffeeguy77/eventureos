@@ -6,7 +6,8 @@ import { certDate } from "@/lib/bookings/certificate";
 import { availabilitySummary, DAY_LABEL, DAYS, EXPERIENCE, SLOT_LABEL, SLOTS, WORK_TYPES } from "@/lib/jobs/core";
 import { approvedEmployer } from "@/lib/jobs/guard";
 import { profileForEmployer, unreadFor } from "@/lib/jobs/server";
-import { card, employerNav, JobsShell } from "@/components/jobs/shell";
+import { card } from "@/components/jobs/shell";
+import { EmployerShell } from "@/components/jobs/employer-shell";
 import { ContactBarista } from "@/components/jobs/tools";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export default async function BaristaProfile({ params }: { params: Promise<{ org
   ]);
   const hasContact = !!(v.email || v.phone);
   return (
-    <JobsShell org={org} side="employer" nav={employerNav(slug, unread)}>
+    <EmployerShell org={org} me={{ name: emp.contact_name }} active="search" unread={unread} legacy>
       <Link href={`/jobs/${slug}/employers/search`} className="mb-4 inline-block text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← Back to search</Link>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
@@ -75,6 +76,6 @@ export default async function BaristaProfile({ params }: { params: Promise<{ org
           </section>
         </aside>
       </div>
-    </JobsShell>
+    </EmployerShell>
   );
 }

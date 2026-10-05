@@ -53,9 +53,16 @@ function CupArt({ className }: { className?: string }) {
  * The public booking page: sells the experience first, then makes booking easy.
  * Everything (words, photos, reviews, prices, dates) comes from the business's settings, courses and live sessions.
  */
-export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate }: {
+export interface LandingJobs { name: string; url: string; trained: number }
+export interface LandingPromo { id: string; title: string; body: string | null; cta_label: string | null; href: string | null; coupon_code: string | null; image_url: string | null; tone: string }
+
+export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate, jobs = null, promos = [] }: {
   org: PublicOrg; data: { courses: CourseRow[]; sessions: PublicSession[] }; agent: Agent | null; initialCourse: string | null;
   utm: Record<string, string>; source: "website" | "wordpress"; certificate: boolean;
+  /** The business's barista job board — sold on the course page as a reason to train here */
+  jobs?: LandingJobs | null;
+  /** Shop banners placed on the course page */
+  promos?: LandingPromo[];
 }) {
   const L = org.settings.landing;
   const C = (k: string) => landingCopy(L, k);
@@ -363,6 +370,77 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ───────── Barista jobs: the course keeps working after the class ───────── */}
+      {jobs && (
+        <section id="jobs" className="relative isolate scroll-mt-24 overflow-hidden bg-[#171411] py-20 text-[#F7F1EA] sm:py-24">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_85%_15%,color-mix(in_srgb,var(--b)_26%,transparent),transparent_55%)]" />
+          <div className={`${PAGE} grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]`}>
+            <div data-reveal>
+              <p className="lp-hand text-[1.75rem] leading-none text-[var(--b)]">Your course doesn&apos;t end when the class does</p>
+              <h2 className="lp-serif mt-4 text-balance text-[2.25rem] font-semibold leading-[1.06] tracking-[-0.015em] sm:text-[2.875rem] xl:text-[3.25rem]">Train with us and get found by employers</h2>
+              <p className="mt-5 max-w-[36rem] text-[1.0938rem] leading-relaxed text-[#F7F1EA]/80">Every student gets a free profile on <span className="font-semibold text-[#F7F1EA]">{jobs.name}</span> — our own job board where cafés, coffee carts and event companies look for trained baristas.</p>
+              <ul className="mt-7 grid gap-3 sm:grid-cols-2">
+                {[
+                  { t: "Free profile, included", d: "Switch it on after your course. Add your suburb and the days you're free." },
+                  { t: "Your certificate shows", d: "Employers can see you've been trained — and by whom." },
+                  { t: "Shifts and jobs", d: "See work that local businesses post, from one-off events to regular shifts." },
+                  { t: "You stay in control", d: "Your phone and email stay private until you choose to share them." },
+                ].map((x) => (
+                  <li key={x.t} className="rounded-2xl bg-white/[0.05] p-5 ring-1 ring-white/10">
+                    <p className="flex items-center gap-2 font-semibold"><Check className="h-5 w-5 shrink-0 text-[var(--b)]" strokeWidth={2.75} />{x.t}</p>
+                    <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-[#F7F1EA]/70">{x.d}</p>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a href="#book" className="lp-btn inline-flex h-14 items-center gap-2 rounded-2xl bg-[var(--b)] px-7 text-[1.0313rem] font-semibold text-[var(--on-b)]">Book your course<ArrowRight className="lp-arrow h-5 w-5" /></a>
+                <Link href={jobs.url} className="lp-btn inline-flex h-14 items-center rounded-2xl px-7 text-[1.0313rem] font-semibold ring-1 ring-[#F7F1EA]/50 hover:bg-[#F7F1EA] hover:text-[#171714]">See {jobs.name}</Link>
+              </div>
+            </div>
+            <div data-reveal className="relative mx-auto w-full max-w-[420px]">
+              {jobs.trained >= 50 && (
+                <div className="absolute -left-4 -top-6 z-10 rotate-[-4deg] rounded-2xl bg-[var(--b)] px-5 py-3 text-[var(--on-b)] shadow-xl sm:-left-10">
+                  <p className="lp-serif text-[2rem] font-semibold leading-none">{(Math.floor(jobs.trained / 50) * 50).toLocaleString("en-AU")}+</p>
+                  <p className="text-[0.8125rem] font-semibold">baristas trained</p>
+                </div>
+              )}
+              {/* An example profile card (illustration) */}
+              <div aria-hidden className="rounded-[28px] bg-[#FFFDFC] p-6 text-[#171714] shadow-[0_40px_80px_-40px_rgba(0,0,0,.9)]">
+                <div className="flex items-center gap-4">
+                  <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[color-mix(in_srgb,var(--b)_18%,white)] text-[var(--b)]"><Coffee className="h-8 w-8" strokeWidth={1.6} /></span>
+                  <div><p className="lp-serif text-[1.375rem] font-semibold">Your profile</p><p className="flex items-center gap-1 text-[0.875rem] text-[#696866]"><MapPin className="h-3.5 w-3.5" />Your suburb</p></div>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-1.5">{["Espresso", "Milk texturing", "Latte art", "Events"].map((t) => <span key={t} className="rounded-full bg-[#F1EAE2] px-3 py-1 text-[0.8125rem] font-medium">{t}</span>)}</div>
+                <div className="mt-5 flex items-center gap-3 rounded-2xl bg-[#F6F0E9] p-4">
+                  <Award className="h-7 w-7 shrink-0 text-[var(--b)]" strokeWidth={1.6} />
+                  <div><p className="text-[0.9375rem] font-semibold">Trained at {org.name}</p><p className="text-[0.8125rem] text-[#696866]">Certificate verified</p></div>
+                </div>
+                <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[0.6875rem] font-semibold text-[#696866]">
+                  {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => <span key={i} className={`rounded-lg py-2 ${i >= 5 ? "bg-[var(--b)] text-[var(--on-b)]" : "bg-[#F1EAE2]"}`}>{d}</span>)}
+                </div>
+                <p className="mt-4 rounded-xl border border-dashed border-[#D9CCBF] p-3 text-center text-[0.875rem] font-medium">A café nearby wants to chat about weekend shifts</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {promos.length > 0 && (
+        <section aria-label="Offers" className={`${PAGE} grid gap-4 py-10 md:grid-cols-2`}>
+          {promos.map((b) => (
+            <a key={b.id} href={b.href ?? "#"} className={`relative flex min-h-[150px] overflow-hidden rounded-[26px] p-7 ${b.tone === "dark" ? "bg-[#1d1915] text-[#FFFDFC]" : b.tone === "light" ? "border border-[#E9DFD5] bg-[#FFFDFC]" : "bg-[var(--b)] text-[var(--on-b)]"}`}>
+              {b.image_url && <img src={b.image_url} alt="" className="absolute inset-y-0 right-0 h-full w-2/5 object-cover" />}
+              <div className={b.image_url ? "relative w-3/5 pr-4" : "relative"}>
+                <p className="lp-serif text-[1.625rem] font-semibold leading-tight">{b.title}</p>
+                {b.body && <p className="mt-2 opacity-90">{b.body}</p>}
+                {b.coupon_code && <p className="mt-3 inline-flex rounded-lg border border-dashed border-current px-3 py-1 font-mono font-bold tracking-wider">{b.coupon_code}</p>}
+                <p className="mt-3 inline-flex items-center gap-1.5 font-semibold">{b.cta_label || "Shop now"}<ArrowRight className="h-4 w-4" /></p>
+              </div>
+            </a>
+          ))}
         </section>
       )}
 
