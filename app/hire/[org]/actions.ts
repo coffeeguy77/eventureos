@@ -103,5 +103,6 @@ function sanitiseCatering(o: CateringOrder): CateringOrder {
       items: (Array.isArray(s?.items) ? s.items : []).slice(0, 60).map((l) => ({ serviceId: str(l?.serviceId, 36), qty: Math.max(0, Math.min(5000, Math.round(Number(l?.qty)) || 0)) })),
     })),
     contact: { name: str(c.name, 160), email: str(c.email, 254), phone: str(c.phone, 40), company: str(c.company, 160) },
+    pickup: o?.pickup === true,
   };
 }

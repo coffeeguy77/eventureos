@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { buildReport, type SiteEvent } from "@/lib/analytics/core";
-import { readEvents } from "@/lib/events/core";
+import { cateringGroup, isCatering, readEvents } from "@/lib/events/core";
 import { readReminders } from "@/lib/reminders/core";
 import { SITE_LABELS } from "@/lib/site-nav";
 import { EventsForm } from "@/components/website/events-form";
@@ -29,8 +29,12 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
 
   let body: React.ReactNode;
   if (tab === "events") {
-    const { data: pk } = await supabase.from("service_packages").select("id, name").eq("organisation_id", org.id).eq("active", true).order("position");
-    body = <EventsForm initial={readEvents(settings)} packages={(pk ?? []) as { id: string; name: string }[]} slug={o?.slug as string} base={appBaseUrl()} />;
+    const [{ data: pk }, { data: sv }] = await Promise.all([
+      supabase.from("service_packages").select("id, name").eq("organisation_id", org.id).eq("active", true).order("position"),
+      supabase.from("services").select("category").eq("organisation_id", org.id).eq("active", true).order("position"),
+    ]);
+    const menus = [...new Set(((sv ?? []) as { category: string | null }[]).filter((x) => isCatering(x.category)).map((x) => cateringGroup(x.category)))];
+    body = <EventsForm initial={readEvents(settings)} packages={(pk ?? []) as { id: string; name: string }[]} slug={o?.slug as string} base={appBaseUrl()} menus={menus} />;
   } else if (tab === "reminders") {
     const { data: carts, error } = await supabase.from("site_carts").select("section, status, reminders_sent").eq("organisation_id", org.id).limit(5000);
     const counts: Record<string, { open: number; sent: number }> = {};

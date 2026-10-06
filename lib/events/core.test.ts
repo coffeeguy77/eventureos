@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cateringProblem, cateringSections, dayStatus, hireKindFromSlug, hirePageSlug, hireSections, isTentative, readEvents, requestProblem, sectionsTotal, type HireRequest } from "./core";
+import { cateringProblem, cateringSections, dayStatus, menuOrder, hireKindFromSlug, hirePageSlug, hireSections, isTentative, readEvents, requestProblem, sectionsTotal, type HireRequest } from "./core";
 import type { PackageRules, PricedService } from "../pricing/engine";
 
 const s = readEvents({ events: { enabled: true, city: "Canberra", fleet: { cart: 4, van: 1, diy: 2 }, stickerPrice: 1 } });
@@ -65,13 +65,23 @@ test("equipment only: daily hire × days × kits; pickup is free", () => {
   assert.ok(items.some((i) => i.service_id === "del" && i.is_optional));
 });
 
-test("catering: grouped by delivery, validated", () => {
+test("catering: minimum 10, delivery $100 + GST or free pickup, menu order per time", () => {
   const menu = [{ id: "a", name: "Muffins", description: null, group: "Morning tea", unit: "person", unit_price: 5, tax_rate: 10 }, { id: "b", name: "Wraps", description: null, group: "Lunch", unit: "person", unit_price: 12.5, tax_rate: 10 }];
-  const o = { date: "2026-11-14", venue: "", address: "1 Main St", guests: 20, notes: "", contact, slots: [{ slot: "morning" as const, time: "09:30", items: [{ serviceId: "a", qty: 20 }] }, { slot: "lunch" as const, time: "12:00", items: [{ serviceId: "b", qty: 20 }] }] };
-  assert.equal(cateringProblem(o, menu, "2026-11-01"), null);
-  assert.match(cateringProblem({ ...o, slots: [] }, menu, "2026-11-01")!, /Add something/);
-  const sec = cateringSections(o, menu);
-  assert.equal(sec.length, 2);
+  const o = { date: "2026-11-14", venue: "", address: "1 Main St", guests: 20, notes: "", contact, pickup: false, slots: [{ slot: "morning" as const, time: "09:30", items: [{ serviceId: "a", qty: 20 }] }, { slot: "lunch" as const, time: "12:00", items: [{ serviceId: "b", qty: 20 }] }] };
+  const cs = readEvents({ events: { enabled: true } }).catering;
+  assert.equal(cs.minQty, 10); assert.equal(cs.deliveryFee, 100);
+  assert.equal(cateringProblem(o, menu, "2026-11-01", cs), null);
+  assert.match(cateringProblem({ ...o, slots: [] }, menu, "2026-11-01", cs)!, /Add something/);
+  assert.match(cateringProblem({ ...o, slots: [{ slot: "morning", time: "09:30", items: [{ serviceId: "a", qty: 9 }] }] }, menu, "2026-11-01", cs)!, /minimum is 10/);
+  assert.match(cateringProblem({ ...o, address: "" }, menu, "2026-11-01", cs)!, /delivery address/);
+  assert.equal(cateringProblem({ ...o, address: "", pickup: true }, menu, "2026-11-01", cs), null);
+  const sec = cateringSections(o, menu, cs);
   assert.match(sec[0].title, /^Morning delivery/);
-  assert.equal(sectionsTotal(sec).total, 385);
+  // 100 + 250 + 100 delivery once per order = 450 ex, 495 inc
+  assert.equal(sectionsTotal(sec).total, 495);
+  assert.equal(sectionsTotal(cateringSections({ ...o, pickup: true }, menu, cs)).total, 385);
+  assert.equal(sectionsTotal(cateringSections(o, menu, { ...cs, deliveryPer: "delivery" })).total, 605);
+  const m = menuOrder(["Breakfast", "Lunch", "Salads", "Morning & afternoon tea"], "lunch", cs);
+  assert.deepEqual(m.first, ["Lunch", "Salads"]);
+  assert.deepEqual(m.rest, ["Breakfast", "Morning & afternoon tea"]);
 });

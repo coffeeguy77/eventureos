@@ -26,9 +26,9 @@ export default async function CateringPage({ params }: { params: Promise<{ org: 
           <div className="mb-8 max-w-[780px]">
             <p className={eyebrow}>Catering{s.city ? ` · ${s.city}` : ""}</p>
             <h1 className={`${serif} mt-3 text-[2.5rem] font-semibold leading-[1.05] sm:text-[3.25rem]`}>Morning tea, lunch &amp; afternoon tea — delivered</h1>
-            <p className="mt-3 text-[1.0625rem] text-[#5E5853]">Choose a delivery, set how many people, then add from the menu. Your total updates as you go{s.leadDays ? ` — order ${s.leadDays}+ days ahead to lock it in` : ""}.</p>
+            <p className="mt-3 text-[1.0625rem] text-[#5E5853]">Pick a time, set how many people, then add from the menu — minimum {s.catering.minQty} of each item. Prices are + GST{s.catering.deliveryFee !== null ? `; delivery $${s.catering.deliveryFee.toFixed(s.catering.deliveryFee % 1 ? 2 : 0)} + GST${s.catering.pickup ? " or free pickup" : ""}` : ""}{s.leadDays ? `. Order ${s.leadDays}+ days ahead to lock it in` : ""}.</p>
           </div>
-          <CateringBuilder slug={org.slug} menu={menu} today={today} leadDays={s.leadDays} prefill={{ name: "", email: "", phone: "", company: "" }} />
+          <CateringBuilder slug={org.slug} menu={menu} today={today} leadDays={s.leadDays} cs={s.catering} pickupFrom={org.address} prefill={{ name: "", email: "", phone: "", company: "" }} />
         </div>
       </section>
       <section className="pb-20" data-section="contact">

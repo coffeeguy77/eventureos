@@ -1,10 +1,10 @@
 "use client";
 import { useState, useTransition } from "react";
-import { ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
-import { HIRE_KINDS, type DrinkGroup, type EventsSettings, type HireKind } from "@/lib/events/core";
+import { HIRE_KINDS, SLOTS, type CateringSettings, type DrinkGroup, type EventsSettings, type HireKind, type Slot } from "@/lib/events/core";
 import { saveEventsSettings } from "@/app/(app)/website/actions";
 
 const KIND_NAME: Record<HireKind, string> = { cart: "Coffee carts", van: "Coffee van", diy: "Equipment only" };
@@ -13,12 +13,15 @@ const IMG: { key: keyof EventsSettings["images"]; label: string }[] = [
   { key: "diy", label: "Equipment photo" }, { key: "branding", label: "Branded cart photo" }, { key: "drinks", label: "Drinks feature photo" },
 ];
 
-export function EventsForm({ initial, packages, slug, base }: { initial: EventsSettings; packages: { id: string; name: string }[]; slug: string; base: string }) {
+export function EventsForm({ initial, packages, slug, base, menus }: { initial: EventsSettings; packages: { id: string; name: string }[]; slug: string; base: string; menus: string[] }) {
   const [v, setV] = useState<EventsSettings>(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof EventsSettings>(k: K, val: EventsSettings[K]) => setV({ ...v, [k]: val });
   const setDrink = (gi: number, g: DrinkGroup) => set("drinks", v.drinks.map((x, i) => (i === gi ? g : x)));
+  const cat = v.catering;
+  const setCat = (patch: Partial<CateringSettings>) => set("catering", { ...cat, ...patch });
+  const setSlotMenus = (sl: Slot, list: string[]) => setCat({ slots: { ...cat.slots, [sl]: list } });
   const save = () => start(async () => { const r = await saveEventsSettings(v); setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error }); });
 
   return (
@@ -59,6 +62,57 @@ export function EventsForm({ initial, packages, slug, base }: { initial: EventsS
               <div className="sm:col-span-3"><Label htmlFor={`ev-b-${k}`}>Short description</Label><Input id={`ev-b-${k}`} value={v.blurbs[k]} onChange={(e) => set("blurbs", { ...v.blurbs, [k]: e.target.value })} /></div>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="font-semibold text-ink">Catering</h2>
+        <p className="mt-0.5 text-[0.8125rem] text-ink-muted">The catering order page. Menu items come from Settings → Services &amp; pricing (categories starting with &quot;Catering&quot;). Prices show + GST.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-4">
+          <div><Label htmlFor="cat-min">Minimum of each item</Label><Input id="cat-min" type="number" min={1} max={500} value={cat.minQty} onChange={(e) => setCat({ minQty: Math.max(1, Number(e.target.value)) })} /></div>
+          <div><Label htmlFor="cat-fee" hint="Blank = no delivery">Delivery (ex GST)</Label><Input id="cat-fee" type="number" min={0} step="0.01" value={cat.deliveryFee ?? ""} onChange={(e) => setCat({ deliveryFee: e.target.value === "" ? null : Number(e.target.value) })} /></div>
+          <div><Label htmlFor="cat-per">Charge delivery</Label><Select id="cat-per" value={cat.deliveryPer} onChange={(e) => setCat({ deliveryPer: e.target.value === "delivery" ? "delivery" : "order" })}><option value="order">Once per order</option><option value="delivery">For each delivery time</option></Select></div>
+          <label className="flex items-center gap-2 self-end pb-2 text-[0.8125rem]"><input type="checkbox" className="h-4 w-4" checked={cat.pickup} onChange={(e) => setCat({ pickup: e.target.checked })} />Free pickup</label>
+        </div>
+        <div className="mt-5">
+          <Label>How menus show</Label>
+          <div className="flex flex-wrap gap-2">
+            {([["list", "Menu after menu"], ["tabs", "Tabbed menus"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setCat({ layout: k })} className={`rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium ring-1 ring-inset ${cat.layout === k ? "bg-brand-50 text-ink ring-brand-300" : "text-ink-muted ring-line-strong hover:bg-zinc-50"}`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-5">
+          <Label>Menus for each time, in order</Label>
+          <p className="-mt-1 mb-3 text-[0.7812rem] text-ink-muted">Ticked menus show first, in this order. The rest sit under &quot;Looking for something else?&quot; so customers can still add them.</p>
+          {!menus.length && <p className="text-[0.8125rem] text-ink-muted">No catering items in your price list yet.</p>}
+          <div className="grid gap-4 md:grid-cols-3">
+            {SLOTS.map((sl) => {
+              const chosen = cat.slots[sl.id].filter((g) => menus.includes(g));
+              const notChosen = menus.filter((g) => !chosen.includes(g));
+              const move = (i: number, d: number) => { const l = [...chosen]; const j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; setSlotMenus(sl.id, l); };
+              return (
+                <div key={sl.id} className="rounded-lg border border-line p-3">
+                  <p className="mb-2 text-[0.8125rem] font-semibold text-ink">{sl.label.replace(" delivery", "")}</p>
+                  <ul className="space-y-1">
+                    {chosen.map((g, i) => (
+                      <li key={g} className="flex items-center gap-1.5 rounded-md bg-brand-50/60 px-2 py-1 text-[0.8125rem]">
+                        <input type="checkbox" checked onChange={() => setSlotMenus(sl.id, chosen.filter((x) => x !== g))} aria-label={`Hide ${g}`} />
+                        <span className="flex-1 truncate">{i + 1}. {g}</span>
+                        <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} className="text-ink-faint disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label="Move down" disabled={i === chosen.length - 1} onClick={() => move(i, 1)} className="text-ink-faint disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+                      </li>
+                    ))}
+                    {notChosen.map((g) => (
+                      <li key={g} className="flex items-center gap-1.5 px-2 py-1 text-[0.8125rem] text-ink-muted">
+                        <input type="checkbox" checked={false} onChange={() => setSlotMenus(sl.id, [...chosen, g])} aria-label={`Show ${g}`} /><span className="truncate">{g}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </Card>
 

@@ -27,7 +27,22 @@ export interface EventsSettings {
   images: Partial<Record<HireKind | "hero" | "branding" | "catering" | "drinks", string>>;
   drinks: DrinkGroup[];                           // the drinks menu page
   areas: string[];                                // places served, for the hire pages
+  catering: CateringSettings;
 }
+
+/** How the catering order page works (settings.events.catering). Prices on the page are shown + GST. */
+export interface CateringSettings {
+  minQty: number;                                 // minimum of each item
+  deliveryFee: number | null;                     // ex GST; null = no delivery offered
+  deliveryPer: "order" | "delivery";              // charge once per order, or for each delivery time
+  pickup: boolean;                                // customers can collect for free
+  layout: "list" | "tabs";                        // menu after menu, or one tab per menu
+  slots: Record<Slot, string[]>;                  // which menus show first for each delivery, in order
+}
+export const DEFAULT_CATERING: CateringSettings = {
+  minQty: 10, deliveryFee: 100, deliveryPer: "order", pickup: true, layout: "list",
+  slots: { morning: ["Breakfast", "Morning & afternoon tea", "Filtered coffee & tea"], lunch: ["Lunch", "Salads"], afternoon: ["Morning & afternoon tea", "Filtered coffee & tea"] },
+};
 
 export const DEFAULT_EVENTS: EventsSettings = {
   enabled: false, heading: "Barista coffee | for your next event.", intro: "Coffee carts, a coffee van, equipment hire and catering — build your event online and we'll email your quote.", city: "", fleet: { cart: 1, van: 0, diy: 0 },
@@ -37,7 +52,7 @@ export const DEFAULT_EVENTS: EventsSettings = {
     van: "A coffee van that brings the café to you — made for outdoor events and big crowds.",
     diy: "Professional espresso equipment delivered and set up, so your team can make the coffee.",
   },
-  packages: {}, leadDays: 5, stickerPrice: null, stickerSize: "50mm round", images: {}, drinks: [], areas: [],
+  packages: {}, leadDays: 5, stickerPrice: null, stickerSize: "50mm round", images: {}, drinks: [], areas: [], catering: DEFAULT_CATERING,
 };
 
 const str = (v: unknown, d: string, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : d);
@@ -72,6 +87,24 @@ export function readEvents(orgSettings: unknown): EventsSettings {
     images: Object.fromEntries(["cart", "van", "diy", "hero", "branding", "catering", "drinks"].map((k) => [k, url(im[k])]).filter(([, v]) => v)),
     drinks,
     areas: Array.isArray(raw.areas) ? raw.areas.map((a) => str(a, "", 40)).filter(Boolean).slice(0, 12) : d.areas,
+    catering: readCatering(raw.catering),
+  };
+}
+
+function readCatering(v: unknown): CateringSettings {
+  const d = DEFAULT_CATERING;
+  if (!v || typeof v !== "object") return d;
+  const o = v as Record<string, unknown>;
+  const sl = (o.slots && typeof o.slots === "object" ? o.slots : {}) as Record<string, unknown>;
+  const list = (x: unknown, def: string[]) => (Array.isArray(x) ? x.map((g) => str(g, "", 60)).filter(Boolean).slice(0, 20) : def);
+  const fee = o.deliveryFee === null || o.deliveryFee === "" ? null : Number(o.deliveryFee);
+  return {
+    minQty: int(o.minQty, d.minQty, 1, 500),
+    deliveryFee: o.deliveryFee === undefined ? d.deliveryFee : fee === null || !Number.isFinite(fee) || fee < 0 ? null : Math.round(fee * 100) / 100,
+    deliveryPer: o.deliveryPer === "delivery" ? "delivery" : "order",
+    pickup: o.pickup === undefined ? d.pickup : o.pickup === true,
+    layout: o.layout === "tabs" ? "tabs" : "list",
+    slots: { morning: list(sl.morning, d.slots.morning), lunch: list(sl.lunch, d.slots.lunch), afternoon: list(sl.afternoon, d.slots.afternoon) },
   };
 }
 
@@ -225,23 +258,35 @@ export function sectionsTotal(sections: QuoteSection[]) {
 /* ------------------------------------------------------------------ catering order */
 
 export interface CateringItem { id: string; name: string; description: string | null; group: string; unit: string | null; unit_price: number; tax_rate: number }
-export interface CateringOrder { date: string; venue: string; address: string; guests: number | null; notes: string; slots: CateringSlot[]; contact: HireRequest["contact"] }
+export interface CateringOrder { date: string; venue: string; address: string; guests: number | null; notes: string; slots: CateringSlot[]; contact: HireRequest["contact"]; pickup: boolean }
 
-export function cateringProblem(o: CateringOrder, menu: CateringItem[], today: string): string | null {
-  if (!DATE.test(o.date)) return "Choose your delivery date.";
+export function cateringProblem(o: CateringOrder, menu: CateringItem[], today: string, cs: CateringSettings = DEFAULT_CATERING): string | null {
+  if (!DATE.test(o.date)) return "Choose your date.";
   if (o.date < today) return "That date has passed.";
-  const ids = new Set(menu.map((m) => m.id));
+  const byId = new Map(menu.map((m) => [m.id, m]));
   const lines = o.slots.flatMap((s) => s.items).filter((l) => l.qty > 0);
   if (!lines.length) return "Add something from the menu.";
-  if (lines.some((l) => !ids.has(l.serviceId) || l.qty > 2000 || !Number.isInteger(l.qty))) return "Check the quantities.";
-  if (o.slots.some((s) => s.items.some((l) => l.qty > 0) && !TIME.test(s.time))) return "Choose a delivery time.";
-  if (!o.address.trim() && !o.venue.trim()) return "Add the delivery address.";
+  if (lines.some((l) => !byId.has(l.serviceId) || l.qty > 2000 || !Number.isInteger(l.qty))) return "Check the quantities.";
+  const small = lines.find((l) => l.qty < cs.minQty);
+  if (small) return `${byId.get(small.serviceId)!.name}: the minimum is ${cs.minQty}.`;
+  if (o.slots.some((s) => s.items.some((l) => l.qty > 0) && !TIME.test(s.time))) return "Choose a time.";
+  if (o.pickup && !cs.pickup) return "Choose delivery.";
+  if (!o.pickup && cs.deliveryFee === null) return "Choose pickup.";
+  if (!o.pickup && !o.address.trim()) return "Add the delivery address.";
   if (!o.contact.name.trim() || o.contact.name.trim().length < 2) return "Add your name.";
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(o.contact.email.trim())) return "Add a valid email.";
   return null;
 }
 
-export function cateringSections(o: CateringOrder, menu: CateringItem[]): QuoteSection[] {
+/** How many deliveries an order needs (one per delivery time with something on it). */
+export const deliveryCount = (o: Pick<CateringOrder, "slots">) => o.slots.filter((s) => s.items.some((l) => l.qty > 0)).length;
+export function deliveryCharge(o: Pick<CateringOrder, "slots" | "pickup">, cs: CateringSettings) {
+  if (o.pickup || cs.deliveryFee === null) return { qty: 0, each: 0 };
+  const n = deliveryCount(o);
+  return { qty: n ? (cs.deliveryPer === "delivery" ? n : 1) : 0, each: cs.deliveryFee };
+}
+
+export function cateringSections(o: CateringOrder, menu: CateringItem[], cs: CateringSettings = DEFAULT_CATERING): QuoteSection[] {
   const byId = new Map(menu.map((m) => [m.id, m]));
   const out: QuoteSection[] = [];
   for (const sl of SLOTS) {
@@ -250,7 +295,18 @@ export function cateringSections(o: CateringOrder, menu: CateringItem[]): QuoteS
       const m = byId.get(l.serviceId)!;
       return { name: m.name, description: m.description, quantity: l.qty, unit: m.unit, unit_price: m.unit_price, tax_rate: m.tax_rate, service_id: m.id, is_optional: false };
     });
-    if (items.length) out.push({ title: `${sl.label} · ${fmtDate(o.date)} · ${slot!.time}`, items });
+    if (items.length) out.push({ title: `${o.pickup ? sl.label.replace("delivery", "pickup") : sl.label} · ${fmtDate(o.date)} · ${slot!.time}`, items });
   }
+  const d = deliveryCharge(o, cs);
+  if (out.length) out.push({ title: o.pickup ? "Pickup" : "Delivery", items: [o.pickup
+    ? { name: "Pickup — free", description: "You collect the order", quantity: 1, unit: null, unit_price: 0, tax_rate: 10, service_id: null, is_optional: false }
+    : { name: "Catering delivery", description: o.address.trim() || null, quantity: d.qty, unit: d.qty > 1 ? "delivery" : null, unit_price: d.each, tax_rate: 10, service_id: null, is_optional: false }] });
   return out;
+}
+
+/** Menus in the order the business wants for a delivery time; the rest come after. */
+export function menuOrder(groups: string[], slot: Slot, cs: CateringSettings) {
+  const pref = cs.slots[slot].map((g) => g.toLowerCase());
+  const first = pref.map((p) => groups.find((g) => g.toLowerCase() === p)).filter((g): g is string => !!g);
+  return { first, rest: groups.filter((g) => !first.includes(g)) };
 }

@@ -174,20 +174,20 @@ export async function submitCatering(slug: string, o: CateringOrder, db = create
   if (!eo) return { ok: false, error: "Online catering orders aren't available right now." };
   const { org, s, today } = eo;
   const menu = await cateringMenu(db, org.id);
-  const problem = cateringProblem(o, menu, today);
+  const problem = cateringProblem(o, menu, today, s.catering);
   if (problem) return { ok: false, error: problem };
-  const sections = cateringSections(o, menu);
+  const sections = cateringSections(o, menu, s.catering);
   const tentative = isTentative(today, o.date, s.leadDays);
   const byId = new Map(menu.map((m) => [m.id, m]));
   const catering = o.slots.filter((x) => x.items.some((l) => l.qty > 0)).map((x) => ({
-    slot: x.slot, label: SLOTS.find((z) => z.id === x.slot)?.label, time: x.time, date: o.date,
+    slot: x.slot, label: (o.pickup ? SLOTS.find((z) => z.id === x.slot)?.label.replace("delivery", "pickup") : SLOTS.find((z) => z.id === x.slot)?.label), time: x.time, date: o.date, pickup: o.pickup,
     items: x.items.filter((l) => l.qty > 0).map((l) => ({ service_id: l.serviceId, name: byId.get(l.serviceId)?.name, qty: l.qty })),
   }));
-  const msg = [`Catering order from the website for ${fmtLong(o.date)}.`, ...catering.map((c) => `• ${c.label} ${c.time}: ${c.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}`),
+  const msg = [`Catering order from the website for ${fmtLong(o.date)} — ${o.pickup ? "CUSTOMER PICKS UP" : `delivery to ${o.address.trim()}`}.`, ...catering.map((c) => `• ${c.label} ${c.time}: ${c.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}`),
     tentative ? `TENTATIVE — under ${s.leadDays} days away; check the kitchen can do it.` : "", o.notes.trim() ? `Customer notes: ${o.notes.trim()}` : ""].filter(Boolean).join("\n");
   const payload = {
     title: `Catering — ${o.contact.company.trim() || o.contact.name.trim()}`, event_type: "Catering", date: o.date,
-    start_time: catering[0]?.time ?? null, end_time: null, guests: o.guests, venue: o.venue, address: o.address, notes: msg, message: msg,
+    start_time: catering[0]?.time ?? null, end_time: null, guests: o.guests, venue: o.venue, address: o.pickup ? "" : o.address, notes: msg, message: msg,
     customer: { name: o.contact.name.trim(), email: o.contact.email.trim(), phone: o.contact.phone.trim(), company: o.contact.company.trim() },
     fleet: {}, fleet_dates: [o.date], catering, sections, tentative, source_label: "Catering order",
   };
@@ -200,7 +200,7 @@ export async function submitCatering(slug: string, o: CateringOrder, db = create
   await mailBoth(org,
     { to: o.contact.email.trim(), firstName: first1, heading: `Thanks ${first1} — your catering order is in`,
       intro: [`We've got your catering order for ${fmtLong(o.date)}. We'll check it and email your quote and invoice to lock it in.`, tentative ? `It's less than ${s.leadDays} days away, so it's tentative until the kitchen confirms — we'll be in touch quickly.` : ""].filter(Boolean),
-      rows: [{ label: "Reference", value: res.event_number }, ...catering.map((c) => ({ label: `${c.label} · ${c.time}`, value: c.items.map((i) => `${i.qty} × ${i.name}`).join(", ") })), { label: "Estimated total", value: `${moneyAU(t.total)} inc GST` }] },
+      rows: [{ label: "Reference", value: res.event_number }, ...catering.map((c) => ({ label: `${c.label} · ${c.time}`, value: c.items.map((i) => `${i.qty} × ${i.name}`).join(", ") })), { label: o.pickup ? "Pickup" : "Delivery", value: o.pickup ? `Free — collect from ${org.address ?? "us"}` : o.address.trim() }, { label: "Total", value: `${moneyAU(t.subtotal)} + GST ${moneyAU(t.tax)} = ${moneyAU(t.total)}` }] },
     { heading: `${tentative ? "TENTATIVE · " : ""}Catering order: ${o.contact.name.trim()} — ${fmtLong(o.date)}`, url: `${appBaseUrl()}/quotes/${res.quote_id}`,
       rows: [{ label: "Draft", value: `${res.quote_number} · ${moneyAU(Number(res.total))} inc GST` }, { label: "Email", value: o.contact.email.trim() }] });
   return { ok: true, reference: res.event_number, tentative };
