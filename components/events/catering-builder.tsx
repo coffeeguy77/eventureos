@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Clock, Minus, Plus, RotateCcw, ShoppingBag, Store, Sun, Sunrise, Sunset, Trash2, Truck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Clock, LayoutGrid, List, Minus, Plus, RotateCcw, Search, ShoppingBag, SlidersHorizontal, Store, Sun, Sunrise, Sunset, Trash2, Truck, Users, X } from "lucide-react";
 import type { CateringItem, CateringOrder, CateringSettings, Slot } from "@/lib/events/core";
 import { cateringProblem, deliveryCharge, menuOrder, SLOTS } from "@/lib/events/core";
 import { requestCatering, saveCart } from "@/app/hire/[org]/actions";
@@ -37,6 +37,11 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
   const [extra, setExtra] = useState<Record<Slot, string[]>>({ morning: [], lunch: [], afternoon: [] });
   const [tab, setTab] = useState<string | null>(null);
   const [showOther, setShowOther] = useState(false);
+  const [layout, setLayout] = useState(cs.layout);
+  const [view, setView] = useState(cs.display);
+  const [query, setQuery] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterBox = useRef<HTMLDivElement>(null);
   const [pickup, setPickup] = useState(cs.deliveryFee === null);
   const [date, setDate] = useState("");
   const [venue, setVenue] = useState("");
@@ -66,6 +71,21 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
     } catch { /* fresh */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem("eos-catering-view") ?? "null"); if (v?.layout === "list" || v?.layout === "tabs") setLayout(v.layout); if (v?.view === "tiles" || v?.view === "rows") setView(v.view); } catch { /* default */ }
+  }, []);
+  const choose = (patch: { layout?: "list" | "tabs"; view?: "tiles" | "rows" }) => {
+    const next = { layout: patch.layout ?? layout, view: patch.view ?? view };
+    setLayout(next.layout); setView(next.view);
+    try { localStorage.setItem("eos-catering-view", JSON.stringify(next)); } catch { /* off */ }
+  };
+  useEffect(() => {
+    if (!filterOpen) return;
+    const close = (e: MouseEvent) => { if (filterBox.current && !filterBox.current.contains(e.target as Node)) setFilterOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setFilterOpen(false); };
+    document.addEventListener("mousedown", close); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
+  }, [filterOpen]);
   useEffect(() => { if (!done) try { localStorage.setItem(KEY, JSON.stringify({ lines, custom, people, times, date, venue, address, pickup, contact })); } catch { /* off */ } },
     [KEY, lines, custom, people, times, date, venue, address, pickup, contact, done]);
 
@@ -182,10 +202,44 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
       </div>
     );
   };
-  const group = (g: string) => (
+  const itemRow = (m: CateringItem) => {
+    const q = lines[slot][m.id] ?? 0;
+    const own = isCustom(slot, m.id);
+    const pp = perPerson(m.unit);
+    return (
+      <li key={m.id} className={`flex items-center gap-4 px-4 py-3 sm:px-5 ${q ? "bg-[color-mix(in_srgb,var(--pk)_5%,white)]" : ""}`}>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[0.9688rem] font-semibold">{m.name}<span className="ml-2 text-[0.8125rem] font-semibold text-[#8C847D] sm:hidden">{aud(m.unit_price)} + GST</span></p>
+          <p className="truncate text-[0.8438rem] text-[#5E5853]">{m.description || (pp ? "Per person" : "Each")}</p>
+          {q > 0 && q < min && <p className="text-[0.75rem] font-medium text-[#B42318]">Minimum {min}</p>}
+          {q >= min && own && pp && <p className="text-[0.75rem] text-[#5E5853]">Your own amount · <button type="button" onClick={() => { markCustom(slot, m.id, false); setQty(slot, m.id, Math.max(min, people[slot]), false); }} className="font-semibold text-[var(--pk)]">match {Math.max(min, people[slot])}</button></p>}
+        </div>
+        <p className="hidden shrink-0 text-right sm:block"><span className="block text-[0.9375rem] font-bold">{aud(m.unit_price)}</span><span className="text-[0.6875rem] text-[#8C847D]">+ GST {pp ? "pp" : "ea"}</span></p>
+        <div className="flex w-[124px] shrink-0 justify-end">
+          {q ? (
+            <div className="inline-flex h-[40px] items-center rounded-full bg-[#F7EFEA]">
+              <button type="button" aria-label={q <= min ? `Remove ${m.name}` : `Fewer ${m.name}`} onClick={() => setQty(slot, m.id, q <= min ? 0 : q - 1, true)} className="grid h-full w-9 place-items-center">{q <= min ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}</button>
+              <input aria-label={`${m.name} quantity`} inputMode="numeric" className="w-11 bg-transparent text-center text-[0.9375rem] font-bold outline-none" value={q} onChange={(e) => setQty(slot, m.id, Number(e.target.value.replace(/\D/g, "")) || 0, true)} />
+              <button type="button" aria-label={`More ${m.name}`} onClick={() => setQty(slot, m.id, q + 1, true)} className="grid h-full w-9 place-items-center"><Plus className="h-3.5 w-3.5" /></button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => add(m.id)} data-track-kind="cart_add" data-track={`Catering add: ${m.name}`} className="shop-btn inline-flex h-[40px] items-center gap-1.5 rounded-full border-[1.5px] border-[#1F1B19] px-4 text-[0.875rem] font-semibold hover:bg-[#151312] hover:text-white">
+              <Plus className="h-3.5 w-3.5" />Add {follow(m.id)}
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  };
+  const items = (list: CateringItem[]) => view === "rows"
+    ? <ul className="divide-y divide-[#EDE3DB] overflow-hidden rounded-[20px] bg-white ring-1 ring-[#EDE3DB]">{list.map(itemRow)}</ul>
+    : <div className="grid gap-4 sm:grid-cols-2">{list.map(itemCard)}</div>;
+  const q = query.trim().toLowerCase();
+  const found = q ? menu.filter((m) => `${m.name} ${m.description ?? ""} ${m.group}`.toLowerCase().includes(q)) : [];
+  const group = (g: string, heading = layout === "list") => (
     <div key={g} data-section={`menu-${g.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
-      {cs.layout === "list" && <p className="shop-serif text-[1.875rem] font-semibold">{g}</p>}
-      <div className={`${cs.layout === "list" ? "mt-4" : ""} grid gap-4 sm:grid-cols-2`}>{menu.filter((m) => m.group === g).map(itemCard)}</div>
+      {heading && <p className={`shop-serif font-semibold ${view === "rows" ? "text-[1.5rem]" : "text-[1.875rem]"}`}>{g}</p>}
+      <div className={heading ? (view === "rows" ? "mt-3" : "mt-4") : ""}>{items(menu.filter((m) => m.group === g))}</div>
     </div>
   );
 
@@ -315,17 +369,59 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
             <span className="text-[0.8125rem] text-[#8C847D]">Minimum {min} of each item · prices + GST</span>
           </div>
 
-          {cs.layout === "tabs" && shown.length > 1 && (
-            <div className="no-scrollbar mt-8 flex gap-2 overflow-x-auto" role="tablist" aria-label="Menus">
-              {shown.map((g) => <button key={g} type="button" role="tab" aria-selected={activeTab === g} onClick={() => setTab(g)} className={`h-11 shrink-0 rounded-full px-5 text-[0.9375rem] font-semibold transition ${activeTab === g ? "bg-[#151312] text-white" : "bg-white text-[#3A3431] ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"}`}>{g}</button>)}
+          <div className="mt-6 flex items-center gap-2">
+            <label className="relative flex-1">
+              <span className="sr-only">Search the menu</span>
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#8C847D]" />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the menu — e.g. gluten free, wraps, fruit" className={`${field} pl-11 pr-10`} />
+              {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#8C847D] hover:bg-[#F4ECE6]"><X className="h-4 w-4" /></button>}
+            </label>
+            <div className="relative" ref={filterBox}>
+              <button type="button" aria-label="How to show the menu" aria-expanded={filterOpen} onClick={() => setFilterOpen((o) => !o)} className={`grid h-[52px] w-[52px] place-items-center rounded-[14px] border bg-white transition ${filterOpen ? "border-[var(--pk)] text-[var(--pk)]" : "border-[#E6DCD4] hover:border-[#CFC3BA]"}`}><SlidersHorizontal className="h-5 w-5" /></button>
+              {filterOpen && (
+                <div className="absolute right-0 top-[60px] z-30 w-[270px] rounded-[18px] bg-white p-4 shadow-[0_30px_60px_-24px_rgba(40,20,20,.35)] ring-1 ring-[#EDE3DB]" role="dialog" aria-label="Menu view">
+                  <p className="text-[0.75rem] font-bold uppercase tracking-wide text-[#8C847D]">Show items as</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {([["tiles", "Tiles", LayoutGrid], ["rows", "Compact list", List]] as const).map(([k, l, I]) => (
+                      <button key={k} type="button" aria-pressed={view === k} onClick={() => choose({ view: k })} className={`flex flex-col items-center gap-1.5 rounded-xl border-2 py-3 text-[0.8125rem] font-semibold ${view === k ? "border-[var(--pk)] bg-[color-mix(in_srgb,var(--pk)_6%,white)]" : "border-[#EDE3DB]"}`}><I className="h-5 w-5" />{l}</button>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-[0.75rem] font-bold uppercase tracking-wide text-[#8C847D]">Menus</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {([["list", "One after another"], ["tabs", "Tabs"]] as const).map(([k, l]) => (
+                      <button key={k} type="button" aria-pressed={layout === k} onClick={() => choose({ layout: k })} className={`rounded-xl border-2 px-2 py-2.5 text-[0.8125rem] font-semibold ${layout === k ? "border-[var(--pk)] bg-[color-mix(in_srgb,var(--pk)_6%,white)]" : "border-[#EDE3DB]"}`}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          <div className={`${cs.layout === "tabs" ? "mt-5" : "mt-8"} space-y-10`}>
-            {cs.layout === "tabs" ? (activeTab ? group(activeTab) : null) : shown.map(group)}
-            {!menu.length && <p className="rounded-[20px] bg-white p-8 text-center text-[#5E5853] ring-1 ring-[#EDE3DB]">Our catering menu is being updated — send us a message below and we&apos;ll help.</p>}
           </div>
 
-          {others.filter((g) => !extra[slot].includes(g)).length > 0 && (
+          {q ? (
+            <div className="mt-6 space-y-8">
+              <p className="text-[0.9375rem] text-[#5E5853]">{found.length ? `${found.length} match${found.length > 1 ? "es" : ""} for “${query.trim()}” — anything you add goes in your ${SHORT[slot].toLowerCase()} order` : `Nothing matches “${query.trim()}”. Try another word, or send us a message below.`}</p>
+              {[...new Set(found.map((m) => m.group))].map((g) => (
+                <div key={g}>
+                  <p className={`shop-serif font-semibold ${view === "rows" ? "text-[1.5rem]" : "text-[1.875rem]"}`}>{g}</p>
+                  <div className={view === "rows" ? "mt-3" : "mt-4"}>{items(found.filter((m) => m.group === g))}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              {layout === "tabs" && shown.length > 1 && (
+                <div className="no-scrollbar mt-6 flex gap-2 overflow-x-auto" role="tablist" aria-label="Menus">
+                  {shown.map((g) => <button key={g} type="button" role="tab" aria-selected={activeTab === g} onClick={() => setTab(g)} className={`h-11 shrink-0 rounded-full px-5 text-[0.9375rem] font-semibold transition ${activeTab === g ? "bg-[#151312] text-white" : "bg-white text-[#3A3431] ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"}`}>{g}</button>)}
+                </div>
+              )}
+              <div className={`${layout === "tabs" ? "mt-5" : "mt-8"} ${view === "rows" ? "space-y-8" : "space-y-10"}`}>
+                {layout === "tabs" ? (activeTab ? group(activeTab, shown.length <= 1) : null) : shown.map((g) => group(g))}
+                {!menu.length && <p className="rounded-[20px] bg-white p-8 text-center text-[#5E5853] ring-1 ring-[#EDE3DB]">Our catering menu is being updated — send us a message below and we&apos;ll help.</p>}
+              </div>
+            </>
+          )}
+
+          {!q && others.filter((g) => !extra[slot].includes(g)).length > 0 && (
             <div className="mt-10 rounded-[22px] border-2 border-dashed border-[#E3D7CE] p-5">
               <button type="button" onClick={() => setShowOther((v) => !v)} aria-expanded={showOther} className="flex w-full items-center justify-between gap-3 text-left">
                 <span><span className="block text-[1.0625rem] font-bold">Looking for something else?</span><span className="text-[0.875rem] text-[#5E5853]">Add from our other menus to your {SHORT[slot].toLowerCase()} order.</span></span>

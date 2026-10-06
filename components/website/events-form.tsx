@@ -75,10 +75,14 @@ export function EventsForm({ initial, packages, slug, base, menus }: { initial: 
           <label className="flex items-center gap-2 self-end pb-2 text-[0.8125rem]"><input type="checkbox" className="h-4 w-4" checked={cat.pickup} onChange={(e) => setCat({ pickup: e.target.checked })} />Free pickup</label>
         </div>
         <div className="mt-5">
-          <Label>How menus show</Label>
+          <Label>How the menu shows (customers can change it with the filter button)</Label>
           <div className="flex flex-wrap gap-2">
             {([["list", "Menu after menu"], ["tabs", "Tabbed menus"]] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setCat({ layout: k })} className={`rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium ring-1 ring-inset ${cat.layout === k ? "bg-brand-50 text-ink ring-brand-300" : "text-ink-muted ring-line-strong hover:bg-zinc-50"}`}>{l}</button>
+            ))}
+            <span className="mx-1 w-px self-stretch bg-line" />
+            {([["tiles", "Item tiles"], ["rows", "Compact list"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setCat({ display: k })} className={`rounded-lg px-3 py-1.5 text-[0.8125rem] font-medium ring-1 ring-inset ${cat.display === k ? "bg-brand-50 text-ink ring-brand-300" : "text-ink-muted ring-line-strong hover:bg-zinc-50"}`}>{l}</button>
             ))}
           </div>
         </div>

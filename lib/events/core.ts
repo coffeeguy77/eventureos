@@ -37,10 +37,11 @@ export interface CateringSettings {
   deliveryPer: "order" | "delivery";              // charge once per order, or for each delivery time
   pickup: boolean;                                // customers can collect for free
   layout: "list" | "tabs";                        // menu after menu, or one tab per menu
+  display: "tiles" | "rows";                      // item tiles, or a compact list (name + description on two lines)
   slots: Record<Slot, string[]>;                  // which menus show first for each delivery, in order
 }
 export const DEFAULT_CATERING: CateringSettings = {
-  minQty: 10, deliveryFee: 100, deliveryPer: "order", pickup: true, layout: "list",
+  minQty: 10, deliveryFee: 100, deliveryPer: "order", pickup: true, layout: "list", display: "tiles",
   slots: { morning: ["Breakfast", "Morning & afternoon tea", "Filtered coffee & tea"], lunch: ["Lunch", "Salads"], afternoon: ["Morning & afternoon tea", "Filtered coffee & tea"] },
 };
 
@@ -104,6 +105,7 @@ function readCatering(v: unknown): CateringSettings {
     deliveryPer: o.deliveryPer === "delivery" ? "delivery" : "order",
     pickup: o.pickup === undefined ? d.pickup : o.pickup === true,
     layout: o.layout === "tabs" ? "tabs" : "list",
+    display: o.display === "rows" ? "rows" : "tiles",
     slots: { morning: list(sl.morning, d.slots.morning), lunch: list(sl.lunch, d.slots.lunch), afternoon: list(sl.afternoon, d.slots.afternoon) },
   };
 }
