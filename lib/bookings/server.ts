@@ -622,14 +622,24 @@ export async function deliverGift(db: SupabaseClient, org: PublicOrg, giftId: st
   const common = { purchaserName: g.purchaser_name, recipientName: g.recipient_name, code: g.code, amount: money(g.amount, org.currency), course: g.course?.name ?? null, message: g.message,
     expires: g.expires_on ? new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(g.expires_on + "T00:00:00Z")) : null,
     viewUrl: bookUrl(org, `/gift/${g.view_token}`), bookUrl: bookUrl(org) };
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
+  const toRecipient = !!g.recipient_email && !g.sent_at && (!g.send_on || g.send_on <= today);
+  // The printable certificate (front + back) goes with the email; if it can't be made, the email still goes with its link
+  let attachments: { filename: string; content: string }[] | undefined;
+  if ((toPurchaser && g.purchaser_email) || toRecipient) {
+    try {
+      const { giftPdf } = await import("./gift-pdf");
+      const pdf = await giftPdf(org, g);
+      if (pdf) attachments = [{ filename: pdf.file, content: Buffer.from(pdf.bytes).toString("base64") }];
+    } catch (e) { console.error("gift pdf attach", e); }
+  }
   if (toPurchaser && g.purchaser_email) {
     const m = giftEmail(brand, { ...common, to: "purchaser" });
-    await safeSend({ to: g.purchaser_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name });
+    await safeSend({ to: g.purchaser_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments });
   }
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
-  if (g.recipient_email && !g.sent_at && (!g.send_on || g.send_on <= today)) {
+  if (toRecipient && g.recipient_email) {
     const m = giftEmail(brand, { ...common, to: "recipient" });
-    if (await safeSend({ to: g.recipient_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
+    if (await safeSend({ to: g.recipient_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments })) {
       await db.from("booking_gifts").update({ sent_at: new Date().toISOString() }).eq("id", g.id);
     }
   }

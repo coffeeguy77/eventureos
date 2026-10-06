@@ -42,26 +42,38 @@ const FONTS = `
 }
 `;
 
-export function GiftCard({ front, back, flipped: controlled, onFlip, className = "", label = "Flip card" }: {
+export function GiftCard({ front, back, flipped: controlled, onFlip, className = "", label = "Flip card", button = "below", hints = false }: {
   front: CardFront; back: CardBack; flipped?: boolean; onFlip?: (v: boolean) => void; className?: string; label?: string;
+  /** Where the flip button goes: under the card, or a small round button on its corner */
+  button?: "below" | "corner";
+  /** Show faint "Their name" / "Your name" where nothing has been typed yet (live preview) */
+  hints?: boolean;
 }) {
   const [own, setOwn] = useState(false);
   const flipped = controlled ?? own;
   const flip = () => { const v = !flipped; if (onFlip) onFlip(v); else setOwn(v); };
+  const text = flipped ? "See the front" : label;
   return (
-    <div className={className}>
+    <div className={`${className} ${button === "corner" ? "relative" : ""}`}>
       <style>{FONTS}</style>
-      <div className="gc" data-flipped={flipped ? "" : undefined}>
+      <div className="gc cursor-pointer" data-flipped={flipped ? "" : undefined} onClick={flip}>
         <div className="gc-inner">
           <Front f={front} />
-          <Back b={back} />
+          <Back b={back} hints={hints} />
         </div>
       </div>
-      <div className="gc-flip mt-4 flex justify-center">
-        <button type="button" onClick={flip} className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.875rem] font-semibold text-[#2A2522] shadow-sm ring-1 ring-black/10 backdrop-blur transition hover:bg-white">
-          <RotateCcw className="h-4 w-4" />{flipped ? "See the front" : label}
+      {button === "corner" ? (
+        <button type="button" onClick={flip} aria-label={text} title={text}
+          className="gc-flip absolute -right-3 -top-3 z-10 grid h-11 w-11 place-items-center rounded-full bg-white text-[#2A2522] shadow-[0_6px_18px_-6px_rgba(0,0,0,.45)] ring-1 ring-black/10 transition hover:scale-105">
+          <RotateCcw className="h-[18px] w-[18px]" />
         </button>
-      </div>
+      ) : (
+        <div className="gc-flip mt-4 flex justify-center">
+          <button type="button" onClick={flip} className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-[0.875rem] font-semibold text-[#2A2522] shadow-sm ring-1 ring-black/10 backdrop-blur transition hover:bg-white">
+            <RotateCcw className="h-4 w-4" />{text}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -82,26 +94,27 @@ function Front({ f }: { f: CardFront }) {
   );
 }
 
-function Back({ b }: { b: CardBack }) {
+function Back({ b, hints }: { b: CardBack; hints?: boolean }) {
+  const hint = (t: string) => (hints ? <span className="text-[#1d1916]/25">{t}</span> : " ");
   return (
     <div className="gc-face gc-back" aria-label="Back of the card">
       {b.art && <img src={b.art} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[0.55]" style={{ transform: "scaleX(-1)" }} />}
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(247,242,234,.25)_0%,rgba(247,242,234,.92)_38%,rgba(247,242,234,.97)_100%)]" />
       <div className="absolute inset-y-[8%] left-[36%] right-[6%] flex flex-col text-[#1d1916]">
         <p className="gc-sans font-medium uppercase text-[#6d655e]" style={{ fontSize: "1.9cqw", letterSpacing: "0.3em" }}>To</p>
-        <p className="gc-script leading-[1.05]" style={{ fontSize: "6.4cqw", minHeight: "6.6cqw" }}>{b.to || " "}</p>
+        <p className="gc-script leading-[1.05]" style={{ fontSize: "6.4cqw", minHeight: "6.6cqw" }}>{b.to || hint("Their name")}</p>
         <div className="mt-[2.2cqw] h-px w-full bg-[#1d1916]/15" />
         <p className="gc-serif mt-[2.8cqw] flex-1 overflow-hidden whitespace-pre-line italic leading-[1.45] text-[#2c2622]" style={{ fontSize: b.message && b.message.length > 140 ? "2.55cqw" : "3.05cqw" }}>
           {b.message || <span className="text-[#2c2622]/35">Your message will appear here.</span>}
         </p>
         <p className="gc-sans font-medium uppercase text-[#6d655e]" style={{ fontSize: "1.9cqw", letterSpacing: "0.3em" }}>From</p>
-        <p className="gc-script leading-[1.05]" style={{ fontSize: "5cqw", minHeight: "5.2cqw" }}>{b.from || " "}</p>
+        <p className="gc-script leading-[1.05]" style={{ fontSize: "5cqw", minHeight: "5.2cqw" }}>{b.from || hint("Your name")}</p>
         <div className="mt-[2.4cqw] flex items-end justify-between gap-[2cqw] border-t border-[#1d1916]/15 pt-[2.2cqw]">
           <div className="min-w-0">
-            <p className="gc-serif font-bold leading-none" style={{ fontSize: "4.4cqw" }}>{b.value}</p>
+            <p className="gc-serif font-bold leading-[1.1]" style={{ fontSize: b.value.length > 22 ? "3.1cqw" : b.value.length > 14 ? "3.7cqw" : "4.4cqw" }}>{b.value}</p>
             {b.valueNote && <p className="gc-sans mt-[0.8cqw] text-[#6d655e]" style={{ fontSize: "1.75cqw" }}>{b.valueNote}</p>}
           </div>
-          <div className="text-right">
+          <div className="shrink-0 whitespace-nowrap text-right">
             {b.code && <p className="gc-sans font-semibold tracking-[0.14em]" style={{ fontSize: "2.5cqw" }}>{b.code}</p>}
             <p className="gc-sans text-[#6d655e]" style={{ fontSize: "1.65cqw" }}>{[b.expires ? `Valid until ${b.expires}` : null, b.business].filter(Boolean).join(" · ")}</p>
           </div>

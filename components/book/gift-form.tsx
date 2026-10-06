@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, CalendarHeart, Check, Gift, Heart, Loader2, Lock, Mail, MessageCircle, Printer, Send, ShieldCheck, UserRound } from "lucide-react";
 import { startGiftAction } from "@/app/book/actions";
 import { goTop } from "./embed-bridge";
+import { GiftCard } from "@/components/gifts/gift-card";
 
 interface Option { key: string; courseId: string | null; amount: number; label: string; hint: string }
 
@@ -28,10 +30,15 @@ function OptionIcon({ i, amount }: { i: number; amount: boolean }) {
   );
 }
 
-export function GiftForm({ orgSlug, currency, options, minDate, years, business, badge }: {
+/** The certificate artwork, and the id of the spot on the page where the live card goes. */
+export interface GiftFormCard { art: string; backArt: string | null; slot: string; redeem: string }
+
+export function GiftForm({ orgSlug, currency, options, minDate, years, business, badge, card }: {
   orgSlug: string; currency: string; options: Option[]; minDate: string; years?: number; business?: string;
   /** Small badge beside "Choose a gift" (e.g. "Popular gift") */
   badge?: string | null;
+  /** Live certificate: the back fills in as they type */
+  card?: GiftFormCard | null;
 }) {
   const $ = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n).replace(/\.00$/, "");
   const [pick, setPick] = useState(options[0]?.key ?? "");
@@ -42,6 +49,18 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
   const [pending, start] = useTransition();
   const opt = options.find((o) => o.key === pick);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
+  // The card turns to its back while they fill in the names and message, so they can watch it being written
+  const [flipped, setFlipped] = useState(false);
+  const [mobileFront, setMobileFront] = useState(false);
+  const showBack = () => setFlipped(true);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { if (card) setSlot(document.getElementById(card.slot)); }, [card]);
+  const preview = (extra: { flipped: boolean; onFlip: (v: boolean) => void; button: "below" | "corner"; label?: string }) => card && (
+    <GiftCard front={{ art: card.art }} hints {...extra}
+      back={{ to: f.recipientName.trim() || null, from: f.purchaserName.trim() || null, message: f.message.trim() || null,
+        value: opt ? (opt.courseId ? opt.label : $(opt.amount)) : "", valueNote: opt?.courseId ? `${$(opt.amount)} value` : null,
+        business: business ?? "", redeem: card.redeem, art: card.backArt }} />
+  );
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,17 +114,23 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
       <h2 className="text-[1.1875rem] font-semibold text-[#1E1A18]">Who&apos;s it for?</h2>
       <div className="mt-3 grid gap-[13px] sm:grid-cols-[1.1fr_1fr]">
         <div><label className={label} htmlFor="g-rn">Recipient&apos;s name</label>
-          <div className="relative"><Gift className={icon} strokeWidth={1.7} /><input id="g-rn" className={field} value={f.recipientName} onChange={set("recipientName")} maxLength={160} placeholder="Shown on the certificate" /></div></div>
+          <div className="relative"><Gift className={icon} strokeWidth={1.7} /><input id="g-rn" className={field} value={f.recipientName} onChange={set("recipientName")} onFocus={showBack} maxLength={160} placeholder="Shown on the certificate" /></div></div>
         <div><label className={label} htmlFor="g-pn">Your name</label>
-          <div className="relative"><UserRound className={icon} strokeWidth={1.7} /><input id="g-pn" className={field} value={f.purchaserName} onChange={set("purchaserName")} required maxLength={160} autoComplete="name" placeholder="Your name" /></div></div>
+          <div className="relative"><UserRound className={icon} strokeWidth={1.7} /><input id="g-pn" className={field} value={f.purchaserName} onChange={set("purchaserName")} onFocus={showBack} required maxLength={160} autoComplete="name" placeholder="Your name" /></div></div>
       </div>
       <div className="mt-3.5"><label className={label} htmlFor="g-pe">Your email</label>
         <div className="relative"><Mail className={icon} strokeWidth={1.7} /><input id="g-pe" type="email" inputMode="email" className={field} value={f.purchaserEmail} onChange={set("purchaserEmail")} required maxLength={254} autoComplete="email" placeholder="The certificate will be sent to this email" /></div>
         <p className="mt-2.5 text-[0.7813rem] text-[#6E6560]">The certificate comes to you (or directly to them), ready to print or forward.</p></div>
       <div className="mt-3.5"><label className={label} htmlFor="g-m">Personal message (optional)</label>
         <div className="relative"><MessageCircle className="pointer-events-none absolute left-4 top-[15px] h-[18px] w-[18px] text-[#8C8480]" strokeWidth={1.7} />
-          <textarea id="g-m" rows={3} className={`${field} h-[84px] resize-y py-3 leading-relaxed`} value={f.message} onChange={set("message")} maxLength={MAX_MESSAGE} placeholder="Happy Father's Day! Love, …" /></div>
+          <textarea id="g-m" rows={3} className={`${field} h-[84px] resize-y py-3 leading-relaxed`} value={f.message} onChange={set("message")} onFocus={showBack} maxLength={MAX_MESSAGE} placeholder="Happy Father's Day! Love, …" /></div>
         <p className="mt-1 text-right text-[0.875rem] text-[#6E6560]" aria-live="polite">{f.message.length}/{MAX_MESSAGE}</p></div>
+      {card && (
+        <div className="mb-6 mt-1 xl:hidden">
+          <p className="mb-2.5 text-[0.875rem] font-medium text-[#1E1A18]">Preview</p>
+          {preview({ flipped: !mobileFront, onFlip: (v) => setMobileFront(!v), button: "below", label: "See the back" })}
+        </div>
+      )}
 
       <h3 className="text-[0.875rem] font-medium text-[#1E1A18]">Delivery method</h3>
       <div className="mt-2.5 grid gap-[13px] sm:grid-cols-2" role="radiogroup" aria-label="Delivery method">
@@ -146,6 +171,7 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
           </li>
         ))}
       </ul>
+      {slot && createPortal(preview({ flipped, onFlip: setFlipped, button: "corner" }), slot)}
     </form>
   );
 }

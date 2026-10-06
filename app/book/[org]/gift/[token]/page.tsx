@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { giftByToken, publicOrg, settleFromStripe } from "@/lib/bookings/server";
 import { money } from "@/lib/format";
 import { BookShell } from "@/components/book/shell";
 import { AutoRefresh } from "@/components/book/auto-refresh";
 import { PrintButton } from "@/components/book/print-button";
 import { GiftCard } from "@/components/gifts/gift-card";
+import { giftBack } from "@/lib/bookings/gift-pdf";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Gift certificate", robots: { index: false, follow: false } };
@@ -38,11 +39,9 @@ export default async function GiftView({ params, searchParams }: { params: Promi
             {sp.paid === "1" && <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-center text-[0.9375rem] font-medium text-emerald-800 print:hidden">Thank you! The certificate is on its way to your inbox{g.recipient_email ? " (and theirs)" : ""}.</p>}
             {org.settings.landing.giftCard ? (
               <>
-                <GiftCard front={{ art: org.settings.landing.giftCard }} label="See your message"
-                  back={{ to: g.recipient_name, from: g.purchaser_name, message: g.message, value: g.course ? g.course.name : money(g.amount, org.currency), valueNote: g.course ? `${money(g.amount, org.currency)} value` : null,
-                    code: g.code, expires, business: org.name, art: org.settings.landing.giftCard, redeem: `Book at ${org.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || `eventureos.com.au/book/${org.slug}`} and enter the code at checkout.` }} />
+                <GiftCard front={{ art: org.settings.landing.giftCard }} label="See your message" back={{ ...giftBack(org, g), art: org.settings.landing.giftCardBack }} />
                 {g.status === "redeemed" ? <p className="mt-3 text-center text-[0.875rem] font-semibold text-ink-muted">Used — thank you!</p> : Number(g.balance) < Number(g.amount) && Number(g.balance) > 0 ? <p className="mt-3 text-center text-[0.875rem] font-semibold text-ink">{money(g.balance, org.currency, { cents: true })} left to use</p> : null}
-                <p className="mt-2 text-center text-[0.8125rem] text-ink-muted print:hidden">Printing? You&apos;ll get the front and the back — cut them out and glue back to back, or fold.</p>
+                <p className="mt-2 text-center text-[0.8125rem] text-ink-muted print:hidden">Printing? Download the PDF and print it double-sided (flip on short edge) — the back lines up behind the front. Cut along the corner marks.</p>
               </>
             ) : (
             <div className="relative overflow-hidden rounded-3xl border-2 border-[var(--b)] bg-surface p-8 text-center shadow-card print:shadow-none">
@@ -60,7 +59,9 @@ export default async function GiftView({ params, searchParams }: { params: Promi
             </div>
             )}
             <div className="mt-5 flex flex-wrap justify-center gap-2 print:hidden">
-              <PrintButton />
+              {org.settings.landing.giftCard && g.status !== "void"
+                ? <a href={`/api/book/gift/${token}?download=1`} className="inline-flex h-12 items-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-ink ring-1 ring-line-strong hover:bg-zinc-50"><Download className="h-4 w-4" />Download PDF to print</a>
+                : <PrintButton />}
               {g.status === "active" && <Link href={bookHref} className="inline-flex h-12 items-center rounded-xl bg-[var(--b)] px-5 text-[0.9375rem] font-semibold text-[var(--on-b)]">Book with this code</Link>}
             </div>
           </>

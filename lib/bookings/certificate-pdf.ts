@@ -12,7 +12,7 @@ const FILES: Record<Font, string> = {
   scriptCasual: "Allison-Regular.ttf", scriptFormal: "PinyonScript-Regular.ttf",
 };
 const cache = new Map<string, Uint8Array>();
-async function fontBytes(name: string) {
+export async function fontBytes(name: string) {
   if (cache.has(name)) return cache.get(name)!;
   const res = await fetch(`${appBaseUrl()}/fonts/cert/${name}`, { cache: "force-cache" });
   if (!res.ok) throw new Error(`Certificate font ${name} not found (${res.status})`);
