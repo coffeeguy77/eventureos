@@ -78,6 +78,13 @@ export async function GET(req: NextRequest) {
     shopJobs = await runShopJobs(db);
   } catch (e) { shopJobs = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Website "come back and finish" reminders — only for businesses that switched them on (off by default)
+  let reminders: unknown = null;
+  if (!only.length) try {
+    const { runReminders } = await import("@/lib/reminders/server");
+    reminders = await runReminders(db);
+  } catch (e) { reminders = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -98,5 +105,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders });
 }

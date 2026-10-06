@@ -3,10 +3,10 @@
  * Every top-level folder in app/ is a real route and is never treated as a business (a test checks this list).
  */
 export const RESERVED = [
-  "admin", "api", "auth", "book", "crew", "jobs", "onboarding", "p", "pay", "q", "shop", "suspended",
+  "admin", "api", "auth", "book", "crew", "hire", "jobs", "onboarding", "p", "pay", "q", "shop", "suspended",
   "login", "signup",
-  "bookings", "calendar", "clients", "crm", "dashboard", "enquiries", "events", "history", "invoices", "my-jobs", "my-signature", "offers",
-  "payments", "portal", "quotes", "reports", "settings", "store", "tasks", "wages", "xero-quotes",
+  "bookings", "calendar", "clients", "crm", "dashboard", "enquiries", "events", "history", "invoices", "kitchen", "my-jobs", "my-signature", "offers",
+  "payments", "portal", "quotes", "reports", "settings", "store", "tasks", "wages", "website", "xero-quotes",
   "robots.txt", "sitemap.xml", "manifest.webmanifest", "favicon.ico", "embed.js", "downloads", "fonts", "media",
 ];
 

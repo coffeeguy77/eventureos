@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { loadLibrary } from "@/lib/documents/library";
+import { readEvents } from "@/lib/events/core";
 import { DocList } from "@/components/portal/doc-list";
 import { cn } from "@/lib/cn";
 import { firstName, fmtDate, money, relativeDay, timeRange, todayISO } from "@/lib/format";
@@ -55,6 +56,8 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
   const past = cards.filter((c) => !upcoming.includes(c));
   const actionCount = upcoming.filter((c) => c.next.urgent).length;
 
+  const { data: orgSettings } = await createServiceClient().from("organisations").select("settings").eq("id", org.id).maybeSingle();
+  const hireOn = readEvents(orgSettings?.settings).enabled;
   return (
     <div>
       <div className="mb-6 sm:mb-8">
@@ -66,6 +69,13 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
             : events.length ? "Everything's up to date. Here are your bookings." : "Here's where your bookings will appear."}
         </p>
       </div>
+
+      {hireOn && (
+        <Link href={`/hire/${slug}/quote`} className="mb-8 flex items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 shadow-card transition hover:border-[color:var(--portal-brand)] sm:p-5">
+          <span><span className="block text-[0.9375rem] font-semibold text-ink">Planning another event?</span><span className="text-[0.8125rem] text-ink-muted">Build it online — choose a cart, van or equipment, add days and baristas, and we&apos;ll email your quote.</span></span>
+          <ArrowRight className="h-5 w-5 shrink-0 text-[color:var(--portal-brand-ink)]" />
+        </Link>
+      )}
 
       <h2 className="mb-3 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">My events</h2>
       {upcoming.length === 0 && (

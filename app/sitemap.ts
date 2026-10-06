@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { createServiceClient, serviceRoleConfigured } from "@/lib/integrations/runtime";
+import { hirePageSlug, offered, readEvents } from "@/lib/events/core";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
@@ -14,6 +15,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const db = createServiceClient();
     const { data: orgs } = await db.from("organisations").select("id, slug, settings").eq("status", "active");
+    for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
+      const ev = readEvents(o.settings);
+      if (!ev.enabled) continue;
+      const h = `${BASE}/hire/${o.slug}`;
+      out.push({ url: h, changeFrequency: "weekly", priority: 0.9 });
+      for (const k of offered(ev)) if (k !== "diy") out.push({ url: `${h}/${hirePageSlug(k, ev)}`, changeFrequency: "weekly", priority: 0.9 });
+      for (const p of ["quote", "drinks", "branding", "catering"]) out.push({ url: `${h}/${p}`, changeFrequency: "weekly", priority: 0.7 });
+    }
     const live = ((orgs ?? []) as { id: string; slug: string; settings: Record<string, unknown> | null }[])
       .filter((o) => !!o.settings?.booking && (o.settings.booking as { enabled?: boolean }).enabled !== false);
     if (!live.length) return out;

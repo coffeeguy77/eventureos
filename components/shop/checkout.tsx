@@ -92,7 +92,7 @@ export function Checkout({ slug, products, s, today, me }: { slug: string; produ
   const months = cart.prepaidMonths ?? s.prepaid[0]?.months ?? 3;
 
   return (
-    <form onSubmit={pay} className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-10">
+    <form onSubmit={pay} data-track="Shop checkout" data-track-submit="checkout_start" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-10">
       <div className="space-y-6">
         {/* Items */}
         <section className="rounded-[26px] bg-[#FFFDFC] p-5 ring-1 ring-[#EAE1D7] sm:p-6">

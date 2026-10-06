@@ -3,15 +3,18 @@ import type { PublicOrg } from "@/lib/bookings/server";
 import { readSiteNav, type SiteSection } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
+import { readEvents } from "@/lib/events/core";
 import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
+import { SiteTracker } from "./tracker";
 
-/** One menu bar above every public section of the business's site: logo · classes · job board · shop · gift certificates. */
+/** One menu bar above every public section of the business's site: logo · events · classes · job board · shop · gift certificates. Also runs the anonymous analytics tracker. */
 export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light" }) {
   const light = tone === "light";
   const labels = readSiteNav(org.rawSettings);
   const base = org.slug;
   const items: { key: SiteSection; href: string; on: boolean }[] = [
+    { key: "events", href: `/hire/${base}`, on: readEvents(org.rawSettings).enabled },
     { key: "lessons", href: `/${base}`, on: org.settings.enabled },
     { key: "jobs", href: `/jobs/${base}`, on: readJobSettings(org.rawSettings, org.name).enabled },
     { key: "shop", href: `/shop/${base}`, on: readShop(org.rawSettings).enabled },
@@ -41,6 +44,7 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
       </div>
     </div>
     <OfferRibbon org={org} active={active} />
+    <SiteTracker slug={org.slug} section={active ?? "other"} />
     </>
   );
 }

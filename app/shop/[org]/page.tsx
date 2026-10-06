@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ContactForm } from "@/components/events/contact-form";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, CalendarDays, Leaf, Package, Truck } from "lucide-react";
@@ -166,6 +167,11 @@ export default async function Storefront({ params, searchParams }: P) {
               </>
             )}
           </div>
+        </div>
+      </section>
+      <section className="pb-20" data-section="contact">
+        <div className="mx-auto w-full max-w-[940px] px-5 sm:px-8">
+          <ContactForm slug={org.slug} section="shop" heading="Questions about our coffee?" intro="Wholesale, office coffee, subscriptions or anything else — send us a message." showEvent={false} messageHint="How can we help?" />
         </div>
       </section>
     </ShopFrame>

@@ -1,4 +1,5 @@
 import "server-only";
+import { finishCart, rememberCart } from "@/lib/reminders/server";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
@@ -271,6 +272,7 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("shop_orders").update({ stripe_session_id: cs.id }).eq("id", order.id);
+    await rememberCart(db, org.id, "shop", { email, name, total: due, resume: `/shop/${org.slug}/cart`, summary: priced.lines.map((l) => `${l.qty > 1 ? `${l.qty} × ` : ""}${l.name}${l.variant ? ` ${l.variant}` : ""}`).join(", ") });
     return { ok: true, redirect: cs.url };
   } catch (e) {
     await db.from("shop_orders").update({ status: "cancelled", office_note: "Card payment page couldn't be opened" }).eq("id", order.id);
@@ -358,6 +360,7 @@ export async function startGiftCardPurchase(input: GiftCardInput): Promise<Check
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("shop_orders").update({ stripe_session_id: cs.id }).eq("id", order.id);
+    await rememberCart(db, org.id, "giftcards", { email, name, total: due, resume: `/shop/${org.slug}/gift-card`, summary: `${money(amount, org.currency)} gift card` });
     return { ok: true, redirect: cs.url };
   } catch (e) {
     await db.from("shop_orders").update({ status: "cancelled" }).eq("id", order.id);
@@ -384,6 +387,7 @@ export async function settleShopCheckout(db: SupabaseClient, orgId: string, orde
   const { data: upd } = await db.from("shop_orders").update({ status: "paid", paid_at: now, stripe_session_id: s?.id ?? null, stripe_payment_intent: s?.payment_intent ?? null })
     .eq("id", orderId).eq("status", "pending").select("id");
   if (!upd?.length) return "already settled";
+  await finishCart(db, orgId, o.kind === "gift_card" ? "giftcards" : "shop", o.email as string | null);
   if (o.coupon_code) {
     const { data: c } = await db.from("shop_coupons").select("id, uses").eq("organisation_id", orgId).eq("code", o.coupon_code).maybeSingle();
     if (c) await db.from("shop_coupons").update({ uses: (c.uses as number) + 1 }).eq("id", c.id);

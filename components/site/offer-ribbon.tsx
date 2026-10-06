@@ -13,7 +13,7 @@ function endOfDay(date: string, tz: string) {
   return guess - (asIfUtc - guess);
 }
 
-const PLACE: Record<SiteSection, OfferPlace | null> = { lessons: "classes", gifts: "gifts", shop: "shop", jobs: null };
+const PLACE: Record<SiteSection, OfferPlace | null> = { lessons: "classes", gifts: "gifts", shop: "shop", jobs: null, events: null };
 
 /**
  * The website ribbon: an offer the business has chosen to show, across the top of every public page while it runs —

@@ -277,6 +277,8 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("bookings").update({ stripe_session_id: cs.id }).eq("id", bookingId);
+    const { rememberCart } = await import("@/lib/reminders/server");
+    await rememberCart(db, org.id, "classes", { email, name, total: due, resume: `/book/${org.slug}/${course.slug}`, summary: `${course.name} — ${w.day}` });
     return { ok: true, redirect: cs.url };
   } catch (e) {
     await cancelHold("Couldn't start the card payment");
@@ -296,6 +298,11 @@ export async function confirmPaidBooking(db: SupabaseClient, orgId: string, book
     amount_paid: Math.round((Number(b.gift_amount) + paid) * 100) / 100, payment_method: "stripe",
     stripe_session_id: s.id, stripe_payment_intent: s.payment_intent ?? s.id,
   }).eq("id", bookingId);
+  {
+    const { data: who } = await db.from("bookings").select("contact_email").eq("id", bookingId).maybeSingle();
+    const { finishCart } = await import("@/lib/reminders/server");
+    await finishCart(db, orgId, "classes", (who?.contact_email as string | null) ?? null);
+  }
   {
     // An offer code on the booking counts as used once it's paid
     const { data: cp, error: cpErr } = await db.from("bookings").select("coupon_id").eq("id", bookingId).maybeSingle();
@@ -629,6 +636,8 @@ export async function startGiftPurchase(input: GiftInput): Promise<StartResult> 
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("booking_gifts").update({ stripe_session_id: cs.id }).eq("id", gift.id);
+    const { rememberCart } = await import("@/lib/reminders/server");
+    await rememberCart(db, org.id, "gifts", { email: purchaserEmail, name: input.purchaserName, total: due, resume: `/book/${org.slug}/gift`, summary: course ? course.name : `a ${money(amount, org.currency)} gift certificate` });
     return { ok: true, redirect: cs.url };
   } catch (e) {
     await db.from("booking_gifts").update({ status: "void" }).eq("id", gift.id);
@@ -651,6 +660,11 @@ export async function activateGift(db: SupabaseClient, orgId: string, giftId: st
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
   const exp = new Date(today + "T00:00:00Z"); exp.setUTCMonth(exp.getUTCMonth() + org.settings.gift_expiry_months);
   await db.from("booking_gifts").update({ status: "active", expires_on: exp.toISOString().slice(0, 10), stripe_session_id: s.id, stripe_payment_intent: s.payment_intent ?? s.id }).eq("id", giftId);
+  {
+    const { data: who } = await db.from("booking_gifts").select("purchaser_email").eq("id", giftId).maybeSingle();
+    const { finishCart } = await import("@/lib/reminders/server");
+    await finishCart(db, orgId, "gifts", (who?.purchaser_email as string | null) ?? null);
+  }
   {
     const { data: cp, error: cpErr } = await db.from("booking_gifts").select("coupon_id").eq("id", giftId).maybeSingle();
     if (!cpErr && cp?.coupon_id) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, cp.coupon_id as string).catch(() => undefined); }

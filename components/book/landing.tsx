@@ -1,4 +1,5 @@
 import "@fontsource-variable/fraunces";
+import { ContactForm } from "@/components/events/contact-form";
 import "@fontsource/caveat/600.css";
 import {
   ArrowRight, Award, Backpack, CalendarDays, Check, Clock, Coffee, Flame, Gift, GraduationCap, HandHeart, Heart, MapPin, Navigation, Phone, ShieldCheck,
@@ -612,6 +613,12 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
             {many && <a href="#compare" className="lp-btn inline-flex h-14 items-center rounded-2xl px-7 text-[1.0313rem] font-semibold text-[#F4EDE4] ring-1 ring-[#F4EDE4]/50 hover:bg-[#F4EDE4] hover:text-[#15251F]">Compare courses</a>}
             {phone && <a href={telHref(phone)} className="inline-flex h-14 items-center gap-2 px-3 text-[1.0313rem] font-semibold text-[#F4EDE4]"><Phone className="h-5 w-5 text-[var(--b)]" />{phone}</a>}
           </div>
+        </div>
+      </section>
+
+      <section className="bg-[#F4EDE4] py-16 sm:py-20" data-section="contact" style={{ ["--pk" as string]: "var(--b)" }}>
+        <div className="mx-auto w-full max-w-[940px] px-5 sm:px-8">
+          <ContactForm slug={org.slug} section="classes" serifClass="lp-serif" heading="Questions about a class?" intro="Group bookings, private classes or anything else — send us a message." showEvent={false} messageHint="How can we help?" />
         </div>
       </section>
 

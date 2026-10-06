@@ -17,7 +17,7 @@ export const INK = "#151312";
 export const MUTED = "#5E5853";
 export const LINE = "#EDE3DB";
 
-const CSS = `
+export const SHOP_CSS = `
 .shop{--pk:color-mix(in srgb,var(--b) 40%,#ff0a6c)}
 .shop .shop-serif{font-family:'Newsreader Variable',Georgia,'Times New Roman',serif;font-optical-sizing:auto;letter-spacing:-0.018em}
 .shop .shop-hand{font-family:'Caveat',cursive;font-weight:600}
@@ -63,7 +63,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
   const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
-      <style>{CSS}</style>
+      <style>{SHOP_CSS}</style>
       <MasterNav org={org} active="shop" tone="light" />
       {strip && (
         <div className="bg-[color-mix(in_srgb,var(--b)_14%,#FFF6F4)] text-[#151312]">

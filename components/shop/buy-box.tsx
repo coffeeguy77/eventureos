@@ -120,7 +120,7 @@ export function BuyBox({ slug, p, s }: { slug: string; p: Product; s: ShopSettin
           <span className="w-8 text-center text-[1.0625rem] font-semibold" aria-live="polite">{qty}</span>
           <button type="button" onClick={() => setQty(Math.min(20, qty + 1))} className="grid h-14 w-12 place-items-center" aria-label="One more"><Plus className="h-4 w-4" /></button>
         </div>
-        <button type="button" onClick={submit} disabled={added} className="shop-btn flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--b)] px-5 text-[1.0625rem] font-semibold text-[var(--on-b)] shadow-[0_14px_30px_-14px_var(--b)] disabled:opacity-70">
+        <button type="button" onClick={submit} disabled={added} data-track-kind="cart_add" data-track={`Add to cart: ${p.name}`} className="shop-btn flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--b)] px-5 text-[1.0625rem] font-semibold text-[var(--on-b)] shadow-[0_14px_30px_-14px_var(--b)] disabled:opacity-70">
           <ShoppingBag className="h-5 w-5" />{mode === "subscription" ? `Subscribe — ${money(sub * qty)}` : `Add to cart — ${money(one * qty)}`}
         </button>
       </div>
