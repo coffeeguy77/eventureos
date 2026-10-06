@@ -28,6 +28,8 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
         <div><Label htmlFor="ss-t">Shop heading</Label><Input id="ss-t" value={s.title} onChange={(e) => set("title", e.target.value)} /></div>
         <div><Label htmlFor="ss-tg">Tagline</Label><Input id="ss-tg" value={s.tagline} onChange={(e) => set("tagline", e.target.value)} /></div>
         <div><Label htmlFor="ss-h">Hero photo</Label><div className="flex gap-2"><Input id="ss-h" value={s.heroImage ?? ""} onChange={(e) => set("heroImage", e.target.value || null)} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("heroImage", u)} /></div></div>
+        <div><Label htmlFor="ss-si" hint="subscriptions page and the gift-subscription panel — e.g. your delivery box">Subscriptions photo</Label><div className="flex gap-2"><Input id="ss-si" value={s.subsImage ?? ""} onChange={(e) => set("subsImage", e.target.value || null)} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("subsImage", u)} /></div></div>
+        <div><Label htmlFor="ss-ri" hint="shows “Locally roasted in …” — leave blank to hide">Roasted in</Label><Input id="ss-ri" value={s.roastedIn} onChange={(e) => set("roastedIn", e.target.value)} placeholder="e.g. Canberra" /></div>
         <div><Label htmlFor="ss-rn" hint="shown on every page and in emails">Roast & delivery message</Label><Textarea id="ss-rn" value={s.roastNote} onChange={(e) => set("roastNote", e.target.value)} /></div>
         <div><Label>Roast days</Label>{days("roastDays")}</div>
         <div><Label hint="subscriptions are scheduled on these days">Ship days</Label>{days("dispatchDays")}</div>

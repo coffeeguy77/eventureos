@@ -17,15 +17,15 @@ import { confirmationEmail, giftEmail, officeAlertEmail, reminderEmail, seatOpen
 
 export interface PublicOrg {
   id: string; name: string; slug: string; logo_url: string | null; brand_colour: string | null; contact_email: string | null; contact_phone: string | null;
-  website: string | null; timezone: string; currency: string; settings: BookingSettings; rawSettings: Record<string, unknown>; stripeReady: boolean;
+  website: string | null; address: string | null; timezone: string; currency: string; settings: BookingSettings; rawSettings: Record<string, unknown>; stripeReady: boolean;
 }
 
-const ORG_COLS = "id, name, slug, logo_url, brand_colour, contact_email, contact_phone, website, timezone, currency, settings, status";
+const ORG_COLS = "id, name, slug, logo_url, brand_colour, contact_email, contact_phone, website, address, timezone, currency, settings, status";
 
 function toOrg(o: Record<string, unknown>, stripeReady: boolean): PublicOrg {
   return {
     id: o.id as string, name: o.name as string, slug: o.slug as string, logo_url: (o.logo_url as string) ?? null, brand_colour: (o.brand_colour as string) ?? null,
-    contact_email: (o.contact_email as string) ?? null, contact_phone: (o.contact_phone as string) ?? null, website: (o.website as string) ?? null,
+    contact_email: (o.contact_email as string) ?? null, contact_phone: (o.contact_phone as string) ?? null, website: (o.website as string) ?? null, address: (o.address as string) || null,
     timezone: (o.timezone as string) || "Australia/Sydney", currency: (o.currency as string) || "AUD",
     settings: readSettings(o.settings), rawSettings: (o.settings ?? {}) as Record<string, unknown>, stripeReady,
   };
