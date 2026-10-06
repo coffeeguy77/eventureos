@@ -58,9 +58,11 @@ function CupArt({ className }: { className?: string }) {
 export interface LandingJobs { name: string; url: string; trained: number }
 export interface LandingPromo { id: string; title: string; body: string | null; cta_label: string | null; href: string | null; coupon_code: string | null; image_url: string | null; tone: string }
 
-export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate, jobs = null, promos = [] }: {
+export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate, jobs = null, promos = [], promo = null }: {
   org: PublicOrg; data: { courses: CourseRow[]; sessions: PublicSession[] }; agent: Agent | null; initialCourse: string | null;
   utm: Record<string, string>; source: "website" | "wordpress"; certificate: boolean;
+  /** An offer code from the link (?code=) — applied at checkout */
+  promo?: string | null;
   /** The business's barista job board — sold on the course page as a reason to train here */
   jobs?: LandingJobs | null;
   /** Shop banners placed on the course page */
@@ -266,7 +268,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
           <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
             <LandingBooking initial={initialCourse} dateStyle="cards"
               base={{ org: { slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours },
-                utm, embed: false, source,
+                utm, embed: false, source, promo,
                 agent: agent ? { code: agent.agency.code, agency: agent.agency.name, price: agent.agency.price === null ? null : Number(agent.agency.price), poRequired: agent.agency.po_required, name: agent.cm.name, site: agent.cm.site } : null }}
               courses={courses.map((c) => ({ slug: c.slug, label: clean(c.name), meta: `${dur(c.duration_minutes)} · ${price(c)}`, course: { id: c.id, name: c.name, price: Number(c.price), maxSeats: c.max_seats_per_booking, questions: c.questions ?? [] }, sessions: byCourse(c.id) }))} />
           </div>

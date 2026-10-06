@@ -5,7 +5,7 @@
 export const RESERVED = [
   "admin", "api", "auth", "book", "crew", "jobs", "onboarding", "p", "pay", "q", "shop", "suspended",
   "login", "signup",
-  "bookings", "calendar", "clients", "crm", "dashboard", "enquiries", "events", "history", "invoices", "my-jobs", "my-signature",
+  "bookings", "calendar", "clients", "crm", "dashboard", "enquiries", "events", "history", "invoices", "my-jobs", "my-signature", "offers",
   "payments", "portal", "quotes", "reports", "settings", "store", "tasks", "wages", "xero-quotes",
   "robots.txt", "sitemap.xml", "manifest.webmanifest", "favicon.ico", "embed.js", "downloads", "fonts", "media",
 ];

@@ -60,3 +60,41 @@ export async function checkAgencyAction(orgSlug: string, code: string): Promise<
   if (!a) return { ok: false, error: "That agency code isn't recognised." };
   return { ok: true, name: a.name as string, price: a.price === null ? null : Number(a.price), poRequired: !!a.po_required };
 }
+
+export type OfferCheck = { ok: true; code: string; discount: number; label: string } | { ok: false; error: string };
+
+/**
+ * Check an offer code before paying: a class booking (session + seats) or a gift certificate (course or dollar amount).
+ * Prices come from the database, never the browser. The same check runs again when they pay.
+ */
+export async function checkOfferAction(orgSlug: string, code: string, x: { place: "classes"; sessionId: string; seats: number; email?: string | null } | { place: "gifts"; courseId: string | null; amount: number | null; email?: string | null; shop?: boolean }): Promise<OfferCheck> {
+  try {
+    const db = createServiceClient();
+    const org = await publicOrg(orgSlug, db);
+    if (!org || !code?.trim()) return { ok: false, error: "Enter a code." };
+    const { quoteOffer } = await import("@/lib/offers/server");
+    const { offerShort } = await import("@/lib/offers/core");
+    let courseId: string | null = null, subtotal = 0;
+    if (x.place === "classes") {
+      const { data: s } = await db.from("booking_sessions").select("price, course:booking_courses(id, price)").eq("organisation_id", org.id).eq("id", x.sessionId).maybeSingle();
+      const row = s as unknown as { price: number | null; course: { id: string; price: number } | null } | null;
+      if (!row?.course) return { ok: false, error: "Choose a date first." };
+      courseId = row.course.id;
+      subtotal = Math.round(Number(row.price ?? row.course.price) * Math.max(1, Math.round(x.seats || 1)) * 100) / 100;
+    } else {
+      if (x.courseId) {
+        const { data: c } = await db.from("booking_courses").select("id, price").eq("organisation_id", org.id).eq("id", x.courseId).maybeSingle();
+        if (!c) return { ok: false, error: "Choose a gift first." };
+        courseId = c.id as string; subtotal = Number(c.price);
+      } else {
+        // Class gift certificates use the booking amounts; coffee gift cards use the shop's
+        const amounts = x.shop ? (await import("@/lib/shop/core")).readShop(org.rawSettings).giftAmounts : org.settings.gift_amounts;
+        subtotal = amounts.includes(Math.round(Number(x.amount))) ? Math.round(Number(x.amount)) : 0;
+      }
+      if (subtotal <= 0) return { ok: false, error: "Choose a gift first." };
+    }
+    const q = await quoteOffer(db, org, { code, place: x.place, courseId, subtotal, email: x.email ?? null });
+    if (!q.ok) return q;
+    return { ok: true, code: q.offer.code, discount: q.discount, label: q.offer.headline || q.offer.description || offerShort(q.offer) };
+  } catch (e) { return { ok: false, error: notReady(String(e)) ? "Codes aren't set up yet." : "Couldn't check that code — try again." }; }
+}

@@ -131,6 +131,8 @@ export interface StartBookingInput {
   name: string; email: string; phone?: string | null; attendees?: string[]; answers?: Record<string, string>; notes?: string | null; marketing?: boolean;
   giftCode?: string | null; agencyCode?: string | null; po?: { number?: string | null; site?: string | null; contact?: string | null } | null;
   waitlist?: boolean; utm?: Record<string, string>; source?: "website" | "wordpress";
+  /** An offer code (Offers): money off the class */
+  promoCode?: string | null;
   /** Agency bookings: the case manager (picked from the list, or the signed-in one), or a new one typed in */
   caseManagerId?: string | null; newCaseManager?: { name: string; email: string; phone?: string | null; site?: string | null } | null;
   /** Set only by the server action when a signed-in case manager is booking (their job seeker's email is then optional) */
@@ -191,7 +193,19 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     }
   }
   if (!email && !(caseManager && viaCaseManager)) return { ok: false, error: "Enter a valid email address — your booking confirmation goes there." };
-  const priceEach = agency ? Number(agency.price ?? course.agency_price ?? session.price ?? course.price) : Number(session.price ?? course.price);
+  let priceEach = agency ? Number(agency.price ?? course.agency_price ?? session.price ?? course.price) : Number(session.price ?? course.price);
+
+  // Offer code: money off the seats (not for agency bookings, which are invoiced at the agency price)
+  let promo: { id: string; code: string; discount: number } | null = null;
+  if (input.promoCode?.trim() && !agency) {
+    const { quoteOffer } = await import("@/lib/offers/server");
+    const { discountedEach } = await import("@/lib/offers/core");
+    const q = await quoteOffer(db, org, { code: input.promoCode, place: "classes", courseId: course.id, subtotal: Math.round(priceEach * seats * 100) / 100, email });
+    if (!q.ok) return { ok: false, error: q.error };
+    const before = priceEach;
+    priceEach = discountedEach(priceEach, seats, q.discount);
+    promo = { id: q.offer.id, code: q.offer.code, discount: Math.round((before - priceEach) * seats * 100) / 100 };
+  }
 
   // No email (booked by a case manager): reuse a student with the same name and phone rather than making a duplicate
   let studentId: string | null = null;
@@ -221,6 +235,11 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     return { ok: false, error: msg, soldOut: /sold out|seats? left/i.test(msg) };
   }
   const bookingId = id as string;
+  if (promo) {
+    // Remember the code on the booking (needs the offers database update; the discount is already in the price)
+    const { error: pErr } = await db.from("bookings").update({ coupon_id: promo.id, coupon_code: promo.code, discount: promo.discount }).eq("id", bookingId);
+    if (pErr) console.error("booking offer", pErr.message);
+  }
   if (caseManager) {
     const { error: cmErr } = await db.from("bookings").update({ case_manager_id: caseManager.id }).eq("id", bookingId);
     if (cmErr) console.error("case manager link", cmErr.message);
@@ -235,6 +254,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   if (agency || due <= 0) {
     if (!agency) {
       await db.from("bookings").update({ status: "confirmed", hold_expires_at: null, confirmed_at: new Date().toISOString(), amount_paid: bk.gift_amount, payment_method: Number(bk.total) > 0 ? "gift" : "free" }).eq("id", bookingId);
+      if (promo) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, promo.id).catch(() => undefined); }
     }
     await finalizeBooking(db, bookingId).catch((e) => console.error("finalize booking", e));
     return { ok: true, redirect: doneUrl };
@@ -250,7 +270,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   try {
     const cs = await createCheckout(cfg.secretKey, {
       amountCents: toCents(due), currency: org.currency, name: `${course.name}${seats > 1 ? ` × ${seats}` : ""}`,
-      description: `${w.day}, ${w.time}${Number(bk.gift_amount) > 0 ? ` · gift certificate ${money(bk.gift_amount, org.currency, { cents: true })} applied` : ""} · ${bk.reference}`,
+      description: `${w.day}, ${w.time}${promo ? ` · ${promo.code} −${money(promo.discount, org.currency, { cents: true })}` : ""}${Number(bk.gift_amount) > 0 ? ` · gift certificate ${money(bk.gift_amount, org.currency, { cents: true })} applied` : ""} · ${bk.reference}`,
       email, successUrl: `${doneUrl}?paid=1`, cancelUrl: bookUrl(org, `/done/${bk.manage_token}?cancelled=1`),
       metadata: { eventureos_booking_id: bookingId, eventureos_org_id: org.id, booking_reference: bk.reference },
       idempotencyKey: `bk-${bookingId}`, account: cfg.account, expiresAt: Math.floor(Date.now() / 1000) + holdMinutes * 60,
@@ -276,6 +296,11 @@ export async function confirmPaidBooking(db: SupabaseClient, orgId: string, book
     amount_paid: Math.round((Number(b.gift_amount) + paid) * 100) / 100, payment_method: "stripe",
     stripe_session_id: s.id, stripe_payment_intent: s.payment_intent ?? s.id,
   }).eq("id", bookingId);
+  {
+    // An offer code on the booking counts as used once it's paid
+    const { data: cp, error: cpErr } = await db.from("bookings").select("coupon_id").eq("id", bookingId).maybeSingle();
+    if (!cpErr && cp?.coupon_id) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, cp.coupon_id as string).catch(() => undefined); }
+  }
   if (late) {
     await db.from("activity_logs").insert({ organisation_id: orgId, actor_type: "system", actor_label: "Bookings", action: "booking.paid_late", entity_type: "booking", entity_id: bookingId,
       summary: `${b.reference} was paid after its seat hold ran out — it's confirmed, but check the session isn't overbooked` });
@@ -535,7 +560,7 @@ export async function customerMove(token: string, sessionId: string): Promise<{ 
 
 export const newGiftCode = () => giftCode((n) => randomBytes(n));
 
-export interface GiftInput { orgSlug: string; courseId?: string | null; amount?: number | null; purchaserName: string; purchaserEmail: string; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null }
+export interface GiftInput { orgSlug: string; courseId?: string | null; amount?: number | null; purchaserName: string; purchaserEmail: string; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null; promoCode?: string | null }
 
 export async function startGiftPurchase(input: GiftInput): Promise<StartResult> {
   const db = createServiceClient();
@@ -562,27 +587,45 @@ export async function startGiftPurchase(input: GiftInput): Promise<StartResult> 
   if (amount <= 0) return { ok: false, error: "Choose a gift." };
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
   const sendOn = input.sendOn && /^\d{4}-\d{2}-\d{2}$/.test(input.sendOn) && input.sendOn > today ? input.sendOn : null;
+  // Offer code: money off what they pay — the certificate keeps its full value
+  let promo: { id: string; code: string; discount: number } | null = null;
+  if (input.promoCode?.trim()) {
+    const { quoteOffer } = await import("@/lib/offers/server");
+    const q = await quoteOffer(db, org, { code: input.promoCode, place: "gifts", courseId: course?.id ?? null, subtotal: amount, email: purchaserEmail });
+    if (!q.ok) return { ok: false, error: q.error };
+    promo = { id: q.offer.id, code: q.offer.code, discount: q.discount };
+  }
+  const due = Math.max(0, Math.round((amount - (promo?.discount ?? 0)) * 100) / 100);
   const cfg = org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
-  if (!cfg) return { ok: false, error: `${org.name} can't take card payments online right now.` };
+  if (!cfg && due > 0) return { ok: false, error: `${org.name} can't take card payments online right now.` };
 
   type NewGift = { id: string; code: string; view_token: string };
   let gift: NewGift | null = null;
+  const row = {
+    organisation_id: org.id, course_id: course?.id ?? null, amount, balance: amount, status: "pending",
+    purchaser_name: purchaserName, purchaser_email: purchaserEmail, recipient_name: input.recipientName?.trim().slice(0, 160) || null, recipient_email: recipientEmail,
+    message: input.message?.trim().slice(0, 1000) || null, send_on: sendOn, source: "stripe",
+  };
+  const withPromo = promo ? { coupon_id: promo.id, coupon_code: promo.code, discount: promo.discount } : {};
   for (let i = 0; i < 4 && !gift; i++) {
-    const { data, error } = await db.from("booking_gifts").insert({
-      organisation_id: org.id, code: newGiftCode(), course_id: course?.id ?? null, amount, balance: amount, status: "pending",
-      purchaser_name: purchaserName, purchaser_email: purchaserEmail, recipient_name: input.recipientName?.trim().slice(0, 160) || null, recipient_email: recipientEmail,
-      message: input.message?.trim().slice(0, 1000) || null, send_on: sendOn, source: "stripe",
-    }).select("id, code, view_token").single();
+    let { data, error } = await db.from("booking_gifts").insert({ ...row, ...withPromo, code: newGiftCode() }).select("id, code, view_token").single();
+    // Before the offers database update the code columns don't exist yet: keep the sale going without them
+    if (error && promo && /coupon_id|coupon_code|discount/.test(error.message)) ({ data, error } = await db.from("booking_gifts").insert({ ...row, code: newGiftCode() }).select("id, code, view_token").single());
     if (!error) gift = data as NewGift;
     else if (!/duplicate|unique/i.test(error.message)) return { ok: false, error: error.message };
   }
   if (!gift) return { ok: false, error: "Couldn't create the certificate — please try again." };
+  if (due <= 0) {
+    // Fully covered by the offer: nothing to pay, so it's ready now
+    await activateGiftNow(db, org, gift.id, promo?.id ?? null, "offer");
+    return { ok: true, redirect: bookUrl(org, `/gift/${gift.view_token}?paid=1`) };
+  }
   try {
-    const cs = await createCheckout(cfg.secretKey, {
-      amountCents: toCents(amount), currency: org.currency, name: `Gift certificate — ${course ? course.name : money(amount, org.currency)}`,
-      description: input.recipientName?.trim() ? `For ${input.recipientName.trim()}` : `${org.name} gift certificate`, email: purchaserEmail,
+    const cs = await createCheckout(cfg!.secretKey, {
+      amountCents: toCents(due), currency: org.currency, name: `Gift certificate — ${course ? course.name : money(amount, org.currency)}`,
+      description: [input.recipientName?.trim() ? `For ${input.recipientName.trim()}` : `${org.name} gift certificate`, promo ? `${promo.code} −${money(promo.discount, org.currency, { cents: true })} (certificate value ${money(amount, org.currency)})` : null].filter(Boolean).join(" · "), email: purchaserEmail,
       successUrl: bookUrl(org, `/gift/${gift.view_token}?paid=1`), cancelUrl: bookUrl(org, "/gift"),
-      metadata: { eventureos_gift_id: gift.id, eventureos_org_id: org.id }, idempotencyKey: `gift-${gift.id}`, account: cfg.account,
+      metadata: { eventureos_gift_id: gift.id, eventureos_org_id: org.id }, idempotencyKey: `gift-${gift.id}`, account: cfg!.account,
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("booking_gifts").update({ stripe_session_id: cs.id }).eq("id", gift.id);
@@ -608,10 +651,26 @@ export async function activateGift(db: SupabaseClient, orgId: string, giftId: st
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
   const exp = new Date(today + "T00:00:00Z"); exp.setUTCMonth(exp.getUTCMonth() + org.settings.gift_expiry_months);
   await db.from("booking_gifts").update({ status: "active", expires_on: exp.toISOString().slice(0, 10), stripe_session_id: s.id, stripe_payment_intent: s.payment_intent ?? s.id }).eq("id", giftId);
+  {
+    const { data: cp, error: cpErr } = await db.from("booking_gifts").select("coupon_id").eq("id", giftId).maybeSingle();
+    if (!cpErr && cp?.coupon_id) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, cp.coupon_id as string).catch(() => undefined); }
+  }
   await deliverGift(db, org, giftId, true);
   await db.from("activity_logs").insert({ organisation_id: orgId, actor_type: "system", actor_label: "Bookings", action: "gift.sold", entity_type: "booking_gift", entity_id: giftId,
     summary: `Gift certificate ${g.code} sold online (${money((s.amount_total ?? 0) / 100, org.currency)})` });
   return `gift ${g.code} activated`;
+}
+
+/** A gift certificate with nothing to pay (fully covered by an offer code): activate and email it now. */
+async function activateGiftNow(db: SupabaseClient, org: PublicOrg, giftId: string, offerId: string | null, why: string) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone }).format(new Date());
+  const exp = new Date(today + "T00:00:00Z"); exp.setUTCMonth(exp.getUTCMonth() + org.settings.gift_expiry_months);
+  const { data: g } = await db.from("booking_gifts").update({ status: "active", expires_on: exp.toISOString().slice(0, 10) }).eq("id", giftId).eq("status", "pending").select("code").maybeSingle();
+  if (!g) return;
+  if (offerId) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, offerId).catch(() => undefined); }
+  await deliverGift(db, org, giftId, true).catch((e) => console.error("deliver gift", e));
+  await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: "gift.sold", entity_type: "booking_gift", entity_id: giftId,
+    summary: `Gift certificate ${g.code} issued online with nothing to pay (${why})` });
 }
 
 /** Email the certificate: to the purchaser (once), and to the recipient when their send date arrives. */

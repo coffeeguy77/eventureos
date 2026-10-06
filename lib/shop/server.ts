@@ -107,7 +107,8 @@ export const normCoupon = (s: unknown) => (typeof s === "string" ? s.toUpperCase
 export async function findCoupon(db: SupabaseClient, orgId: string, code: string): Promise<Coupon | null> {
   const c = normCoupon(code);
   if (!c) return null;
-  const { data } = await db.from("shop_coupons").select(COUPON_COLS).eq("organisation_id", orgId).eq("code", c).maybeSingle();
+  // "*" so the newer offer columns come back when the database has them (works before and after that update)
+  const { data } = await db.from("shop_coupons").select("*").eq("organisation_id", orgId).eq("code", c).maybeSingle();
   return data ? ({ ...data, value: Number(data.value), min_spend: data.min_spend === null ? null : Number(data.min_spend), product_ids: (data.product_ids as string[]) ?? [] } as Coupon) : null;
 }
 
@@ -129,6 +130,9 @@ export async function quoteCart(org: ShopOrg, input: { lines: CartLine[]; mode: 
     coupon = await findCoupon(db, org.id, input.couponCode);
     const hist = input.email ? await customerHistory(db, org.id, input.email, coupon?.code ?? null) : { orders: 0, uses: 0 };
     couponError = couponProblem(coupon, { today: todayIn(org.timezone), mode: input.mode, subtotal: pre.subtotal, customerOrders: hist.orders, customerUses: hist.uses });
+    // Offer codes made only for classes or gift certificates don't work in the shop
+    const works = (coupon as unknown as { works_on?: string[] } | null)?.works_on;
+    if (!couponError && Array.isArray(works) && works.length && !works.includes("shop")) couponError = `That code is for ${works.map((w) => (w === "classes" ? "classes" : "gift certificates")).join(" and ")}, not the coffee shop.`;
   }
   const priced = priceCart({ lines: input.lines, products, mode: input.mode, settings: org.shop, delivery: input.delivery, coupon, couponOk: !!coupon && !couponError, prepaidMonths: input.prepaidMonths, interval: input.interval });
   return { priced, coupon: coupon && !couponError ? coupon : null, couponError, products };
@@ -305,7 +309,7 @@ async function newGiftCard(db: SupabaseClient, orgId: string, o: { amount: numbe
 
 /* ------------------------------------------------------------------ gift cards (bags of coffee) */
 
-export interface GiftCardInput { orgSlug: string; amount: number; purchaserName: string; purchaserEmail: string; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null }
+export interface GiftCardInput { orgSlug: string; amount: number; purchaserName: string; purchaserEmail: string; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null; promoCode?: string | null }
 
 export async function startGiftCardPurchase(input: GiftCardInput): Promise<CheckoutResult> {
   const db = createServiceClient();
@@ -321,22 +325,36 @@ export async function startGiftCardPurchase(input: GiftCardInput): Promise<Check
   if (input.recipientEmail?.trim() && !recipientEmail) return { ok: false, error: "The recipient's email doesn't look right." };
   const today = todayIn(org.timezone);
   const sendOn = input.sendOn && /^\d{4}-\d{2}-\d{2}$/.test(input.sendOn) && input.sendOn > today ? input.sendOn : null;
+  // Offer code (one made for gift certificates): money off what they pay — the card keeps its full value
+  let promo: { code: string; discount: number } | null = null;
+  if (input.promoCode?.trim()) {
+    const { quoteOffer } = await import("@/lib/offers/server");
+    const q = await quoteOffer(db, org, { code: input.promoCode, place: "gifts", courseId: null, subtotal: amount, email });
+    if (!q.ok) return { ok: false, error: q.error };
+    promo = { code: q.offer.code, discount: q.discount };
+  }
+  const due = Math.max(0, round2(amount - (promo?.discount ?? 0)));
   const cfg = org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
-  if (!cfg) return { ok: false, error: `${org.name} can't take card payments online right now.` };
+  if (!cfg && due > 0) return { ok: false, error: `${org.name} can't take card payments online right now.` };
   const customer = await ensureCustomer(db, org.id, { email, name });
   const number = await nextNumber(db, org.id);
   const { data: order, error } = await db.from("shop_orders").insert({
     organisation_id: org.id, number, customer_id: customer.id, status: "pending", kind: "gift_card", source: "shop", email, name, delivery: "post",
     items: [{ name: "Coffee gift card", variant: money(amount, org.currency), qty: 1, unit_price: amount, list_price: amount, line_total: amount, kind: "gift_card" }],
-    subtotal: amount, total: amount, currency: org.currency,
+    subtotal: amount, discount: promo?.discount ?? 0, total: due, currency: org.currency, coupon_code: promo?.code ?? null,
   }).select("id, view_token").single();
   if (error) return { ok: false, error: error.message };
   const card = await newGiftCard(db, org.id, { amount, orderId: order.id as string, purchaserName: name, purchaserEmail: email, recipientName: input.recipientName?.trim().slice(0, 120) || null, recipientEmail, message: input.message?.trim().slice(0, 600) || null, sendOn });
+  if (due <= 0) {
+    // Fully covered by the code: nothing to pay, so it's ready now
+    await settleShopCheckout(db, org.id, order.id as string, null);
+    return { ok: true, redirect: shopUrl(org, `/gift-card/${card.view_token}?paid=1`) };
+  }
   try {
-    const cs = await createCheckout(cfg.secretKey, {
-      amountCents: toCents(amount), currency: org.currency, name: `Coffee gift card — ${money(amount, org.currency)}`, description: input.recipientName?.trim() ? `For ${input.recipientName.trim()}` : `${org.name} gift card`, email,
+    const cs = await createCheckout(cfg!.secretKey, {
+      amountCents: toCents(due), currency: org.currency, name: `Coffee gift card — ${money(amount, org.currency)}`, description: [input.recipientName?.trim() ? `For ${input.recipientName.trim()}` : `${org.name} gift card`, promo ? `${promo.code} −${money(promo.discount, org.currency, { cents: true })}` : null].filter(Boolean).join(" · "), email,
       successUrl: shopUrl(org, `/gift-card/${card.view_token}?paid=1`), cancelUrl: shopUrl(org, "/gift-card"),
-      metadata: { eventureos_shop_checkout: order.id as string, eventureos_org_id: org.id }, idempotencyKey: `shopgift-${order.id}`, account: cfg.account,
+      metadata: { eventureos_shop_checkout: order.id as string, eventureos_org_id: org.id }, idempotencyKey: `shopgift-${order.id}`, account: cfg!.account,
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("shop_orders").update({ stripe_session_id: cs.id }).eq("id", order.id);

@@ -11,7 +11,7 @@ const ITEMS = [
   { href: "/store/subscriptions", label: "Subscriptions" },
   { href: "/store/products", label: "Products" },
   { href: "/store/customers", label: "Customers" },
-  { href: "/store/coupons", label: "Coupons" },
+  { href: "/offers", label: "Offers & coupons" },
   { href: "/store/banners", label: "Banners" },
   { href: "/store/gift-cards", label: "Gift cards" },
   { href: "/store/settings", label: "Settings" },

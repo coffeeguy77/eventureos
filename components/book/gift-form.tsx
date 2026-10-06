@@ -6,6 +6,8 @@ import { ArrowRight, CalendarHeart, Check, Gift, Heart, Loader2, Lock, Mail, Mes
 import { startGiftAction } from "@/app/book/actions";
 import { goTop } from "./embed-bridge";
 import { GiftCard } from "@/components/gifts/gift-card";
+import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
+import { checkOfferAction } from "@/app/book/actions";
 
 interface Option { key: string; courseId: string | null; amount: number; label: string; hint: string }
 
@@ -33,12 +35,14 @@ function OptionIcon({ i, amount }: { i: number; amount: boolean }) {
 /** The certificate artwork, and the id of the spot on the page where the live card goes. */
 export interface GiftFormCard { art: string; backArt: string | null; slot: string; redeem: string }
 
-export function GiftForm({ orgSlug, currency, options, minDate, years, business, badge, card }: {
+export function GiftForm({ orgSlug, currency, options, minDate, years, business, badge, card, promo }: {
   orgSlug: string; currency: string; options: Option[]; minDate: string; years?: number; business?: string;
   /** Small badge beside "Choose a gift" (e.g. "Popular gift") */
   badge?: string | null;
   /** Live certificate: the back fills in as they type */
   card?: GiftFormCard | null;
+  /** An offer code from the link (?code=) — applied straight away */
+  promo?: string | null;
 }) {
   const $ = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n).replace(/\.00$/, "");
   const [pick, setPick] = useState(options[0]?.key ?? "");
@@ -48,6 +52,8 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
   const [fallback, setFallback] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const opt = options.find((o) => o.key === pick);
+  const [offer, setOffer] = useState<AppliedOffer | null>(null);
+  const due = opt ? Math.max(0, Math.round((opt.amount - (offer?.discount ?? 0)) * 100) / 100) : 0;
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   // The card turns to its back while they fill in the names and message, so they can watch it being written
   const [flipped, setFlipped] = useState(false);
@@ -68,7 +74,7 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
     setErr(null);
     start(async () => {
       const r = await startGiftAction({ orgSlug, courseId: opt.courseId, amount: opt.courseId ? null : opt.amount, purchaserName: f.purchaserName, purchaserEmail: f.purchaserEmail,
-        recipientName: f.recipientName, recipientEmail: direct ? f.recipientEmail : null, message: f.message, sendOn: direct ? f.sendOn : null })
+        recipientName: f.recipientName, recipientEmail: direct ? f.recipientEmail : null, message: f.message, sendOn: direct ? f.sendOn : null, promoCode: offer?.code ?? null })
         .catch(() => ({ ok: false as const, error: "Couldn't reach the booking system — try again." }));
       if (!r.ok) { setErr(r.error); return; }
       if (!goTop(r.redirect)) setFallback(r.redirect);
@@ -153,12 +159,23 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
         </div>
       )}
 
+      <div className="mt-[22px]">
+        <PromoField tone="warm" money={$} applied={offer} onChange={setOffer} recheckKey={pick} initial={promo}
+          check={(code) => checkOfferAction(orgSlug, code, { place: "gifts", courseId: opt?.courseId ?? null, amount: opt && !opt.courseId ? opt.amount : null, email: f.purchaserEmail.includes("@") ? f.purchaserEmail : null })} />
+        {offer && opt && (
+          <dl className="mt-3 space-y-1 text-[0.875rem]">
+            <div className="flex justify-between text-[#6E6560]"><dt>Certificate value</dt><dd>{$(opt.amount)}</dd></div>
+            <div className="flex justify-between font-medium text-[var(--b)]"><dt>{offer.code}</dt><dd>−{$(offer.discount)}</dd></div>
+            <div className="flex justify-between border-t border-[#E6DCD6] pt-1.5 text-[1rem] font-semibold text-[#1E1A18]"><dt>You pay</dt><dd>{$(due)}</dd></div>
+          </dl>
+        )}
+      </div>
       {err && <p role="alert" className="mt-5 rounded-lg bg-rose-50 px-4 py-3 text-[0.875rem] font-medium text-rose-800">{err}</p>}
       {fallback ? (
         <a href={fallback} target="_top" className="mt-[18px] flex h-[68px] w-full items-center justify-center rounded-xl bg-[var(--b)] text-[1.125rem] font-medium text-white">Continue to secure payment →</a>
       ) : (
         <button type="submit" disabled={pending || !opt} className="group relative mt-[18px] flex h-[68px] w-full items-center justify-center gap-3 rounded-xl bg-[var(--b)] px-6 text-[1.125rem] font-medium text-white shadow-[0_14px_30px_-16px_var(--b)] transition hover:brightness-105 disabled:opacity-50">
-          {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" strokeWidth={2} />}{opt ? `Pay ${$(opt.amount)} securely` : "Choose a gift"}
+          {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" strokeWidth={2} />}{!opt ? "Choose a gift" : due <= 0 ? "Get my certificate — nothing to pay" : `Pay ${$(due)} securely`}
           <ArrowRight className="absolute right-7 h-6 w-6 transition-transform group-hover:translate-x-1" strokeWidth={1.6} />
         </button>
       )}

@@ -12,6 +12,7 @@ const ITEMS = [
   { href: "/bookings/certificates", label: "Certificates" },
   { href: "/bookings/jobs", label: "Barista jobs" },
   { href: "/bookings/agencies", label: "Agencies" },
+  { href: "/offers", label: "Offers" },
   { href: "/bookings/website", label: "Website & settings" },
 ];
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Lock, MessageSquare } from "lucide-react";
-import { card } from "./shell";
+import { card } from "./styles";
 import { Composer, RequestContactButton, ShareContactButton } from "./tools";
 import { EmployerInfo, type EmployerInfoData } from "./employer-info";
 

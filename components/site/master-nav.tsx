@@ -4,6 +4,7 @@ import { readSiteNav, type SiteSection } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
 import { PAGE } from "@/components/book/shell";
+import { OfferRibbon } from "./offer-ribbon";
 
 /** One menu bar above every public section of the business's site: logo · classes · job board · shop · gift certificates. */
 export function MasterNav({ org, active }: { org: PublicOrg; active?: SiteSection }) {
@@ -18,6 +19,7 @@ export function MasterNav({ org, active }: { org: PublicOrg; active?: SiteSectio
   const shown = items.filter((i) => i.on);
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
   return (
+    <>
     <div className="relative z-50 border-b border-white/10 bg-[#141011] text-white" data-master-nav>
       <div className={`${PAGE} flex min-h-[60px] flex-wrap items-center gap-x-8 gap-y-0`}>
         <Link href={`/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
@@ -37,5 +39,7 @@ export function MasterNav({ org, active }: { org: PublicOrg; active?: SiteSectio
         </nav>
       </div>
     </div>
+    <OfferRibbon org={org} active={active} />
+    </>
   );
 }

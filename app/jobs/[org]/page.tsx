@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
   return { title: org?.jobs.name ?? "Barista jobs", description: org ? `Find trained baristas, or find barista work — ${org.jobs.name}.` : undefined };
 }
 
-const serif = { fontFamily: "'Playfair Display', Georgia, serif" };
+const serif = { fontFamily: "'AU Dollar', 'Playfair Display', Georgia, serif" };
 const glass = "rounded-2xl border border-white/10 bg-[#141010]/70 backdrop-blur-md";
 
 /** "Bean Culture Barista Jobs" → the last two words in the brand colour on their own line. */

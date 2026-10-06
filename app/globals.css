@@ -48,3 +48,7 @@ html, body {
 }
 
 ::selection { background: rgb(var(--brand-100)); }
+
+/* Playfair Display draws "$" with two strokes. This one-glyph font (Playfair's own "$" with a single stroke, as used
+   in Australia) goes first in every Playfair font stack, so prices show "$" with one line through it. */
+@font-face{font-family:'AU Dollar';src:url('/fonts/au-dollar.woff') format('woff');font-weight:100 900;font-style:normal;unicode-range:U+0024;font-display:swap}

@@ -77,7 +77,7 @@ export function BaristaBoard({ cards, slug, business }: { cards: PublicCard[]; s
                   ? <img src={c.photo_url} alt="" className="h-[148px] w-[112px] shrink-0 rounded-xl object-cover" loading="lazy" />
                   : <span className="grid h-[148px] w-[112px] shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--b)_18%,#211b19)] text-[2rem] font-bold text-[var(--b)]">{c.name.trim()[0]?.toUpperCase()}</span>}
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="flex items-center gap-2 text-[1.125rem] font-semibold text-white" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+                  <span className="flex items-center gap-2 text-[1.125rem] font-semibold text-white" style={{ fontFamily: "'AU Dollar', 'Playfair Display', Georgia, serif" }}>
                     <span className="truncate">{c.name}</span>
                     <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${c.active ? "bg-emerald-400" : "bg-white/30"}`} title={c.active ? "Active recently" : undefined} />
                   </span>

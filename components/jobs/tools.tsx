@@ -10,7 +10,7 @@ import {
 } from "@/app/jobs/actions";
 import { DAY_LABEL, DAYS, EQUIPMENT_BRANDS, EQUIPMENT_TYPES, EXPERIENCE, JOB_KINDS, SKILLS, SLOT_LABEL, SLOTS, WORK_TYPES, equipmentLabel, type Availability, type Equipment, type EquipmentType } from "@/lib/jobs/core";
 import type { Profile } from "@/lib/jobs/server";
-import { btn2Cls as btn2, btnCls as btn, inputCls as input } from "./shell";
+import { btn2Cls as btn2, btnCls as btn, inputCls as input } from "./styles";
 
 type Msg = { ok: boolean; text: string } | null;
 const Note = ({ m }: { m: Msg }) => (m ? <p role="status" className={`text-[0.875rem] font-medium ${m.ok ? "text-emerald-700" : "text-rose-700"}`}>{m.text}</p> : null);

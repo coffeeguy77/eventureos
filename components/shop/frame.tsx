@@ -19,7 +19,7 @@ export const MUTED = "#5E5853";
 export const LINE = "#EDE3DB";
 
 const CSS = `
-.shop .shop-serif{font-family:'Playfair Display',Georgia,'Times New Roman',serif;letter-spacing:-0.012em}
+.shop .shop-serif{font-family:'AU Dollar','Playfair Display',Georgia,'Times New Roman',serif;letter-spacing:-0.012em}
 .shop .shop-hand{font-family:'Caveat',cursive;font-weight:600}
 .shop .shop-btn{transition:transform .2s ease,box-shadow .2s ease,background-color .2s ease,color .2s ease,filter .2s}
 .shop .shop-btn:hover{transform:translateY(-1px)}

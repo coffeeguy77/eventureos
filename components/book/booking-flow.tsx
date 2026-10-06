@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { Check, ChevronDown, ChevronLeft, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2 } from "lucide-react";
 import type { PublicSession } from "@/lib/bookings/server";
 import type { Question } from "@/lib/bookings/core";
-import { checkGiftAction, startBookingAction } from "@/app/book/actions";
+import { checkGiftAction, checkOfferAction, startBookingAction } from "@/app/book/actions";
+import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
 import { agencyCodeAction } from "@/app/book/agent-actions";
 import { goTop } from "./embed-bridge";
 
@@ -22,6 +23,8 @@ interface Props {
   dateStyle?: "list" | "cards";
   /** Added to the step numbers when the page shows its own step before these (e.g. choosing the course) */
   stepOffset?: number;
+  /** An offer code from the link (?code=) — applied once a date is chosen */
+  promo?: string | null;
 }
 
 type Pay = "card" | "gift" | "agency";
@@ -29,7 +32,7 @@ type Pay = "card" | "gift" | "agency";
 const input = "h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-[var(--b)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--b)_25%,transparent)]";
 const label = "mb-1.5 block text-[0.8125rem] font-medium text-ink";
 
-export function BookingFlow({ org, course, sessions, preselect, utm, source, agent, dateStyle = "list", stepOffset = 0 }: Props) {
+export function BookingFlow({ org, course, sessions, preselect, utm, source, agent, dateStyle = "list", stepOffset = 0, promo = null }: Props) {
   const fmt = useMemo(() => ({
     month: new Intl.DateTimeFormat("en-AU", { month: "long", year: "numeric", timeZone: org.timezone }),
     day: new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: org.timezone }),
@@ -69,9 +72,12 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
   const [pending, start] = useTransition();
 
   const each = pay === "agency" && agencyOk ? agencyOk.price ?? session?.price ?? course.price : session?.price ?? course.price;
+  const [offer, setOffer] = useState<AppliedOffer | null>(null);
+  const offerOn = pay !== "agency" && !waitlist ? offer : null;
   const total = each * n;
-  const giftApplied = pay === "gift" && giftOk ? Math.min(giftOk.balance, total) : 0;
-  const due = Math.max(0, total - giftApplied);
+  const afterOffer = Math.max(0, Math.round((total - (offerOn?.discount ?? 0)) * 100) / 100);
+  const giftApplied = pay === "gift" && giftOk ? Math.min(giftOk.balance, afterOffer) : 0;
+  const due = Math.max(0, afterOffer - giftApplied);
 
   // Sessions grouped by month; the first 8 shown until "more dates"
   const visible = showAll ? sessions : sessions.slice(0, 8);
@@ -106,7 +112,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
         giftCode: pay === "gift" ? gift : null, agencyCode: pay === "agency" ? agency : null, po: pay === "agency" ? po : null,
         caseManagerId: pay === "agency" && !agent && cmId && cmId !== "new" ? cmId : null,
         newCaseManager: pay === "agency" && !agent && cmId === "new" && newCm.email.trim() ? newCm : null,
-        waitlist, utm, source,
+        waitlist, utm, source, promoCode: offerOn?.code ?? null,
       }).catch(() => ({ ok: false as const, error: "Couldn't reach the booking system — check your connection and try again." }));
       if (!r.ok) { setErr(r.error); return; }
       if (!goTop(r.redirect)) setFallback(r.redirect);
@@ -315,9 +321,16 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
 
           {/* Summary */}
           <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+            {!waitlist && pay !== "agency" && (
+              <div className="mb-4 border-b border-line pb-4">
+                <PromoField money={$} applied={offer} onChange={setOffer} recheckKey={`${session.id}:${n}`} initial={promo}
+                  check={(code) => checkOfferAction(org.slug, code, { place: "classes", sessionId: session.id, seats: n, email: email.includes("@") ? email : null })} />
+              </div>
+            )}
             <div className="space-y-1.5 text-[0.9375rem]">
               <div className="flex justify-between gap-3"><span className="text-ink-muted">{course.name}</span><span className="text-ink">{n} × {$(each)}</span></div>
               <div className="flex justify-between gap-3"><span className="text-ink-muted">{fmt.long.format(new Date(session.starts_at))}</span><span className="text-ink">{t(session.starts_at)}</span></div>
+              {offerOn && <div className="flex justify-between gap-3 font-medium text-[var(--b)]"><span>{offerOn.code}</span><span>−{$(offerOn.discount)}</span></div>}
               {giftApplied > 0 && <div className="flex justify-between gap-3 text-emerald-700"><span>Gift certificate</span><span>−{$(giftApplied)}</span></div>}
               <div className="flex justify-between gap-3 border-t border-line pt-2.5 text-[1.125rem] font-bold text-ink">
                 <span>{waitlist ? "Waitlist" : pay === "agency" ? "Invoiced to your agency" : "Total to pay"}</span><span>{waitlist ? "No charge" : $(pay === "agency" ? total : due)}</span>

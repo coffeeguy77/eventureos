@@ -4,23 +4,27 @@ import { useState, useTransition } from "react";
 import { Check, Loader2, Lock, Mail, MessageSquare, Printer, Send, UserRound } from "lucide-react";
 import { giftCardAction } from "@/app/shop/actions";
 import { GiftCard } from "@/components/gifts/gift-card";
+import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
+import { checkOfferAction } from "@/app/book/actions";
 
 const field = "h-12 w-full rounded-xl border border-[#E2D8CD] bg-white pl-11 pr-3.5 text-base placeholder:text-[#9A948F] focus:border-[var(--b)] focus:outline-none";
 const label = "mb-1.5 block text-[0.9063rem] font-medium";
 const money = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n).replace(/\.00$/, "");
 
-export function ShopGiftForm({ slug, amounts, minDate, art, tagline, business, years, redeem }: { slug: string; amounts: number[]; minDate: string; art: string | null; tagline: string; business: string; years: number | null; redeem: string }) {
+export function ShopGiftForm({ slug, amounts, minDate, art, tagline, business, years, redeem, promo = null }: { slug: string; amounts: number[]; minDate: string; art: string | null; tagline: string; business: string; years: number | null; redeem: string; promo?: string | null }) {
   const [amount, setAmount] = useState(amounts[Math.min(2, amounts.length - 1)] ?? amounts[0]);
   const [f, setF] = useState({ purchaserName: "", purchaserEmail: "", recipientName: "", recipientEmail: "", message: "", sendOn: "" });
   const [direct, setDirect] = useState(false);
   const [back, setBack] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [offer, setOffer] = useState<AppliedOffer | null>(null);
+  const due = Math.max(0, Math.round((amount - (offer?.discount ?? 0)) * 100) / 100);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const choice = (on: boolean) => `flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ${on ? "border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_6%,white)] ring-1 ring-[var(--b)]" : "border-[#E2D8CD] bg-white hover:border-[#CDBFB1]"}`;
   return (
     <form onSubmit={(e) => { e.preventDefault(); setErr(null); start(async () => {
-      const r = await giftCardAction({ orgSlug: slug, amount, purchaserName: f.purchaserName, purchaserEmail: f.purchaserEmail, recipientName: f.recipientName, recipientEmail: direct ? f.recipientEmail : null, message: f.message, sendOn: direct ? f.sendOn : null })
+      const r = await giftCardAction({ orgSlug: slug, amount, purchaserName: f.purchaserName, purchaserEmail: f.purchaserEmail, recipientName: f.recipientName, recipientEmail: direct ? f.recipientEmail : null, message: f.message, sendOn: direct ? f.sendOn : null, promoCode: offer?.code ?? null })
         .catch(() => ({ ok: false as const, error: "Couldn't reach the shop — try again." }));
       if (!r.ok) setErr(r.error); else window.location.href = r.data;
     }); }} className="grid gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
@@ -51,8 +55,13 @@ export function ShopGiftForm({ slug, amounts, minDate, art, tagline, business, y
             <div><label className={label} htmlFor="sg-d">Send on <span className="font-normal text-[#8a817a]">(blank = now)</span></label><input id="sg-d" type="date" min={minDate} className={`${field} pl-3.5`} value={f.sendOn} onChange={set("sendOn")} /></div>
           </div>
         )}
+        <div className="mt-5">
+          <PromoField money={money} applied={offer} onChange={setOffer} recheckKey={String(amount)} initial={promo}
+            check={(code) => checkOfferAction(slug, code, { place: "gifts", shop: true, courseId: null, amount, email: f.purchaserEmail.includes("@") ? f.purchaserEmail : null })} />
+          {offer && <p className="mt-2 text-[0.875rem] text-[#5E5853]">Card value {money(amount)} · {offer.code} −{money(offer.discount)} · <span className="font-semibold text-[#151312]">you pay {money(due)}</span></p>}
+        </div>
         {err && <p role="alert" className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-[0.9063rem] font-medium text-rose-800">{err}</p>}
-        <button type="submit" disabled={pending} className="shop-btn mt-6 flex h-16 w-full items-center justify-center gap-2.5 rounded-2xl bg-[var(--b)] text-[1.125rem] font-semibold text-[var(--on-b)] shadow-[0_14px_30px_-14px_var(--b)] disabled:opacity-60">{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}Pay {money(amount)} securely</button>
+        <button type="submit" disabled={pending} className="shop-btn mt-6 flex h-16 w-full items-center justify-center gap-2.5 rounded-2xl bg-[var(--b)] text-[1.125rem] font-semibold text-[var(--on-b)] shadow-[0_14px_30px_-14px_var(--b)] disabled:opacity-60">{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}{due <= 0 ? "Get my gift card — nothing to pay" : `Pay ${money(due)} securely`}</button>
         <p className="mt-3 text-center text-[0.8125rem] text-[#6b655f]">Spend it on any coffee or a prepaid subscription{years ? ` · valid for ${years} year${years === 1 ? "" : "s"}` : ""}.</p>
       </div>
     </form>
