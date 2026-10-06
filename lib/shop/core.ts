@@ -16,6 +16,7 @@ export interface ShopSettings {
   tagline: string;
   heroImage: string | null;
   subsImage: string | null;         // photo on the subscriptions page and the gift-subscription panel (e.g. the delivery box)
+  subsHero: string | null;          // wide picture behind the subscriptions page heading (blank = the subscriptions photo)
   roastedIn: string;                // "Locally roasted in …" (blank = not shown)
   flatRate: number;
   freeOver: number | null;
@@ -57,6 +58,7 @@ export const DEFAULT_SHOP: ShopSettings = {
   tagline: "Freshly roasted coffee, delivered.",
   heroImage: null,
   subsImage: null,
+  subsHero: null,
   roastedIn: "",
   flatRate: 10,
   freeOver: null,
@@ -94,6 +96,7 @@ export function readShop(orgSettings: unknown): ShopSettings {
     heroImage: typeof raw.heroImage === "string" && /^https:\/\/|^\//.test(raw.heroImage) ? raw.heroImage : null,
     subsImage: typeof raw.subsImage === "string" && /^https:\/\/|^\//.test(raw.subsImage) ? raw.subsImage : null,
     roastedIn: str(raw.roastedIn, "", 40),
+    subsHero: typeof raw.subsHero === "string" && /^https:\/\/|^\//.test(raw.subsHero) ? raw.subsHero : null,
     flatRate: num(raw.flatRate, d.flatRate, 0, 1000),
     freeOver: raw.freeOver === null || raw.freeOver === "" ? null : raw.freeOver === undefined ? d.freeOver : num(raw.freeOver, 0, 0, 100000) || null,
     pickup: raw.pickup === true,

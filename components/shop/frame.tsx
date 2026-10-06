@@ -1,9 +1,8 @@
-import "@fontsource/playfair-display/600.css";
-import "@fontsource/playfair-display/700.css";
+import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
 import { ArrowRight, UserRound } from "lucide-react";
-import { brandStyle, PAGE } from "@/components/book/shell";
+import { brandStyle } from "@/components/book/shell";
 import type { Banner, ShopOrg } from "@/lib/shop/server";
 import { CartButton } from "./cart-button";
 import { MasterNav } from "@/components/site/master-nav";
@@ -19,7 +18,8 @@ export const MUTED = "#5E5853";
 export const LINE = "#EDE3DB";
 
 const CSS = `
-.shop .shop-serif{font-family:'AU Dollar','Playfair Display',Georgia,'Times New Roman',serif;letter-spacing:-0.012em}
+.shop{--pk:color-mix(in srgb,var(--b) 40%,#ff0a6c)}
+.shop .shop-serif{font-family:'Newsreader Variable',Georgia,'Times New Roman',serif;font-optical-sizing:auto;letter-spacing:-0.018em}
 .shop .shop-hand{font-family:'Caveat',cursive;font-weight:600}
 .shop .shop-btn{transition:transform .2s ease,box-shadow .2s ease,background-color .2s ease,color .2s ease,filter .2s}
 .shop .shop-btn:hover{transform:translateY(-1px)}
@@ -31,9 +31,11 @@ const CSS = `
 `;
 
 /** Primary (brand) and outline buttons used across the shop */
-export const btn = "shop-btn inline-flex h-[52px] items-center justify-center gap-2 rounded-full bg-[var(--b)] px-7 text-[1rem] font-semibold text-[var(--on-b)] shadow-[0_14px_28px_-14px_var(--b)] hover:brightness-105";
-export const btnOutline = "shop-btn inline-flex h-[52px] items-center justify-center gap-2 rounded-full border-[1.5px] border-[#151312] bg-white/60 px-7 text-[1rem] font-semibold text-[#151312] hover:bg-white";
-export const eyebrow = "text-[0.8125rem] font-semibold uppercase tracking-[0.2em] text-[var(--b)]";
+export const btn = "shop-btn inline-flex h-[60px] items-center justify-center gap-2.5 rounded-full bg-[var(--pk)] px-9 text-[1.0625rem] font-semibold text-white shadow-[0_16px_30px_-16px_var(--pk)] hover:brightness-105";
+export const btnOutline = "shop-btn inline-flex h-[60px] items-center justify-center gap-2 rounded-full border-[1.5px] border-[#1F1B19] bg-white/70 px-9 text-[1rem] font-semibold text-[#1F1B19] hover:bg-white";
+export const eyebrow = "text-[0.9375rem] font-medium uppercase tracking-[0.16em] text-[var(--pk)]";
+/** The shop's page width (matches the design: 80px gutters at 1440) */
+export const WRAP = "mx-auto w-full max-w-[1360px] px-5 sm:px-8 lg:px-10";
 
 /** The frame around every shop page: site menu, promo strip, shop header with cart, footer with the roast schedule. */
 export function ShopFrame({ org, children, active, topBanners = [], cta }: {
@@ -60,32 +62,32 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
   const strip = topBanners[0];
   const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
-    <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FFFBF8] text-[#151312]">
+    <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
       <style>{CSS}</style>
-      <MasterNav org={org} active="shop" />
+      <MasterNav org={org} active="shop" tone="light" />
       {strip && (
         <div className="bg-[color-mix(in_srgb,var(--b)_14%,#FFF6F4)] text-[#151312]">
-          <div className={`${PAGE} flex min-h-10 items-center justify-center gap-3 py-2 text-center text-[0.875rem]`}>
+          <div className={`${WRAP} flex min-h-10 items-center justify-center gap-3 py-2 text-center text-[0.875rem]`}>
             <span><span className="font-semibold">{strip.title}</span>{strip.body ? <span className="text-[#5E5853]"> — {strip.body}</span> : null}</span>
             {strip.href && <Link href={strip.href} className="inline-flex shrink-0 items-center gap-1 font-semibold text-[var(--b)] hover:underline">{strip.cta_label || "Shop now"}<ArrowRight className="h-3.5 w-3.5" /></Link>}
           </div>
         </div>
       )}
-      <header className="sticky top-0 z-40 border-b border-[#EDE3DB] bg-[#FFFBF8]/92 backdrop-blur-md">
-        <div className={`${PAGE} flex h-[68px] items-center gap-4`}>
-          <Link href={base} className="flex min-w-0 shrink-0 items-center gap-3">
-            <span className={`${serif} truncate text-[1.1875rem] font-bold`}>{labels.shop}</span>
+      <header className="sticky top-0 z-40 border-b border-[#EEE6DF] bg-[#FCFAF7]/92 backdrop-blur-md">
+        <div className={`${WRAP} flex h-[62px] items-center gap-4`}>
+          <Link href={base} className="flex min-w-0 shrink-0 items-center gap-3 md:w-[180px]">
+            <span className={`${serif} truncate text-[1.1875rem] font-semibold`}>{labels.shop}</span>
           </Link>
           <nav className="hidden flex-1 items-center justify-center gap-1.5 md:flex" aria-label="Shop">
             {nav.map((n) => (
               <Link key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined}
-                className={`rounded-full px-4 py-2 text-[0.9375rem] font-medium transition ${active === n.key ? "bg-[#151312] text-white" : "text-[#3F3A36] hover:bg-[#F4ECE6] hover:text-[#151312]"}`}>{n.label}</Link>
+                className={`rounded-full px-[18px] py-[9px] text-[0.9375rem] font-medium transition ${active === n.key ? "bg-[#111] text-white" : "text-[#26211E] hover:bg-[#F2EAE4]"}`}>{n.label}</Link>
             ))}
           </nav>
           <span className="flex-1 md:hidden" />
           <Link href={`${base}/account`} aria-label="My account" className="grid h-11 w-11 place-items-center rounded-full transition hover:bg-[#F4ECE6]"><UserRound className="h-5 w-5" /></Link>
           <CartButton slug={org.slug} />
-          {cta && <Link href={cta.href} className="shop-btn ml-1 hidden h-11 items-center rounded-full bg-[var(--b)] px-6 text-[0.9375rem] font-semibold text-[var(--on-b)] shadow-[0_10px_22px_-12px_var(--b)] sm:inline-flex">{cta.label}</Link>}
+          {cta && <Link href={cta.href} className="shop-btn ml-1 hidden h-[46px] items-center rounded-full bg-[var(--pk)] px-8 text-[0.9375rem] font-semibold text-white shadow-[0_10px_22px_-12px_var(--pk)] sm:inline-flex">{cta.label}</Link>}
         </div>
         <nav className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Shop sections">
           {nav.map((n) => (
@@ -95,9 +97,9 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
       </header>
       <main>{children}</main>
       <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]">
-        <div className={`${PAGE} grid gap-9 py-12 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_0.8fr_1.1fr_auto] lg:gap-0 lg:divide-x lg:divide-[#EDE3DB]`}>
+        <div className={`${WRAP} grid gap-9 py-12 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_0.8fr_1.1fr_auto] lg:gap-0 lg:divide-x lg:divide-[#EDE3DB]`}>
           <div className="lg:pr-10">
-            <p className={`${serif} text-[1.5rem] font-bold`}>{org.name}</p>
+            <p className={`${serif} text-[1.625rem] font-semibold`}>{org.name}</p>
             {(org.shop.roastedIn || org.shop.roastNote) && (
               <p className="mt-3 max-w-sm text-[0.875rem] leading-relaxed text-[#5E5853]">
                 {org.shop.roastedIn && <>Locally roasted in {org.shop.roastedIn}.<br /></>}{org.shop.roastNote}
@@ -111,7 +113,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
           </div>
           {learn.length > 0 && (
             <div className="space-y-1.5 lg:px-8">
-              <p className="mb-2.5 text-[0.875rem] font-semibold">Learn &amp; more</p>
+              <p className="mb-2.5 text-[0.875rem] font-semibold">Learn</p>
               {learn.map((n) => <Link key={n.href} href={n.href} className={link}>{n.label}</Link>)}
             </div>
           )}
@@ -129,7 +131,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
             </div>
           )}
         </div>
-        <p className={`${PAGE} border-t border-[#EDE3DB] py-5 text-[0.8125rem] text-[#8C847D]`}>Secure checkout by Stripe · Shop by EventureOS</p>
+        <p className={`${WRAP} border-t border-[#EDE3DB] py-5 text-[0.8125rem] text-[#8C847D]`}>Secure checkout by Stripe · Shop by EventureOS</p>
       </footer>
     </div>
   );

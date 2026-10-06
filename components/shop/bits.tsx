@@ -36,31 +36,43 @@ export function ProductCard({ p, slug, s, currency, prices = "from" }: { p: Prod
   const from = priceFrom(p);
   const sub = p.subscribable && p.kind === "coffee" && s.subDiscount > 0 ? unitPrice(from, "subscription", s) : null;
   const notes = p.tasting_notes || p.short;
+  if (prices === "split") {
+    // Subscriptions page card: bag on white, name, notes between hairlines, one-time vs subscribe
+    return (
+      <Link href={`/shop/${slug}/p/${p.slug}`} className="shop-card group flex h-full flex-col rounded-[16px] bg-white px-[22px] pb-6 pt-5 shadow-[0_2px_4px_rgba(60,40,30,.03),0_18px_40px_-28px_rgba(80,45,40,.35)]">
+        <div className="relative h-[196px]">
+          {p.image_url ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-0 h-full w-full object-contain drop-shadow-[0_14px_14px_rgba(60,30,20,.16)]" loading="lazy" />
+            : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--pk)]`}>{p.name[0]}</span>}
+          {p.featured && <span className="absolute -left-1 -top-1 rounded-full bg-[#111] px-3 py-[3px] text-[0.8125rem] font-semibold text-[#F6C445]">Bestseller</span>}
+        </div>
+        <h3 className={`${serif} mt-4 border-b border-[#EFE8E2] pb-3 text-[1.3125rem] font-semibold leading-tight text-[#151312]`}>{p.name}</h3>
+        <p className="mt-3 line-clamp-2 min-h-[2.9em] text-[0.9375rem] leading-[1.45] text-[#4E4844]">{notes ?? ""}</p>
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-[#EFE8E2] pt-3.5">
+          <p className="text-[0.8125rem] text-[#6B645F]">One-time<span className="mt-1 block text-[1.1875rem] font-semibold text-[#151312]">{$(from, currency)}</span></p>
+          {sub !== null && <p className="text-right text-[0.8125rem] text-[var(--pk)]">Subscribe<span className="mt-1 block text-[1.375rem] font-bold">{$(sub, currency)}</span></p>}
+        </div>
+      </Link>
+    );
+  }
+  // Coffee page card: bag on a blush panel with the badges, details below
   return (
-    <Link href={`/shop/${slug}/p/${p.slug}`} className="shop-card group flex h-full flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_1px_0_rgba(21,19,18,.04),0_12px_32px_-22px_rgba(80,45,40,.35)] ring-1 ring-[#EFE6DF]">
-      <div className="relative aspect-[1/0.78] overflow-hidden bg-[linear-gradient(180deg,#FFF6F5,color-mix(in_srgb,var(--b)_10%,#FFF3EF))]">
+    <Link href={`/shop/${slug}/p/${p.slug}`} className="shop-card group flex h-full flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_2px_4px_rgba(60,40,30,.03),0_18px_40px_-28px_rgba(80,45,40,.35)]">
+      <div className="relative h-[244px] overflow-hidden bg-[linear-gradient(180deg,#F8EDE8,#FBF1EC)]">
         {p.image_url
-          ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-0 h-full w-full object-contain px-6 pb-3 pt-9 drop-shadow-[0_18px_18px_rgba(60,30,20,.18)]" loading="lazy" />
-          : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--b)]`}>{p.name[0]}</span>}
-        {p.featured && <span className="absolute left-3 top-3 rounded-full bg-[#151312] px-2.5 py-[3px] text-[0.6875rem] font-semibold text-white">Featured</span>}
-        {sub !== null && <span className="absolute right-3 top-3 rounded-full bg-[color-mix(in_srgb,var(--b)_22%,white)] px-2.5 py-[3px] text-[0.6875rem] font-semibold text-[#151312]">Save {s.subDiscount}% on subscription</span>}
+          ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-x-0 bottom-0 top-[26px] mx-auto h-[calc(100%-26px)] w-full object-contain object-bottom drop-shadow-[0_16px_16px_rgba(60,30,20,.2)]" loading="lazy" />
+          : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--pk)]`}>{p.name[0]}</span>}
+        {p.featured && <span className="absolute left-[18px] top-[18px] rounded-full bg-[#111] px-3 py-[5px] text-[0.75rem] font-semibold text-white">Featured</span>}
+        {sub !== null && <span className="absolute right-[10px] top-[10px] rounded-full bg-[#FFB3CE] px-3 py-[5px] text-[0.75rem] font-semibold text-[#2A1F22]">Save {s.subDiscount}% on subscription</span>}
       </div>
-      <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
-        {p.category && <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-[#7A726B]">{p.category}</p>}
-        <h3 className={`${serif} mt-1 text-[1.25rem] font-bold leading-[1.2] text-[#151312]`}>{p.name}</h3>
-        {notes && <p className="mt-1.5 line-clamp-2 text-[0.875rem] leading-relaxed text-[#5E5853]">{notes}</p>}
-        {p.best_for && <p className="mt-2.5 inline-flex w-fit rounded-full bg-[color-mix(in_srgb,var(--b)_12%,#FFF6F2)] px-3 py-1 text-[0.75rem] font-medium text-[#3F3A36]">Best for {p.best_for.toLowerCase()}</p>}
-        {prices === "split" ? (
-          <div className="mt-auto grid grid-cols-2 gap-2 border-t border-[#F0E8E2] pt-3.5 text-[0.75rem] text-[#7A726B]">
-            <p>One-time<span className="mt-0.5 block text-[1.125rem] font-bold text-[#151312]">{$(from, currency)}</span></p>
-            {sub !== null && <p className="text-right">Subscribe<span className="mt-0.5 block text-[1.125rem] font-bold text-[var(--b)]">{$(sub, currency)}</span></p>}
-          </div>
-        ) : (
-          <div className="mt-auto flex items-end justify-between gap-3 pt-4">
-            <p className="text-[0.875rem] text-[#5E5853]">From <span className="text-[1.125rem] font-bold text-[#151312]">{$(from, currency)}</span></p>
-            {sub !== null && <p className="text-right text-[0.75rem] leading-tight text-[#7A726B]">Subscribe from<span className="mt-0.5 block text-[1.25rem] font-bold text-[var(--b)]">{$(sub, currency)}</span></p>}
-          </div>
-        )}
+      <div className="flex flex-1 flex-col px-[22px] pb-[22px] pt-[18px]">
+        {p.category && <p className="text-[0.75rem] font-medium uppercase tracking-[0.12em] text-[#5E5853]">{p.category}</p>}
+        <h3 className={`${serif} mt-[6px] text-[1.4375rem] font-semibold leading-[1.15] text-[#151312]`}>{p.name}</h3>
+        {notes && <p className="mt-2 line-clamp-2 text-[0.9688rem] leading-[1.45] text-[#4E4844]">{notes}</p>}
+        {p.best_for && <p className="mt-3 inline-flex w-fit rounded-full bg-[#FCEDE6] px-3.5 py-[5px] text-[0.875rem] text-[#3A3431]">Best for {p.best_for.toLowerCase()}</p>}
+        <div className="mt-auto flex items-end justify-between gap-3 pt-5">
+          <p className="text-[0.9375rem] text-[#3A3431]">From <span className="text-[1.3125rem] font-bold text-[#151312]">{$(from, currency)}</span></p>
+          {sub !== null && <p className="text-right text-[0.875rem] leading-tight text-[#5E5853]">Subscribe from<span className="mt-1 block text-[1.4375rem] font-bold text-[var(--pk)]">{$(sub, currency)}</span></p>}
+        </div>
       </div>
     </Link>
   );
