@@ -1,4 +1,5 @@
 import "@fontsource/playfair-display/700.css";
+import { PageBg } from "@/components/site/page-bg";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CalendarDays, Gift, Mail, Users } from "lucide-react";
@@ -67,6 +68,7 @@ export default async function GiftPage({ params, searchParams }: P) {
 
   return (
     <div data-book-root style={brandStyle(org)} className="min-h-screen bg-[#1a120d]">
+      <PageBg color="#FBF8F4" />
       <MasterNav org={org} active="gifts" />
       <section className="relative isolate overflow-hidden xl:h-[max(1000px,66.667vw)] xl:overflow-visible xl:overflow-x-clip">
         {hero

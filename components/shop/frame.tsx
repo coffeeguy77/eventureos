@@ -1,4 +1,5 @@
 import "@fontsource-variable/newsreader/opsz.css";
+import { PageBg } from "@/components/site/page-bg";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
 import { ArrowRight, UserRound } from "lucide-react";
@@ -63,6 +64,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
   const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
+      <PageBg color="#FFFBF8" />
       <style>{SHOP_CSS}</style>
       <MasterNav org={org} active="shop" tone="light" />
       {strip && (

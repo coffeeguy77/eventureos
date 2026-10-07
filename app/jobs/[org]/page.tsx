@@ -1,4 +1,5 @@
 import "@fontsource/playfair-display/700.css";
+import { PageBg } from "@/components/site/page-bg";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Briefcase, CalendarDays, GraduationCap, Lock, MapPin, ShieldCheck, Store, Users } from "lucide-react";
@@ -48,6 +49,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
 
   return (
     <div style={brandStyle(org)} className="min-h-screen bg-[#0E0B0A] text-white">
+      <PageBg color="#0E0B0A" />
       <MasterNav org={org} active="jobs" />
       {/* Top: photo, headline, sign-in */}
       <div className="relative isolate overflow-hidden">

@@ -1,4 +1,5 @@
 import "@fontsource-variable/fraunces";
+import { PageBg } from "@/components/site/page-bg";
 import { ContactForm } from "@/components/events/contact-form";
 import "@fontsource/caveat/600.css";
 import {
@@ -123,6 +124,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
 
   return (
     <div id="top" data-book-root style={brandStyle(org)} className="lp min-h-screen bg-[#FAF7F3] pb-24 text-[#171714] md:pb-0">
+      <PageBg color="#101C17" />
       <style>{LANDING_CSS}</style>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <RevealOnScroll />

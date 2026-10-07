@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageBg } from "@/components/site/page-bg";
 import { ChevronDown, LogOut } from "lucide-react";
 import type { JobsOrg } from "@/lib/jobs/server";
 import { brandStyle, PAGE } from "@/components/book/shell";
@@ -29,6 +30,7 @@ export function EmployerShell({ org, children, me, active, unread = 0, legacy = 
   const bg = org.jobs.employerImage ?? org.jobs.heroImage;
   return (
     <div style={brandStyle(org)} className="relative min-h-screen bg-[#0d0a0b] text-white [color-scheme:dark]">
+      <PageBg color="#0d0a0b" />
       {bg && <img src={bg} alt="" className="pointer-events-none fixed inset-0 h-full w-full object-cover" />}
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(90deg,rgba(12,9,10,.86)_0%,rgba(12,9,10,.5)_42%,rgba(12,9,10,.62)_100%)]" />
       <div className="relative z-30"><MasterNav org={org} active="jobs" /></div>

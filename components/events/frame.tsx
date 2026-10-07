@@ -1,4 +1,5 @@
 import "@fontsource-variable/newsreader/opsz.css";
+import { PageBg } from "@/components/site/page-bg";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
 import { brandStyle } from "@/components/book/shell";
@@ -43,6 +44,7 @@ export function EventsFrame({ org, s, active, children }: { org: PublicOrg; s: E
   const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
+      <PageBg color="#FFFBF8" />
       <style>{SHOP_CSS}</style>
       <MasterNav org={org} active="events" tone="light" />
       <header className="sticky top-0 z-40 border-b border-[#EEE6DF] bg-[#FCFAF7]/92 backdrop-blur-md">
