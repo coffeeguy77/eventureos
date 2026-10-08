@@ -6,7 +6,7 @@ import { rememberCart } from "@/lib/reminders/server";
 import type { CartSection } from "@/lib/reminders/core";
 import { availability, eventsOrg, monthFree, submitCatering, submitHire, type SubmitResult } from "@/lib/events/server";
 
-const SECTIONS = ["events", "catering", "branding", "drinks", "shop", "classes", "gifts", "giftcards"] as const;
+const SECTIONS = ["events", "catering", "branding", "drinks", "shop", "classes", "gifts", "giftcards", "cafe", "club", "wholesale"] as const;
 type Section = (typeof SECTIONS)[number];
 const str = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
 
@@ -25,7 +25,7 @@ export async function sendEnquiry(slug: string, section: string, f: Record<strin
   if (name.length < 2) return { ok: false, error: "Add your name." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "Add a valid email so we can reply." };
   const sec: Section = (SECTIONS as readonly string[]).includes(section) ? (section as Section) : "events";
-  const topic = { events: "Event hire", catering: "Catering", branding: "Branding & cart wrap", drinks: "Drinks menu", shop: "Coffee shop", classes: "Classes", gifts: "Gift certificates", giftcards: "Gift cards" }[sec];
+  const topic = { events: "Event hire", catering: "Catering", branding: "Branding & cart wrap", drinks: "Drinks menu", shop: "Coffee shop", classes: "Classes", gifts: "Gift certificates", giftcards: "Gift cards", cafe: "Café", club: "Roasting Club", wholesale: "Wholesale coffee" }[sec];
   const payload = {
     name, email, phone: str(f.phone, 40), company: str(f.company, 160), event_type: str(f.event_type, 80) || topic,
     event_date: /^\d{4}-\d{2}-\d{2}$/.test(f.event_date ?? "") ? f.event_date : "", guests: str(f.guests, 8), venue: str(f.venue, 200),

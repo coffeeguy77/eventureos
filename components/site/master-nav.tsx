@@ -4,12 +4,13 @@ import { readSiteNav, type SiteSection } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
 import { readEvents } from "@/lib/events/core";
+import { cafePages, readCafe } from "@/lib/cafe/core";
 import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
 import { GiftMenu } from "./gift-menu";
 
-/** One menu bar above every public section of the business's site: logo · events · classes · job board · shop · gift certificates. Also runs the anonymous analytics tracker. */
+/** One menu bar above every public section of the business's site: logo · events · classes · job board · shop · café · gift certificates. Also runs the anonymous analytics tracker. */
 export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light" }) {
   const light = tone === "light";
   const labels = readSiteNav(org.rawSettings);
@@ -19,6 +20,7 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
     { key: "lessons", href: `/${base}`, on: org.settings.enabled },
     { key: "jobs", href: `/jobs/${base}`, on: readJobSettings(org.rawSettings, org.name).enabled },
     { key: "shop", href: `/shop/${base}`, on: readShop(org.rawSettings).enabled },
+    { key: "cafe", href: `/cafe/${base}`, on: false },
     { key: "gifts", href: `/book/${base}/gift`, on: org.settings.enabled && org.stripeReady },
   ];
   // Gift certificates: barista lessons and/or coffee gift cards — the same dropdown on every page.
@@ -31,6 +33,17 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
   const giftItem = items.find((i) => i.key === "gifts")!;
   giftItem.on = gifts.length > 0;
   if (gifts.length === 1) giftItem.href = gifts[0].href;
+  // Café: the café page, plus ordering, table bookings, roasting club and wholesale when they're on.
+  const cafe = readCafe(org.rawSettings);
+  const cp = cafePages(cafe);
+  const cafeLinks = [
+    cp.home ? { kind: "cafe" as const, href: `/cafe/${base}`, label: "Our café", note: "Coffee, kitchen & hours" } : null,
+    cp.order ? { kind: "order" as const, href: `/cafe/${base}/order`, label: "Order online", note: "Pick up from the café" } : cp.appOrder ? { kind: "order" as const, href: cafe.appUrl, label: "Order online", note: "Order in our app" } : null,
+    cp.reserve ? { kind: "table" as const, href: `/cafe/${base}/reserve`, label: "Reserve a table", note: "Book ahead" } : null,
+    cp.club ? { kind: "club" as const, href: `/cafe/${base}/roasting-club`, label: "Roasting Club", note: "Roast on our equipment" } : null,
+    cp.wholesale ? { kind: "wholesale" as const, href: `/cafe/${base}/wholesale`, label: "Wholesale", note: "Coffee for your business" } : null,
+  ].filter((x): x is NonNullable<typeof x> => !!x);
+  items.find((i) => i.key === "cafe")!.on = cp.home;
   const shown = items.filter((i) => i.on);
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
   return (
@@ -44,9 +57,9 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
           {shown.map((i, n) => (
             <span key={i.key} className="flex shrink-0 items-center">
               {n > 0 && <span aria-hidden className={`mx-1 hidden h-4 w-px sm:block ${light ? "bg-[#E2D8D0]" : "bg-white/20"}`} />}
-              {i.key === "gifts" && gifts.length > 1 ? (
-                <GiftMenu label={labels.gifts} items={gifts} light={light} active={active === "gifts"}
-                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${active === "gifts" ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
+              {(i.key === "gifts" && gifts.length > 1) || (i.key === "cafe" && cafeLinks.length > 1) ? (
+                <GiftMenu label={labels[i.key]} items={i.key === "gifts" ? gifts : cafeLinks} light={light} active={active === i.key} track={i.key === "gifts" ? "Gift menu" : "Café menu"}
+                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${active === i.key ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
               ) : (
               <Link href={i.href} aria-current={active === i.key ? "page" : undefined}
                 className={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${active === i.key ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`}>

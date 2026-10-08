@@ -1,9 +1,9 @@
 /**
- * The menu bar across a business's public pages (classes, job board, shop, gift certificates), so they read as one website.
+ * The menu bar across a business's public pages (events, classes, job board, shop, café, gift certificates), so they read as one website.
  * Labels live in organisations.settings.site.nav; a section only shows when it's switched on.
  */
-export type SiteSection = "events" | "lessons" | "jobs" | "shop" | "gifts";
-export const SITE_LABELS: Record<SiteSection, string> = { events: "Events", lessons: "Classes", jobs: "Job board", shop: "Shop", gifts: "Gift certificates" };
+export type SiteSection = "events" | "lessons" | "jobs" | "shop" | "cafe" | "gifts";
+export const SITE_LABELS: Record<SiteSection, string> = { events: "Events", lessons: "Classes", jobs: "Job board", shop: "Shop", cafe: "Café", gifts: "Gift certificates" };
 
 export function readSiteNav(orgSettings: unknown): Record<SiteSection, string> {
   const site = (orgSettings && typeof orgSettings === "object" ? (orgSettings as Record<string, unknown>).site : null) as Record<string, unknown> | null;

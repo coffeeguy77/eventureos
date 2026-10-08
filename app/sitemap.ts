@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createServiceClient, serviceRoleConfigured } from "@/lib/integrations/runtime";
 import { hirePageSlug, offered, readEvents } from "@/lib/events/core";
+import { cafePages, readCafe } from "@/lib/cafe/core";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
@@ -15,6 +16,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const db = createServiceClient();
     const { data: orgs } = await db.from("organisations").select("id, slug, settings").eq("status", "active");
+    for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
+      const cp = cafePages(readCafe(o.settings));
+      const cb = `${BASE}/cafe/${o.slug}`;
+      if (cp.home) out.push({ url: cb, changeFrequency: "weekly", priority: 0.8 });
+      if (cp.order) out.push({ url: `${cb}/order`, changeFrequency: "daily", priority: 0.8 });
+      if (cp.reserve) out.push({ url: `${cb}/reserve`, changeFrequency: "weekly", priority: 0.6 });
+      if (cp.club) out.push({ url: `${cb}/roasting-club`, changeFrequency: "monthly", priority: 0.7 });
+      if (cp.wholesale) out.push({ url: `${cb}/wholesale`, changeFrequency: "monthly", priority: 0.7 });
+    }
     for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
       const ev = readEvents(o.settings);
       if (!ev.enabled) continue;

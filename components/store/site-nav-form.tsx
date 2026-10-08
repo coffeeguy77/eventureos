@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/form";
 
-const WHAT: Record<SiteSection, string> = { events: "Event hire & catering", lessons: "Classes page", jobs: "Job board", shop: "Coffee shop", gifts: "Gift certificates" };
+const WHAT: Record<SiteSection, string> = { events: "Event hire & catering", lessons: "Classes page", jobs: "Job board", shop: "Coffee shop", cafe: "Café, ordering & roasting club", gifts: "Gift certificates" };
 
 export function SiteNavForm({ initial }: { initial: Record<SiteSection, string> }) {
   const [v, setV] = useState(initial);
@@ -15,8 +15,8 @@ export function SiteNavForm({ initial }: { initial: Record<SiteSection, string> 
   const [pending, start] = useTransition();
   return (
     <Card className="mt-5 space-y-3 p-5">
-      <div><h2 className="font-semibold text-ink">Website menu</h2><p className="text-[0.8125rem] text-ink-muted">The bar across the top of your events, classes, job board, shop and gift pages. Sections that are switched off don&apos;t show.</p></div>
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div><h2 className="font-semibold text-ink">Website menu</h2><p className="text-[0.8125rem] text-ink-muted">The bar across the top of your events, classes, job board, shop, café and gift pages. Sections that are switched off don&apos;t show.</p></div>
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {(Object.keys(SITE_LABELS) as SiteSection[]).map((k) => (
           <div key={k}><Label htmlFor={`sn-${k}`} hint={WHAT[k]}>Label</Label><Input id={`sn-${k}`} value={v[k]} onChange={(e) => setV({ ...v, [k]: e.target.value })} placeholder={SITE_LABELS[k]} /></div>
         ))}

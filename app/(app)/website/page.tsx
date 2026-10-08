@@ -11,6 +11,9 @@ import { readReminders } from "@/lib/reminders/core";
 import { SITE_LABELS } from "@/lib/site-nav";
 import { EventsForm } from "@/components/website/events-form";
 import { RemindersForm } from "@/components/website/reminders-form";
+import { CafeForm } from "@/components/website/cafe-form";
+import { readCafe } from "@/lib/cafe/core";
+import { igFeed, igMissingEnv, igStatus } from "@/lib/cafe/instagram";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Website" };
@@ -19,11 +22,11 @@ const SECTION: Record<string, string> = { ...SITE_LABELS, other: "Other pages" }
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 const PART: Record<string, string> = { hero: "Top of page", choose: "Choose cart / van / kit", how: "How it works", more: "Drinks · branding · catering", "quote-band": "Lock in your date", contact: "Contact form", included: "What's included", faq: "Questions", feature: "Featured drink", menu: "Drinks menu", options: "Branding options", why: "Why sponsor", builder: "Quote builder", "builder-kind": "Builder: what", "builder-days": "Builder: days & baristas", "builder-event": "Builder: event", "builder-extras": "Builder: extras", "builder-contact": "Builder: contact details", catering: "Catering menu" };
 
-export default async function WebsitePage({ searchParams }: { searchParams: Promise<{ tab?: string; days?: string }> }) {
+export default async function WebsitePage({ searchParams }: { searchParams: Promise<{ tab?: string; days?: string; ig_error?: string; ig_connected?: string }> }) {
   const { supabase, org, role } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const sp = await searchParams;
-  const tab = sp.tab === "events" || sp.tab === "reminders" ? sp.tab : "analytics";
+  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" ? sp.tab : "analytics";
   const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone").eq("id", org.id).single();
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
 
@@ -35,6 +38,12 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     ]);
     const menus = [...new Set(((sv ?? []) as { category: string | null }[]).filter((x) => isCatering(x.category)).map((x) => cateringGroup(x.category)))];
     body = <EventsForm initial={readEvents(settings)} packages={(pk ?? []) as { id: string; name: string }[]} slug={o?.slug as string} base={appBaseUrl()} menus={menus} />;
+  } else if (tab === "cafe") {
+    const [st, feed] = await Promise.all([igStatus(org.id), igFeed(org.id)]);
+    const missing = igMissingEnv();
+    body = <CafeForm initial={readCafe(settings)} slug={o?.slug as string} base={appBaseUrl()} orgId={org.id}
+      ig={{ configured: !missing.length, missing, connected: st?.status === "connected", account: st?.account_label ?? null, error: st?.last_error ?? null, posts: feed.posts.length,
+        flash: sp.ig_error ? String(sp.ig_error).slice(0, 300) : sp.ig_connected ? "Instagram connected." : null, flashOk: !sp.ig_error }} />;
   } else if (tab === "reminders") {
     const { data: carts, error } = await supabase.from("site_carts").select("section, status, reminders_sent").eq("organisation_id", org.id).limit(5000);
     const counts: Record<string, { open: number; sent: number }> = {};
@@ -143,8 +152,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader eyebrow="Marketing" title="Website" subtitle="How people use your public pages, your events pages, and the come-back-and-finish reminders." />
-      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "reminders", label: "Reminders" }]} /></div>
+      <PageHeader eyebrow="Marketing" title="Website" subtitle="How people use your public pages, your events and café pages, and the come-back-and-finish reminders." />
+      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "reminders", label: "Reminders" }]} /></div>
       {body}
     </>
   );

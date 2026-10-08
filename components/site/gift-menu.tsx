@@ -1,12 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Coffee, GraduationCap } from "lucide-react";
+import { CalendarDays, ChevronDown, Coffee, Flame, GraduationCap, ShoppingBag, Store, Truck } from "lucide-react";
 
-/** "Gift Certificates" in the site menu: a small dropdown — Barista lessons or Coffee. */
-export function GiftMenu({ label, items, light, active, itemClass }: {
+export type MenuKind = "lessons" | "coffee" | "cafe" | "order" | "table" | "club" | "wholesale";
+const ICON = { lessons: GraduationCap, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck };
+
+/** A dropdown in the site menu — "Gift Certificates" (barista lessons / coffee) and "Café" (order, book, club, wholesale). */
+export function GiftMenu({ label, items, light, active, itemClass, track = "Gift menu" }: {
   label: string; light: boolean; active: boolean; itemClass: string;
-  items: { kind: "lessons" | "coffee"; href: string; label: string; note: string }[];
+  items: { kind: MenuKind; href: string; label: string; note: string }[];
+  /** analytics label prefix */ track?: string;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
@@ -26,9 +30,9 @@ export function GiftMenu({ label, items, light, active, itemClass }: {
       {open && (
         <span role="menu" className={`fixed right-3 top-[52px] z-[60] w-[260px] rounded-2xl p-2 shadow-[0_24px_48px_-20px_rgba(0,0,0,.45)] ring-1 sm:absolute sm:right-0 sm:top-full ${light ? "bg-white ring-[#EDE3DB]" : "bg-[#1E1819] ring-white/10"}`}>
           {items.map((i) => {
-            const I = i.kind === "coffee" ? Coffee : GraduationCap;
+            const I = ICON[i.kind];
             return (
-              <Link key={i.href} role="menuitem" href={i.href} onClick={() => setOpen(false)} data-track={`Gift menu: ${i.label}`}
+              <Link key={i.href} role="menuitem" href={i.href} onClick={() => setOpen(false)} data-track={`${track}: ${i.label}`}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${light ? "hover:bg-[#FBF1F3]" : "hover:bg-white/[0.06]"}`}>
                 <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${light ? "bg-[color-mix(in_srgb,var(--b)_14%,white)]" : "bg-white/10"} text-[color-mix(in_srgb,var(--b)_55%,#ff0a6c)]`}><I className="h-[18px] w-[18px]" /></span>
                 <span><span className={`block text-[0.9375rem] font-semibold ${light ? "text-[#151312]" : "text-white"}`}>{i.label}</span><span className={`block text-[0.8125rem] ${light ? "text-[#5E5853]" : "text-white/60"}`}>{i.note}</span></span>
