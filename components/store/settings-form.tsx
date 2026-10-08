@@ -85,7 +85,7 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
         <Button type="button" size="sm" variant="secondary" onClick={() => set("grindChart", [...s.grindChart, { label: "", dial: "", use: "" }])}><Plus className="h-4 w-4" />Add row</Button>
       </Card>
       <div className="flex items-center gap-3 xl:col-span-2">
-        <Button type="button" variant="primary" disabled={pending} onClick={() => start(async () => { const r = await saveShopSettings(s); setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error }); router.refresh(); })}>Save settings</Button>
+        <Button type="button" variant="primary" disabled={pending} onClick={() => start(async () => { const { boxes: _boxes, ...rest } = s; void _boxes; const r = await saveShopSettings(rest); setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error }); router.refresh(); })}>Save settings</Button>
         {msg && <span className={msg.ok ? "text-[0.8125rem] text-emerald-700" : "text-[0.8125rem] text-rose-700"}>{msg.text}</span>}
       </div>
     </div>

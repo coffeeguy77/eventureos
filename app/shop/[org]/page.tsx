@@ -55,30 +55,30 @@ export default async function Storefront({ params, searchParams }: P) {
       <EventLink slug={org.slug} token={sp.event ?? null} code={sp.code ?? null} />
 
       {/* Hero: a bright roastery scene, the words over its washed-out left side */}
-      <section className="relative isolate overflow-hidden lg:min-h-[640px] lg:[height:min(805px,calc(100vw*805/1440))]">
+      <section className="relative isolate overflow-hidden lg:flex lg:min-h-[min(805px,calc(100vw*805/1440))] lg:items-center">
         {s.heroImage && (
           <>
             <img src={s.heroImage} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] lg:block" />
             <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(252,250,247,.86)_0%,rgba(252,250,247,.62)_28%,rgba(252,250,247,0)_48%)] lg:block" />
           </>
         )}
-        <div className={`${WRAP} lg:h-full`}>
-          <div className="pb-10 pt-12 lg:pb-0 lg:pl-10 lg:pt-[113px]">
+        <div className={WRAP}>
+          <div className="pb-10 pt-12 lg:py-[clamp(3rem,6vw,5.5rem)] lg:pl-10">
             <p className={`${eyebrow} text-[0.9375rem] tracking-[0.1em] lg:text-[1.0625rem]`}>Fresh from our roaster</p>
-            <h1 className={`${serif} mt-3 max-w-[640px] text-[2.875rem] font-[620] leading-[0.95] tracking-[-0.025em] sm:text-[4rem] lg:mt-[14px] lg:text-[4.75rem] lg:leading-[0.87]`}>{s.title.split(/\s*\|\s*/).map((l, i) => <span key={i} className="block">{l}</span>)}</h1>
+            <h1 className={`${serif} mt-3 max-w-[640px] text-[2.875rem] font-[620] leading-[0.95] tracking-[-0.025em] sm:text-[4rem] lg:mt-[14px] lg:text-[clamp(3.5rem,5.3vw,4.75rem)] lg:leading-[0.9]`}>{s.title.split(/\s*\|\s*/).map((l, i) => <span key={i} className="block">{l}</span>)}</h1>
             {(s.subDiscount > 0 && subs) || s.tagline ? (
               <p className="mt-6 max-w-[490px] text-[1.0625rem] leading-[1.62] text-[#2A2522] lg:mt-[26px] lg:text-[1.1563rem]">
                 {s.subDiscount > 0 && subs ? `Save ${s.subDiscount}% on every bag. ` : ""}{s.tagline}
               </p>
             ) : null}
             <div className="mt-8 flex flex-wrap gap-4 lg:mt-[30px]">
-              <a href="#coffee" className={`${btn} lg:w-[292px]`}>Choose your coffee<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></a>
-              {subs && <Link href={`${base}/subscriptions`} className={`${btnOutline} lg:w-[275px]`}>How subscriptions work</Link>}
+              <a href="#coffee" className={btn}>Choose your coffee<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></a>
+              {subs && <Link href={`${base}/subscriptions`} className={btnOutline}>How subscriptions work</Link>}
             </div>
             {facts.length > 0 && (
-              <ul className="mt-10 grid max-w-[680px] grid-cols-2 gap-y-6 sm:grid-cols-4 lg:mt-[60px] lg:flex lg:gap-0">
+              <ul className="mt-10 grid max-w-[720px] grid-cols-2 gap-y-6 sm:grid-cols-4 lg:mt-[clamp(2.5rem,4vw,3.75rem)]">
                 {facts.map((f, i) => (
-                  <li key={i} className={`pr-4 lg:h-[131px] ${i > 0 ? "sm:border-l sm:border-[#DCD2CA] sm:pl-5 lg:pl-[30px]" : ""} ${["lg:w-[162px]", "lg:w-[200px]", "lg:w-[140px]", "lg:w-[178px]"][i]}`}>
+                  <li key={i} className={`pr-4 ${i > 0 ? "sm:border-l sm:border-[#DCD2CA] sm:pl-5 lg:pl-6" : ""}`}>
                     <f.icon className="h-9 w-9 text-[var(--pk)]" strokeWidth={1.35} />
                     <p className="mt-4 text-[0.9375rem] leading-[1.55] text-[#2A2522]">{f.text}</p>
                   </li>
@@ -111,7 +111,7 @@ export default async function Storefront({ params, searchParams }: P) {
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 lg:pl-[13px] xl:flex-nowrap">
           <div>
             <p className={`${eyebrow} tracking-[0.12em]`}>Our coffee</p>
-            <h2 className={`${serif} mt-[10px] whitespace-nowrap text-[2.5rem] font-[620] leading-none tracking-[-0.025em] sm:text-[3.75rem]`}>Roasted fresh, every week</h2>
+            <h2 className={`${serif} mt-[10px] text-[2.5rem] xl:whitespace-nowrap font-[620] leading-none tracking-[-0.025em] sm:text-[3.75rem]`}>Roasted fresh, every week</h2>
           </div>
           <div className="flex items-center gap-9">
             {s.roastNote && <p className="hidden max-w-[330px] text-[0.875rem] leading-[1.55] text-[#3A3431] md:block">{s.roastNote}</p>}
@@ -131,7 +131,7 @@ export default async function Storefront({ params, searchParams }: P) {
             <p className={`${eyebrow} tracking-[0.12em]`}>Never run out again</p>
             <h2 className={`${serif} mt-[14px] text-[2.5rem] font-[620] leading-[1.06] tracking-[-0.03em] sm:text-[3.5rem]`}>A subscription<br className="hidden lg:block" /> that bends<br className="hidden lg:block" /> around your life.</h2>
             <p className="mt-5 max-w-[400px] text-[1.0625rem] leading-[1.6] text-[#2A2522]">Change anything, any time, from your phone — your coffee, your schedule, your address.</p>
-            <Link href={`${base}/subscriptions`} className={`${btn} mt-[34px] h-[64px] lg:w-[376px]`}>How subscriptions work<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
+            <Link href={`${base}/subscriptions`} className={`${btn} mt-[34px] h-[60px]`}>How subscriptions work<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
           </div>
           <ul className="grid grid-cols-2 gap-[15px] sm:grid-cols-4">
             {tiles.map((f) => (
@@ -146,18 +146,18 @@ export default async function Storefront({ params, searchParams }: P) {
       )}
 
       {/* Gift: a prepaid subscription when offered, otherwise a gift card */}
-      <section className="relative mt-4 grid overflow-hidden bg-[#FAF6F1] lg:h-[426px] lg:grid-cols-[minmax(0,947px)_1fr]">
+      <section className="relative mt-4 grid overflow-hidden bg-[#FAF6F1] lg:min-h-[426px] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {s.subsImage
           ? <div className="relative min-h-[300px]"><img src={s.subsImage} alt="" className="absolute inset-0 h-full w-full object-cover object-[50%_60%]" /><div className="absolute inset-0 hidden bg-[linear-gradient(90deg,rgba(250,246,241,0)_72%,#FAF6F1)] lg:block" /></div>
           : <div className="hidden lg:block" />}
-        <div className="flex items-center px-6 py-12 sm:px-10 lg:py-0 lg:pl-[25px] lg:pr-10">
+        <div className="flex items-center px-6 py-12 sm:px-10 lg:py-14 lg:pl-8 lg:pr-12">
           <div className="max-w-[440px]">
             <p className={`${eyebrow} tracking-[0.12em]`}>The perfect gift</p>
             {s.prepaid.length > 0 && subs ? (
               <>
                 <h2 className={`${serif} mt-[12px] text-[2.25rem] font-[620] leading-[1.08] tracking-[-0.025em] sm:text-[3rem]`}>Give a subscription of great coffee.</h2>
                 <p className="mt-4 text-[1.0625rem] leading-[1.55] text-[#2A2522]">Birthdays, Christmas or just because. Choose their coffee and frequency, and we&apos;ll keep the good coffee coming.</p>
-                <Link href={`${base}/subscriptions#gift`} className={`${btn} mt-7 h-[64px] lg:w-[344px]`}>Send a gift subscription<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
+                <Link href={`${base}/subscriptions#gift`} className={`${btn} mt-7 h-[60px]`}>Send a gift subscription<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
               </>
             ) : (
               <>
@@ -169,7 +169,7 @@ export default async function Storefront({ params, searchParams }: P) {
           </div>
         </div>
       </section>
-      <section className="pb-20" data-section="contact">
+      <section className="py-16 sm:py-20" data-section="contact">
         <div className="mx-auto w-full max-w-[940px] px-5 sm:px-8">
           <ContactForm slug={org.slug} section="shop" heading="Questions about our coffee?" intro="Wholesale, office coffee, subscriptions or anything else — send us a message." showEvent={false} messageHint="How can we help?" />
         </div>

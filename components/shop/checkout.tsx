@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Check, Gift, Loader2, Lock, Minus, PartyPopper, Plus, Store, Tag, Trash2, Truck } from "lucide-react";
 import { checkoutAction, eventInfoAction, quoteAction } from "@/app/shop/actions";
-import { frequencyLabel, grindLabel, nextDispatch, prepaidDeliveries, type Address, type Delivery, type IntervalUnit, type Priced, type Product, type ShopSettings } from "@/lib/shop/core";
+import { boxSummary, frequencyLabel, grindLabel, nextDispatch, prepaidDeliveries, type Address, type Delivery, type IntervalUnit, type Priced, type Product, type ShopSettings } from "@/lib/shop/core";
 import { useCart } from "./cart-store";
 import { GrindAdjuster } from "./buy-box";
 
@@ -100,14 +100,14 @@ export function Checkout({ slug, products, s, today, me }: { slug: string; produ
           <ul className="mt-4 divide-y divide-[#EFE7DE]">
             {items.map((it, idx) => {
               const { p, v } = byVariant.get(it.variantId)!;
-              const line = priced?.lines.find((l) => l.variantId === it.variantId && l.grind === (p.grinds.length ? it.grind : null) && l.adjust === it.adjust);
+              const line = priced?.lines.find((l) => l.variantId === it.variantId && l.grind === (p.grinds.length ? it.grind : null) && l.adjust === it.adjust && JSON.stringify(l.picks ?? []) === JSON.stringify(it.picks ?? []));
               const whole = !it.grind || /whole/i.test(it.grind);
               return (
-                <li key={`${it.variantId}-${it.grind}-${it.adjust}`} className="flex gap-4 py-4">
+                <li key={`${it.variantId}-${it.grind}-${it.adjust}-${(it.picks ?? []).join(".")}`} className="flex gap-4 py-4">
                   <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-[#F3ECE4]">{p.image_url && <img src={p.image_url} alt="" className="h-full w-full object-contain p-2" />}</div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
-                      <div><p className="font-semibold leading-tight">{p.name}</p><p className="text-[0.875rem] text-[#6b655f]">{v.label}</p></div>
+                      <div><p className="font-semibold leading-tight">{p.name}</p><p className="text-[0.875rem] text-[#6b655f]">{v.label}</p>{line?.contents?.length ? <p className="mt-1 text-[0.8438rem] text-[#3A3431]">{boxSummary(line.contents)} · <Link href={`/shop/${slug}/p/${p.slug}`} className="font-semibold text-[var(--b)]">change</Link></p> : null}</div>
                       <p className="text-right font-semibold">{line ? money(line.total) : "—"}{line && line.unit < line.base && <span className="block text-[0.8125rem] font-normal text-[#8a817a] line-through">{money(line.base * line.qty)}</span>}</p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">

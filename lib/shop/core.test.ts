@@ -90,3 +90,24 @@ test("settings: bad values fall back to safe defaults", () => {
   assert.deepEqual(s.dispatchDays, [4]); assert.deepEqual(s.frequencies, [{ unit: "week", count: 5 }]);
   assert.equal(readShop(null).enabled, false);
 });
+
+test("selection box: two coffees always in, two chosen (pre-selected when not chosen)", async () => {
+  const { resolveBox, boxSummary, priceCart, readShop } = await import("./core");
+  const mk = (id: string, name: string, kind: "coffee" | "other" = "coffee") => ({ id, slug: id, name, kind, category: null, short: null, description: null, tasting_notes: null, origin: null, roast: null, best_for: null, image_url: null, images: [], grinds: ["Whole beans"], subscribable: true, featured: false, status: "active", position: 0, variants: [{ id: id + "-v", product_id: id, label: "200g", grams: 200, price: 18, active: true, position: 0 }] });
+  const U = (n: number) => `00000000-0000-0000-0000-00000000000${n}`;
+  const products = [mk(U(1), "Parliament | Café Blend"), mk(U(2), "Seasonal Espresso"), mk(U(3), "Colombia"), mk(U(4), "Night Owl Decaf"), { ...mk(U(5), "Roaster Box"), variants: [{ id: "box-v", product_id: U(5), label: "4 × 200g", grams: 800, price: 65, active: true, position: 0 }] }];
+  const box = { productId: U(5), included: [U(1), U(2)], slots: [{ default: U(3), options: [] }, { default: null, options: [U(3), U(4)] }], bag: "200g" };
+  const r1 = resolveBox(box, undefined, products as never);
+  assert.match(r1.problem!, /choose coffee 4/);
+  const r2 = resolveBox(box, [U(4), U(4)], products as never);
+  assert.equal(r2.problem, null);
+  assert.equal(boxSummary(r2.contents), "Parliament, Seasonal Espresso, Night Owl Decaf, Night Owl Decaf");
+  const r3 = resolveBox(box, ["bogus", U(1)], products as never); // not allowed in slot 2 → problem; slot 1 falls back to default
+  assert.equal(r3.picks[0], U(3));
+  assert.ok(r3.problem);
+  const s = readShop({ shop: { enabled: true, boxes: [box] } });
+  const priced = priceCart({ lines: [{ variantId: "box-v", grind: "Whole beans", adjust: 0, qty: 1, picks: [U(3), U(4)] }], products: products as never, mode: "one_off", settings: s, delivery: "post" });
+  assert.equal(priced.problems.length, 0);
+  assert.equal(priced.lines[0].contents?.length, 4);
+  assert.equal(priced.subtotal, 65);
+});

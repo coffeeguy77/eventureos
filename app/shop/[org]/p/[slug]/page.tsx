@@ -67,7 +67,7 @@ export default async function ProductPage({ params }: P) {
               {facts.map((f) => <div key={f.label} className="rounded-2xl bg-[#F1EAE2] p-4"><dt className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-[#6b655f]"><f.icon className="h-4 w-4" />{f.label}</dt><dd className="mt-1 text-[0.9688rem] font-semibold leading-snug">{f.value}</dd></div>)}
             </dl>
           )}
-          <div className="mt-7"><BuyBox slug={org.slug} p={p} s={org.shop} /></div>
+          <div className="mt-7"><BuyBox slug={org.slug} p={p} s={org.shop} products={products ?? []} /></div>
           {(chips.length > 0 || org.shop.roastNote) && (
             <div className="mt-5 rounded-2xl border border-dashed border-[#D8CCBF] p-4 text-[0.9375rem] leading-relaxed text-[#4a4743]">
               {org.shop.roastNote || chips.map((c) => c.text).join(" · ")}

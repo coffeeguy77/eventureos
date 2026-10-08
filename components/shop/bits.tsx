@@ -43,7 +43,7 @@ export function ProductCard({ p, slug, s, currency, prices = "from" }: { p: Prod
         <div className="relative h-[196px]">
           {p.image_url ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-0 h-full w-full object-contain drop-shadow-[0_14px_14px_rgba(60,30,20,.16)]" loading="lazy" />
             : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--pk)]`}>{p.name[0]}</span>}
-          {p.featured && <span className="absolute -left-1 -top-1 rounded-full bg-[#111] px-3 py-[3px] text-[0.8125rem] font-semibold text-[#F6C445]">Bestseller</span>}
+          {p.featured && <span className="absolute left-0 top-0 z-10 rounded-full bg-[#111] px-3 py-[3px] text-[0.8125rem] font-semibold text-[#F6C445]">Bestseller</span>}
         </div>
         <h3 className={`${serif} mt-4 border-b border-[#EFE8E2] pb-3 text-[1.3125rem] font-semibold leading-tight text-[#151312]`}>{p.name}</h3>
         <p className="mt-3 line-clamp-2 min-h-[2.9em] text-[0.9375rem] leading-[1.45] text-[#4E4844]">{notes ?? ""}</p>
@@ -59,10 +59,14 @@ export function ProductCard({ p, slug, s, currency, prices = "from" }: { p: Prod
     <Link href={`/shop/${slug}/p/${p.slug}`} className="shop-card group flex h-full flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_2px_4px_rgba(60,40,30,.03),0_18px_40px_-28px_rgba(80,45,40,.35)]">
       <div className="relative h-[244px] overflow-hidden bg-[linear-gradient(180deg,#F8EDE8,#FBF1EC)]">
         {p.image_url
-          ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-x-0 bottom-0 top-[26px] mx-auto h-[calc(100%-26px)] w-full object-contain object-bottom drop-shadow-[0_16px_16px_rgba(60,30,20,.2)]" loading="lazy" />
+          ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-x-0 bottom-0 top-[46px] mx-auto h-[calc(100%-46px)] w-full object-contain object-bottom drop-shadow-[0_16px_16px_rgba(60,30,20,.2)]" loading="lazy" />
           : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--pk)]`}>{p.name[0]}</span>}
-        {p.featured && <span className="absolute left-[18px] top-[18px] rounded-full bg-[#111] px-3 py-[5px] text-[0.75rem] font-semibold text-white">Featured</span>}
-        {sub !== null && <span className="absolute right-[10px] top-[10px] rounded-full bg-[#FFB3CE] px-3 py-[5px] text-[0.75rem] font-semibold text-[#2A1F22]">Save {s.subDiscount}% on subscription</span>}
+        {(p.featured || sub !== null) && (
+          <div className="absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-1.5">
+            {p.featured ? <span className="rounded-full bg-[#111] px-3 py-[5px] text-[0.75rem] font-semibold text-white">Featured</span> : <span />}
+            {sub !== null && <span className="rounded-full bg-[#FFB3CE] px-3 py-[5px] text-[0.75rem] font-semibold text-[#2A1F22]">Save {s.subDiscount}% subscribed</span>}
+          </div>
+        )}
       </div>
       <div className="flex flex-1 flex-col px-[22px] pb-[22px] pt-[18px]">
         {p.category && <p className="text-[0.75rem] font-medium uppercase tracking-[0.12em] text-[#5E5853]">{p.category}</p>}

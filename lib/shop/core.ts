@@ -37,7 +37,15 @@ export interface ShopSettings {
   grinder: string;                  // shown on the grind guide, e.g. the grinder model
   grindChart: GrindStep[];
   eventAddon: boolean;              // offer bags of coffee to event / equipment-hire customers
+  boxes: BoxConfig[];               // selection boxes (e.g. 4 × 200g): some coffees always in, the rest chosen by the customer
 }
+
+/**
+ * A selection box: one product whose bags are partly fixed and partly the customer's choice.
+ * slots: one per choosable bag — a pre-selected coffee (default) and the coffees allowed (empty = any coffee in the shop).
+ */
+export interface BoxSlot { default: string | null; options: string[] }
+export interface BoxConfig { productId: string; included: string[]; slots: BoxSlot[]; bag: string }
 
 export const DEFAULT_GRINDS = ["Whole beans", "Espresso", "Stovetop", "Filter machine", "Plunger"];
 
@@ -79,6 +87,7 @@ export const DEFAULT_SHOP: ShopSettings = {
   grinder: "",
   grindChart: DEFAULT_GRIND_CHART,
   eventAddon: true,
+  boxes: [],
 };
 
 const num = (v: unknown, d: number, min = 0, max = 100000) => { const n = Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : d; };
@@ -125,6 +134,15 @@ export function readShop(orgSettings: unknown): ShopSettings {
       return typeof o?.label === "string" && o.label.trim() ? { label: o.label.slice(0, 40), dial: str(o.dial, "", 20), use: str(o.use, "", 120) } : null;
     }, d.grindChart),
     eventAddon: raw.eventAddon !== false,
+    boxes: arr(raw.boxes, (b) => {
+      const o = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
+      const id = (v: unknown) => (typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v) ? v : null);
+      const ids = (v: unknown) => (Array.isArray(v) ? v.map(id).filter((x): x is string => !!x).slice(0, 12) : []);
+      const productId = id(o.productId);
+      if (!productId) return null;
+      const slots = (Array.isArray(o.slots) ? o.slots : []).slice(0, 8).map((x) => { const q = (x && typeof x === "object" ? x : {}) as Record<string, unknown>; return { default: id(q.default), options: ids(q.options) }; });
+      return { productId, included: ids(o.included), slots, bag: str(o.bag, "200g", 20) || "200g" };
+    }, d.boxes),
   };
 }
 
@@ -182,8 +200,8 @@ export function couponProblem(c: Coupon | null, o: { today: string; mode: Mode; 
 
 /* ------------------------------------------------------------------ pricing a cart */
 
-export interface CartLine { variantId: string; grind: string | null; adjust: number; qty: number }
-export interface PricedLine { variantId: string; productId: string; name: string; variant: string; grind: string | null; adjust: number; qty: number; base: number; unit: number; total: number; kind: Product["kind"] }
+export interface CartLine { variantId: string; grind: string | null; adjust: number; qty: number; picks?: string[] }
+export interface PricedLine { variantId: string; productId: string; name: string; variant: string; grind: string | null; adjust: number; qty: number; base: number; unit: number; total: number; kind: Product["kind"]; picks?: string[]; contents?: { id: string; name: string }[] }
 export interface Priced {
   lines: PricedLine[]; subtotal: number; listSubtotal: number; saved: number; discount: number; shipping: number; total: number;
   freeShippingGap: number | null;   // how much more for free shipping (null = not applicable / already free)
@@ -210,7 +228,14 @@ export function priceCart(input: {
     const lineMode: Mode = hit.p.kind === "coffee" && hit.p.subscribable ? mode : "one_off";
     if (mode !== "one_off" && !(hit.p.kind === "coffee" && hit.p.subscribable)) problems.push(`${hit.p.name} can't be part of a subscription.`);
     const unit = unitPrice(hit.v.price, lineMode, s, prepaidExtra);
-    lines.push({ variantId: hit.v.id, productId: hit.p.id, name: hit.p.name, variant: hit.v.label, grind, adjust: grind ? clampAdjust(l.adjust) : 0, qty, base: hit.v.price, unit, total: round2(unit * qty), kind: hit.p.kind });
+    const box = s.boxes.find((b) => b.productId === hit.p.id);
+    let extra: Pick<PricedLine, "picks" | "contents"> = {};
+    if (box) {
+      const r = resolveBox(box, l.picks, input.products);
+      if (r.problem) problems.push(`${hit.p.name}: ${r.problem}`);
+      extra = { picks: r.picks, contents: r.contents };
+    }
+    lines.push({ variantId: hit.v.id, productId: hit.p.id, name: hit.p.name, variant: hit.v.label, grind, adjust: grind ? clampAdjust(l.adjust) : 0, qty, base: hit.v.price, unit, total: round2(unit * qty), kind: hit.p.kind, ...extra });
   }
   const listSubtotal = round2(lines.reduce((a, l) => a + l.base * l.qty, 0));
   const subtotal = round2(lines.reduce((a, l) => a + l.total, 0));
@@ -235,6 +260,33 @@ export function priceCart(input: {
   const freeShippingGap = physical && input.delivery === "post" && s.freeOver !== null && !freeByAmount && parcels === 1 ? round2(s.freeOver - subtotal) : null;
   return { lines, subtotal, listSubtotal, saved: round2(listSubtotal - subtotal), discount, shipping, total, freeShippingGap, deliveries, perDelivery, problems: [...new Set(problems)] };
 }
+
+/* ------------------------------------------------------------------ selection boxes */
+
+/** Coffees a box slot may hold: the listed ones, or every active coffee except the box itself and other boxes. */
+export function boxOptions(slot: BoxSlot, products: Product[], boxes: BoxConfig[]) {
+  const coffees = products.filter((p) => p.kind === "coffee" && p.status === "active" && !boxes.some((b) => b.productId === p.id));
+  return slot.options.length ? coffees.filter((p) => slot.options.includes(p.id)) : coffees;
+}
+
+/** The customer's picks checked against the box rules; missing picks fall back to the pre-selected coffee. */
+export function resolveBox(box: BoxConfig, picks: string[] | undefined, products: Product[]) {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const out: string[] = [];
+  let problem: string | null = null;
+  box.slots.forEach((slot, i) => {
+    const allowed = boxOptions(slot, products, [box]).map((p) => p.id);
+    const want = picks?.[i];
+    const pick = want && allowed.includes(want) ? want : slot.default && allowed.includes(slot.default) ? slot.default : null;
+    if (!pick) problem = problem ?? `choose coffee ${box.included.length + i + 1}.`;
+    out.push(pick ?? "");
+  });
+  const contents = [...box.included, ...out].filter(Boolean).map((id) => ({ id, name: byId.get(id)?.name ?? "Coffee" }));
+  return { picks: out, contents, problem };
+}
+
+/** "Parliament, Seasonal, Colombia, Night Owl" */
+export const boxSummary = (contents: { name: string }[] | undefined) => (contents ?? []).map((c) => c.name.split(/\s*\|\s*/)[0]).join(", ");
 
 /** How many deliveries a prepaid package covers at a frequency. */
 export function prepaidDeliveries(months: 3 | 6 | 12, iv: { unit: IntervalUnit; count: number }) {

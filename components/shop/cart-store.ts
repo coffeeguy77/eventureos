@@ -7,7 +7,7 @@ import type { IntervalUnit, Mode } from "@/lib/shop/core";
  * The cart lives in this browser (per shop). Prices are never trusted from here — the server re-prices everything.
  * If storage is blocked (private mode), the cart still works for this page visit.
  */
-export interface CartItem { variantId: string; grind: string | null; adjust: number; qty: number }
+export interface CartItem { variantId: string; grind: string | null; adjust: number; qty: number; picks?: string[] }
 export interface Cart {
   items: CartItem[]; mode: Mode; interval: { unit: IntervalUnit; count: number }; prepaidMonths: 3 | 6 | 12 | null;
   coupon: string | null; eventToken: string | null;
@@ -41,7 +41,7 @@ export function useCart(slug: string) {
   }, [slug]);
   const update = useCallback((f: (c: Cart) => Cart) => { const next = f(read(slug)); write(slug, next); setCart(next); }, [slug]);
   const add = useCallback((item: CartItem, opts?: { mode?: Mode; interval?: { unit: IntervalUnit; count: number } }) => update((c) => {
-    const same = c.items.findIndex((x) => x.variantId === item.variantId && x.grind === item.grind && x.adjust === item.adjust);
+    const same = c.items.findIndex((x) => x.variantId === item.variantId && x.grind === item.grind && x.adjust === item.adjust && JSON.stringify(x.picks ?? []) === JSON.stringify(item.picks ?? []));
     const items = same >= 0 ? c.items.map((x, i) => (i === same ? { ...x, qty: Math.min(50, x.qty + item.qty) } : x)) : [...c.items, item];
     return { ...c, items, mode: opts?.mode ?? c.mode, interval: opts?.interval ?? c.interval };
   }), [update]);

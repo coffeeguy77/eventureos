@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Minus, Plus, ShoppingBag } from "lucide-react";
-import { ADJUST_LABELS, frequencyLabel, unitPrice, type IntervalUnit, type Product, type ShopSettings } from "@/lib/shop/core";
+import { ADJUST_LABELS, boxOptions, frequencyLabel, unitPrice, type IntervalUnit, type Product, type ShopSettings } from "@/lib/shop/core";
 import { useCart } from "./cart-store";
 
 const money = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n).replace(/\.00$/, "");
@@ -28,7 +28,7 @@ export function GrindAdjuster({ value, onChange, compact = false }: { value: num
   );
 }
 
-export function BuyBox({ slug, p, s }: { slug: string; p: Product; s: ShopSettings }) {
+export function BuyBox({ slug, p, s, products = [] }: { slug: string; p: Product; s: ShopSettings; products?: Product[] }) {
   const router = useRouter();
   const { add } = useCart(slug);
   const canSub = p.kind === "coffee" && p.subscribable;
@@ -41,6 +41,10 @@ export function BuyBox({ slug, p, s }: { slug: string; p: Product; s: ShopSettin
   const [freq, setFreq] = useState<{ unit: IntervalUnit; count: number }>(quick.find((f) => f.unit === "week" && f.count === 2) ?? quick[0] ?? { unit: "week", count: 2 });
   const [custom, setCustom] = useState(false);
   const [added, setAdded] = useState(false);
+  // Selection box: some coffees always in, the rest the customer picks (pre-selected to start)
+  const box = s.boxes.find((b) => b.productId === p.id) ?? null;
+  const byId = new Map(products.map((x) => [x.id, x]));
+  const [picks, setPicks] = useState<string[]>(() => (box ? box.slots.map((sl) => { const opts = boxOptions(sl, products, s.boxes); return sl.default && opts.some((o) => o.id === sl.default) ? sl.default : opts[0]?.id ?? ""; }) : []));
   const v = p.variants.find((x) => x.id === variantId) ?? p.variants[0];
   if (!v) return <p className="rounded-2xl bg-white p-6 text-[#5b5955]">Not available right now.</p>;
   const one = unitPrice(v.price, "one_off", s);
@@ -48,7 +52,7 @@ export function BuyBox({ slug, p, s }: { slug: string; p: Product; s: ShopSettin
   const whole = !grind || /whole/i.test(grind);
 
   const submit = () => {
-    add({ variantId: v.id, grind, adjust: whole ? 0 : adjust, qty }, { mode, interval: mode === "subscription" ? freq : undefined });
+    add({ variantId: v.id, grind, adjust: whole ? 0 : adjust, qty, ...(box ? { picks } : {}) }, { mode, interval: mode === "subscription" ? freq : undefined });
     setAdded(true);
     router.push(`/shop/${slug}/cart`);
   };
@@ -64,6 +68,40 @@ export function BuyBox({ slug, p, s }: { slug: string; p: Product; s: ShopSettin
           <div className="mt-2.5 flex flex-wrap gap-2">
             {p.variants.map((x) => <button key={x.id} type="button" onClick={() => setVariantId(x.id)} className={pill(x.id === v.id)} aria-pressed={x.id === v.id}>{x.label}<span className="ml-2 font-normal opacity-75">{money(x.price)}</span></button>)}
           </div>
+        </fieldset>
+      )}
+
+      {box && (
+        <fieldset className={p.variants.length > 1 ? "mt-6" : ""}>
+          <legend className="text-[0.9375rem] font-semibold">What&apos;s in your box</legend>
+          <p className="mt-0.5 text-[0.8438rem] text-[#6b655f]">{box.included.length + box.slots.length} × {box.bag} bags{box.slots.length ? ` — choose ${box.slots.length === 1 ? "the last one" : `the last ${box.slots.length}`}` : ""}.</p>
+          <ol className="mt-3 space-y-2">
+            {box.included.map((id, i) => (
+              <li key={id} className="flex items-center gap-3 rounded-2xl border border-[#E2D8CD] bg-[#FBF7F3] px-3.5 py-3">
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#171714] text-[0.8125rem] font-bold text-white">{i + 1}</span>
+                {byId.get(id)?.image_url ? <img src={byId.get(id)!.image_url!} alt="" className="h-10 w-10 shrink-0 object-contain" /> : null}
+                <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{byId.get(id)?.name ?? "Coffee"}</span><span className="text-[0.8125rem] text-[#6b655f]">Always included</span></span>
+                <Check className="h-4 w-4 shrink-0 text-[var(--b)]" strokeWidth={3} />
+              </li>
+            ))}
+            {box.slots.map((sl, i) => {
+              const opts = boxOptions(sl, products, s.boxes);
+              const n = box.included.length + i + 1;
+              const pick = byId.get(picks[i]);
+              return (
+                <li key={i} className="flex items-center gap-3 rounded-2xl border border-[var(--b)] bg-white px-3.5 py-3 ring-1 ring-[color-mix(in_srgb,var(--b)_30%,transparent)]">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--b)] text-[0.8125rem] font-bold text-[var(--on-b)]">{n}</span>
+                  {pick?.image_url ? <img src={pick.image_url} alt="" className="h-10 w-10 shrink-0 object-contain" /> : null}
+                  <label className="min-w-0 flex-1">
+                    <span className="block text-[0.8125rem] text-[#6b655f]">Your choice{sl.default && picks[i] === sl.default ? " · our pick" : ""}</span>
+                    <select value={picks[i] ?? ""} onChange={(e) => setPicks(picks.map((x, j) => (j === i ? e.target.value : x)))} className="mt-0.5 w-full truncate rounded-lg border-0 bg-transparent p-0 text-[0.9688rem] font-semibold focus:ring-0" aria-label={`Coffee ${n}`}>
+                      {opts.map((o) => <option key={o.id} value={o.id}>{o.name}{o.id === sl.default ? " (our pick)" : ""}</option>)}
+                    </select>
+                  </label>
+                </li>
+              );
+            })}
+          </ol>
         </fieldset>
       )}
 

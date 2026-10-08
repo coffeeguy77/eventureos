@@ -13,6 +13,7 @@ import { cleanEmail, cleanPhone, giftCode } from "@/lib/bookings/core";
 import {
   addInterval, addressLine, cleanAddress, couponProblem, frequencyLabel, grindLabel, nextDispatch, prepaidDeliveries, priceCart, readShop, round2,
   type Address, type CartLine, type Coupon, type Delivery, type IntervalUnit, type Mode, type Priced, type Product, type ShopSettings, type Variant,
+  boxSummary, resolveBox,
 } from "./core";
 import { shopEmail } from "./emails";
 
@@ -164,7 +165,7 @@ export interface CheckoutInput {
 }
 export type CheckoutResult = { ok: true; redirect: string } | { ok: false; error: string };
 
-const itemJson = (l: Priced["lines"][number]) => ({ product_id: l.productId, variant_id: l.variantId, name: l.name, variant: l.variant, grind: l.grind, adjust: l.adjust, grind_label: grindLabel(l.grind, l.adjust), qty: l.qty, unit_price: l.unit, list_price: l.base, line_total: l.total, kind: l.kind });
+const itemJson = (l: Priced["lines"][number]) => ({ product_id: l.productId, variant_id: l.variantId, name: l.contents?.length ? `${l.name} (${boxSummary(l.contents)})` : l.name, picks: l.picks, contents: l.contents, variant: l.variant, grind: l.grind, adjust: l.adjust, grind_label: grindLabel(l.grind, l.adjust), qty: l.qty, unit_price: l.unit, list_price: l.base, line_total: l.total, kind: l.kind });
 
 export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   const db = createServiceClient();
@@ -221,7 +222,7 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
     subId = sub.id as string;
     const { data: parcel, error: pe } = await db.from("shop_parcels").insert({
       organisation_id: org.id, subscription_id: subId, label: "Home", delivery: delivery === "pickup" ? "pickup" : "post", address: address ?? {},
-      items: priced.lines.map((l) => ({ variant_id: l.variantId, grind: l.grind, adjust: l.adjust, qty: l.qty })),
+      items: priced.lines.map((l) => ({ variant_id: l.variantId, grind: l.grind, adjust: l.adjust, qty: l.qty, ...(l.picks ? { picks: l.picks } : {}) })),
     }).select("id").single();
     if (pe) return { ok: false, error: pe.message };
     parcelId = parcel.id as string;
@@ -496,7 +497,7 @@ export async function deliverGiftCard(db: SupabaseClient, org: ShopOrg, cardId: 
 
 /* ------------------------------------------------------------------ subscriptions */
 
-export interface ParcelItem { variant_id: string; grind: string | null; adjust: number; qty: number }
+export interface ParcelItem { variant_id: string; grind: string | null; adjust: number; qty: number; picks?: string[] }
 export interface SubView {
   id: string; status: string; billing: string; interval_unit: IntervalUnit; interval_count: number; next_date: string | null; paused_until: string | null;
   discount_percent: number; prepaid_remaining: number | null; prepaid_deliveries: number | null; prepaid_months: number | null; deliveries_made: number;
@@ -521,7 +522,7 @@ export async function loadSubs(db: SupabaseClient, orgId: string, filter: { cust
 /** Price of one delivery of a subscription (all parcels). */
 export function subDelivery(sub: Pick<SubView, "parcels" | "discount_percent" | "billing">, products: Product[], s: ShopSettings, coupon: Coupon | null) {
   const settings = { ...s, subDiscount: sub.discount_percent };
-  const per = sub.parcels.map((p) => priceCart({ lines: p.items.map((i) => ({ variantId: i.variant_id, grind: i.grind, adjust: i.adjust ?? 0, qty: i.qty })), products, mode: "subscription", settings, delivery: p.delivery === "pickup" ? "pickup" : "post", coupon, couponOk: !!coupon }));
+  const per = sub.parcels.map((p) => priceCart({ lines: p.items.map((i) => ({ variantId: i.variant_id, grind: i.grind, adjust: i.adjust ?? 0, qty: i.qty, picks: Array.isArray(i.picks) ? i.picks : undefined })), products, mode: "subscription", settings, delivery: p.delivery === "pickup" ? "pickup" : "post", coupon, couponOk: !!coupon }));
   return { parcels: per, total: round2(per.reduce((a, p) => a + p.perDelivery, 0)) };
 }
 
@@ -547,7 +548,7 @@ export async function changeSubscription(db: SupabaseClient, org: ShopOrg, subId
     const ok = (items ?? []).map((i) => {
       const p = products.find((x) => x.variants.some((v) => v.id === i.variant_id));
       if (!p || p.kind !== "coffee" || !p.subscribable) return null;
-      return { variant_id: i.variant_id, grind: p.grinds.length ? (p.grinds.includes(i.grind ?? "") ? i.grind : p.grinds[0]) : null, adjust: Math.max(-2, Math.min(2, Math.round(i.adjust || 0))), qty: Math.max(1, Math.min(20, Math.round(i.qty) || 1)) };
+      return { variant_id: i.variant_id, grind: p.grinds.length ? (p.grinds.includes(i.grind ?? "") ? i.grind : p.grinds[0]) : null, adjust: Math.max(-2, Math.min(2, Math.round(i.adjust || 0))), qty: Math.max(1, Math.min(20, Math.round(i.qty) || 1)), ...(Array.isArray(i.picks) ? { picks: i.picks.filter((x) => typeof x === "string" && isUuid(x)).slice(0, 8) } : {}) };
     }).filter((x): x is ParcelItem => !!x);
     if (!ok.length) throw new Error("Add at least one coffee.");
     return ok.slice(0, 12);
@@ -808,8 +809,15 @@ export async function roastPlan(db: SupabaseClient, org: ShopOrg, days = 7) {
     r.qty += qty; r.grams += (grams ?? 0) * qty; r.sources[src] += qty; rows.set(k, r);
   };
   const { data: orders } = await db.from("shop_orders").select("items, dispatch_on").eq("organisation_id", org.id).in("status", ["paid", "roasting"]).neq("source", "woocommerce").or(`dispatch_on.is.null,dispatch_on.lte.${end}`);
-  for (const o of orders ?? []) for (const i of (o.items as { variant_id?: string; name: string; variant: string; grind_label: string | null; qty: number; kind?: string }[]) ?? []) {
+  // A selection box is roasted as its coffees: one bag of each, at the box's bag size
+  const boxBag = (productId: string | undefined) => { const b = org.shop.boxes.find((x) => x.productId === productId); return b ? { label: b.bag, grams: Number(/(\d+)\s*g/i.exec(b.bag)?.[1]) || null } : null; };
+  const addBox = (contents: { id: string; name: string }[], productId: string | undefined, grind: string | null, qty: number, src: "orders" | "subs" | "woo") => {
+    const bag = boxBag(productId);
+    for (const c of contents) add(products.find((p) => p.id === c.id)?.name ?? c.name, bag?.label ?? "bag", grind, qty, bag?.grams ?? null, src);
+  };
+  for (const o of orders ?? []) for (const i of (o.items as { product_id?: string; variant_id?: string; name: string; variant: string; grind_label: string | null; qty: number; kind?: string; contents?: { id: string; name: string }[] }[]) ?? []) {
     if (i.kind === "gift_card") continue;
+    if (Array.isArray(i.contents) && i.contents.length) { addBox(i.contents, i.product_id, i.grind_label, i.qty, "orders"); continue; }
     add(i.name, i.variant, i.grind_label, i.qty, (i.variant_id && vmap.get(i.variant_id)?.v.grams) || null, "orders");
   }
   const { data: subs } = await db.from("shop_subscriptions").select("id, billing, next_date").eq("organisation_id", org.id).eq("status", "active").gte("next_date", today).lte("next_date", end);
@@ -820,7 +828,10 @@ export async function roastPlan(db: SupabaseClient, org: ShopOrg, days = 7) {
     if (count) continue;
     for (const p of s.parcels) for (const i of p.items) {
       const hit = vmap.get(i.variant_id);
-      if (hit) add(hit.p.name, hit.v.label, grindLabel(i.grind, i.adjust), i.qty, hit.v.grams, s.billing === "woocommerce" ? "woo" : "subs");
+      if (!hit) continue;
+      const box = org.shop.boxes.find((b) => b.productId === hit.p.id);
+      if (box) { addBox(resolveBox(box, i.picks, products).contents, hit.p.id, grindLabel(i.grind, i.adjust), i.qty, s.billing === "woocommerce" ? "woo" : "subs"); continue; }
+      add(hit.p.name, hit.v.label, grindLabel(i.grind, i.adjust), i.qty, hit.v.grams, s.billing === "woocommerce" ? "woo" : "subs");
     }
   }
   const list = [...rows.values()].sort((a, b) => a.name.localeCompare(b.name) || b.grams - a.grams);
