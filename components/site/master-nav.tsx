@@ -21,13 +21,12 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
     { key: "shop", href: `/shop/${base}`, on: readShop(org.rawSettings).enabled },
     { key: "gifts", href: `/book/${base}/gift`, on: org.settings.enabled && org.stripeReady },
   ];
-  // Gift certificates: barista lessons and/or coffee gift cards. In the barista lessons pages, only the lesson certificate.
+  // Gift certificates: barista lessons and/or coffee gift cards — the same dropdown on every page.
   const lessonsGift = org.settings.enabled && org.stripeReady;
   const coffeeGift = readShop(org.rawSettings).enabled && org.stripeReady;
-  const inLessons = active === "lessons" || active === "gifts";
   const gifts = [
     lessonsGift ? { kind: "lessons" as const, href: `/book/${base}/gift`, label: labels.lessons, note: "A class they'll love" } : null,
-    coffeeGift && !inLessons ? { kind: "coffee" as const, href: `/shop/${base}/gift-card`, label: "Coffee", note: "Choose an amount" } : null,
+    coffeeGift ? { kind: "coffee" as const, href: `/shop/${base}/gift-card`, label: "Coffee", note: "Choose an amount" } : null,
   ].filter((x): x is NonNullable<typeof x> => !!x);
   const giftItem = items.find((i) => i.key === "gifts")!;
   giftItem.on = gifts.length > 0;
