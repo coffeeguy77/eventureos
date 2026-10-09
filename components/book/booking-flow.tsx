@@ -175,7 +175,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
         ) : (<>
         {session && <button type="button" onClick={() => setPicking(false)} className="mb-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]"><ChevronLeft className="h-4 w-4" />Keep {fmt.day.format(new Date(session.starts_at))}</button>}
         {monthTabs.length > 1 && (
-          <div className="no-scrollbar -mx-5 mb-4 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:px-0" role="tablist" aria-label="Month">
+          <div className="no-scrollbar -mx-5 -my-1 mb-3 flex gap-2 overflow-x-auto px-5 py-1 sm:-mx-1 sm:px-1" role="tablist" aria-label="Month">
             {monthTabs.map((m) => (
               <button key={m.key} type="button" role="tab" aria-selected={m.key === month} onClick={() => setMonth(m.key)}
                 className={`flex shrink-0 flex-col items-start rounded-xl border px-4 py-2 text-left transition ${m.key === month ? "border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_9%,transparent)] ring-2 ring-[var(--b)]" : "border-line hover:border-line-strong hover:bg-zinc-50"}`}>
