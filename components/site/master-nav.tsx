@@ -9,6 +9,9 @@ import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
 import { GiftMenu } from "./gift-menu";
+import { MobileMenu, type MobileItem } from "./mobile-menu";
+
+const NOTE: Record<SiteSection, string> = { events: "Coffee carts, vans & catering", lessons: "Courses & upcoming dates", jobs: "Find barista work or staff", shop: "Freshly roasted coffee", cafe: "Order, book a table & more", gifts: "Classes & coffee gift cards" };
 
 /** One menu bar above every public section of the business's site: logo · events · classes · job board · shop · café · gift certificates. Also runs the anonymous analytics tracker. */
 export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light" }) {
@@ -46,6 +49,8 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
   items.find((i) => i.key === "cafe")!.on = cp.home;
   const shown = items.filter((i) => i.on);
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
+  const mobile: MobileItem[] = shown.map((i) => ({ key: i.key, label: labels[i.key], href: i.href, note: NOTE[i.key],
+    children: i.key === "gifts" && gifts.length > 1 ? gifts : i.key === "cafe" && cafeLinks.length > 1 ? cafeLinks : undefined }));
   return (
     <>
     <div className={`relative z-50 border-b ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav>
@@ -53,7 +58,8 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
         <Link href={`/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
           {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[1.0625rem] font-semibold">{org.name}</span>}
         </Link>
-        <nav aria-label={org.name} className="no-scrollbar -mx-4 flex w-[calc(100%+2rem)] items-center gap-1 overflow-x-auto px-3 pb-2 sm:overflow-visible sm:mx-0 sm:w-auto sm:flex-1 sm:justify-end sm:px-0 sm:pb-0">
+        {shown.length > 0 && <MobileMenu items={mobile} active={active} light={light} logo={logo} name={org.name} home={`/${base}`} phone={org.contact_phone} email={org.contact_email} />}
+        <nav aria-label={org.name} className="hidden items-center gap-1 lg:flex lg:flex-1 lg:justify-end">
           {shown.map((i, n) => (
             <span key={i.key} className="flex shrink-0 items-center">
               {n > 0 && <span aria-hidden className={`mx-1 hidden h-4 w-px sm:block ${light ? "bg-[#E2D8D0]" : "bg-white/20"}`} />}
