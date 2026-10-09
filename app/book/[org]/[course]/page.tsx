@@ -62,7 +62,7 @@ export default async function CoursePage({ params, searchParams }: P) {
           </div>
         </section>
         <BookingFlow
-          org={{ slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist && course.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours }}
+          org={{ slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist && course.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours, friend: org.settings.friend }}
           course={{ id: course.id, name: course.name, price: Number(course.price), maxSeats: course.max_seats_per_booking, questions: course.questions ?? [] }}
           sessions={sessions} preselect={pre} utm={pickUtm(sp)} embed={embed} source={source} promo={typeof sp.code === "string" ? sp.code.slice(0, 40) : null}
           agent={agent ? { code: agent.agency.code, agency: agent.agency.name, price: agent.agency.price === null ? null : Number(agent.agency.price), poRequired: agent.agency.po_required, name: agent.cm.name, site: agent.cm.site } : null}

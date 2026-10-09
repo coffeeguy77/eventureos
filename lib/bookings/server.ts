@@ -10,8 +10,12 @@ import { money } from "@/lib/format";
 import {
   agencyLineDescription, bookedSeats, cleanEmail, cleanPhone, giftCode, googleCalendarLink, hoursUntil, normCode, readSettings, seatCount, sessionWhen, splitGst,
   type BookingSettings, type CourseRow, type SessionRow,
+  friendEach, friendSaving,
 } from "./core";
-import { confirmationEmail, giftEmail, officeAlertEmail, reminderEmail, seatOpenEmail, thankYouEmail, waitlistEmail, type Brand } from "./emails";
+
+/** Shown on the booking (coupon_code) when the bring-a-friend saving was used */
+export const FRIEND_CODE = "Bring a friend";
+import { confirmationEmail, giftEmail, officeAlertEmail, reminderEmail, seatOpenEmail, thankYouEmail, waitlistEmail, waitlistMissedEmail, type Brand } from "./emails";
 
 /* ------------------------------------------------------------------ organisation */
 
@@ -196,15 +200,21 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   let priceEach = agency ? Number(agency.price ?? course.agency_price ?? session.price ?? course.price) : Number(session.price ?? course.price);
 
   // Offer code: money off the seats (not for agency bookings, which are invoiced at the agency price)
-  let promo: { id: string; code: string; discount: number } | null = null;
+  const basePrice = priceEach;
+  let promo: { id: string | null; code: string; discount: number } | null = null;
   if (input.promoCode?.trim() && !agency) {
     const { quoteOffer } = await import("@/lib/offers/server");
     const { discountedEach } = await import("@/lib/offers/core");
     const q = await quoteOffer(db, org, { code: input.promoCode, place: "classes", courseId: course.id, subtotal: Math.round(priceEach * seats * 100) / 100, email });
     if (!q.ok) return { ok: false, error: q.error };
-    const before = priceEach;
     priceEach = discountedEach(priceEach, seats, q.discount);
-    promo = { id: q.offer.id, code: q.offer.code, discount: Math.round((before - priceEach) * seats * 100) / 100 };
+    promo = { id: q.offer.id, code: q.offer.code, discount: Math.round((basePrice - priceEach) * seats * 100) / 100 };
+  }
+  // Bring a friend: each person saves when 2+ book together. Doesn't stack with an offer code — the bigger saving wins.
+  const fe = !agency && !input.waitlist ? friendEach(basePrice, seats, org.settings.friend) : null;
+  if (fe !== null && fe < priceEach) {
+    priceEach = fe;
+    promo = { id: null, code: FRIEND_CODE, discount: Math.round((basePrice - fe) * seats * 100) / 100 };
   }
 
   // No email (booked by a case manager): reuse a student with the same name and phone rather than making a duplicate
@@ -254,7 +264,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   if (agency || due <= 0) {
     if (!agency) {
       await db.from("bookings").update({ status: "confirmed", hold_expires_at: null, confirmed_at: new Date().toISOString(), amount_paid: bk.gift_amount, payment_method: Number(bk.total) > 0 ? "gift" : "free" }).eq("id", bookingId);
-      if (promo) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, promo.id).catch(() => undefined); }
+      if (promo?.id) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, promo.id).catch(() => undefined); }
     }
     await finalizeBooking(db, bookingId).catch((e) => console.error("finalize booking", e));
     return { ok: true, redirect: doneUrl };
@@ -518,6 +528,43 @@ async function notifyWaitlist(db: SupabaseClient, org: PublicOrg, sessionId: str
   }
 }
 
+/**
+ * Waitlisted people whose class has now started (within the last 2 days — never old history): email the next open date
+ * of the same course with enough seats, with a book-now button. Once per booking (followup_sent_at).
+ */
+async function waitlistNextDate(db: SupabaseClient, getOrg: (id: string) => Promise<PublicOrg>, now: number) {
+  const { data } = await db.from("bookings").select(FULL_INNER).eq("status", "waitlist").is("followup_sent_at", null).in("source", ["website", "wordpress", "office"])
+    .lt("session.starts_at", new Date(now).toISOString()).gt("session.starts_at", new Date(now - 2 * 86400e3).toISOString()).not("contact_email", "is", null).limit(100);
+  let sent = 0;
+  for (const b of ((data ?? []) as unknown as FullBooking[]).filter((x) => x.session && x.course)) {
+    const org = await getOrg(b.organisation_id);
+    const stamp = () => db.from("bookings").update({ followup_sent_at: new Date().toISOString() }).eq("id", b.id);
+    if (!org.settings.enabled || !org.settings.waitlist_followup) { await stamp(); continue; }
+    const { data: upcoming } = await db.from("booking_sessions").select(SESSION_COLS).eq("organisation_id", org.id).eq("course_id", b.course_id).eq("status", "open")
+      .gt("starts_at", new Date(now + 2 * 3600e3).toISOString()).order("starts_at").limit(12);
+    const list = (upcoming ?? []) as unknown as SessionRow[];
+    const seats = await seatsFor(db, list);
+    const next = list.find((s) => (seats.get(s.id)?.left ?? 0) >= Math.max(1, b.seats)) ?? list.find((s) => (seats.get(s.id)?.left ?? 0) > 0) ?? null;
+    const missed = sessionWhen(b.session.starts_at, b.session.ends_at, org.timezone);
+    const w = next ? sessionWhen(next.starts_at, next.ends_at, org.timezone) : null;
+    const price = Number(next?.price ?? b.course.price);
+    const f = org.settings.friend;
+    const friend = f.enabled && price > 0 ? `Bringing a friend? Book ${f.minSeats} or more together and you each save ${money(friendSaving(price, f), org.currency, { cents: false })} (${f.percent}% off).` : null;
+    const m = waitlistMissedEmail(brandOf(org), {
+      firstName: b.contact_name.split(/\s+/)[0], course: b.course.name, missedWhen: missed.day,
+      next: next && w ? { when: w.day, time: w.time, left: seats.get(next.id)!.left, url: bookUrl(org, `/${b.course.slug}?session=${next.id}`) } : null,
+      allDatesUrl: bookUrl(org, `?course=${b.course.slug}#book`), friend,
+    });
+    if (await safeSend({ to: b.contact_email!, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
+      await stamp();
+      await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: "booking.waitlist_offer", entity_type: "booking", entity_id: b.id,
+        summary: `${b.reference}: no seat opened on ${missed.short} — emailed ${b.contact_name} ${w ? `the next ${b.course.name} (${w.short})` : "the dates page"}` });
+      sent++;
+    }
+  }
+  return sent;
+}
+
 /* ------------------------------------------------------------------ customer self-service */
 
 export async function customerCancel(token: string): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
@@ -774,6 +821,9 @@ export async function runBookingJobs(db: SupabaseClient) {
       out.thanks++;
     }
   }
+
+  // Waitlist, once the full class has started and no seat came free: offer the next date for the same course
+  try { (out as Record<string, number>).waitlistOffers = await waitlistNextDate(db, getOrg, now); } catch (e) { console.error("waitlist next date", e); }
 
   // Gift certificates scheduled to reach the recipient today
   const { data: gifts } = await db.from("booking_gifts").select("id, organisation_id").eq("status", "active").is("sent_at", null).not("recipient_email", "is", null).not("send_on", "is", null).limit(100);

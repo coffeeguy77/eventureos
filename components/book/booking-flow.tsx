@@ -1,16 +1,16 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Check, ChevronDown, ChevronLeft, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2 } from "lucide-react";
+import { Check, ChevronLeft, CreditCard, Gift, Loader2, Lock, Minus, Plus, ShieldCheck, Building2, UserPlus } from "lucide-react";
 import type { PublicSession } from "@/lib/bookings/server";
-import type { Question } from "@/lib/bookings/core";
+import { friendEach, friendSaving, type FriendDeal, type Question } from "@/lib/bookings/core";
 import { checkGiftAction, checkOfferAction, startBookingAction } from "@/app/book/actions";
 import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
 import { agencyCodeAction } from "@/app/book/agent-actions";
 import { goTop } from "./embed-bridge";
 
 interface Props {
-  org: { slug: string; name: string; currency: string; timezone: string; stripeReady: boolean; showSeatsLeft: boolean; waitlist: boolean; terms: string | null; cancelHours: number };
+  org: { slug: string; name: string; currency: string; timezone: string; stripeReady: boolean; showSeatsLeft: boolean; waitlist: boolean; terms: string | null; cancelHours: number; friend?: FriendDeal };
   course: { id: string; name: string; price: number; maxSeats: number; questions: Question[] };
   sessions: PublicSession[];
   preselect: string | null;
@@ -45,7 +45,30 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
   const $ = (n: number) => fmt.money.format(n).replace(/\.00$/, "");
 
   const [sessionId, setSessionId] = useState<string | null>(preselect && sessions.some((s) => s.id === preselect) ? preselect : null);
-  const [showAll, setShowAll] = useState(false);
+  // Dates by month: a tab per month from this month to the last date (at least three months), so people can look ahead
+  const monthKey = useMemo(() => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: org.timezone }), [org.timezone]);
+  const keyOf = (iso: string) => monthKey.format(new Date(iso)).slice(0, 7);
+  const monthTabs = useMemo(() => {
+    const first = keyOf(new Date().toISOString());
+    const last = sessions.length ? keyOf(sessions[sessions.length - 1].starts_at) : first;
+    const out: { key: string; label: string; count: number; open: number }[] = [];
+    let [y, m] = first.split("-").map(Number);
+    for (let i = 0; i < 12; i++) {
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      if (i >= 3 && key > last) break;
+      const inMonth = sessions.filter((x) => keyOf(x.starts_at) === key);
+      out.push({ key, label: new Intl.DateTimeFormat("en-AU", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 15))), count: inMonth.length, open: inMonth.filter((x) => !x.full).length });
+      m++; if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }, [sessions, monthKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startMonth = (() => {
+    const pre = preselect ? sessions.find((x) => x.id === preselect) : null;
+    if (pre) return keyOf(pre.starts_at);
+    const firstOpen = sessions.find((x) => !x.full) ?? sessions[0];
+    return firstOpen ? keyOf(firstOpen.starts_at) : monthTabs[0]?.key;
+  })();
+  const [month, setMonth] = useState<string>(startMonth ?? "");
   // After choosing, the date list folds away to the chosen date with a "Change date" button
   const [picking, setPicking] = useState(!(preselect && sessions.some((s) => s.id === preselect)));
   const session = sessions.find((s) => s.id === sessionId) ?? null;
@@ -73,19 +96,22 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
 
   const each = pay === "agency" && agencyOk ? agencyOk.price ?? session?.price ?? course.price : session?.price ?? course.price;
   const [offer, setOffer] = useState<AppliedOffer | null>(null);
-  const offerOn = pay !== "agency" && !waitlist ? offer : null;
+  const friendDeal = org.friend?.enabled && !agent ? org.friend : null;
+  const friendPer = friendDeal && pay !== "agency" ? friendSaving(each, friendDeal) : 0;
+  const fe = friendDeal && pay !== "agency" && !waitlist ? friendEach(each, n, friendDeal) : null;
+  const friendOff = fe !== null ? Math.round((each - fe) * n * 100) / 100 : 0;
+  // Bring a friend and offer codes don't stack — the bigger saving is used (the server does the same)
+  const codeOff = pay !== "agency" && !waitlist ? offer?.discount ?? 0 : 0;
+  const useFriend = friendOff > 0 && friendOff >= codeOff;
+  const offerOn = !useFriend && pay !== "agency" && !waitlist ? offer : null;
   const total = each * n;
-  const afterOffer = Math.max(0, Math.round((total - (offerOn?.discount ?? 0)) * 100) / 100);
+  const afterOffer = Math.max(0, Math.round((total - (useFriend ? friendOff : offerOn?.discount ?? 0)) * 100) / 100);
   const giftApplied = pay === "gift" && giftOk ? Math.min(giftOk.balance, afterOffer) : 0;
   const due = Math.max(0, afterOffer - giftApplied);
 
-  // Sessions grouped by month; the first 8 shown until "more dates"
-  const visible = showAll ? sessions : sessions.slice(0, 8);
-  const months = useMemo(() => {
-    const m = new Map<string, PublicSession[]>();
-    for (const s of visible) { const k = fmt.month.format(new Date(s.starts_at)); m.set(k, [...(m.get(k) ?? []), s]); }
-    return [...m.entries()];
-  }, [visible, fmt]);
+  const visible = sessions.filter((x) => keyOf(x.starts_at) === month);
+  const monthName = monthTabs.find((x) => x.key === month)?.label ?? "";
+  const nextWithDates = monthTabs.find((x) => x.key > month && x.count > 0);
 
   const checkGift = () => start(async () => {
     setCheckMsg(null); setGiftOk(null);
@@ -148,7 +174,24 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
           </div>
         ) : (<>
         {session && <button type="button" onClick={() => setPicking(false)} className="mb-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]"><ChevronLeft className="h-4 w-4" />Keep {fmt.day.format(new Date(session.starts_at))}</button>}
-        {dateStyle === "cards" ? (
+        {monthTabs.length > 1 && (
+          <div className="no-scrollbar -mx-5 mb-4 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:px-0" role="tablist" aria-label="Month">
+            {monthTabs.map((m) => (
+              <button key={m.key} type="button" role="tab" aria-selected={m.key === month} onClick={() => setMonth(m.key)}
+                className={`flex shrink-0 flex-col items-start rounded-xl border px-4 py-2 text-left transition ${m.key === month ? "border-[var(--b)] bg-[color-mix(in_srgb,var(--b)_9%,transparent)] ring-2 ring-[var(--b)]" : "border-line hover:border-line-strong hover:bg-zinc-50"}`}>
+                <span className="text-[0.9375rem] font-semibold text-ink">{m.label}</span>
+                <span className={`text-[0.75rem] ${m.count ? (m.open ? "text-emerald-700" : "text-amber-800") : "text-ink-faint"}`}>{m.count ? (m.open ? `${m.open} date${m.open === 1 ? "" : "s"} available` : "Sold out · waitlist") : "No dates yet"}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {visible.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line-strong px-4 py-6 text-center">
+            <p className="text-[0.9688rem] font-semibold text-ink">No {course.name} dates in {monthName} yet</p>
+            <p className="mt-1 text-[0.875rem] text-ink-muted">{nextWithDates ? "Dates sell out fast — grab one of the next available." : `New dates are added regularly. Contact ${org.name} to ask about a date.`}</p>
+            {nextWithDates && <button type="button" onClick={() => setMonth(nextWithDates.key)} className="mt-3 inline-flex h-11 items-center rounded-xl bg-[var(--b)] px-4 text-[0.9063rem] font-semibold text-[var(--on-b)]">See {nextWithDates.label} dates</button>}
+          </div>
+        ) : dateStyle === "cards" ? (
           <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4" role="list">
             {visible.map((s) => {
               const on = s.id === sessionId;
@@ -163,7 +206,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
                   <span className="mt-0.5 block text-[1.625rem] font-bold leading-tight tracking-tight text-ink">{p.day} <span className="text-[1rem] font-semibold uppercase tracking-wide">{p.month}</span></span>
                   <span className="mt-1 block text-[0.8438rem] text-ink-muted">{t(s.starts_at)} – {t(s.ends_at)}{s.price !== course.price ? ` · ${$(s.price)}` : ""}</span>
                   <span className={`mt-3 inline-flex rounded-full px-2.5 py-1 text-[0.75rem] font-semibold ${s.full ? "bg-zinc-200 text-ink-muted" : few ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
-                    {s.full ? (org.waitlist ? "Full · waitlist" : "Full") : org.showSeatsLeft || few ? `${s.left} spot${s.left === 1 ? "" : "s"} left` : "Available"}
+                    {s.full ? (org.waitlist ? "Sold out · join waitlist" : "Sold out") : org.showSeatsLeft || few ? `${s.left} spot${s.left === 1 ? "" : "s"} left` : "Available"}
                   </span>
                 </button>
               );
@@ -171,9 +214,8 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
           </div>
         ) : (
         <div className="space-y-4">
-          {months.map(([month, list]) => (
+          {[visible].map((list) => (
             <div key={month}>
-              <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-wider text-ink-faint">{month}</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {list.map((s) => {
                   const on = s.id === sessionId;
@@ -186,7 +228,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
                         <span className="block text-[0.8438rem] text-ink-muted">{t(s.starts_at)} – {t(s.ends_at)}{s.price !== course.price ? ` · ${$(s.price)}` : ""}</span>
                       </span>
                       <span className={`shrink-0 rounded-full px-2.5 py-1 text-[0.72rem] font-semibold ${s.full ? "bg-zinc-100 text-ink-muted" : few ? "bg-amber-100 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
-                        {s.full ? (org.waitlist ? "Full · waitlist" : "Full") : org.showSeatsLeft || few ? `${s.left} left` : "Available"}
+                        {s.full ? (org.waitlist ? "Sold out · join waitlist" : "Sold out") : org.showSeatsLeft || few ? `${s.left} left` : "Available"}
                       </span>
                     </button>
                   );
@@ -195,11 +237,6 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
             </div>
           ))}
         </div>
-        )}
-        {sessions.length > visible.length && (
-          <button type="button" onClick={() => setShowAll(true)} className="mt-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--b)]">
-            Show {sessions.length - visible.length} more dates<ChevronDown className="h-4 w-4" />
-          </button>
         )}
         </>)}
         {session?.full && !org.waitlist && <p className="mt-3 text-[0.875rem] text-rose-700">That date is full — please choose another.</p>}
@@ -211,7 +248,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
           <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
             <Step n={2 + stepOffset} title={agent ? "Who's the job seeker?" : "Who's coming?"} done={name.length > 1 && (!!agent || /@/.test(email))} />
             {agent && <p className="mb-4 rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted">Booking as <span className="font-semibold text-ink">{agent.name}</span> · {agent.agency}. You&apos;ll get the course details to pass on, and their certificate after the course.</p>}
-            {waitlist && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900">This date is full. Join the waitlist and we&apos;ll email you if a seat opens up — nothing to pay now.</p>}
+            {waitlist && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900">This date has sold out. Join the waitlist — if anyone can&apos;t make it you&apos;ll be first to hear, and if no seat comes free we&apos;ll send you the next date. Nothing to pay now.</p>}
             <div className="mb-4 flex items-center justify-between gap-3">
               <span className="text-[0.9375rem] font-medium text-ink">Number of people</span>
               <span className="flex items-center gap-1 rounded-xl border border-line p-1">
@@ -220,6 +257,17 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
                 <button type="button" onClick={() => setSeats(Math.min(maxSeats, n + 1))} disabled={n >= maxSeats} aria-label="One more" className="grid h-10 w-10 place-items-center rounded-lg text-ink hover:bg-zinc-100 disabled:opacity-30"><Plus className="h-4 w-4" /></button>
               </span>
             </div>
+            {friendDeal && friendPer > 0 && !waitlist && pay !== "agency" && (
+              n < friendDeal.minSeats ? (
+                <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-[color-mix(in_srgb,var(--b)_9%,transparent)] px-4 py-3 ring-1 ring-[color-mix(in_srgb,var(--b)_30%,transparent)]">
+                  <UserPlus className="h-5 w-5 shrink-0 text-[var(--b)]" />
+                  <span className="min-w-0 flex-1 text-[0.9063rem] text-ink"><span className="font-semibold">Bring a friend and you each save {$(friendPer)}</span> <span className="text-ink-muted">({friendDeal.percent}% off when {friendDeal.minSeats}+ book together)</span></span>
+                  {maxSeats >= friendDeal.minSeats && <button type="button" onClick={() => setSeats(friendDeal.minSeats)} className="inline-flex h-10 items-center rounded-lg bg-[var(--b)] px-3.5 text-[0.875rem] font-semibold text-[var(--on-b)]">Add a friend</button>}
+                </div>
+              ) : useFriend ? (
+                <p className="mb-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-[0.9063rem] font-medium text-emerald-800"><Check className="h-4 w-4" />Bring-a-friend saving: you each save {$(friendPer)} — {$(friendOff)} off in total.</p>
+              ) : null
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2"><label className={label} htmlFor="bk-name">{agent ? "Job seeker's full name" : "Your name"}</label><input id="bk-name" className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete={agent ? "off" : "name"} required maxLength={160} />
                 {agent && <p className="mt-1 text-[0.75rem] text-ink-muted">As it should appear on their certificate.</p>}</div>
@@ -330,6 +378,8 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
             <div className="space-y-1.5 text-[0.9375rem]">
               <div className="flex justify-between gap-3"><span className="text-ink-muted">{course.name}</span><span className="text-ink">{n} × {$(each)}</span></div>
               <div className="flex justify-between gap-3"><span className="text-ink-muted">{fmt.long.format(new Date(session.starts_at))}</span><span className="text-ink">{t(session.starts_at)}</span></div>
+              {useFriend && <div className="flex justify-between gap-3 font-medium text-[var(--b)]"><span>Bring a friend ({friendDeal!.percent}% each)</span><span>−{$(friendOff)}</span></div>}
+              {useFriend && offer && <p className="text-[0.75rem] text-ink-muted">Your code {offer.code} saves less than bring-a-friend, so we&apos;ve used the bigger saving.</p>}
               {offerOn && <div className="flex justify-between gap-3 font-medium text-[var(--b)]"><span>{offerOn.code}</span><span>−{$(offerOn.discount)}</span></div>}
               {giftApplied > 0 && <div className="flex justify-between gap-3 text-emerald-700"><span>Gift certificate</span><span>−{$(giftApplied)}</span></div>}
               <div className="flex justify-between gap-3 border-t border-line pt-2.5 text-[1.125rem] font-bold text-ink">

@@ -103,11 +103,11 @@ export function LandingForm({ initial, pageUrl, courses, orgId }: { initial: Lan
           </Group>
         )}
 
-        <Group title={`Trust strip (${l.stats.length})`} hint="Big numbers under the booking form — only real ones">
+        <Group title={`Trust strip (${l.stats.length})`} hint="Big numbers under the booking form — only real ones. Type {trained} for the live number of people trained (it grows as students finish)">
           <div className="space-y-2">
             {l.stats.map((s, i) => (
               <div key={i} className="flex gap-2">
-                <Input className="w-32" value={s.value} maxLength={16} placeholder="280+" onChange={(e) => set("stats", l.stats.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
+                <Input className="w-32" value={s.value} maxLength={16} placeholder="{trained}" onChange={(e) => set("stats", l.stats.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
                 <Input value={s.label} maxLength={50} placeholder="students certified" onChange={(e) => set("stats", l.stats.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
                 <RemoveBtn onClick={() => set("stats", l.stats.filter((_, j) => j !== i))} />
               </div>

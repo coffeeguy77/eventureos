@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { currentStudent } from "@/lib/bookings/student-auth";
 import { JOB_KINDS } from "@/lib/jobs/core";
 import { jobsOrg, openPosts, publicBaristas, trainedCount } from "@/lib/jobs/server";
+import { trainedLabel as trainedLabelOf } from "@/lib/bookings/core";
 import { brandStyle, PAGE } from "@/components/book/shell";
 import { MasterNav } from "@/components/site/master-nav";
 import { BaristaAuth } from "@/components/jobs/tools";
@@ -38,7 +39,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
     currentStudent(org).catch(() => null), openPosts(db, org.id).catch(() => []), publicBaristas(db, org.id).catch(() => []), trainedCount(db, org.id).catch(() => 0),
   ]);
   const joining = (await searchParams).join === "1";
-  const trainedLabel = trained >= 20 ? `${Math.floor(trained / 10) * 10}+` : null;
+  const trainedLabel = trained >= 20 ? trainedLabelOf(trained) : null;
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
   const features = [
     { i: Lock, t: "Your details stay private", d: "Employers never see your phone or email unless you choose to share them." },

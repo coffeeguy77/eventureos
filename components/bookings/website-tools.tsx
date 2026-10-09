@@ -196,6 +196,13 @@ export function SettingsForm({ initial }: { initial: BookingSettings }) {
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.show_seats_left} onChange={chk("show_seats_left")} />Show seats left</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.waitlist} onChange={chk("waitlist")} />Waitlist when full</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={s.followup} onChange={chk("followup")} />Thank-you email after the class</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={s.waitlist_followup} onChange={chk("waitlist_followup")} />On the day, email the waitlist the next date if no seat came free</label>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line p-3 text-[0.8125rem] text-ink">
+        <label className="flex items-center gap-2 font-semibold"><input type="checkbox" checked={s.friend.enabled} onChange={(e) => setS({ ...s, friend: { ...s.friend, enabled: e.target.checked } })} />Bring a friend:</label>
+        <span>when</span><Input type="number" min={2} max={10} className="w-16" value={s.friend.minSeats} onChange={(e) => setS({ ...s, friend: { ...s.friend, minSeats: Number(e.target.value) } })} />
+        <span>or more people book together, each saves</span><Input type="number" min={1} max={50} className="w-16" value={s.friend.percent} onChange={(e) => setS({ ...s, friend: { ...s.friend, percent: Number(e.target.value) } })} /><span>%</span>
+        <span className="w-full text-[0.75rem] text-ink-muted">Shown on the booking form and in waitlist emails. Doesn&apos;t stack with offer codes — the bigger saving is used. Not for agency bookings.</span>
       </div>
       {msg && <p className={cn("mt-3 text-[0.8125rem] font-medium", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
       <Button variant="primary" className="mt-4" disabled={pending} onClick={() => start(async () => {

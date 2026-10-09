@@ -103,3 +103,21 @@ test("weekly timetable: Saturdays for 60 days, skipping a closed period", async 
   assert.ok(d.every((x) => new Date(x + "T00:00:00Z").getUTCDay() === 6));
   assert.equal(readSchedules([{ course_id: "x", weekdays: [1], times: ["10:00"] }]).length, 0);
 });
+
+test("bring a friend: each saves the percentage once enough people book", async () => {
+  const { friendEach, friendSaving, readSettings, trainedLabel } = await import("./core");
+  const f = { enabled: true, percent: 10, minSeats: 2 };
+  assert.equal(friendEach(300, 1, f), null);
+  assert.equal(friendEach(300, 2, f), 270);
+  assert.equal(friendEach(150, 3, f), 135);
+  assert.equal(friendSaving(300, f), 30);
+  assert.equal(friendSaving(150, f), 15);
+  assert.equal(friendEach(300, 2, { ...f, enabled: false }), null);
+  const s = readSettings({ booking: { friend: { enabled: true, percent: 90, minSeats: 1 } } });
+  assert.deepEqual(s.friend, { enabled: true, percent: 50, minSeats: 2 });
+  assert.equal(readSettings({ booking: {} }).friend.enabled, false);
+  assert.equal(readSettings({ booking: {} }).waitlist_followup, true);
+  assert.equal(trainedLabel(1599), "1,590+");
+  assert.equal(trainedLabel(12), "12");
+  assert.equal(trainedLabel(0), null);
+});

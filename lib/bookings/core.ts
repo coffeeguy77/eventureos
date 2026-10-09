@@ -34,6 +34,10 @@ export interface BookingSettings {
   social: { facebook?: string; instagram?: string };
   show_seats_left: boolean;
   waitlist: boolean;
+  /** On the day of a full class, email the waitlist the next date for the same course (when no seat opened) */
+  waitlist_followup: boolean;
+  /** Bring a friend: when this many people (or more) book together, each saves this percentage */
+  friend: FriendDeal;
   /** Questions people ask, shown beside the booking form */
   faqs: { q: string; a: string }[];
   /** The public booking page as a landing page: search title/description, headline, photo, highlights and text sections */
@@ -161,9 +165,23 @@ export function readLanding(raw: unknown): Landing {
   };
 }
 
+export interface FriendDeal { enabled: boolean; percent: number; minSeats: number }
+export const DEFAULT_FRIEND: FriendDeal = { enabled: false, percent: 10, minSeats: 2 };
+
+/** Price each person pays with the bring-a-friend saving, or null when it doesn't apply. */
+export function friendEach(price: number, seats: number, f: FriendDeal): number | null {
+  if (!f.enabled || f.percent <= 0 || seats < f.minSeats || price <= 0) return null;
+  return Math.round(price * (1 - f.percent / 100) * 100) / 100;
+}
+/** What each person saves, e.g. 30 for a $300 class at 10% */
+export const friendSaving = (price: number, f: FriendDeal) => Math.round(price * (f.percent / 100) * 100) / 100;
+
+/** "1590+" — rounded down to the ten, so it never overstates (the same number the job board shows) */
+export const trainedLabel = (n: number) => (n >= 20 ? `${(Math.floor(n / 10) * 10).toLocaleString("en-AU")}+` : n > 0 ? String(n) : null);
+
 export const DEFAULT_SETTINGS: BookingSettings = {
   enabled: true, hold_minutes: 30, cancel_hours: 48, reminder_hours: 48, followup: true, review_url: null,
-  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, faqs: [], landing: DEFAULT_LANDING, schedules: [], closures: [],
+  gift_expiry_months: 36, gift_amounts: [], terms: null, intro: null, notify_email: null, reply_to: null, social: {}, show_seats_left: true, waitlist: true, waitlist_followup: true, friend: DEFAULT_FRIEND, faqs: [], landing: DEFAULT_LANDING, schedules: [], closures: [],
 };
 
 const num = (v: unknown, d: number, min: number, max: number) => {
@@ -191,6 +209,11 @@ export function readSettings(orgSettings: unknown): BookingSettings {
     social: { facebook: url(social.facebook) ?? undefined, instagram: url(social.instagram) ?? undefined },
     show_seats_left: raw.show_seats_left !== false,
     waitlist: raw.waitlist !== false,
+    waitlist_followup: raw.waitlist_followup !== false,
+    friend: (() => {
+      const f = (raw.friend && typeof raw.friend === "object" ? raw.friend : {}) as Record<string, unknown>;
+      return { enabled: f.enabled === true, percent: num(f.percent, DEFAULT_FRIEND.percent, 1, 50), minSeats: num(f.minSeats, DEFAULT_FRIEND.minSeats, 2, 10) };
+    })(),
     faqs: Array.isArray(raw.faqs) ? (raw.faqs as unknown[]).map((f) => (f && typeof f === "object" ? { q: str((f as Record<string, unknown>).q, 200) ?? "", a: str((f as Record<string, unknown>).a, 2000) ?? "" } : null))
       .filter((f): f is { q: string; a: string } => !!f && !!f.q && !!f.a).slice(0, 12) : [],
     landing: readLanding(raw.landing),

@@ -144,6 +144,22 @@ export function seatOpenEmail(b: Brand, o: { firstName: string; course: string; 
   });
 }
 
+/** On the day of a full class: no seat came free — offer the next date for the same course. */
+export function waitlistMissedEmail(b: Brand, o: { firstName: string; course: string; missedWhen: string; next: { when: string; time: string; left: number; url: string } | null; allDatesUrl: string; friend: string | null }) {
+  const few = o.next && o.next.left <= 3 ? ` Only ${o.next.left} seat${o.next.left === 1 ? "" : "s"} left.` : "";
+  return shell(b, {
+    title: o.next ? `Sorry we missed you — ${o.course} on ${o.next.when} is open` : `Sorry we missed you — ${o.course}`,
+    heading: `Sorry ${o.firstName} — no seats came free this time`,
+    intro: [
+      `You were on the waitlist for ${o.course} on ${o.missedWhen}. Everyone turned up, so we weren't able to fit you in — sorry!`,
+      o.next ? `The next ${o.course} is ${o.next.when}, ${o.next.time}.${few} Book today to lock in your spot before it sells out again.` : `New dates are added regularly — have a look and grab a seat before they sell out.`,
+    ],
+    ...(o.next ? { badge: "Next available", rows: [{ label: "Course", value: o.course }, { label: "When", value: `${o.next.when}\n${o.next.time}` }] } : {}),
+    buttons: [o.next ? { label: "Book my seat now", url: o.next.url } : { label: "See dates", url: o.allDatesUrl }, ...(o.next ? [{ label: "See all dates", url: o.allDatesUrl }] : [])],
+    after: o.friend ? [o.friend] : [],
+  });
+}
+
 export function loginEmail(b: Brand, o: { firstName: string; url: string; minutes: number }) {
   return shell(b, {
     title: `Your sign-in link — ${b.businessName}`,

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { CourseRow } from "@/lib/bookings/core";
-import { landingCopy, sessionWhen } from "@/lib/bookings/core";
+import { friendSaving, landingCopy, sessionWhen, trainedLabel } from "@/lib/bookings/core";
 import type { PublicOrg, PublicSession } from "@/lib/bookings/server";
 import { bookUrl } from "@/lib/bookings/server";
 import type { Agent } from "@/lib/bookings/agents";
@@ -60,11 +60,13 @@ function CupArt({ className }: { className?: string }) {
 export interface LandingJobs { name: string; url: string; trained: number }
 export interface LandingPromo { id: string; title: string; body: string | null; cta_label: string | null; href: string | null; coupon_code: string | null; image_url: string | null; tone: string }
 
-export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate, jobs = null, promos = [], promo = null }: {
+export function BookLanding({ org, data, agent, initialCourse, utm, source, certificate, jobs = null, promos = [], promo = null, trained = 0 }: {
   org: PublicOrg; data: { courses: CourseRow[]; sessions: PublicSession[] }; agent: Agent | null; initialCourse: string | null;
   utm: Record<string, string>; source: "website" | "wordpress"; certificate: boolean;
   /** An offer code from the link (?code=) — applied at checkout */
   promo?: string | null;
+  /** People trained (certificates on record, each person once) — fills {trained} in the trust strip */
+  trained?: number;
   /** The business's barista job board — sold on the course page as a reason to train here */
   jobs?: LandingJobs | null;
   /** Shop banners placed on the course page */
@@ -219,6 +221,11 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                       <span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4 text-[var(--b)]" />Up to {c.capacity} people</span>
                       {certificate && <span className="inline-flex items-center gap-1.5"><Award className="h-4 w-4 text-[var(--b)]" />Digital certificate</span>}
                     </p>
+                    {org.settings.friend.enabled && Number(c.price) > 0 && (
+                      <p className="mt-4 inline-flex w-fit items-center gap-2 rounded-full bg-[color-mix(in_srgb,var(--b)_12%,#FFFDFC)] px-3.5 py-1.5 text-[0.875rem] font-semibold text-[#2b2925]">
+                        <Users className="h-4 w-4 text-[var(--b)]" />Bring a friend — you each save {money(friendSaving(Number(c.price), org.settings.friend), org.currency, { cents: false })}
+                      </p>
+                    )}
                     {c.summary && <p className="mt-5 text-[1.0625rem] font-medium leading-relaxed text-[#2b2925]">{c.summary}</p>}
                     {x.points.length > 0 ? (
                       <ul className="mt-5 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
@@ -270,7 +277,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
           </div>
           <div className="min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
             <LandingBooking initial={initialCourse} dateStyle="cards"
-              base={{ org: { slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours },
+              base={{ org: { slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours, friend: org.settings.friend },
                 utm, embed: false, source, promo,
                 agent: agent ? { code: agent.agency.code, agency: agent.agency.name, price: agent.agency.price === null ? null : Number(agent.agency.price), poRequired: agent.agency.po_required, name: agent.cm.name, site: agent.cm.site } : null }}
               courses={courses.map((c) => ({ slug: c.slug, label: clean(c.name), meta: `${dur(c.duration_minutes)} · ${price(c)}`, course: { id: c.id, name: c.name, price: Number(c.price), maxSeats: c.max_seats_per_booking, questions: c.questions ?? [] }, sessions: byCourse(c.id) }))} />
@@ -314,7 +321,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                 <li key={i} data-reveal className="flex items-center gap-4 px-2">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full ring-1 sm:h-14 sm:w-14 ring-[color-mix(in_srgb,var(--b)_45%,#FFFDFC)]"><I className="h-6 w-6 text-[var(--b)]" strokeWidth={1.6} /></span>
                   <span className="min-w-0">
-                    <span className="lp-serif block text-[1.375rem] font-semibold leading-none sm:text-[1.75rem]">{s.value}</span>
+                    <span className="lp-serif block text-[1.375rem] font-semibold leading-none sm:text-[1.75rem]">{s.value.replace(/\{trained\}/g, trainedLabel(trained) ?? "")}</span>
                     <span className="mt-1.5 block text-[0.875rem] leading-snug text-[#696866]">{s.label}</span>
                   </span>
                 </li>
@@ -411,7 +418,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
             <div data-reveal className="relative mx-auto w-full max-w-[420px]">
               {jobs.trained >= 50 && (
                 <div className="absolute -left-4 -top-6 z-10 rotate-[-4deg] rounded-2xl bg-[var(--b)] px-5 py-3 text-[var(--on-b)] shadow-xl sm:-left-10">
-                  <p className="lp-serif text-[2rem] font-semibold leading-none">{(Math.floor(jobs.trained / 50) * 50).toLocaleString("en-AU")}+</p>
+                  <p className="lp-serif text-[2rem] font-semibold leading-none">{trainedLabel(jobs.trained)}</p>
                   <p className="text-[0.8125rem] font-semibold">baristas trained</p>
                 </div>
               )}

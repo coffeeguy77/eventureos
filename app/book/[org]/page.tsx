@@ -53,10 +53,11 @@ export default async function BookHome({ params, searchParams }: P) {
     const utm = Object.fromEntries(Object.entries(sp).filter(([k, v]) => typeof v === "string" && (k.startsWith("utm_") || k === "fbclid" || k === "gclid" || k === "ref")) as [string, string][]);
     const db = createServiceClient();
     const jobSettings = readJobSettings(org.rawSettings, org.name);
-    const jobs = jobSettings.enabled ? { name: jobSettings.name, url: `/jobs/${org.slug}`, trained: await trainedCount(db, org.id).catch(() => 0) } : null;
+    const trained = await trainedCount(db, org.id).catch(() => 0);
+    const jobs = jobSettings.enabled ? { name: jobSettings.name, url: `/jobs/${org.slug}`, trained } : null;
     const shop = readShop(org.rawSettings);
     const promos = shop.enabled ? await activeBanners(db, { ...org, shop }, ["course"]).catch(() => []) : [];
-    return <BookLanding org={org} data={data} agent={agent} initialCourse={course} utm={utm} source={source} certificate={await certificatesOffered(org.id)} jobs={jobs} promos={promos} promo={typeof sp.code === "string" ? sp.code.slice(0, 40) : null} />;
+    return <BookLanding org={org} data={data} agent={agent} initialCourse={course} utm={utm} source={source} certificate={await certificatesOffered(org.id)} jobs={jobs} promos={promos} promo={typeof sp.code === "string" ? sp.code.slice(0, 40) : null} trained={trained} />;
   }
   return (
     <BookShell org={org} embed={embed}>
