@@ -245,8 +245,12 @@ export function hireSections(r: HireRequest, rules: PackageRules, services: Pric
     });
   }
   const extras: QuoteItem[] = [];
-  if (r.stickers > 0 && s.stickerPrice) extras.push({ name: `Branded cup stickers (${s.stickerSize}, printed + applied)`, description: "Your logo on every cup", quantity: r.stickers, unit: "each", unit_price: s.stickerPrice, tax_rate: 10, service_id: null, is_optional: false });
-  if (r.wrap) extras.push({ name: `${s.labels[r.kind]} wrap / signage`, description: "Your branding on the " + s.labels[r.kind].toLowerCase() + " — priced once we see your artwork", quantity: 1, unit: null, unit_price: 0, tax_rate: 10, service_id: null, is_optional: true });
+  // Branding lines use the price-list item when there is one (so they carry its Xero account), else the website settings
+  const sticker = services.find((x) => /sticker/i.test(x.name));
+  const wrap = services.find((x) => /\bwrap\b|signage/i.test(x.name) && !/sticker/i.test(x.name));
+  const stickerPrice = sticker ? sticker.unit_price : s.stickerPrice;
+  if (r.stickers > 0 && stickerPrice) extras.push({ name: sticker?.name ?? `Branded cup stickers (${s.stickerSize}, printed + applied)`, description: sticker?.description ?? "Your logo on every cup", quantity: r.stickers, unit: sticker?.unit ?? "each", unit_price: stickerPrice, tax_rate: sticker?.tax_rate ?? 10, service_id: sticker?.id ?? null, is_optional: false });
+  if (r.wrap) extras.push({ name: `${s.labels[r.kind]} wrap / signage`, description: "Your branding on the " + s.labels[r.kind].toLowerCase() + " — priced once we see your artwork", quantity: 1, unit: wrap?.unit ?? null, unit_price: 0, tax_rate: wrap?.tax_rate ?? 10, service_id: wrap?.id ?? null, is_optional: true });
   if (extras.length) sections.push({ title: "Branding", items: extras });
   return { sections, notes };
 }
