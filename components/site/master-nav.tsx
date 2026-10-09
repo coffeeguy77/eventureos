@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { readSiteNav, type SiteSection } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
@@ -14,7 +15,7 @@ import { MobileMenu, type MobileItem } from "./mobile-menu";
 const NOTE: Record<SiteSection, string> = { events: "Coffee carts, vans & catering", lessons: "Courses & upcoming dates", jobs: "Find barista work or staff", shop: "Freshly roasted coffee", cafe: "Order, book a table & more", gifts: "Classes & coffee gift cards" };
 
 /** One menu bar above every public section of the business's site: logo · events · classes · job board · shop · café · gift certificates. Also runs the anonymous analytics tracker. */
-export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light" }) {
+export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light"; /** A button at the end of the menu, e.g. "Get a quote" on the events pages */ cta?: { href: string; label: string } }) {
   const light = tone === "light";
   const labels = readSiteNav(org.rawSettings);
   const base = org.slug;
@@ -58,7 +59,7 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
         <Link href={`/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
           {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[1.0625rem] font-semibold">{org.name}</span>}
         </Link>
-        {shown.length > 0 && <MobileMenu items={mobile} active={active} light={light} logo={logo} name={org.name} home={`/${base}`} phone={org.contact_phone} email={org.contact_email} />}
+        {shown.length > 0 && <MobileMenu items={mobile} active={active} light={light} logo={logo} name={org.name} home={`/${base}`} phone={org.contact_phone} email={org.contact_email} cta={cta} />}
         <nav aria-label={org.name} className="hidden items-center gap-1 lg:flex lg:flex-1 lg:justify-end">
           {shown.map((i, n) => (
             <span key={i.key} className="flex shrink-0 items-center">
@@ -75,6 +76,12 @@ export function MasterNav({ org, active, tone = "dark" }: { org: PublicOrg; acti
               )}
             </span>
           ))}
+          {cta && (
+            <Link href={cta.href} data-track={`${cta.label} (site menu)`}
+              className="shop-btn ml-4 inline-flex h-[42px] shrink-0 items-center gap-2 rounded-full bg-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)] px-6 text-[0.9375rem] font-semibold text-white shadow-[0_10px_22px_-12px_color-mix(in_srgb,var(--b)_40%,#ff0a6c)] hover:brightness-105">
+              {cta.label}<ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
         </nav>
       </div>
     </div>

@@ -12,8 +12,8 @@ const SECTION_ICON = { events: PartyPopper, lessons: GraduationCap, jobs: Briefc
 const CHILD_ICON = { lessons: GraduationCap, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck };
 
 /** Phones: a "Menu" button that opens a full-screen menu with every section, its sub-pages, and call / email buttons. */
-export function MobileMenu({ items, active, light, logo, name, home, phone, email }: {
-  items: MobileItem[]; active?: string; light: boolean; logo: string | null; name: string; home: string; phone: string | null; email: string | null;
+export function MobileMenu({ items, active, light, logo, name, home, phone, email, cta }: {
+  items: MobileItem[]; active?: string; light: boolean; logo: string | null; name: string; home: string; phone: string | null; email: string | null; cta?: { href: string; label: string };
 }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(active && items.find((i) => i.key === active)?.children?.length ? active : null);
@@ -55,6 +55,12 @@ export function MobileMenu({ items, active, light, logo, name, home, phone, emai
 
           {/* Sections */}
           <nav className="flex-1 overflow-y-auto overscroll-contain px-4 pb-6 pt-4" aria-label={name}>
+            {cta && (
+              <Link href={cta.href} onClick={() => setOpen(false)} data-track={`${cta.label} (mobile menu)`}
+                className="mb-3 flex h-14 items-center justify-center gap-2 rounded-[18px] bg-[color-mix(in_srgb,var(--b)_45%,#ff0a6c)] text-[1.0625rem] font-semibold text-white shadow-[0_14px_28px_-16px_color-mix(in_srgb,var(--b)_45%,#ff0a6c)]">
+                {cta.label}<ChevronRight className="h-5 w-5" />
+              </Link>
+            )}
             <ul className="space-y-2.5">
               {items.map((it, n) => {
                 const I = SECTION_ICON[it.key];

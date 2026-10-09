@@ -24,7 +24,7 @@ export interface EventsSettings {
   leadDays: number;                               // under this many days away = tentative (staff availability)
   stickerPrice: number | null;                    // branded cup stickers, each (printed + applied)
   stickerSize: string;                            // "50mm round"
-  images: Partial<Record<HireKind | "hero" | "branding" | "catering" | "drinks", string>>;
+  images: Partial<Record<HireKind | "hero" | "branding" | "catering" | "drinks" | "band" | "contact", string>>;
   drinks: DrinkGroup[];                           // the drinks menu page
   areas: string[];                                // places served, for the hire pages
   catering: CateringSettings;
@@ -85,7 +85,7 @@ export function readEvents(orgSettings: unknown): EventsSettings {
     leadDays: int(raw.leadDays, d.leadDays, 0, 60),
     stickerPrice: raw.stickerPrice === null || raw.stickerPrice === undefined || raw.stickerPrice === "" ? null : Math.max(0, Math.round(Number(raw.stickerPrice) * 100) / 100) || null,
     stickerSize: str(raw.stickerSize, d.stickerSize, 40) || d.stickerSize,
-    images: Object.fromEntries(["cart", "van", "diy", "hero", "branding", "catering", "drinks"].map((k) => [k, url(im[k])]).filter(([, v]) => v)),
+    images: Object.fromEntries(["cart", "van", "diy", "hero", "branding", "catering", "drinks", "band", "contact"].map((k) => [k, url(im[k])]).filter(([, v]) => v)),
     drinks,
     areas: Array.isArray(raw.areas) ? raw.areas.map((a) => str(a, "", 40)).filter(Boolean).slice(0, 12) : d.areas,
     catering: readCatering(raw.catering),

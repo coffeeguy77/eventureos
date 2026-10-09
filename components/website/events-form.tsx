@@ -10,7 +10,8 @@ import { saveEventsSettings } from "@/app/(app)/website/actions";
 const KIND_NAME: Record<HireKind, string> = { cart: "Coffee carts", van: "Coffee van", diy: "Equipment only" };
 const IMG: { key: keyof EventsSettings["images"]; label: string }[] = [
   { key: "hero", label: "Events page banner" }, { key: "cart", label: "Coffee cart photo" }, { key: "van", label: "Coffee van photo" },
-  { key: "diy", label: "Equipment photo" }, { key: "branding", label: "Branded cart photo" }, { key: "drinks", label: "Drinks feature photo" },
+  { key: "diy", label: "Equipment photo" }, { key: "branding", label: "Branded cart photo" }, { key: "drinks", label: "Drinks feature photo" }, { key: "catering", label: "Catering photo" },
+  { key: "band", label: "“Lock in your date” band (wide)" }, { key: "contact", label: "Contact section photo" },
 ];
 
 export function EventsForm({ initial, packages, slug, base, menus }: { initial: EventsSettings; packages: { id: string; name: string }[]; slug: string; base: string; menus: string[] }) {
