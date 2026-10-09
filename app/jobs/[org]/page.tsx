@@ -13,6 +13,8 @@ import { MasterNav } from "@/components/site/master-nav";
 import { BaristaAuth } from "@/components/jobs/tools";
 import { BaristaBoard } from "@/components/jobs/board";
 
+import { copyOf, ed, edImg } from "@/lib/site/copy";
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }) {
@@ -33,6 +35,7 @@ function Title({ name }: { name: string }) {
 export default async function JobsHome({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ join?: string }> }) {
   const { org: slug } = await params;
   const org = await jobsOrg(slug);
+  const c = copyOf(org?.rawSettings, "jobs");
   if (!org || !org.jobs.enabled) notFound();
   const db = createServiceClient();
   const [me, posts, cards, trained] = await Promise.all([
@@ -55,7 +58,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
       {/* Top: photo, headline, sign-in */}
       <div className="relative isolate overflow-hidden">
         {org.jobs.heroImage
-          ? <img src={org.jobs.heroImage} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover object-center" />
+          ? <img {...edImg("jobs.heroImage")} src={org.jobs.heroImage} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover object-center" />
           : <div className="absolute inset-0 -z-20 bg-[radial-gradient(ellipse_at_60%_20%,color-mix(in_srgb,var(--b)_22%,#2a201d),#0E0B0A_70%)]" />}
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(14,11,10,0.82)_0%,rgba(14,11,10,0.35)_42%,rgba(14,11,10,0.05)_62%,rgba(14,11,10,0.45)_100%),linear-gradient(180deg,rgba(14,11,10,0.15)_0%,rgba(14,11,10,0)_55%,#0E0B0A_100%)] max-lg:bg-[rgba(14,11,10,0.72)]" />
 
@@ -80,7 +83,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
           <div>
             <p className="text-[0.8438rem] font-semibold uppercase tracking-[0.14em] text-[var(--b)]">Free for baristas</p>
             <h1 className="mt-2 text-[2.75rem] font-bold leading-[0.98] tracking-[-0.01em] sm:text-[3.5rem] xl:text-[4.25rem]" style={serif}><Title name={org.jobs.name} /></h1>
-            <p className="mt-4 max-w-[34rem] text-[1.0625rem] leading-relaxed text-white/85 sm:text-[1.125rem]">Cafés, coffee carts and event companies looking for staff can find trained baristas — and post shifts and jobs you can say yes to.</p>
+            <p {...ed("copy:jobs.hero.text")} className="mt-4 max-w-[34rem] text-[1.0625rem] leading-relaxed text-white/85 sm:text-[1.125rem]">{c("hero.text", "Cafés, coffee carts and event companies looking for staff can find trained baristas — and post shifts and jobs you can say yes to.")}</p>
             <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-4">
               {trainedLabel && (
                 <div className="flex items-center gap-3.5">
@@ -120,7 +123,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
             <div className={`${glass} p-6`}>
               <div className="flex gap-4">
                 <Store className="mt-0.5 h-9 w-9 shrink-0 text-[var(--b)]" strokeWidth={1.5} />
-                <div><h2 className="text-[1.25rem] font-semibold">Looking for staff?</h2><p className="mt-1 text-[0.9063rem] text-white/70">Search trained baristas near you and post shifts — free for approved businesses.</p></div>
+                <div><h2 {...ed("copy:jobs.staff.title")} className="text-[1.25rem] font-semibold">{c("staff.title", "Looking for staff?")}</h2><p {...ed("copy:jobs.staff.text")} className="mt-1 text-[0.9063rem] text-white/70">{c("staff.text", "Search trained baristas near you and post shifts — free for approved businesses.")}</p></div>
               </div>
               <Link href={`/jobs/${slug}/employers`} className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10">Employers start here <ArrowRight className="h-4 w-4" /></Link>
             </div>
@@ -134,7 +137,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-start gap-4">
               <Users className="mt-1 h-10 w-10 shrink-0 text-[var(--b)]" strokeWidth={1.5} />
-              <div><h2 className="text-[1.75rem] font-bold leading-tight" style={serif}>Baristas available now</h2><p className="mt-1 text-[0.9688rem] text-white/70">Browse trained {org.name} baristas looking for casual shifts, events and more.</p></div>
+              <div><h2 {...ed("copy:jobs.available.title")} className="text-[1.75rem] font-bold leading-tight" style={serif}>{c("available.title", "Baristas available now")}</h2><p className="mt-1 text-[0.9688rem] text-white/70">Browse trained {org.name} baristas looking for casual shifts, events and more.</p></div>
             </div>
             <Link href={`/jobs/${slug}/employers/search`} className="inline-flex items-center gap-2 text-[0.9688rem] font-semibold text-[var(--b)]">View all baristas <ArrowRight className="h-4 w-4" /></Link>
           </div>

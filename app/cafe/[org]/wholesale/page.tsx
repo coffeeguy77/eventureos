@@ -8,6 +8,8 @@ import { cafePages } from "@/lib/cafe/core";
 import { appSnapshot, cafeOrg } from "@/lib/cafe/server";
 import { readShop } from "@/lib/shop/core";
 
+import { ed, edImg } from "@/lib/site/copy";
+
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
 
@@ -28,14 +30,14 @@ export default async function WholesalePage({ params }: P) {
       <section data-section="hero" className={`${WRAP} grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 lg:py-20`}>
         <div>
           <p className={`${hand} text-[1.75rem] leading-none text-[var(--pk)]`}>For cafés, offices &amp; restaurants</p>
-          <h1 className={`${serif} mt-3 text-[clamp(2.5rem,5.4vw,4.25rem)] font-semibold leading-[1.02]`}>{c.wholesaleTitle}</h1>
-          <p className="mt-5 max-w-xl text-[1.125rem] leading-relaxed text-[#5E5853]">{c.wholesaleIntro}</p>
+          <h1 className={`${serif} mt-3 text-[clamp(2.5rem,5.4vw,4.25rem)] font-semibold leading-[1.02]`} {...ed("cafe.wholesaleTitle")}>{c.wholesaleTitle}</h1>
+          <p {...ed("cafe.wholesaleIntro")} className="mt-5 max-w-xl text-[1.125rem] leading-relaxed text-[#5E5853]">{c.wholesaleIntro}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="#enquire" className={btn} data-track="Wholesale: enquire">Talk to us<ArrowRight className="h-5 w-5" /></Link>
             {shop && <Link href={`/shop/${org.slug}`} className="shop-btn inline-flex h-[60px] items-center rounded-full px-8 font-semibold ring-[1.5px] ring-[#1F1B19] hover:bg-white">Try our coffee first</Link>}
           </div>
         </div>
-        {c.wholesaleImage && <img src={c.wholesaleImage} alt="" className="aspect-[4/3] w-full rounded-[32px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.55)]" />}
+        {c.wholesaleImage && <img {...edImg("cafe.wholesaleImage")} src={c.wholesaleImage} alt="" className="aspect-[4/3] w-full rounded-[32px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.55)]" />}
       </section>
 
       {c.wholesalePoints.length > 0 && (

@@ -11,6 +11,8 @@ import { readShop } from "@/lib/shop/core";
 import { readSiteNav } from "@/lib/site-nav";
 import { OpenBadge } from "@/components/cafe/bits";
 
+import { ed, edImg } from "@/lib/site/copy";
+
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
 
@@ -49,8 +51,8 @@ export default async function CafePage({ params }: P) {
       <section data-section="hero" className={`${WRAP} grid items-center gap-10 py-10 sm:py-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 lg:py-20`}>
         <div>
           {h && <OpenBadge hours={h} />}
-          <h1 className={`${serif} mt-5 text-[clamp(2.5rem,5.4vw,4.5rem)] font-semibold leading-[1.02]`}>{c.heroTitle}</h1>
-          <p className="mt-5 max-w-xl text-[1.125rem] leading-relaxed text-[#5E5853]">{c.heroText}</p>
+          <h1 {...ed("cafe.heroTitle")} className={`${serif} mt-5 text-[clamp(2.5rem,5.4vw,4.5rem)] font-semibold leading-[1.02]`}>{c.heroTitle}</h1>
+          <p {...ed("cafe.heroText")} className="mt-5 max-w-xl text-[1.125rem] leading-relaxed text-[#5E5853]">{c.heroText}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             {orderHref && <Link href={orderHref} className={btn} data-track="Café: order online"><ShoppingBag className="h-5 w-5" />Order online</Link>}
             {pages.reserve && <Link href={`${base}/reserve`} className={btnOutline} data-track="Café: reserve"><CalendarDays className="h-5 w-5" />Reserve a table</Link>}
@@ -59,7 +61,7 @@ export default async function CafePage({ params }: P) {
         </div>
         {hero ? (
           <div className="relative">
-            <img src={hero} alt={`Inside ${org.name}`} className="aspect-[4/3] w-full rounded-[32px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.55)]" />
+            <img {...edImg("cafe.heroImage")} src={hero} alt={`Inside ${org.name}`} className="aspect-[4/3] w-full rounded-[32px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.55)]" />
             {c.instagram && <span className={`${hand} absolute -bottom-5 left-6 rounded-full bg-white px-5 py-2 text-[1.375rem] text-[var(--pk)] shadow-lg ring-1 ring-[#EDE3DB]`}>@{c.instagram}</span>}
           </div>
         ) : (
@@ -92,11 +94,11 @@ export default async function CafePage({ params }: P) {
       {/* Coffee */}
       <section data-section="coffee" className="bg-[#1E1A18] text-white">
         <div className={`${WRAP} grid items-center gap-10 py-16 sm:py-20 lg:grid-cols-2 lg:gap-16`}>
-          {c.coffeeImage && <img src={c.coffeeImage} alt="Our roaster" className="aspect-[4/3] w-full rounded-[28px] object-cover lg:order-2" />}
+          {c.coffeeImage && <img {...edImg("cafe.coffeeImage")} src={c.coffeeImage} alt="Our roaster" className="aspect-[4/3] w-full rounded-[28px] object-cover lg:order-2" />}
           <div className={c.coffeeImage ? "lg:order-1" : "lg:col-span-2 lg:max-w-3xl"}>
             <p className={`${eyebrow} !text-[color-mix(in_srgb,var(--pk)_55%,white)]`}>Roasted here</p>
-            <h2 className={`${serif} mt-3 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`}>{c.coffeeTitle}</h2>
-            <p className="mt-4 max-w-xl text-[1.0625rem] leading-relaxed text-white/75">{c.coffeeText}</p>
+            <h2 className={`${serif} mt-3 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`} {...ed("cafe.coffeeTitle")}>{c.coffeeTitle}</h2>
+            <p {...ed("cafe.coffeeText")} className="mt-4 max-w-xl text-[1.0625rem] leading-relaxed text-white/75">{c.coffeeText}</p>
             <div className="mt-7 flex flex-wrap gap-3">
               {shop && <Link href={`/shop/${org.slug}`} className="shop-btn inline-flex h-[54px] items-center gap-2 rounded-full bg-white px-7 font-semibold text-[#151312] hover:bg-[#F6EEE8]">Buy our coffee<ArrowRight className="h-4 w-4" /></Link>}
               {pages.club && <Link href={`${base}/roasting-club`} className="shop-btn inline-flex h-[54px] items-center gap-2 rounded-full px-7 font-semibold text-white ring-1 ring-white/30 hover:bg-white/10">Roast your own</Link>}
@@ -110,14 +112,14 @@ export default async function CafePage({ params }: P) {
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
           <div>
             <p className={eyebrow}><UtensilsCrossed className="mr-1.5 inline h-4 w-4 align-[-2px]" />Our kitchen</p>
-            <h2 className={`${serif} mt-3 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`}>{c.kitchenTitle}</h2>
-            <p className="mt-4 max-w-xl text-[1.0625rem] leading-relaxed text-[#5E5853]">{c.kitchenText}</p>
+            <h2 className={`${serif} mt-3 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`} {...ed("cafe.kitchenTitle")}>{c.kitchenTitle}</h2>
+            <p {...ed("cafe.kitchenText")} className="mt-4 max-w-xl text-[1.0625rem] leading-relaxed text-[#5E5853]">{c.kitchenText}</p>
             {h?.kitchen?.hasHours && h.kitchen.weekly && (
               <p className="mt-4 flex items-center gap-2 text-[0.9375rem] text-[#3A3431]"><Clock className="h-4 w-4 text-[var(--pk)]" />Kitchen today: {hoursRows(h.kitchen.weekly).find((r) => r.dow === todayDow)?.text}</p>
             )}
             {orderHref && <Link href={orderHref} className={`${btn} mt-7`}>See the full menu<ArrowRight className="h-5 w-5" /></Link>}
           </div>
-          {kitchenPic && <img src={kitchenPic} alt="From our kitchen" className="aspect-[5/4] w-full rounded-[28px] object-cover" />}
+          {kitchenPic && <img {...edImg("cafe.kitchenImage")} src={kitchenPic} alt="From our kitchen" className="aspect-[5/4] w-full rounded-[28px] object-cover" />}
         </div>
         {picks.length > 0 && (
           <div className="mt-14">

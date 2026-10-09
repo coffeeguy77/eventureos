@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import type { CourseRow } from "@/lib/bookings/core";
 import { friendSaving, landingCopy, sessionWhen, trainedLabel } from "@/lib/bookings/core";
+import { ed, edImg } from "@/lib/site/copy";
 import type { PublicOrg, PublicSession } from "@/lib/bookings/server";
 import { bookUrl } from "@/lib/bookings/server";
 import type { Agent } from "@/lib/bookings/agents";
@@ -135,13 +136,13 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
 
       {/* ───────── Hero ───────── */}
       <header className="relative isolate overflow-hidden bg-[#1d1915] text-[#FFFDFC]">
-        {hero && <img src={hero} alt="" className="lp-hero-img absolute inset-0 -z-20 h-full w-full object-cover" fetchPriority="high" />}
+        {hero && <img {...edImg("booking.landing.heroImage")} src={hero} alt="" className="lp-hero-img absolute inset-0 -z-20 h-full w-full object-cover" fetchPriority="high" />}
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(180deg,rgba(24,19,15,0.55)_0%,rgba(24,19,15,0.72)_55%,rgba(24,19,15,0.92)_100%)] lg:bg-[linear-gradient(90deg,rgba(24,19,15,0.9)_0%,rgba(24,19,15,0.72)_38%,rgba(24,19,15,0.18)_68%,rgba(24,19,15,0.05)_100%)]" />
         <div className={`${PAGE} relative grid min-h-[640px] items-center gap-10 pb-14 pt-28 lg:min-h-[740px] lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:pb-20 lg:pt-32`}>
           <div className="max-w-[44rem]">
-            {L.eyebrow && <p className="lp-hand text-[1.625rem] leading-none text-[#FFFDFC]/90 sm:text-[1.875rem]">{L.eyebrow}</p>}
-            <h1 className="lp-serif mt-3 text-balance text-[3rem] font-semibold leading-[0.98] tracking-[-0.02em] sm:text-[4rem] xl:text-[4.875rem]">{accent(headline)}</h1>
-            {org.settings.intro && <p className="mt-6 max-w-[36rem] whitespace-pre-line text-[1.0625rem] leading-relaxed text-[#FFFDFC]/85 sm:text-[1.1875rem]">{org.settings.intro}</p>}
+            {L.eyebrow && <p {...ed("booking.landing.eyebrow")} className="lp-hand text-[1.625rem] leading-none text-[#FFFDFC]/90 sm:text-[1.875rem]">{L.eyebrow}</p>}
+            <h1 {...ed("booking.landing.headline", headline)} className="lp-serif mt-3 text-balance text-[3rem] font-semibold leading-[0.98] tracking-[-0.02em] sm:text-[4rem] xl:text-[4.875rem]">{accent(headline)}</h1>
+            {org.settings.intro && <p {...ed("booking.intro")} className="mt-6 max-w-[36rem] whitespace-pre-line text-[1.0625rem] leading-relaxed text-[#FFFDFC]/85 sm:text-[1.1875rem]">{org.settings.intro}</p>}
             {L.highlights.length > 0 && (
               <ul className="mt-7 grid max-w-[40rem] grid-cols-2 gap-x-4 gap-y-3 sm:gap-x-6 xl:grid-cols-3">
                 {L.highlights.map((h) => (
@@ -195,10 +196,10 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         <div className={PAGE}>
           <div className="grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-reveal>
             <div>
-              <p className={eyebrowCls}>{C("coursesEyebrow")}</p>
-              <h2 className={`${h2Cls} mt-3`}>{accent(C("coursesTitle"))}</h2>
+              <p {...ed("booking.landing.copy.coursesEyebrow", C("coursesEyebrow"))} className={eyebrowCls}>{C("coursesEyebrow")}</p>
+              <h2 {...ed("booking.landing.copy.coursesTitle", C("coursesTitle"))} className={`${h2Cls} mt-3`}>{accent(C("coursesTitle"))}</h2>
             </div>
-            {C("coursesIntro") && <p className="max-w-[34rem] text-[1.0625rem] leading-relaxed text-[#696866] lg:justify-self-end">{C("coursesIntro")}</p>}
+            {C("coursesIntro") && <p {...ed("booking.landing.copy.coursesIntro", C("coursesIntro"))} className="max-w-[34rem] text-[1.0625rem] leading-relaxed text-[#696866] lg:justify-self-end">{C("coursesIntro")}</p>}
           </div>
           <div className={`mt-12 grid gap-6 ${courses.length === 2 ? "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]" : courses.length > 2 ? "md:grid-cols-2 xl:grid-cols-3" : "lg:grid-cols-[minmax(0,1fr)_340px]"}`}>
             {courses.map((c) => {
@@ -248,8 +249,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
             })}
             <aside data-reveal className="relative flex flex-col overflow-hidden rounded-[26px] bg-[color-mix(in_srgb,var(--b)_10%,#FFFDFC)] p-7 sm:p-8 md:col-span-2 xl:col-span-1">
               <Coffee className="h-9 w-9 text-[var(--b)]" strokeWidth={1.6} />
-              <h3 className="lp-serif mt-5 text-[1.625rem] font-semibold leading-tight">{C("helpTitle")}</h3>
-              <p className="mt-3 text-[1rem] leading-relaxed text-[#5b5955]">{C("helpText")}</p>
+              <h3 {...ed("booking.landing.copy.helpTitle", C("helpTitle"))} className="lp-serif mt-5 text-[1.625rem] font-semibold leading-tight">{C("helpTitle")}</h3>
+              <p {...ed("booking.landing.copy.helpText", C("helpText"))} className="mt-3 text-[1rem] leading-relaxed text-[#5b5955]">{C("helpText")}</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 {many && <a href="#compare" className="lp-btn inline-flex h-12 items-center gap-2 rounded-xl bg-[#FFFDFC] px-5 text-[0.9375rem] font-semibold text-[#171714] ring-1 ring-[#2b2925]/25">Compare courses<ArrowRight className="lp-arrow h-4 w-4" /></a>}
                 {phone && <a href={telHref(phone)} className="inline-flex h-12 items-center gap-2 rounded-xl px-2 text-[0.9375rem] font-semibold text-[#171714]"><Phone className="h-4 w-4 text-[var(--b)]" />{phone}</a>}
@@ -264,8 +265,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
       <section id="book" className="scroll-mt-20 bg-[color-mix(in_srgb,var(--b)_7%,#F6EEE6)] py-20 sm:py-24">
         <div className={`${PAGE} grid items-start gap-8 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-x-14 lg:gap-y-8`}>
           <div className="lg:col-start-1 lg:row-start-1">
-            <p className={eyebrowCls}>{C("bookEyebrow")}</p>
-            <h2 className={`${h2Cls} mt-3`}>{accent(C("bookTitle"))}</h2>
+            <p {...ed("booking.landing.copy.bookEyebrow", C("bookEyebrow"))} className={eyebrowCls}>{C("bookEyebrow")}</p>
+            <h2 {...ed("booking.landing.copy.bookTitle", C("bookTitle"))} className={`${h2Cls} mt-3`}>{accent(C("bookTitle"))}</h2>
             {C("bookIntro") && <div className="mt-5 space-y-3 text-[1.0625rem] leading-relaxed text-[#5b5955]">{paras(C("bookIntro")).map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}</div>}
             {C("bookPoints") && (
               <ul className="mt-6 space-y-3">
@@ -337,8 +338,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
           <div className={PAGE}>
             <div className="flex flex-wrap items-end justify-between gap-6" data-reveal>
               <div>
-                <p className={eyebrowCls}>{C("reviewsEyebrow")}</p>
-                <h2 className={`${h2Cls} mt-3`}>{accent(C("reviewsTitle"))}</h2>
+                <p {...ed("booking.landing.copy.reviewsEyebrow", C("reviewsEyebrow"))} className={eyebrowCls}>{C("reviewsEyebrow")}</p>
+                <h2 {...ed("booking.landing.copy.reviewsTitle", C("reviewsTitle"))} className={`${h2Cls} mt-3`}>{accent(C("reviewsTitle"))}</h2>
               </div>
               <div className="flex items-center gap-4 rounded-2xl bg-[#FFFDFC] px-5 py-4 ring-1 ring-[#E9DFD5]">
                 <span className="lp-serif text-[2.5rem] font-semibold leading-none">{avg.toFixed(1)}</span>
@@ -366,8 +367,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
               </div>
               <div className="relative grid items-center gap-10 p-8 sm:p-12 xl:grid-cols-[minmax(0,1fr)_240px]">
                 <div>
-                  <h2 className="lp-serif text-balance text-[2.25rem] font-semibold leading-[1.06] sm:text-[2.875rem]">{accent(C("giftTitle"))}</h2>
-                  <p className="mt-4 max-w-[30rem] text-[1.0625rem] leading-relaxed text-[#E6D9CC]">{C("giftText")}</p>
+                  <h2 {...ed("booking.landing.copy.giftTitle", C("giftTitle"))} className="lp-serif text-balance text-[2.25rem] font-semibold leading-[1.06] sm:text-[2.875rem]">{accent(C("giftTitle"))}</h2>
+                  <p {...ed("booking.landing.copy.giftText", C("giftText"))} className="mt-4 max-w-[30rem] text-[1.0625rem] leading-relaxed text-[#E6D9CC]">{C("giftText")}</p>
                   <ul className="mt-6 grid max-w-[30rem] grid-cols-2 gap-x-6 gap-y-3 text-[0.9688rem] font-medium">
                     <li className="flex items-center gap-2.5"><CalendarDays className="h-5 w-5 text-[var(--b)]" />Valid for {org.settings.gift_expiry_months} months</li>
                     <li className="flex items-center gap-2.5"><Coffee className="h-5 w-5 text-[var(--b)]" />Use towards any course</li>
@@ -465,7 +466,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
           <div className={PAGE}>
             {L.benefits.length > 0 && (
               <>
-                <h2 className={`${h2Cls} max-w-[40rem]`} data-reveal>{accent(C("whyTitle"))}</h2>
+                <h2 {...ed("booking.landing.copy.whyTitle", C("whyTitle"))} className={`${h2Cls} max-w-[40rem]`} data-reveal>{accent(C("whyTitle"))}</h2>
                 <ul className="mt-12 grid gap-px overflow-hidden rounded-[26px] bg-[#E9DFD5] ring-1 ring-[#E9DFD5] sm:grid-cols-2 xl:grid-cols-3">
                   {L.benefits.map((b, i) => {
                     const I = ICONS[i % ICONS.length];
@@ -498,7 +499,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
       {gallery.length >= 3 && (
         <section className="py-20 sm:py-24">
           <div className={PAGE}>
-            <h2 className={`${h2Cls} max-w-[44rem] whitespace-pre-line`} data-reveal>{accent(C("galleryTitle"))}</h2>
+            <h2 {...ed("booking.landing.copy.galleryTitle", C("galleryTitle"))} className={`${h2Cls} max-w-[44rem] whitespace-pre-line`} data-reveal>{accent(C("galleryTitle"))}</h2>
             <div className="mt-12 grid auto-rows-[180px] grid-cols-2 gap-4 sm:auto-rows-[220px] lg:grid-cols-4">
               {gallery.map((g, i) => {
                 const span = ["row-span-2", "", "row-span-2", "", "col-span-2", "", "row-span-2", ""][i % 8];
@@ -518,7 +519,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
       {many && (
         <section id="compare" className="scroll-mt-24 py-20 sm:py-24">
           <div className={PAGE}>
-            <h2 className={`${h2Cls} text-center`} data-reveal>{accent(C("compareTitle"))}</h2>
+            <h2 {...ed("booking.landing.copy.compareTitle", C("compareTitle"))} className={`${h2Cls} text-center`} data-reveal>{accent(C("compareTitle"))}</h2>
             <div className="mx-auto mt-12 max-w-[1080px] overflow-x-auto rounded-[26px] border border-[#E9DFD5] bg-[#FFFDFC]" data-reveal>
               <table className="w-full min-w-[560px] border-collapse text-left">
                 <thead>
@@ -563,7 +564,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         <section id="faq" className="scroll-mt-24 bg-[#FFFDFC] py-20 sm:py-24">
           <div className={`${PAGE} grid gap-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:gap-14`}>
             <div data-reveal>
-              <h2 className={h2Cls}>{accent(C("faqTitle"))}</h2>
+              <h2 {...ed("booking.landing.copy.faqTitle", C("faqTitle"))} className={h2Cls}>{accent(C("faqTitle"))}</h2>
               <p className="mt-4 max-w-sm text-[1.0625rem] leading-relaxed text-[#5b5955]">Still unsure? {phone ? <>Call us on <a href={telHref(phone)} className="font-semibold text-[#171714] underline decoration-[var(--b)] underline-offset-4">{phone}</a>.</> : "Just get in touch."}</p>
             </div>
             <div className="divide-y divide-[#E9DFD5] border-y border-[#E9DFD5]" data-reveal>
@@ -585,7 +586,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         <section id="location" className="scroll-mt-24 py-20 sm:py-24">
           <div className={`${PAGE} grid items-stretch gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]`}>
             <div data-reveal className="flex flex-col justify-center">
-              <h2 className={`${h2Cls} whitespace-pre-line`}>{accent(C("locationTitle"))}</h2>
+              <h2 {...ed("booking.landing.copy.locationTitle", C("locationTitle"))} className={`${h2Cls} whitespace-pre-line`}>{accent(C("locationTitle"))}</h2>
               <p className="mt-6 text-[1.125rem] font-semibold">{org.name}</p>
               {location && <address className="mt-1 not-italic text-[1.0625rem] leading-relaxed text-[#5b5955]">{addressLines(location).map((p, i) => <span key={i} className="block">{p}</span>)}</address>}
               {phone && <a href={telHref(phone)} className="mt-4 inline-flex items-center gap-2 text-[1.0625rem] font-semibold"><Phone className="h-5 w-5 text-[var(--b)]" />{phone}</a>}
@@ -613,9 +614,9 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full opacity-[0.05]"><defs><pattern id="lp-beans" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(18)"><g fill="none" stroke="#F4EDE4" strokeWidth="2"><ellipse cx="30" cy="30" rx="14" ry="20" /><path d="M30 10c-6 10 6 30 0 40" /><ellipse cx="90" cy="90" rx="14" ry="20" /><path d="M90 70c-6 10 6 30 0 40" /></g></pattern></defs><rect width="100%" height="100%" fill="url(#lp-beans)" /></svg>
         <div className={`${PAGE} flex flex-col items-start justify-between gap-10 lg:flex-row lg:items-end`}>
           <div className="max-w-[46rem]" data-reveal>
-            <p className="lp-hand text-[1.875rem] leading-none text-[var(--b)]">{C("ctaEyebrow")}</p>
-            <h2 className="lp-serif mt-3 text-balance text-[2.5rem] font-semibold leading-[1.04] tracking-[-0.015em] sm:text-[3.5rem]">{accent(C("ctaTitle"))}</h2>
-            {C("ctaText") && <p className="mt-5 max-w-[38rem] text-[1.125rem] leading-relaxed text-[#cfd6d1]">{C("ctaText")}</p>}
+            <p {...ed("booking.landing.copy.ctaEyebrow", C("ctaEyebrow"))} className="lp-hand text-[1.875rem] leading-none text-[var(--b)]">{C("ctaEyebrow")}</p>
+            <h2 {...ed("booking.landing.copy.ctaTitle", C("ctaTitle"))} className="lp-serif mt-3 text-balance text-[2.5rem] font-semibold leading-[1.04] tracking-[-0.015em] sm:text-[3.5rem]">{accent(C("ctaTitle"))}</h2>
+            {C("ctaText") && <p {...ed("booking.landing.copy.ctaText", C("ctaText"))} className="mt-5 max-w-[38rem] text-[1.125rem] leading-relaxed text-[#cfd6d1]">{C("ctaText")}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-3" data-reveal>
             <a href="#book" className={btnPrimary}>See dates &amp; book<ArrowRight className="lp-arrow h-5 w-5" /></a>

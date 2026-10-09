@@ -9,6 +9,9 @@ import { ShopFrame, serif, hand, btn, eyebrow, WRAP } from "@/components/shop/fr
 import { $, ProductCard, ShopClosed } from "@/components/shop/bits";
 import { ContactForm } from "@/components/events/contact-form";
 
+import { copyOf, ed, edImg } from "@/lib/site/copy";
+import { Lines } from "@/components/site/lines";
+
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
 
@@ -33,6 +36,7 @@ export default async function Subscriptions({ params }: P) {
   const coffee = products.filter((p) => p.kind === "coffee" && p.subscribable);
   const base = `/shop/${org.slug}`;
   const photo = s.subsHero ?? s.subsImage ?? s.heroImage;
+  const c = copyOf(org.rawSettings, "subs");
   const free = s.freeOver !== null ? `${$(s.freeOver, org.currency)}` : null;
   const prepay = s.prepaid.length > 0;
   const months = list(s.prepaid.map((x) => x.months));
@@ -79,7 +83,7 @@ export default async function Subscriptions({ params }: P) {
     <ShopFrame org={org} active="subs" topBanners={top} cta={{ href: "#choose", label: "Subscribe" }}>
       {/* Hero: the box and a latte on the bench (from the design), words on the left */}
       <section className="relative isolate overflow-hidden bg-[#FBF4ED]">
-        {photo && <img src={photo} alt="" aria-hidden className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[78%_50%] lg:block" />}
+        {photo && <img {...edImg("shop.subsHero")} src={photo} alt="" aria-hidden className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[78%_50%] lg:block" />}
         <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(251,244,237,.9)_0%,rgba(251,244,237,.55)_30%,rgba(251,244,237,0)_44%)] lg:block xl:hidden" />
         <div aria-hidden className="pointer-events-none absolute right-[2.6%] top-[7%] hidden items-start gap-1.5 text-[#2A2522] xl:flex">
           <svg viewBox="0 0 60 70" className="mt-6 h-[54px] w-[46px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M54 6C32 10 18 26 17 58" /><path d="M9 49l8 11 9-9" /></svg>
@@ -87,12 +91,12 @@ export default async function Subscriptions({ params }: P) {
         </div>
         <div className={`${WRAP} lg:flex lg:min-h-[min(625px,calc(100vw/2.3))] lg:items-center`}>
           <div className="py-12 lg:max-w-[min(780px,56vw)] lg:py-[clamp(2.5rem,4vw,3.75rem)]">
-            <p className={`${eyebrow} text-[0.875rem] font-semibold tracking-[0.15em]`}>{org.currency === "AUD" ? "Australian specialty coffee" : "Specialty coffee"}</p>
-            <h1 className={`${h2} mt-3 text-[2.625rem] leading-[1.02] sm:text-[3.5rem] lg:text-[clamp(3.25rem,4.6vw,4.125rem)]`}>
-              Fresh coffee<br />that fits your life<span className="block text-[var(--pk)]">delivered to your door</span>
+            <p {...ed("copy:subs.hero.kicker")} className={`${eyebrow} text-[0.875rem] font-semibold tracking-[0.15em]`}>{c("hero.kicker", org.currency === "AUD" ? "Australian specialty coffee" : "Specialty coffee")}</p>
+            <h1 {...ed("copy:subs.hero.title", c("hero.title", "Fresh coffee | that fits your life | *delivered to your door*"))} className={`${h2} mt-3 text-[2.625rem] leading-[1.02] sm:text-[3.5rem] lg:text-[clamp(3.25rem,4.6vw,4.125rem)]`}>
+              <Lines text={c("hero.title", "Fresh coffee | that fits your life | *delivered to your door*")} />
             </h1>
             <p className="mt-5 max-w-[34rem] text-[1.0625rem] leading-[1.55] text-[#2A2522] lg:max-w-[min(30rem,34vw)] lg:text-[1.125rem]">
-              {s.subDiscount > 0 ? `Save ${s.subDiscount}% on every bag. ` : ""}Freshly roasted coffee on your schedule — flexible plans, easy to manage, and always a better cup at home.
+              {s.subDiscount > 0 ? `Save ${s.subDiscount}% on every bag. ` : ""}<span {...ed("copy:subs.hero.text")}>{c("hero.text", "Freshly roasted coffee on your schedule — flexible plans, easy to manage, and always a better cup at home.")}</span>
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#choose" className={`${btn} h-[56px] px-8`}>Start your subscription<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></a>
@@ -108,12 +112,12 @@ export default async function Subscriptions({ params }: P) {
             </ul>
           </div>
         </div>
-        {photo && <img src={photo} alt="" aria-hidden className="block aspect-[16/10] w-full object-cover object-[80%_50%] lg:hidden" />}
+        {photo && <img {...edImg("shop.subsHero")} src={photo} alt="" aria-hidden className="block aspect-[16/10] w-full object-cover object-[80%_50%] lg:hidden" />}
       </section>
 
       {/* Everything you can do */}
       <section className="mx-auto w-full max-w-[1440px] px-5 pb-14 pt-12 sm:px-8 lg:px-10">
-        <h2 className={sectionH2}>Everything you can do</h2>
+        <h2 {...ed("copy:subs.features.title")} className={sectionH2}>{c("features.title", "Everything you can do")}</h2>
         <p className="mt-2 text-center text-[1.0625rem] text-[#3A3431]">A subscription that puts you in control.</p>
         <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {cards.map((c) => (
@@ -131,7 +135,7 @@ export default async function Subscriptions({ params }: P) {
         <div className={`${WRAP} grid gap-10 py-14 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12 xl:pl-[76px]`}>
           <div>
             <p className={`${eyebrow} text-[0.8125rem] font-semibold tracking-[0.22em]`}>Built around you</p>
-            <h2 className={`${h2} mt-3 text-[2.75rem] leading-[1.02] sm:text-[3.5rem] xl:text-[4rem]`}>Better coffee,<br />more often</h2>
+            <h2 className={`${h2} mt-3 text-[2.75rem] leading-[1.02] sm:text-[3.5rem] xl:text-[4rem]`} {...ed("copy:subs.better.title", c("better.title", "Better coffee, | more often"))}><Lines text={c("better.title", "Better coffee, | more often")} /></h2>
             <p className="mt-4 max-w-[28rem] text-[1.0938rem] leading-[1.6] text-[#2A2522]">Not just a one-off purchase. A flexible subscription designed to bring incredible coffee into your routine, with less effort and more enjoyment.</p>
           </div>
           <div className={`${card} relative px-7 py-7 sm:px-9 sm:py-8`}>
@@ -153,7 +157,7 @@ export default async function Subscriptions({ params }: P) {
 
       {/* How it works */}
       <section className="mx-auto w-full max-w-[1440px] px-5 py-14 sm:px-8 lg:px-10">
-        <h2 className={sectionH2}>How it works</h2>
+        <h2 {...ed("copy:subs.how.title")} className={sectionH2}>{c("how.title", "How it works")}</h2>
         <p className="mt-2 text-center text-[1.0625rem] text-[#3A3431]">Get started in minutes. Great coffee, on repeat.</p>
         <ol className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_32px_1fr_32px_1fr_32px_1fr] xl:gap-0">
           {steps.map((x, i) => (
@@ -178,7 +182,7 @@ export default async function Subscriptions({ params }: P) {
           <div className={`${WRAP} grid gap-10 py-14 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-center lg:gap-12`}>
             <div>
               <p className={`${eyebrow} text-[0.8125rem] font-semibold tracking-[0.22em]`}>Prepaid subscriptions</p>
-              <h2 className={`${h2} mt-3 text-[2.375rem] leading-[1.06] sm:text-[2.75rem] 2xl:text-[3.25rem]`}>Prepay and forget about it</h2>
+              <h2 className={`${h2} mt-3 text-[2.375rem] leading-[1.06] sm:text-[2.75rem] 2xl:text-[3.25rem]`} {...ed("copy:subs.prepay.title")}>{c("prepay.title", "Prepay and forget about it")}</h2>
               <p className="mt-4 max-w-[34rem] text-[1.0938rem] leading-[1.6] text-[#2A2522]">Pay once for {months} months of coffee and enjoy uninterrupted deliveries. Still fully flexible — pause or change your coffee whenever you like.</p>
               <a href="#choose" className={`${btn} mt-7 h-[56px] px-8`}>Explore prepay options<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></a>
             </div>
@@ -202,7 +206,7 @@ export default async function Subscriptions({ params }: P) {
       {/* Choose your coffee */}
       <section id="choose" className="mx-auto w-full max-w-[1440px] scroll-mt-28 px-5 py-14 sm:px-8 lg:px-10">
         <div className="flex flex-col items-center gap-4 xl:relative">
-          <h2 className={sectionH2}>Choose your coffee</h2>
+          <h2 {...ed("copy:subs.choose.title")} className={sectionH2}>{c("choose.title", "Choose your coffee")}</h2>
           <p className="max-w-[46rem] text-center text-[1.0625rem] text-[#3A3431]">Explore our range of specialty coffees. Pick one, choose &ldquo;Subscribe&rdquo;{prepay ? " or \u201cPrepaid\u201d" : ""} and how often.</p>
           <Link href={base} className="flex h-[50px] items-center gap-2 rounded-full border-[1.5px] border-[color-mix(in_srgb,var(--pk)_55%,white)] bg-white px-6 text-[0.9688rem] font-semibold text-[var(--pk)] transition hover:border-[var(--pk)] xl:absolute xl:right-0 xl:top-1">View all coffee<ArrowRight className="h-4 w-4" /></Link>
         </div>

@@ -9,6 +9,7 @@ import { cafePages, readCafe } from "@/lib/cafe/core";
 import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
+import { PageEditor } from "./page-editor";
 import { GiftMenu } from "./gift-menu";
 import { MobileMenu, type MobileItem } from "./mobile-menu";
 
@@ -87,6 +88,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
     </div>
     <OfferRibbon org={org} active={active} />
     <SiteTracker slug={org.slug} section={active ?? "other"} />
+    <PageEditor slug={org.slug} />
     </>
   );
 }

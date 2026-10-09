@@ -10,6 +10,9 @@ import { ShopFrame, serif, btn, btnOutline, eyebrow, WRAP } from "@/components/s
 import { FLEX, GIFT_TILE, ProductCard, ShopClosed } from "@/components/shop/bits";
 import { EventLink } from "@/components/shop/event-link";
 
+import { copyOf, ed, edImg } from "@/lib/site/copy";
+import { Lines } from "@/components/site/lines";
+
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }>; searchParams: Promise<Record<string, string | undefined>> };
 
@@ -38,6 +41,7 @@ export default async function Storefront({ params, searchParams }: P) {
   const coffee = products.filter((p) => p.kind === "coffee");
   const other = products.filter((p) => p.kind === "other");
   const s = org.shop;
+  const c = copyOf(org.rawSettings, "shop");
   const base = `/shop/${org.slug}`;
   const subs = coffee.some((p) => p.subscribable);
   const tiles = s.prepaid.length ? [...FLEX, GIFT_TILE] : FLEX;
@@ -58,17 +62,17 @@ export default async function Storefront({ params, searchParams }: P) {
       <section className="relative isolate overflow-hidden lg:flex lg:min-h-[min(805px,calc(100vw*805/1440))] lg:items-center">
         {s.heroImage && (
           <>
-            <img src={s.heroImage} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] lg:block" />
+            <img {...edImg("shop.heroImage")} src={s.heroImage} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] lg:block" />
             <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(252,250,247,.86)_0%,rgba(252,250,247,.62)_28%,rgba(252,250,247,0)_48%)] lg:block" />
           </>
         )}
         <div className={WRAP}>
           <div className="pb-10 pt-12 lg:py-[clamp(3rem,6vw,5.5rem)] lg:pl-10">
-            <p className={`${eyebrow} text-[0.9375rem] tracking-[0.1em] lg:text-[1.0625rem]`}>Fresh from our roaster</p>
-            <h1 className={`${serif} mt-3 max-w-[640px] text-[2.875rem] font-[620] leading-[0.95] tracking-[-0.025em] sm:text-[4rem] lg:mt-[14px] lg:text-[clamp(3.5rem,5.3vw,4.75rem)] lg:leading-[0.9]`}>{s.title.split(/\s*\|\s*/).map((l, i) => <span key={i} className="block">{l}</span>)}</h1>
+            <p {...ed("copy:shop.hero.kicker")} className={`${eyebrow} text-[0.9375rem] tracking-[0.1em] lg:text-[1.0625rem]`}>{c("hero.kicker", "Fresh from our roaster")}</p>
+            <h1 {...ed("shop.title", s.title)} className={`${serif} mt-3 max-w-[640px] text-[2.875rem] font-[620] leading-[0.95] tracking-[-0.025em] sm:text-[4rem] lg:mt-[14px] lg:text-[clamp(3.5rem,5.3vw,4.75rem)] lg:leading-[0.9]`}>{s.title.split(/\s*\|\s*/).map((l, i) => <span key={i} className="block">{l}</span>)}</h1>
             {(s.subDiscount > 0 && subs) || s.tagline ? (
               <p className="mt-6 max-w-[490px] text-[1.0625rem] leading-[1.62] text-[#2A2522] lg:mt-[26px] lg:text-[1.1563rem]">
-                {s.subDiscount > 0 && subs ? `Save ${s.subDiscount}% on every bag. ` : ""}{s.tagline}
+                {s.subDiscount > 0 && subs ? `Save ${s.subDiscount}% on every bag. ` : ""}<span {...ed("shop.tagline")}>{s.tagline}</span>
               </p>
             ) : null}
             <div className="mt-8 flex flex-wrap gap-4 lg:mt-[30px]">
@@ -87,7 +91,7 @@ export default async function Storefront({ params, searchParams }: P) {
             )}
           </div>
         </div>
-        {s.heroImage && <img src={s.heroImage} alt="" className="mx-4 mb-6 aspect-[4/3] w-[calc(100%-2rem)] rounded-[20px] object-cover object-[70%_50%] sm:mx-8 sm:w-[calc(100%-4rem)] lg:hidden" />}
+        {s.heroImage && <img {...edImg("shop.heroImage")} src={s.heroImage} alt="" className="mx-4 mb-6 aspect-[4/3] w-[calc(100%-2rem)] rounded-[20px] object-cover object-[70%_50%] sm:mx-8 sm:w-[calc(100%-4rem)] lg:hidden" />}
       </section>
 
       {promo.length > 0 && (
@@ -111,7 +115,7 @@ export default async function Storefront({ params, searchParams }: P) {
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 lg:pl-[13px] xl:flex-nowrap">
           <div>
             <p className={`${eyebrow} tracking-[0.12em]`}>Our coffee</p>
-            <h2 className={`${serif} mt-[10px] text-[2.5rem] xl:whitespace-nowrap font-[620] leading-none tracking-[-0.025em] sm:text-[3.75rem]`}>Roasted fresh, every week</h2>
+            <h2 className={`${serif} mt-[10px] text-[2.5rem] xl:whitespace-nowrap font-[620] leading-none tracking-[-0.025em] sm:text-[3.75rem]`} {...ed("copy:shop.roast.title")}>{c("roast.title", "Roasted fresh, every week")}</h2>
           </div>
           <div className="flex items-center gap-9">
             {s.roastNote && <p className="hidden max-w-[330px] text-[0.875rem] leading-[1.55] text-[#3A3431] md:block">{s.roastNote}</p>}
@@ -129,7 +133,7 @@ export default async function Storefront({ params, searchParams }: P) {
         <section className={`${WRAP} grid gap-10 pb-6 pt-[60px] lg:grid-cols-[440px_minmax(0,1fr)] lg:gap-[22px]`}>
           <div className="lg:pl-[10px] lg:pt-[20px]">
             <p className={`${eyebrow} tracking-[0.12em]`}>Never run out again</p>
-            <h2 className={`${serif} mt-[14px] text-[2.5rem] font-[620] leading-[1.06] tracking-[-0.03em] sm:text-[3.5rem]`}>A subscription<br className="hidden lg:block" /> that bends<br className="hidden lg:block" /> around your life.</h2>
+            <h2 className={`${serif} mt-[14px] text-[2.5rem] font-[620] leading-[1.06] tracking-[-0.03em] sm:text-[3.5rem]`} {...ed("copy:shop.subs.title")}><Lines text={c("subs.title", "A subscription | that bends | around your life.")} breakClass="hidden lg:block" /></h2>
             <p className="mt-5 max-w-[400px] text-[1.0625rem] leading-[1.6] text-[#2A2522]">Change anything, any time, from your phone — your coffee, your schedule, your address.</p>
             <Link href={`${base}/subscriptions`} className={`${btn} mt-[34px] h-[60px]`}>How subscriptions work<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
           </div>
@@ -155,13 +159,13 @@ export default async function Storefront({ params, searchParams }: P) {
             <p className={`${eyebrow} tracking-[0.12em]`}>The perfect gift</p>
             {s.prepaid.length > 0 && subs ? (
               <>
-                <h2 className={`${serif} mt-[12px] text-[2.25rem] font-[620] leading-[1.08] tracking-[-0.025em] sm:text-[3rem]`}>Give a subscription of great coffee.</h2>
+                <h2 className={`${serif} mt-[12px] text-[2.25rem] font-[620] leading-[1.08] tracking-[-0.025em] sm:text-[3rem]`} {...ed("copy:shop.gift.subsTitle")}>{c("gift.subsTitle", "Give a subscription of great coffee.")}</h2>
                 <p className="mt-4 text-[1.0625rem] leading-[1.55] text-[#2A2522]">Birthdays, Christmas or just because. Choose their coffee and frequency, and we&apos;ll keep the good coffee coming.</p>
                 <Link href={`${base}/subscriptions#gift`} className={`${btn} mt-7 h-[60px]`}>Send a gift subscription<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
               </>
             ) : (
               <>
-                <h2 className={`${serif} mt-[12px] text-[2.25rem] font-[620] leading-[1.08] tracking-[-0.025em] sm:text-[3rem]`}>Give the gift of great coffee.</h2>
+                <h2 className={`${serif} mt-[12px] text-[2.25rem] font-[620] leading-[1.08] tracking-[-0.025em] sm:text-[3rem]`} {...ed("copy:shop.gift.title")}>{c("gift.title", "Give the gift of great coffee.")}</h2>
                 <p className="mt-4 text-[1.0625rem] leading-[1.55] text-[#2A2522]">A coffee gift card, emailed instantly or on the day you choose, with your message on the back.</p>
                 <Link href={`${base}/gift-card`} className={`${btn} mt-7 h-[64px]`}>Send a gift card<ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.2} /></Link>
               </>

@@ -7,6 +7,8 @@ import { ContactForm } from "@/components/events/contact-form";
 import { cafePages, TIER_UNITS, tierPrice, type Equipment } from "@/lib/cafe/core";
 import { appSnapshot, cafeOrg } from "@/lib/cafe/server";
 
+import { ed, edImg } from "@/lib/site/copy";
+
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
 
@@ -31,12 +33,12 @@ export default async function ClubPage({ params }: P) {
     <CafeFrame org={org} active="club" weekly={(c.appUrl ? (await appSnapshot(c.appUrl, false)).cfg?.hours?.weekly : null) ?? null} cta={{ href: "#join", label: "Join the club" }}>
       {/* Hero */}
       <section data-section="hero" className="relative overflow-hidden bg-[#141011] text-white">
-        {c.clubImage && <img src={c.clubImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-45" />}
+        {c.clubImage && <img {...edImg("cafe.clubImage")} src={c.clubImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-45" />}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,#141011_0%,rgba(20,16,17,.86)_42%,rgba(20,16,17,.25)_100%)]" />
         <div className={`${WRAP} relative py-20 sm:py-28 lg:py-36`}>
           <p className={`${hand} text-[1.875rem] leading-none text-[color-mix(in_srgb,var(--pk)_60%,white)]`}>Roast your own</p>
-          <h1 className={`${serif} mt-3 max-w-3xl text-[clamp(2.75rem,6.2vw,5.25rem)] font-semibold leading-[0.98]`}>{c.clubTitle}</h1>
-          <p className="mt-6 max-w-xl text-[1.1875rem] leading-relaxed text-white/80">{c.clubIntro}</p>
+          <h1 className={`${serif} mt-3 max-w-3xl text-[clamp(2.75rem,6.2vw,5.25rem)] font-semibold leading-[0.98]`} {...ed("cafe.clubTitle")}>{c.clubTitle}</h1>
+          <p {...ed("cafe.clubIntro")} className="mt-6 max-w-xl text-[1.1875rem] leading-relaxed text-white/80">{c.clubIntro}</p>
           <div className="mt-9 flex flex-wrap gap-3">
             <Link href="#join" className={btn} data-track="Club: join">Join the club<ArrowRight className="h-5 w-5" /></Link>
             <Link href="#equipment" className="shop-btn inline-flex h-[60px] items-center rounded-full px-8 font-semibold text-white ring-1 ring-white/35 hover:bg-white/10">See the equipment</Link>
