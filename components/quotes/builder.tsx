@@ -32,7 +32,8 @@ import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { SectionEditor, type Col, type LineHelper, type SectionHandlers } from "./section-editor";
 import { SaveAsTemplateButton, TemplatePicker, type TemplateChoice } from "./template-picker";
 import { EmailDrawer, type DrawerThread } from "./email-drawer";
-import { servesFromQuantity, servesLine } from "@/lib/quotes/line-helpers";
+import { servesFromQuantity, servesLine, shiftDays } from "@/lib/quotes/line-helpers";
+import { withHireDays } from "@/lib/events/days";
 import type { StaffRule } from "@/lib/pricing/engine";
 import type {
   ActionResult, CatalogueItem, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, VersionInfo,
@@ -302,6 +303,23 @@ export function QuoteBuilder(p: BuilderProps) {
       const q = numStr(derived.quantity);
       setItems((all) => all.map((i) => (i.id === id ? { ...i, details, quantity: q, description: derived.description } : i)));
       queue(`i:${id}`, { details, quantity: derived.quantity, description: derived.description }, sendItem(id), SAVE_DELAY);
+      // Barista hours over several dates: the cart / van / caravan hire goes to one per day, dates in its description
+      if (details.kind === "staff") {
+        const days = shiftDays(details).filter((d) => d.date).map((d) => ({ date: d.date!, units: d.units }));
+        const line = items.find((i) => i.id === id);
+        const hireIds = new Set(p.pricing.packages.map((pk) => pk.rules.hire?.service_id).filter((x): x is string => !!x));
+        const hires = items.filter((i) => i.service_id && hireIds.has(i.service_id));
+        const same = hires.filter((i) => i.section_id === line?.section_id);
+        for (const h of same.length ? same : hires) {
+          const r = withHireDays(h.description ?? null, days);
+          const patch: Record<string, unknown> = {};
+          if ((r.description || "") !== (h.description || "")) patch.description = r.description;
+          if (r.quantity != null && (parseNum(h.quantity) ?? 0) !== r.quantity) patch.quantity = r.quantity;
+          if (!Object.keys(patch).length) continue;
+          setItems((all) => all.map((i) => (i.id === h.id ? { ...i, ...(patch.description !== undefined ? { description: r.description } : {}), ...(patch.quantity !== undefined ? { quantity: numStr(r.quantity!) } : {}) } : i)));
+          queue(`i:${h.id}`, patch, sendItem(h.id), SAVE_DELAY);
+        }
+      }
     },
     onSectionTitle(id, value) {
       setSections((all) => all.map((s) => (s.id === id ? { ...s, title: value } : s)));

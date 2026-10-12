@@ -14,6 +14,8 @@ export async function approveBooking(eventId: string): Promise<ApprovalResult> {
     if (!UUID.test(eventId)) return { ok: false, error: "Refresh the page and try again." };
     const { error } = await supabase.rpc("approve_booking", { p_event_id: eventId });
     if (error) return { ok: false, error: error.message };
+    const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
+    await jobCalendarAfterAccept(supabase, eventId);
     revalidatePath(`/events/${eventId}`);
     revalidatePath("/events");
     revalidatePath("/dashboard");

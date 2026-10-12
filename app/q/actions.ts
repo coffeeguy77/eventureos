@@ -68,6 +68,9 @@ export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormDat
     if (decision === "accepted" && eventId) {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
       await alertBookingApproval(db, eventId as string);
+      // The calendar entry goes to Google now, not on the next sync
+      const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
+      await jobCalendarAfterAccept(db, eventId as string);
     }
     revalidatePath(`/q/${token}`);
     return { ok: true, decision };

@@ -270,7 +270,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
 async function upsertInvoices(ctx: SyncContext, list: XeroInvoice[], linked: Map<string, string>, today: string) {
   const rows = list.filter((i) => linked.has(i.Contact!.ContactID));
   if (!rows.length) return 0;
-  const { data: existing, error } = await ctx.db.from("invoices").select("id, xero_invoice_id, number, customer_id")
+  const { data: existing, error } = await ctx.db.from("invoices").select("id, xero_invoice_id, number, customer_id, line_items")
     .eq("organisation_id", ctx.org.id).in("xero_invoice_id", rows.map((r) => r.InvoiceID));
   if (error) throw new Error(`Could not load invoices: ${error.message}`);
   const have = new Map((existing ?? []).map((e) => [e.xero_invoice_id as string, e]));
@@ -283,7 +283,11 @@ async function upsertInvoices(ctx: SyncContext, list: XeroInvoice[], linked: Map
   });
   let written = 0;
   for (const inv of rows.filter((r) => have.has(r.InvoiceID))) {
-    const { error: uErr } = await ctx.db.from("invoices").update(values(inv)).eq("id", have.get(inv.InvoiceID)!.id);
+    const v = values(inv);
+    // Lines edited on the invoice in EventureOS (GST inclusive, marked inc) stay as written — they're sent to Xero from here
+    const mine = have.get(inv.InvoiceID)!.line_items as { inc?: boolean }[] | null;
+    if (Array.isArray(mine) && mine[0]?.inc) delete (v as { line_items?: unknown }).line_items;
+    const { error: uErr } = await ctx.db.from("invoices").update(v).eq("id", have.get(inv.InvoiceID)!.id);
     if (uErr) throw new Error(`Could not update invoice ${inv.InvoiceNumber}: ${uErr.message}`);
     written++;
   }
@@ -292,10 +296,13 @@ async function upsertInvoices(ctx: SyncContext, list: XeroInvoice[], linked: Map
     const wanted = fresh.map((i) => i.InvoiceNumber?.trim() || `XERO-${i.InvoiceID.slice(0, 8)}`);
     const { data: clash } = await ctx.db.from("invoices").select("number").eq("organisation_id", ctx.org.id).in("number", wanted);
     const taken = new Set((clash ?? []).map((c) => c.number as string));
-    const { error: iErr } = await ctx.db.from("invoices").insert(fresh.map((inv, i) => ({
+    const fresh_rows = fresh.map((inv, i) => ({
       organisation_id: ctx.org.id, number: taken.has(wanted[i]) ? `XERO-${wanted[i]}` : wanted[i], customer_id: linked.get(inv.Contact!.ContactID)!, kind: "other",
       issue_date: xeroDate(inv.Date, inv.DateString) ?? today, xero_invoice_id: inv.InvoiceID, ...values(inv),
-    })));
+    }));
+    // Brought in from Xero (shown on the Xero tab) — before the 0058 database update there's no origin column
+    let { error: iErr } = await ctx.db.from("invoices").insert(fresh_rows.map((r) => ({ ...r, origin: "xero" })));
+    if (iErr && /origin/.test(iErr.message)) ({ error: iErr } = await ctx.db.from("invoices").insert(fresh_rows));
     if (iErr) throw new Error(`Could not import Xero invoices: ${iErr.message}`);
     written += fresh.length;
   }
@@ -399,9 +406,9 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
   return { pushed, waiting: list.length - ready.length, errors };
 }
 
-type LocalLine = { description?: string | null; quantity?: number | null; unit_amount?: number | null; line_amount?: number | null; item_code?: string | null; account_code?: string | null };
+type LocalLine = { description?: string | null; quantity?: number | null; unit_amount?: number | null; line_amount?: number | null; item_code?: string | null; account_code?: string | null; tax_rate?: number | null };
 /** An invoice's own lines (GST inclusive) as Xero line items — only if they add up to the invoice total. */
-function localLines(lines: LocalLine[] | null, total: number, s: XeroSettings) {
+export function localLines(lines: LocalLine[] | null, total: number, s: XeroSettings) {
   if (!Array.isArray(lines) || !lines.length) return null;
   const sum = lines.reduce((t, l) => t + Number(l.quantity ?? 1) * Number(l.unit_amount ?? 0), 0);
   if (Math.abs(sum - total) > 0.02) return null;
@@ -410,7 +417,7 @@ function localLines(lines: LocalLine[] | null, total: number, s: XeroSettings) {
     Quantity: Number(l.quantity ?? 1), UnitAmount: Number(l.unit_amount ?? 0),
     ...(l.item_code ? { ItemCode: l.item_code } : {}),
     AccountCode: l.account_code || s.sales_account_code || "200",
-    TaxType: s.tax_type || "OUTPUT",
+    TaxType: l.tax_rate === 0 ? "EXEMPTOUTPUT" : s.tax_type || "OUTPUT",
   }));
 }
 

@@ -18,6 +18,9 @@ import { InvoiceJobPicker } from "@/components/invoices/link-job";
 import { OldLines } from "@/components/history/old-lines";
 import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
+import { InvoiceLinesEditor, type PriceItem } from "@/components/invoices/lines-editor";
+import { startLines } from "@/lib/invoices/lines";
+import { quoteItemsForInvoice } from "@/lib/invoices/quote-lines";
 
 export const metadata = { title: "Invoice" };
 
@@ -27,6 +30,7 @@ type Inv = {
   id: string; number: string; kind: string; issue_date: string; due_date: string | null; subtotal: number; tax_total: number; total: number;
   amount_paid: number; balance: number; status: InvoiceStatus; currency: string; xero_invoice_id: string | null; xero_synced_at: string | null;
   quote_id: string | null; created_at: string; updated_at: string; reference: string | null; line_items: XeroLine[] | null;
+  origin?: string; created_by: string | null;
   customer: { id: string; name: string; email: string | null; phone: string | null; company: string | null } | null;
   event: { id: string; number: number; name: string; event_date: string | null; venue: string | null } | null;
 };
@@ -44,9 +48,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const tz = org.timezone;
   const today = todayISO(tz);
 
-  const { data, error } = await supabase.from("invoices")
-    .select("id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)")
-    .eq("id", id).eq("organisation_id", org.id).maybeSingle();
+  const cols = "id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, created_by, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)";
+  let { data, error } = await supabase.from("invoices").select(`${cols}, origin`).eq("id", id).eq("organisation_id", org.id).maybeSingle();
+  // Before the 0058 database update there's no origin column
+  if (error && /origin/.test(error.message)) ({ data, error } = await supabase.from("invoices").select(cols).eq("id", id).eq("organisation_id", org.id).maybeSingle());
   if (error) throw new Error(`Could not load invoice: ${error.message}`);
   if (!data) notFound();
   const inv = data as unknown as Inv;
@@ -84,6 +89,17 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     : null;
   const copyList = oldView && inv.customer ? await copyPeople(supabase, org.id, inv.customer.id, inv.event?.id ?? null).catch(() => []) : [];
 
+  // Raised here (not brought in from Xero): its lines can be changed — "Edit invoice"
+  const fromXero = inv.origin ? inv.origin === "xero" : !!inv.xero_invoice_id && !inv.quote_id && !inv.created_by && inv.kind === "other";
+  const editable = !fromXero;
+  const label = `${KIND_LABEL[inv.kind] ?? "Invoice"}${inv.event?.name ? ` — ${inv.event.name}` : ""}`;
+  const myLines = editable ? startLines({ kind: inv.kind, total: Number(inv.total), line_items: inv.line_items, xero_invoice_id: inv.xero_invoice_id, label },
+    await quoteItemsForInvoice(supabase, org.id, inv.quote_id).catch(() => null)) : [];
+  const edited = Array.isArray(inv.line_items) && !!(inv.line_items[0] as { inc?: boolean } | undefined)?.inc;
+  const priceList: PriceItem[] = editable && canManage(role) && inv.status !== "void"
+    ? (((await supabase.from("services").select("id, name, description, unit_price, tax_rate, unit, code, xero_account_code, category").eq("organisation_id", org.id).eq("active", true).order("category").order("position")).data ?? []) as { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null; code: string | null; xero_account_code: string | null; category: string | null }[])
+      .map((x) => ({ id: x.id, name: x.name, description: x.description, unit_price: Number(x.unit_price), tax_rate: Number(x.tax_rate), unit: x.unit, code: x.code, account: x.xero_account_code, category: x.category }))
+    : [];
   const s = INVOICE_STATUS[inv.status];
   const xeroManaged = !!inv.xero_invoice_id;
   const open = ["awaiting_payment", "part_paid", "overdue"].includes(inv.status);
@@ -151,7 +167,12 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             )}
           </Card>
 
-          {oldView ? (
+          {editable ? (
+            <Card>
+              <InvoiceLinesEditor invoiceId={inv.id} lines={myLines} currency={cur} canEdit={canManage(role) && inv.status !== "void"} xero={xeroManaged} paid={Number(inv.amount_paid)} priceList={priceList}
+                subtitle={edited ? "Edited here · prices include GST" : version?.quote ? `From quote Q-${version.quote.number} · ${version.quote.title} · prices include GST` : "Prices include GST"} />
+            </Card>
+          ) : oldView ? (
             <OldLines lines={oldView.lines} options={oldView.options} currency={cur} canEdit={canManage(role)}
               source="invoice" sourceId={inv.id} people={copyList} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
           ) : (

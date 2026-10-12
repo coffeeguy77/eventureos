@@ -7,7 +7,8 @@ import { actorName, logActivity } from "@/lib/activity";
 import { money, todayISO, zonedTimeUTC } from "@/lib/format";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { errMessage } from "@/lib/integrations/runtime";
-import { creditInXero, voidInXero } from "@/lib/integrations/xero-invoice-ops";
+import { creditInXero, updateLinesInXero, voidInXero } from "@/lib/integrations/xero-invoice-ops";
+import { cleanLines, lineTotals, linesChangeSummary, startLines, type InvLine } from "@/lib/invoices/lines";
 
 export type InvoiceFormState = { error?: string; ok?: string } | undefined;
 
@@ -278,4 +279,61 @@ export async function linkInvoiceToJob(invoiceId: string, eventId: string | null
   revalidateInvoice(inv.id, eventId ?? inv.event_id, inv.customer_id);
   if (inv.event_id && inv.event_id !== eventId) revalidatePath(`/events/${inv.event_id}`);
   return { ok: eventId ? `Linked to ${name}.` : "Taken off the job." };
+}
+
+/**
+ * Change an invoice raised in EventureOS: quantities, prices, descriptions, extra items. If it's already in Xero the
+ * change is made there first (Xero refuses once money has been paid on it), so the two never disagree.
+ */
+export async function saveInvoiceLines(invoiceId: string, rawLines: unknown): Promise<InvoiceFormState> {
+  const ctx = await requireOrg();
+  if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can change invoices." };
+  if (!UUID.test(invoiceId)) return { error: "Invoice not found." };
+  const cols = "id, number, kind, status, total, amount_paid, xero_invoice_id, event_id, customer_id, quote_id, created_by, line_items, event:events(name)";
+  let { data, error: lErr } = await ctx.supabase.from("invoices").select(`${cols}, origin`).eq("id", invoiceId).eq("organisation_id", ctx.org.id).maybeSingle();
+  if (lErr && /origin/.test(lErr.message)) ({ data, error: lErr } = await ctx.supabase.from("invoices").select(cols).eq("id", invoiceId).eq("organisation_id", ctx.org.id).maybeSingle());
+  if (lErr) return { error: lErr.message };
+  const inv = data as unknown as InvoiceRow & { kind: string; quote_id: string | null; created_by: string | null; line_items: unknown; origin?: string; event: { name: string } | null } | null;
+  if (!inv) return { error: "Invoice not found." };
+  const fromXero = inv.origin ? inv.origin === "xero" : !!inv.xero_invoice_id && !inv.quote_id && !inv.created_by && inv.kind === "other";
+  if (fromXero) return { error: "This invoice came from Xero — change it in Xero and it syncs back." };
+  if (inv.status === "void") return { error: "This invoice is void." };
+
+  let lines: InvLine[];
+  try { lines = cleanLines(rawLines); } catch (e) { return { error: (e as Error).message }; }
+  const t = lineTotals(lines);
+  if (t.total <= 0) return { error: "The invoice total has to be more than zero." };
+  const paid = Number(inv.amount_paid);
+  if (t.total + 0.001 < paid) return { error: `${money(paid, ctx.org.currency, { cents: true })} has already been paid or credited — the total can't go below that.` };
+
+  const { quoteItemsForInvoice } = await import("@/lib/invoices/quote-lines");
+  const label = `${KIND_LABEL[inv.kind as (typeof KINDS)[number]] ?? "Invoice"}${inv.event?.name ? ` — ${inv.event.name}` : ""}`;
+  const before = startLines({ kind: inv.kind, total: Number(inv.total), line_items: inv.line_items, xero_invoice_id: inv.xero_invoice_id, label },
+    await quoteItemsForInvoice(ctx.supabase, ctx.org.id, inv.quote_id));
+  let inXero = "";
+  if (inv.xero_invoice_id) {
+    try {
+      const sctx = await buildContext(ctx.supabase, "user", ctx.org.id, "xero", ctx.user.id);
+      const { localLines, xeroSettings } = await import("@/lib/integrations/xero-sync");
+      const items = localLines(lines, t.total, xeroSettings(sctx));
+      if (!items) return { error: "The lines don't add up — check the amounts and try again." };
+      const xt = await updateLinesInXero(sctx, inv.xero_invoice_id, items);
+      if (xt != null && Math.abs(xt - t.total) > 0.02) inXero = ` (Xero worked the total out as ${money(xt, ctx.org.currency, { cents: true })} — the next sync will bring that across)`;
+      else inXero = " — updated in Xero too";
+    } catch (e) { return { error: errMessage(e) }; }
+  }
+
+  const status = paid >= t.total - 0.001 && paid > 0 ? "paid" : paid > 0 ? "part_paid" : inv.status === "paid" || inv.status === "part_paid" ? "awaiting_payment" : inv.status;
+  const { error } = await ctx.supabase.from("invoices").update({
+    line_items: lines, subtotal: t.subtotal, tax_total: t.tax, total: t.total, status,
+    ...(inv.xero_invoice_id ? { xero_synced_at: new Date().toISOString() } : {}),
+  }).eq("id", inv.id).eq("organisation_id", ctx.org.id);
+  if (error) return { error: inv.xero_invoice_id ? `Xero was updated, but EventureOS couldn't save it: ${error.message}. The next Xero sync will bring the new total across.` : `Couldn't save: ${error.message}` };
+  await logActivity(ctx.supabase, {
+    orgId: ctx.org.id, actorId: ctx.user.id, action: "invoice.edited", entityType: "invoice", entityId: inv.id, eventId: inv.event_id, customerId: inv.customer_id,
+    summary: `${actorName(ctx.profile)} edited ${inv.number}: ${linesChangeSummary(before, lines)} — total ${money(Number(inv.total), ctx.org.currency, { cents: true })} → ${money(t.total, ctx.org.currency, { cents: true })}${inXero}`,
+    changes: { total: [Number(inv.total), t.total] },
+  });
+  revalidateInvoice(inv.id, inv.event_id, inv.customer_id);
+  return { ok: `Saved — new total ${money(t.total, ctx.org.currency, { cents: true })}${inXero}.` };
 }

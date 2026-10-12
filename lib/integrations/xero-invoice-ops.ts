@@ -73,3 +73,25 @@ export async function creditInXero(ctx: SyncContext, xeroInvoiceId: string, amou
   }
   return { id, number };
 }
+
+/**
+ * Change an invoice's lines in Xero (amounts GST inclusive). Xero only allows this while nothing has been paid or
+ * credited on it, and not once it's voided. Returns Xero's new total.
+ *   POST /Invoices/{id}  { Invoices: [{ InvoiceID, LineAmountTypes: "Inclusive", LineItems }] }
+ */
+export async function updateLinesInXero(ctx: SyncContext, xeroInvoiceId: string, lineItems: Record<string, unknown>[]): Promise<number | null> {
+  const inv = await getInvoice(ctx, xeroInvoiceId);
+  if (inv.Status === "VOIDED" || inv.Status === "DELETED") throw new Error(`It's ${inv.Status.toLowerCase()} in Xero, so it can't be changed.`);
+  if (inv.Status === "PAID" || (inv.AmountPaid ?? 0) > 0 || (inv.AmountCredited ?? 0) > 0) {
+    throw new Error("Xero has a payment or credit on this invoice, so it won't let the lines change. Remove the payment in Xero first, or raise a second invoice for the extras.");
+  }
+  try {
+    const r = await apiJSON<{ Invoices?: XeroInvoice[] }>(ctx, `${XERO_API}/Invoices/${encodeURIComponent(xeroInvoiceId)}`, {
+      method: "POST", headers: headers(ctx),
+      body: JSON.stringify({ Invoices: [{ InvoiceID: xeroInvoiceId, LineAmountTypes: "Inclusive", LineItems: lineItems }] }),
+    }, "Xero update invoice");
+    return r.Invoices?.[0]?.Total ?? null;
+  } catch (e) {
+    throw new Error(`Xero wouldn't change it: ${xeroReason(e)}`);
+  }
+}

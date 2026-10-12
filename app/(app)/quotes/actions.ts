@@ -442,6 +442,7 @@ export async function addItem(quoteId: string, sectionId: string, init: ItemPatc
 const ITEM_LABELS: Record<string, string> = {
   name: "name", description: "description", quantity: "quantity", unit: "unit", unit_price: "unit price",
   tax_rate: "tax", discount_percent: "discount", discount_amount: "discount ($)", is_optional: "optional", is_package: "package", image_url: "image",
+  details: "hours",
 };
 
 export async function updateItem(itemId: string, patch: ItemPatch): Promise<ActionResult<QItem>> {
@@ -456,7 +457,7 @@ export async function updateItem(itemId: string, patch: ItemPatch): Promise<Acti
     const changes: Record<string, [unknown, unknown]> = {};
     for (const [k, v] of Object.entries(fields)) {
       const prev = (before as unknown as Record<string, unknown>)[k];
-      const same = typeof v === "number" ? Number(prev) === v : (prev ?? null) === (v ?? null);
+      const same = typeof v === "number" ? Number(prev) === v : v && typeof v === "object" ? JSON.stringify(prev ?? null) === JSON.stringify(v) : (prev ?? null) === (v ?? null);
       if (same) continue;
       next[k] = v;
       const show = (x: unknown) =>
@@ -464,7 +465,7 @@ export async function updateItem(itemId: string, patch: ItemPatch): Promise<Acti
           : k === "tax_rate" || k === "discount_percent" ? `${Number(x ?? 0)}%`
           : k === "discount_amount" ? money(Number(x ?? 0), org.currency)
             : k === "is_optional" || k === "is_package" ? (x ? "Yes" : "No")
-              : k === "description" || k === "image_url" ? (x ? "set" : null)
+              : k === "description" || k === "image_url" || k === "details" ? (x ? "set" : null)
                 : x;
       changes[ITEM_LABELS[k]] = [show(prev), show(v)];
     }
@@ -480,7 +481,7 @@ export async function updateItem(itemId: string, patch: ItemPatch): Promise<Acti
     if (!before.name && item.name) summary = `${who} added ‘${item.name}’ to Quote Q-${q.number}`;
     else {
       const parts = Object.entries(changes).filter(([k]) => k !== "name").map(([k, [a, b]]) =>
-        a == null || b == null || k === "description" || k === "image" ? `${k} ${b == null ? "removed" : a == null ? "added" : "updated"}` : `${k} ${a} → ${b}`);
+        a == null || b == null || k === "description" || k === "image" || k === "hours" ? `${k} ${b == null ? "removed" : a == null ? "added" : "updated"}` : `${k} ${a} → ${b}`);
       const renamed = changes.name ? ` (renamed from ‘${before.name}’)` : "";
       summary = `${who} updated ${itemName(item.name)} on Quote Q-${q.number}${renamed}${parts.length ? ` — ${parts.join(", ")}` : ""}`;
     }
@@ -597,7 +598,8 @@ export async function recordQuoteResponse(
     // staff_record_quote_response writes the audit entry and runs the acceptance automation (or holds it for approval).
     if (decision === "accepted" && q.event_id) {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
-      await alertBookingApproval(supabase, q.event_id);
+      await alertBookingApproval(supabase, q.event_id);  const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
+      await jobCalendarAfterAccept(supabase, q.event_id);
     }
     refresh(q);
     revalidatePath("/invoices");
@@ -994,7 +996,8 @@ export async function adminAcceptQuote(quoteId: string, acceptedBy: string, how:
     if (error) fail(`Couldn't accept the quote: ${error.message}`);
     if (q.event_id) {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
-      await alertBookingApproval(supabase, q.event_id);
+      await alertBookingApproval(supabase, q.event_id);  const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
+      await jobCalendarAfterAccept(supabase, q.event_id);
     }
     refresh(q);
     revalidatePath("/invoices");

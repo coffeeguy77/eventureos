@@ -30,6 +30,8 @@ import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { deleteJob } from "../actions";
 import { rankForJob, type InvoiceForMatch } from "@/lib/invoices/match-job";
 import { LinkInvoiceButton } from "@/components/invoices/link-job";
+import { quoteStaffDays } from "@/lib/calendar/job-sync";
+import { formDays, jobDays, parseDays } from "@/lib/events/days";
 
 export const metadata = { title: "Event" };
 
@@ -134,6 +136,13 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const threads = (threadsRes.data ?? []) as EmailThread[];
   const tasks = (tasksRes.data ?? []) as Task[];
   const activity = (activityRes.data ?? []) as ActivityLog[];
+  // Multi-day jobs: the days it runs (its own, else the quote's dated barista hours) and what the job form starts with
+  const staffDays = await quoteStaffDays(supabase, org.id, e.id).catch(() => []);
+  const evDays = e as unknown as { days?: unknown; fleet_dates?: string[] | null };
+  const runDays = jobDays({ ...e, days: evDays.days }, staffDays);
+  const ownDays = parseDays(evDays.days);
+  const startDays = formDays({ ...e, days: evDays.days, fleet_dates: evDays.fleet_dates }, staffDays);
+  const daysSaved = "days" in evDays;
   const cal = (calRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; kind: string; sync_status: string; calendar_connection_id: string; calendar: { name: string; colour: string; provider: string } | null }[];
   const sameDay = (sameDayRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; event_id: string | null; calendar_connection_id: string; calendar: { name: string; colour: string } | null }[];
   const integrations = Object.fromEntries((gmailRes.data ?? []).map((i) => [i.provider, i.status]));
@@ -187,7 +196,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink-muted">
             <Badge tone={s.tone} dot>{s.label}</Badge>
             <Link href={`/clients/${e.customer.id}`} className="font-medium text-ink hover:text-brand-700">{e.customer.name}</Link>
-            {e.event_date && <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-ink-faint" />{fmtDate(e.event_date, "weekday")}{e.start_time ? `, ${timeRange(e.start_time, e.finish_time)}` : ""} <span className="text-ink-faint">· {relativeDay(e.event_date, today)}</span></span>}
+            {e.event_date && (ownDays.length > 1
+              ? <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-ink-faint" />{fmtDate(ownDays[0].date, "weekday")} – {fmtDate(ownDays[ownDays.length - 1].date, "weekday")} · {ownDays.length} days <span className="text-ink-faint">· {relativeDay(e.event_date, today)}</span></span>
+              : <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-ink-faint" />{fmtDate(e.event_date, "weekday")}{e.start_time ? `, ${timeRange(e.start_time, e.finish_time)}` : ""} <span className="text-ink-faint">· {relativeDay(e.event_date, today)}</span></span>)}
             {e.venue && <span className="flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-ink-faint" /><span className="min-w-0 break-words">{e.venue}</span></span>}
             {e.guest_count != null && <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-ink-faint" />{e.guest_count} guests</span>}
           </div>
@@ -211,12 +222,30 @@ export default async function EventPage({ params, searchParams }: { params: Prom
             <div className="space-y-6 xl:col-start-1 xl:row-span-2 xl:row-start-1">
               <Card>
                 <CardHeader title="Event details" />
-                <EventDetailsEditor event={e} members={memberOpts} view={
+                <EventDetailsEditor event={e} members={memberOpts} startDays={startDays} daysSaved={daysSaved} view={
                   <div className="px-5 pb-5">
                     <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <Field label="Event type">{e.event_type ?? "—"}</Field>
-                      <Field label="Date">{fmtDate(e.event_date)}</Field>
-                      <Field label="Time">{e.setup_time ? <span className="block">Setup {fmtTime(e.setup_time)}</span> : null}{timeRange(e.start_time, e.finish_time) ? `${e.setup_time ? "Service " : ""}${timeRange(e.start_time, e.finish_time)}` : e.setup_time ? null : "—"}</Field>
+                      {ownDays.length > 1 ? (
+                        <Field label={`Dates · ${ownDays.length} days`} className="col-span-2">
+                          <ul className="space-y-0.5">
+                            {ownDays.map((d) => (
+                              <li key={d.date} className="flex flex-wrap gap-x-2">
+                                <span className="w-[6.5rem] shrink-0 font-medium">{fmtDate(d.date, "weekday")}</span>
+                                <span className="text-ink-muted">{[d.setup ? `Setup ${fmtTime(d.setup)}` : null, timeRange(d.start, d.finish) ? `Service ${timeRange(d.start, d.finish)}` : null].filter(Boolean).join(" · ") || "Hours to be set"}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </Field>
+                      ) : (
+                        <>
+                          <Field label="Date">{fmtDate(e.event_date)}</Field>
+                          <Field label="Time">{e.setup_time ? <span className="block">Setup {fmtTime(e.setup_time)}</span> : null}{timeRange(e.start_time, e.finish_time) ? `${e.setup_time ? "Service " : ""}${timeRange(e.start_time, e.finish_time)}` : e.setup_time ? null : "—"}</Field>
+                        </>
+                      )}
+                      <Field label="Calendar">
+                        <AddToCalendarButton eventId={e.id} onCalendar={cal.length > 0} hasDate={!!e.event_date} size="xs" className="-ml-2" />
+                      </Field>
                       <Field label="Venue">{e.venue ?? "—"}</Field>
                       <Field label="Address">{e.address ?? "—"}</Field>
                       <Field label="Guests">{e.guest_count ?? "—"}</Field>
@@ -405,7 +434,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {tab === "schedule" && (
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
-              <CardHeader title="Calendar entries" action={<span className="block max-w-[9rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}</span>} />
+              <CardHeader title="Calendar entries"
+                subtitle={`${integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}${runDays.length > 1 ? ` · ${runDays.length} days, one entry each` : ""}`}
+                action={cal.length > 0 ? <AddToCalendarButton eventId={e.id} onCalendar hasDate={!!e.event_date} size="xs" /> : undefined} />
               {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<AddToCalendarButton eventId={e.id} onCalendar={false} hasDate={!!e.event_date} />}>Add it now, or it goes on automatically when the quote is accepted.</EmptyState> : (
                 <ul className="divide-y divide-line border-t border-line">
                   {cal.map((c) => (
@@ -415,7 +446,9 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                         <p className="text-[0.8125rem] font-medium text-ink">{c.calendar?.name}</p>
                         <p className="text-[0.75rem] text-ink-muted">{fmtDateTime(c.starts_at, tz)} – {fmtDateTime(c.ends_at, tz, "time")}</p>
                       </div>
-                      <Badge tone={c.sync_status === "synced" ? "green" : "neutral"}>{c.sync_status === "synced" ? "Synced" : "Local only"}</Badge>
+                      <Badge tone={c.sync_status === "synced" ? "green" : c.sync_status === "error" ? "red" : c.sync_status === "pending" ? "amber" : "neutral"}>
+                        {c.sync_status === "synced" ? "In Google" : c.sync_status === "error" ? "Didn't send" : c.sync_status === "pending" ? "Sending to Google" : "Local only"}
+                      </Badge>
                     </li>
                   ))}
                 </ul>

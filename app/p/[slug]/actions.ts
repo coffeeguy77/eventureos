@@ -152,6 +152,9 @@ export async function respondToQuote(_prev: ActionResult | undefined, form: Form
     if (decision === "accepted") {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
       await alertBookingApproval(supabase, ev.id);
+      const { createServiceClient } = await import("@/lib/integrations/runtime");
+      const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
+      await jobCalendarAfterAccept(createServiceClient(), ev.id);
     }
     revalidatePath(`/p/${slug}`, "layout");
     return { ok: true };

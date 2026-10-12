@@ -26,6 +26,11 @@ async function resync(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase
   if (eventId) q = q.eq("event_id", eventId);
   else q = q.gte("ends_at", new Date().toISOString());
   await q;
+  // One job: send the new guest list to Google now
+  if (eventId) {
+    const { resyncJobCalendar } = await import("@/lib/crew/server");
+    await resyncJobCalendar(supabase, orgId, eventId).catch(() => undefined);
+  }
 }
 
 export interface CrewInput { name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active?: boolean; extra_emails?: string[] }

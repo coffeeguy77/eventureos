@@ -7,6 +7,7 @@ import { actorName, logActivity } from "@/lib/activity";
 import { EVENT_STATUS } from "@/lib/status";
 import { fmtDate, fmtTime, zonedTimeUTC } from "@/lib/format";
 import type { EventStatus } from "@/lib/types";
+import { parseDays, type EventDay } from "@/lib/events/days";
 
 export type FormState = { error?: string } | undefined;
 
@@ -105,6 +106,8 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
     const raw = form.get(col);
     let next: unknown = kind === "num" ? num(raw) : kind === "list" ? list(raw) : str(raw);
     let prev: unknown = before[col];
+    // Browsers send line breaks as \r\n — don't count that as a change
+    if (kind === "text") { next = typeof next === "string" ? next.replace(/\r\n/g, "\n") : next; prev = typeof prev === "string" ? prev.replace(/\r\n/g, "\n").trim() || null : prev; }
     if (kind === "num" && prev != null) prev = Number(prev);
     if (kind === "time") {
       next = next ? String(next).slice(0, 5) : null;
@@ -119,6 +122,42 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
         : kind === "text" && ["requirements", "customer_notes", "internal_notes"].includes(col) ? (v ? "updated" : null) : v;
     changes[label] = [show(prev), show(next)];
   }
+  // Several days (each with its own hours) — day 1 also fills the job's date and times so everything else keeps working
+  let newDays: EventDay[] | null = null;
+  if (form.has("days")) {
+    let raw: unknown = [];
+    try { raw = JSON.parse(String(form.get("days") ?? "[]")); } catch { return { error: "The dates couldn't be read — refresh and try again." }; }
+    const days = parseDays(raw);
+    if (Array.isArray(raw) && raw.length > 1 && days.length < 2) return { error: "Choose at least two days, or switch back to one day." };
+    const prevDays = parseDays(before.days);
+    if (days.length >= 2) {
+      const bad = days.find((d) => d.start && d.finish && d.finish <= d.start && !(d.finish < "06:00"));
+      if (bad) return { error: `${fmtDate(bad.date)}: the finish time is before the start.` };
+      const d1 = days[0];
+      const set = (col: string, label: string, v: string | null, show: (x: string | null) => string | null) => {
+        const prev = before[col] ? String(before[col]).slice(0, col === "event_date" ? 10 : 5) : null;
+        if ((prev ?? null) !== (v ?? null)) { patch[col] = v; changes[label] = [show(prev), show(v)]; }
+      };
+      set("event_date", "event date", d1.date, (x) => (x ? fmtDate(x) : null));
+      set("setup_time", "setup time", d1.setup, (x) => (x ? fmtTime(x) : null));
+      set("start_time", "start time", d1.start, (x) => (x ? fmtTime(x) : null));
+      set("finish_time", "finish time", d1.finish, (x) => (x ? fmtTime(x) : null));
+      if (JSON.stringify(prevDays) !== JSON.stringify(days)) {
+        patch.days = days;
+        patch.fleet_dates = days.map((d) => d.date);
+        const span = (ds: EventDay[]) => (ds.length > 1 ? `${fmtDate(ds[0].date)} – ${fmtDate(ds[ds.length - 1].date)} (${ds.length} days)` : null);
+        changes["dates"] = [span(prevDays), span(days)];
+        newDays = days;
+      }
+    } else if (prevDays.length) {
+      patch.days = [];
+      const date = (patch.event_date as string | undefined) ?? before.event_date;
+      const fleet = (before.fleet_dates ?? []) as string[];
+      if (fleet.length > 1) patch.fleet_dates = date ? [date] : [];
+      changes["dates"] = [`${fmtDate(prevDays[0].date)} – ${fmtDate(prevDays[prevDays.length - 1].date)} (${prevDays.length} days)`, "one day"];
+      newDays = [];
+    }
+  }
   if (form.has("next_action_due")) {
     const due = str(form.get("next_action_due"));
     const nextDue = due ? new Date(due).toISOString() : null;
@@ -128,7 +167,7 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
   if (Object.keys(patch).length === 0) return undefined;
 
   const { error } = await supabase.from("events").update(patch).eq("id", id).eq("organisation_id", org.id);
-  if (error) return { error: `Couldn't save: ${error.message}` };
+  if (error) return { error: /days/.test(error.message) && "days" in patch ? "Several-day jobs need the 0058 database update — run it in Supabase, then save again." : `Couldn't save: ${error.message}` };
 
   if (Object.keys(changes).length) {
     const summary = Object.entries(changes)
@@ -138,26 +177,23 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
       orgId: org.id, actorId: user.id, action: "event.updated", entityType: "event", entityId: id, eventId: id,
       customerId: before.customer_id, enquiryId: before.enquiry_id, summary: `${actorName(profile)} ${summary}`, changes,
     });
-    // The calendar entry's title and description come from the job — re-send it after any change
-    await supabase.from("calendar_events").update({ sync_status: "pending" }).eq("organisation_id", org.id).eq("event_id", id).eq("kind", "event").neq("sync_status", "local");
-    if (changes["event date"] || changes["setup time"] || changes["start time"] || changes["finish time"] || changes["venue"]) {
-      // Keep linked calendar entries in step with the event
-      const after = { ...before, ...patch } as { event_date: string | null; start_time: string | null; finish_time: string | null; venue: string | null; name: string };
-      if (after.event_date) {
-        const start = zonedTimeUTC(after.event_date, ((after as { setup_time?: string | null }).setup_time ?? after.start_time ?? "09:00").slice(0, 5), org.timezone);
-        const endRaw = zonedTimeUTC(after.event_date, (after.finish_time ?? after.start_time ?? "17:00").slice(0, 5), org.timezone);
-        const end = endRaw < start ? start : endRaw;
-        const { data: moved, error: calErr } = await supabase.from("calendar_events")
-          .update({ starts_at: start, ends_at: end, location: after.venue, title: after.name })
-          .eq("organisation_id", org.id).eq("event_id", id).eq("kind", "event").select("id");
-        if (calErr) return { error: `Saved the event, but couldn't update the calendar: ${calErr.message}` };
-        if (moved?.length) {
-          await logActivity(supabase, {
-            orgId: org.id, actorId: user.id, action: "calendar.updated", entityType: "calendar_event", entityId: moved[0].id,
-            eventId: id, customerId: before.customer_id, summary: "Calendar event updated to match new event details",
-          });
-        }
+    // The calendar comes from the job: one entry per day with that day's hours — updated and sent to Google now
+    try {
+      const { syncJobCalendar } = await import("@/lib/calendar/job-sync");
+      const r = await syncJobCalendar(supabase, org.id, id, { create: false, mode: "user", actorId: user.id });
+      if (r.added || r.removed) {
+        await logActivity(supabase, {
+          orgId: org.id, actorId: user.id, action: "calendar.updated", entityType: "event", entityId: id, eventId: id, customerId: before.customer_id,
+          summary: `Calendar updated to match the job — ${r.entries} day${r.entries === 1 ? "" : "s"}${r.added ? `, ${r.added} added` : ""}${r.removed ? `, ${r.removed} removed` : ""}`,
+        });
       }
+    } catch (e) {
+      return { error: `Saved the job, but couldn't update the calendar: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    // Hire (cart / van / caravan) on quotes not yet accepted: one per day, with the dates in the description
+    if (newDays) {
+      const { applyHireDays } = await import("@/lib/quotes/hire-days");
+      await applyHireDays(supabase, org.id, id, newDays).catch(() => undefined);
     }
     if (changes["event date"] || changes["start time"] || changes["finish time"] || changes["guest count"] || changes["venue"]) {
       await supabase.from("notifications").insert({

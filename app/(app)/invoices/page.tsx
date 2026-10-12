@@ -20,10 +20,14 @@ const OPEN: InvoiceStatus[] = ["awaiting_payment", "part_paid", "overdue"];
 type Row = {
   id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; amount_paid: number; balance: number;
   status: InvoiceStatus; xero_invoice_id: string | null; xero_synced_at: string | null; event_id: string | null;
+  origin?: string; quote_id: string | null; created_by: string | null;
   customer: { id: string; name: string } | null; event: { id: string; number: number; name: string } | null;
 };
 
-export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
+/** Raised in EventureOS (quotes, bookings, by hand) — or brought in from Xero's history. Before the 0058 update, guessed. */
+const fromXero = (i: Row) => (i.origin ? i.origin === "xero" : !!i.xero_invoice_id && !i.quote_id && !i.created_by && i.kind === "other");
+
+export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; src?: string }> }) {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
   const tz = org.timezone;
@@ -31,19 +35,27 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const today = todayISO(tz);
   const month = monthBoundsUTC(tz);
   const status = STATUSES.includes(sp.status as InvoiceStatus) ? (sp.status as InvoiceStatus) : null;
+  // Two lists: invoices raised here (the default — Xero ones sent from here get a Xero pill), and everything in Xero
+  const src: "eventureos" | "xero" = sp.src === "xero" ? "xero" : "eventureos";
+  const cols = "id, number, kind, issue_date, due_date, total, amount_paid, balance, status, xero_invoice_id, xero_synced_at, event_id, quote_id, created_by, customer:customers(id, name), event:events(id, number, name)";
+  const listQuery = (withOrigin: boolean) => {
+    let q = supabase.from("invoices").select(withOrigin ? `${cols}, origin` : cols).eq("organisation_id", org.id);
+    if (src === "xero") q = q.not("xero_invoice_id", "is", null);
+    else if (withOrigin) q = q.eq("origin", "eventureos");
+    return q.order("issue_date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
+  };
 
   const [invRes, payRes, xeroRes] = await Promise.all([
-    supabase.from("invoices")
-      .select("id, number, kind, issue_date, due_date, total, amount_paid, balance, status, xero_invoice_id, xero_synced_at, event_id, customer:customers(id, name), event:events(id, number, name)")
-      .eq("organisation_id", org.id).order("issue_date", { ascending: false }).order("created_at", { ascending: false }).limit(2000),
-    supabase.from("payments").select("amount").eq("organisation_id", org.id).gte("paid_at", month.start).lt("paid_at", month.end),
+    listQuery(true).then((r) => (r.error && /origin/.test(r.error.message) ? listQuery(false) : r)),
+    supabase.from("payments").select("amount, invoice:invoices(id, xero_invoice_id, quote_id, created_by, kind)").eq("organisation_id", org.id).gte("paid_at", month.start).lt("paid_at", month.end),
     supabase.from("integrations").select("status, last_sync_at, last_sync_status, last_error, account_label").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle(),
   ]);
   if (invRes.error) throw new Error(`Could not load invoices: ${invRes.error.message}`);
   if (payRes.error) throw new Error(`Could not load payments: ${payRes.error.message}`);
   if (xeroRes.error) throw new Error(`Could not load Xero status: ${xeroRes.error.message}`);
 
-  const all = (invRes.data ?? []) as unknown as Row[];
+  const all = ((invRes.data ?? []) as unknown as Row[]).filter((i) => (src === "xero" ? true : !fromXero(i)));
+  const shown = new Set(all.map((i) => i.id));
   const xero = xeroRes.data;
   const xeroConnected = xero?.status === "connected" || xero?.status === "syncing";
 
@@ -52,7 +64,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const overdue = all.filter((i) => i.status === "overdue" || pastDue(i));
   const outstanding = openInv.reduce((s, i) => s + Number(i.balance), 0);
   const overdueTotal = overdue.reduce((s, i) => s + Number(i.balance), 0);
-  const paidMonth = (payRes.data ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const paidMonth = ((payRes.data ?? []) as unknown as { amount: number; invoice: { id: string } | null }[])
+    .filter((p) => (p.invoice ? shown.has(p.invoice.id) : src === "eventureos")).reduce((s, p) => s + Number(p.amount), 0);
   const counts = Object.fromEntries(STATUSES.map((s) => [s, all.filter((i) => i.status === s).length])) as Record<InvoiceStatus, number>;
 
   const term = (sp.q ?? "").trim().toLowerCase();
@@ -64,6 +77,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 
   const pill = (key: string | null, label: string, count: number) => {
     const qs = new URLSearchParams();
+    if (src === "xero") qs.set("src", "xero");
     if (key) qs.set("status", key);
     if (sp.q) qs.set("q", sp.q);
     const on = status === key;
@@ -108,9 +122,21 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         )}
       </div>
 
+      <div className="mb-4 flex gap-1 border-b border-line" role="tablist" aria-label="Which invoices">
+        {([["eventureos", "Our invoices", "Raised in EventureOS"], ["xero", "Xero", "Everything in Xero, including history"]] as const).map(([k, label, hint]) => (
+          <Link key={k} href={k === "xero" ? "/invoices?src=xero" : "/invoices"} role="tab" aria-selected={src === k} title={hint}
+            className={cn("-mb-px border-b-2 px-3 py-2 text-[0.8438rem] font-medium", src === k ? "border-brand-600 text-ink" : "border-transparent text-ink-muted hover:text-ink")}>
+            {label}
+          </Link>
+        ))}
+        <span className="ml-auto hidden self-center text-[0.75rem] text-ink-faint sm:block">
+          {src === "xero" ? "Every invoice in Xero — history and the ones sent from here." : "Invoices raised here. A Xero pill means it's been sent to Xero too."}
+        </span>
+      </div>
+
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Kpi label="Outstanding" value={money(outstanding, cur)} sub={`${openInv.length} open invoice${openInv.length === 1 ? "" : "s"}`} href="/invoices?status=awaiting_payment" />
-        <Kpi label="Overdue" value={money(overdueTotal, cur)} alert={overdue.length > 0} sub={overdue.length ? `${overdue.length} invoice${overdue.length === 1 ? "" : "s"} past due` : "Nothing overdue"} href="/invoices?status=overdue" />
+        <Kpi label="Outstanding" value={money(outstanding, cur)} sub={`${openInv.length} open invoice${openInv.length === 1 ? "" : "s"}`} href={`/invoices?${src === "xero" ? "src=xero&" : ""}status=awaiting_payment`} />
+        <Kpi label="Overdue" value={money(overdueTotal, cur)} alert={overdue.length > 0} sub={overdue.length ? `${overdue.length} invoice${overdue.length === 1 ? "" : "s"} past due` : "Nothing overdue"} href={`/invoices?${src === "xero" ? "src=xero&" : ""}status=overdue`} />
         <Kpi label={`Paid · ${month.label}`} value={money(paidMonth, cur)} sub="Payments received this month" href="/payments" />
       </div>
 
@@ -125,7 +151,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         </div>
         {rows.length === 0 ? (
           <EmptyState title={all.length ? "No invoices match" : "No invoices yet"}>
-            {all.length ? "Try a different status or search." : "Invoices are raised automatically when a quote is accepted, or you can create one."}
+            {all.length ? "Try a different status or search." : src === "xero" ? "Nothing from Xero yet — connect Xero in Settings → Integrations." : "Invoices are raised automatically when a quote is accepted, or you can create one."}
           </EmptyState>
         ) : (
           <>
@@ -139,7 +165,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                   <Link href={`/invoices/${i.id}`} className="flex min-h-[56px] items-start gap-3 px-4 py-3 active:bg-zinc-50">
                     <div className="min-w-0 flex-1">
                       <div className={cn("truncate text-[0.8438rem] font-medium", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>
-                        {i.number} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span>
+                        {i.number}{src === "eventureos" && i.xero_invoice_id && <XeroPill />} <span className="font-normal text-ink-muted">· {i.customer?.name ?? "—"}</span>
                       </div>
                       {i.event && <div className="truncate text-[0.7812rem] text-ink-muted">{i.event.name}</div>}
                       <div className={cn("mt-0.5 truncate text-[0.75rem]", late ? "font-medium text-rose-700" : "text-ink-faint")}>
@@ -177,8 +203,10 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     <tr key={i.id} className={cn("relative hover:bg-zinc-50/70", late && "bg-rose-50/40 hover:bg-rose-50/70", i.status === "void" && "text-ink-faint")}>
                       <td className="whitespace-nowrap px-4 py-3">
                         <Link href={`/invoices/${i.id}`} className={cn("font-medium after:absolute after:inset-0", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>{i.number}</Link>
+                        {src === "eventureos" && i.xero_invoice_id && <XeroPill />}
+                        {src === "xero" && !fromXero(i) && <span className="ml-1.5 inline-flex items-center rounded-full bg-brand-50 px-1.5 py-px align-middle text-[0.625rem] font-semibold uppercase tracking-wide text-brand-700 ring-1 ring-inset ring-brand-100" title="Raised in EventureOS">Ours</span>}
                         <span className={cn("block text-[0.7188rem]", i.xero_invoice_id ? "text-emerald-700" : "text-ink-faint")}>
-                          {i.xero_invoice_id ? `Synced with Xero · ${i.xero_synced_at ? relative(i.xero_synced_at) : "not yet"}` : "Not in Xero"}
+                          {i.xero_invoice_id ? `Synced with Xero · ${i.xero_synced_at ? relative(i.xero_synced_at) : "not yet"}` : "Not in Xero yet"}
                         </span>
                       </td>
                       <td className="max-w-[200px] truncate px-4 py-3 text-ink">{i.customer?.name ?? "—"}</td>
@@ -214,4 +242,9 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
       </Card>
     </div>
   );
+}
+
+/** "Sent to Xero" marker on an invoice raised in EventureOS. */
+function XeroPill() {
+  return <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-50 px-1.5 py-px align-middle text-[0.625rem] font-semibold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-100" title="Sent to Xero">Xero</span>;
 }
