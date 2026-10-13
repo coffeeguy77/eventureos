@@ -87,20 +87,26 @@ export function Logo({ size = 26 }: { size?: number }) {
 /** The EventureOS slogan — shown only to the event business's own team, never to their clients. */
 export const SLOGAN = "The early bird gets the booking.";
 
-/** The EventureOS wordmark. `tone="light"` is for dark backgrounds. */
+/**
+ * The EventureOS wordmark. "Eventure" is an image; "OS" is painted in the workspace's accent colour (it follows the
+ * colour picked in Appearance) through a mask of the original letters. `tone="light"` is for dark backgrounds.
+ */
 export function Wordmark({ height = 22, tone = "auto", className }: { height?: number; tone?: "auto" | "dark" | "light"; className?: string }) {
   const width = Math.round((height * 720) / 109);
   const img = (src: string, cls?: string) => (
-    <Image src={src} width={width} height={height} alt="EventureOS" priority className={cn("shrink-0", cls, className)} />
+    <Image src={src} width={width} height={height} alt="" aria-hidden="true" priority className={cn("block h-full w-full", cls)} />
   );
-  if (tone === "light") return img("/brand/eventureos-wordmark-white.png");
-  if (tone === "dark") return img("/brand/eventureos-wordmark.png");
-  // Follows the appearance: dark ink on light, white on night modes
+  const mask = "url(/brand/eventureos-wordmark-os-mask.png)";
+  // The same shade as links (night modes already lighten it); a light one on fixed dark backgrounds
+  const os = tone === "light" ? "bg-brand-300" : "bg-brand-600";
   return (
-    <>
-      {img("/brand/eventureos-wordmark.png", "dark:hidden")}
-      {img("/brand/eventureos-wordmark-white.png", "hidden dark:block")}
-    </>
+    <span role="img" aria-label="EventureOS" className={cn("relative inline-block shrink-0", className)} style={{ width, height }}>
+      {tone === "light" ? img("/brand/eventureos-wordmark-eventure-white.png")
+        : tone === "dark" ? img("/brand/eventureos-wordmark-eventure.png")
+          : <>{img("/brand/eventureos-wordmark-eventure.png", "dark:hidden")}{img("/brand/eventureos-wordmark-eventure-white.png", "hidden dark:block")}</>}
+      <span aria-hidden="true" className={cn("absolute inset-0", os)}
+        style={{ WebkitMaskImage: mask, maskImage: mask, WebkitMaskSize: "100% 100%", maskSize: "100% 100%", WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat" }} />
+    </span>
   );
 }
 
