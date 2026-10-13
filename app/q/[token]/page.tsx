@@ -11,6 +11,7 @@ import { loadCustomerEdit } from "@/lib/quotes/customer-edit-server";
 import { CustomerChange } from "@/components/quotes/customer-change";
 
 import { loadBillTo } from "@/lib/customers/bill-to";
+import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Your quote", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
@@ -27,8 +28,9 @@ interface LinkData {
 
 const safeColour = (c?: string | null) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : "#6028EC");
 
-export default async function QuoteLinkPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function QuoteLinkPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ preview?: string }> }) {
   const { token } = await params;
+  const wantPreview = (await searchParams).preview === "1";
   if (!/^[0-9a-f]{64}$/.test(token)) notFound();
   const { data, error } = await createServiceClient().rpc("quote_link_get", { p_token: token });
   if (error) throw new Error("This quote couldn't be loaded. Please try again shortly.");
@@ -58,9 +60,18 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
   const snap: QuoteSnapshotData = { ...v.snapshot, subtotal: Number(v.subtotal), tax_total: Number(v.tax_total), total: Number(v.total) };
   const total = money(v.total, cur, { cents: true });
   const open = (v.status === "sent" || v.status === "viewed") && !d.quote.expired;
-  const isCopy = d.recipient.role === "copy";
+  // ?preview=1 opened by the business (signed in): exactly what the customer sees, but nothing is recorded or saved
+  const preview = wantPreview && await (async () => {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data: q } = await createServiceClient().from("quotes").select("organisation_id").eq("id", d.quote.id).maybeSingle();
+    const { data: m } = await supabase.from("organisation_users").select("role").eq("user_id", user.id).eq("organisation_id", q?.organisation_id ?? "").eq("status", "active").maybeSingle();
+    return !!m && ["owner", "admin", "manager", "staff"].includes(m.role as string);
+  })().catch(() => false);
+  const isCopy = d.recipient.role === "copy" || preview;
   // Can they change the catering / drinks themselves? (Settings → Automations; on unless switched off)
-  const edit = open && !isCopy ? await loadCustomerEdit(createServiceClient(), token).catch(() => null) : null;
+  const edit = open && (!isCopy || preview) ? await loadCustomerEdit(createServiceClient(), token).catch(() => null) : null;
 
   return (
     <main style={brandVars(safeColour(d.org.brand_colour))} className="min-h-screen bg-canvas [color-scheme:light] print:bg-white">
@@ -72,7 +83,12 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
           <PrintButton />
         </header>
 
-        {isCopy && (
+        {preview ? (
+          <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200 print:hidden">
+            <b>Preview — this is exactly what {d.recipient.name || d.recipient.email} sees.</b> Opening it isn&apos;t counted as them viewing it.
+            You can try &ldquo;Change your order&rdquo;, but nothing is saved, and the quote can&apos;t be accepted from here.
+          </p>
+        ) : isCopy && (
           <p className="mb-4 rounded-xl bg-zinc-100 px-4 py-3 text-[0.8125rem] text-ink-muted print:hidden">
             This is the sender&apos;s copy. Opening it isn&apos;t counted as the customer viewing the quote, and it can&apos;t be accepted from here.
           </p>
@@ -98,9 +114,9 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
           eventDate={d.event ? d.event.event_date ?? null : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />
 
-        {edit?.ok && (
+        {edit?.ok && (!edit.data.busy || preview) && (
           <div className="mt-6">
-            <CustomerChange token={token} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}
+            <CustomerChange token={token} preview={preview} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}
               lines={edit.data.lines.filter((l) => !l.is_optional).map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, editable: l.editable, section: l.section }))} />
           </div>
         )}

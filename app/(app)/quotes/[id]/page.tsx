@@ -258,6 +258,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   // The job's email conversations (event + its original enquiry), shown beside the quote while pricing
   const { data: evLink } = await supabase.from("events").select("enquiry_id, venue, address").eq("id", q.event.id).maybeSingle();
+  // The customer's latest quote link (opened as a preview: what they see, nothing recorded)
+  const { data: linkRow } = await supabase.from("email_send_recipients").select("token").eq("organisation_id", org.id).eq("quote_id", q.id).eq("role", "to").order("created_at", { ascending: false }).limit(1).maybeSingle();
   const threadFilter = [`event_id.eq.${q.event.id}`, evLink?.enquiry_id ? `enquiry_id.eq.${evLink.enquiry_id}` : null].filter(Boolean).join(",");
   const { data: thr } = await supabase.from("email_threads").select("id, subject, last_message_at").eq("organisation_id", org.id).or(threadFilter)
     .neq("classification", "spam").order("last_message_at", { ascending: false }).limit(6);
@@ -287,6 +289,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
     <QuoteBuilder
       key={q.id}
       travelFrom={org.name}
+      customerLink={linkRow?.token ? `/q/${linkRow.token}?preview=1` : null}
       jobAddress={[evLink?.venue, evLink?.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null}
       replyTo={replyTo}
       templates={templates}

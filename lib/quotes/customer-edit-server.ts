@@ -8,6 +8,8 @@ export interface CustomerEditData {
   lines: (EditLine & { description: string | null; editable: boolean; section: string })[];
   catalogue: EditService[];
   perServe: string[];
+  /** The business has unsent changes of its own — changes from the link wait until they're sent */
+  busy: boolean;
 }
 
 export async function loadCustomerEdit(db: SupabaseClient, token: string): Promise<{ ok: true; data: CustomerEditData } | { ok: false; reason: string }> {
@@ -45,7 +47,7 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
   const catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })));
   if (!lines.some((l) => l.editable) && !catalogue.length) return { ok: false, reason: "nothing" };
   return { ok: true, data: { quoteId: q.id, quoteNumber: q.number as number, orgId: q.organisation_id as string, customerId: q.customer_id as string, eventId: q.event_id as string | null,
-    lines, catalogue, perServe } };
+    lines, catalogue, perServe, busy: !!q.has_unpublished_changes } };
 }
 
 /**

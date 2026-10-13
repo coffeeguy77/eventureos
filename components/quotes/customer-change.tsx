@@ -16,8 +16,10 @@ const inc = (p: number, t: number) => p * (1 + t / 100);
  * "Change your order" on the quote link: more or fewer of the catering and drinks, take them off, or add catering from
  * the menu. Saving makes the next version of the quote, shown straight away, ready to accept.
  */
-export function CustomerChange({ token, lines, catalogue, currency, businessName }: {
+export function CustomerChange({ token, lines, catalogue, currency, businessName, preview = false }: {
   token: string; lines: ChangeLine[]; catalogue: ChangeItem[]; currency: string; businessName: string;
+  /** The business looking at the customer's page: everything works, but nothing is saved */
+  preview?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -45,6 +47,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
 
   const save = () => start(async () => {
     setErr(null);
+    if (preview) { setErr("Preview only — in the customer's own link this saves the change and updates their quote."); return; }
     const set = lines.filter((l) => l.editable && !removed.has(l.id) && (qty[l.id] ?? l.quantity) !== Number(l.quantity)).map((l) => ({ id: l.id, quantity: qty[l.id] }));
     const r = await customerChangeQuote(token, { set, remove: [...removed], add: added }).catch(() => ({ ok: false as const, error: "Couldn't reach us — check your connection and try again." }));
     if (!r.ok) { setErr(r.error); return; }

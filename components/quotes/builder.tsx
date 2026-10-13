@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
+import { ExternalLink, AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteQuote, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote, adminAcceptQuote,
@@ -89,6 +89,8 @@ export interface BuilderProps {
   /** Where travel is measured from (the business), and the job's address for the travel line */
   travelFrom?: string | null;
   jobAddress?: string | null;
+  /** The customer's quote link, opened in preview (what they see; nothing recorded or saved) */
+  customerLink?: string | null;
 }
 
 export interface XeroQuoteChoice { id: string; number: string; reference: string | null; status: string; date: string | null; total: number; lines: number }
@@ -586,6 +588,12 @@ export function QuoteBuilder(p: BuilderProps) {
               <Button onClick={() => setEmailOpen((o) => !o)} aria-pressed={emailOpen} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
                 <Mail className="h-4 w-4" />{emailOpen ? "Hide email" : "Show email"}
               </Button>
+            )}
+            {p.customerLink && (
+              <a href={p.customerLink} target="_blank" rel="noopener" title="Their quote link as they see it — opening it here isn't counted as them viewing it"
+                className="inline-flex h-10 flex-1 basis-40 items-center justify-center gap-2 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50 sm:h-9 sm:flex-none sm:basis-auto">
+                <ExternalLink className="h-4 w-4" />Customer&apos;s page
+              </a>
             )}
             <Button onClick={openPreview} disabled={previewLoading} className="h-10 flex-1 basis-40 sm:h-9 sm:flex-none sm:basis-auto">
               {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}Preview as customer
