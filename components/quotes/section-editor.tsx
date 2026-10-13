@@ -8,7 +8,7 @@ import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
-import { dayLabel, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails } from "@/lib/quotes/line-helpers";
+import { chargeMinutes, dayLabel, minutesText, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, travelLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails, type TravelDetails } from "@/lib/quotes/line-helpers";
 import { shortTime } from "@/lib/calendar/job-invite";
 import type { StaffRule } from "@/lib/pricing/engine";
 
@@ -52,7 +52,9 @@ export interface SectionHandlers {
 
 export type LineHelper =
   | { kind: "staff"; rule: StaffRule | null; label: string; defaultStart: string | null; defaultEnd: string | null }
-  | { kind: "serves"; base: string | null };
+  | { kind: "serves"; base: string | null }
+  /** Travel by the kilometre: `from` is where the van leaves from; `trips` defaults to the days on the barista line */
+  | { kind: "travel"; from: string | null; trips: number; address: string | null; hasStaff: boolean };
 
 export function SectionEditor({ section, items, index, count, currency, catalogue, adding, h }: {
   section: QSection;
@@ -333,8 +335,54 @@ function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper;
       </div>
     );
   }
+  if (helper.kind === "travel") return <TravelHelper key={it.id} it={it} helper={helper} h={h} />;
   const saved: StaffDetails | null = it.details?.kind === "staff" ? it.details : null;
   return <StaffHelper key={it.id} it={it} helper={helper} saved={saved} h={h} />;
+}
+
+/**
+ * Travel (e.g. the coffee van going out of town): where to, kilometres each way (doubled for the return trip, for every
+ * trip), and the driving time — charged each way on the barista line, and added before and after the shift.
+ */
+function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHelper, { kind: "travel" }>; h: SectionHandlers }) {
+  const saved = it.details?.kind === "travel" ? it.details : null;
+  const [d, setD] = useState<TravelDetails>(() => saved ?? { kind: "travel", address: helper.address ?? "", km: 0, drive_minutes: 0, charge_minutes: 0, trips: Math.max(1, helper.trips) });
+  const commit = (next: TravelDetails) => { setD(next); h.onDetails(it.id, next, travelLine(next, helper.from)); };
+  const hrs = Math.floor(d.drive_minutes / 60), min = d.drive_minutes % 60;
+  const setDrive = (H: number, M: number) => {
+    const drive = Math.max(0, Math.round(H) * 60 + Math.round(M));
+    // Charged time follows the driving time (rounded up to the half hour) unless it's been set by hand
+    const auto = d.charge_minutes === chargeMinutes(d.drive_minutes);
+    commit({ ...d, drive_minutes: drive, charge_minutes: auto ? chargeMinutes(drive) : d.charge_minutes });
+  };
+  const lab = "mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint";
+  const r = travelLine(d, helper.from);
+  return (
+    <div className="mt-1.5 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-[12rem] flex-1"><span className={lab}>From {helper.from || "base"} to</span>
+          <input value={d.address} onChange={(e) => commit({ ...d, address: e.target.value })} placeholder="Venue address — goes on the calendar" className={helperInput} aria-label="Travel to (address)" /></label>
+        <label className="w-24"><span className={lab}>Km each way</span>
+          <input type="number" min={0} step={1} inputMode="decimal" value={d.km || ""} onChange={(e) => commit({ ...d, km: Math.max(0, Number(e.target.value) || 0) })} className={cn(helperInput, "tabular text-right")} aria-label="Kilometres each way" /></label>
+        <label className="w-20"><span className={lab}>Trips</span>
+          <input type="number" min={1} max={62} inputMode="numeric" value={d.trips} onChange={(e) => commit({ ...d, trips: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label="Return trips" title="Return trips — one per day the van goes out" /></label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <span className="w-full text-[0.6875rem] font-medium text-ink-muted sm:w-auto sm:pb-2">Driving each way</span>
+        <label className="w-16"><span className={lab}>Hours</span>
+          <input type="number" min={0} max={24} inputMode="numeric" value={hrs} onChange={(e) => setDrive(Number(e.target.value) || 0, min)} className={cn(helperInput, "tabular text-right")} aria-label="Driving hours each way" /></label>
+        <label className="w-16"><span className={lab}>Min</span>
+          <input type="number" min={0} max={59} step={5} inputMode="numeric" value={min} onChange={(e) => setDrive(hrs, Math.min(59, Number(e.target.value) || 0))} className={cn(helperInput, "tabular text-right")} aria-label="Driving minutes each way" /></label>
+        <label className="w-28"><span className={lab}>Charged each way</span>
+          <select value={d.charge_minutes} onChange={(e) => commit({ ...d, charge_minutes: Number(e.target.value) })} className={helperInput} aria-label="Travel time charged each way">
+            {[...new Set([0, d.charge_minutes, ...Array.from({ length: 17 }, (_, i) => i * 30)])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m ? minutesText(m) : "None"}</option>)}
+          </select></label>
+        <span className="pb-2 text-[0.75rem] text-ink-muted">
+          = <b className="text-ink">{r.quantity} km</b>{d.charge_minutes > 0 ? <> · {minutesText(d.charge_minutes * 2)} driving per trip{helper.hasStaff ? " added to the barista hours, the shift and the calendar" : " — add a barista line to charge it"}</> : null}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<LineHelper, { kind: "staff" }>; saved: StaffDetails | null; h: SectionHandlers }) {
@@ -343,10 +391,14 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
     days: [{ date: null, start: helper.defaultStart?.slice(0, 5) ?? null, end: helper.defaultEnd?.slice(0, 5) ?? null, setup_minutes: helper.rule?.setup_minutes ?? 30, units: 1, per_unit: 1 }],
   });
   const r = staffLine(d, helper.rule, helper.label);
+  // Travel time is set on the Travel line; keep whatever it last set
+  const travel = it.details?.kind === "staff" ? it.details.travel_minutes ?? 0 : 0;
+  useEffect(() => { setD((x) => (x.travel_minutes ?? 0) === travel ? x : { ...x, travel_minutes: travel || undefined }); }, [travel]);
   const commit = (next: StaffDetails) => {
-    setD(next);
-    const calc = staffLine(next, helper.rule, helper.label);
-    if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}) }, { quantity: calc.quantity, description: calc.description });
+    const withTravel = { ...next, travel_minutes: travel || undefined };
+    setD(withTravel);
+    const calc = staffLine(withTravel, helper.rule, helper.label);
+    if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}), ...(travel ? { travel_minutes: travel } : {}) }, { quantity: calc.quantity, description: calc.description });
   };
   const setDay = (i: number, patch: Partial<ShiftDay>) => commit({ ...d, days: d.days.map((x, n) => (n === i ? { ...x, ...patch } : x)) });
   // Keep the line in step with the rules: if the hours worked out now differ from what's saved, update the line
@@ -406,6 +458,7 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
         <span className="ml-auto text-[0.75rem] text-ink-muted">
           {r ? <>Total <b className="text-ink">{r.quantity} hrs</b>{d.days.length > 1 ? ` over ${d.days.length} days` : ""}</> : "Enter service times — setup and hours are worked out for you."}
           {minH ? <span className="text-ink-faint"> · {minH} hr minimum per {helper.label}{minSetup ? `, incl. ${minSetup} min setup` : ""}</span> : null}
+          {travel ? <span className="text-ink-faint"> · includes travel {minutesText(travel)} each way (set on the Travel line)</span> : null}
         </span>
       </div>
     </div>

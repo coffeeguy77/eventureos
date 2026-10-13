@@ -1,4 +1,4 @@
-import { cleanDetails, longDay, nextShiftDay, servesFromQuantity, servesLine, setupTime, shiftDays, staffLine, type StaffDetails } from "./line-helpers";
+import { chargeMinutes, minutesText, travelLine, cleanDetails, longDay, nextShiftDay, servesFromQuantity, servesLine, setupTime, shiftDays, staffLine, type StaffDetails } from "./line-helpers";
 let fail = 0;
 const eq = (n: string, got: unknown, want: unknown) => { const ok = JSON.stringify(got) === JSON.stringify(want); if (!ok) fail++; console.log(ok ? "ok  " : "FAIL", n, ok ? "" : `got ${JSON.stringify(got)} want ${JSON.stringify(want)}`); };
 const rule = { service_id: "b", setup_minutes: 30, min_hours: 3, round_to_hours: 0.5, label: "barista" };
@@ -44,4 +44,19 @@ eq("qty typed keeps cold", servesFromQuantity({ kind: "serves", hot: 200, cold: 
 eq("clean legacy staff → days", cleanDetails({ kind: "staff", start: "8:00", end: "11:00", staff: "2", setup_minutes: 30 }),
   { kind: "staff", days: [{ date: null, start: "08:00", end: "11:00", setup_minutes: 30, units: 1, per_unit: 2 }] });
 eq("clean junk", cleanDetails({ kind: "x" }), null);
+
+// Travel: Josh's job — 140 km each way over 2 days, 1 hr 45 driving (charged 2 hrs) each way on the barista hours
+eq("charge rounds up to the half hour", [chargeMinutes(105), chargeMinutes(120), chargeMinutes(0)], [120, 120, 0]);
+eq("minutes text", minutesText(105), "1 hr 45 min");
+const trav = travelLine({ kind: "travel", address: "Arthursleigh Farm", km: 140, drive_minutes: 105, charge_minutes: 120, trips: 2 }, "Bean Culture");
+eq("travel km", trav.quantity, 560);
+eq("travel text", trav.description, "Bean Culture → Arthursleigh Farm\n140 km each way · 280 km return × 2 trips = 560 km\nDriving 1 hr 45 min each way (charged as 2 hrs) — on the barista hours");
+const vanRule = { service_id: "x", included_hours: 1, round_to_hours: 0.5, included_applies_to: "first" as const };
+const joshDays = [day({ date: "2026-10-22", start: "09:00", end: "13:00" }), day({ date: "2026-10-23", start: "09:00", end: "16:30" })];
+const josh = staffLine({ kind: "staff", days: joshDays, travel_minutes: 120 }, vanRule, "barista")!;
+eq("travel hours per day", josh.days.map((d) => d.hours), [7.5, 11]);
+eq("travel hours total (same as the quote sent)", josh.quantity, 18.5);
+eq("travel on the description", /Travel 2 hrs each way \(4hrs\)/.test(josh.description), true);
+eq("clean travel", cleanDetails({ kind: "travel", address: " Farm ", km: "140", drive_minutes: 105, charge_minutes: 120, trips: 2 }), { kind: "travel", address: "Farm", km: 140, drive_minutes: 105, charge_minutes: 120, trips: 2 });
+eq("clean keeps travel minutes", (cleanDetails({ kind: "staff", days: [], travel_minutes: 120 }) as StaffDetails).travel_minutes, 120);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }

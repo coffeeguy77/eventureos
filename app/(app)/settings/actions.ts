@@ -536,6 +536,7 @@ export async function saveAutomationSettings(_prev: ActionState, form: FormData)
     pay_before_event: payBefore,
     booking_approval: approval,
     booking_approval_days: approvalDays,
+    quote_customer_edit: form.get("quote_customer_edit") === "on",
   };
   const changes = diff(before, patch);
   if (!Object.keys(changes).length) return { ok: "No changes to save." };
@@ -548,6 +549,7 @@ export async function saveAutomationSettings(_prev: ActionState, form: FormData)
   if (changes.default_payment_terms_days) parts.push(`payment terms ${before.default_payment_terms_days ?? "—"} → ${terms} days`);
   if (changes.pay_before_event) parts.push(`payment required before the event ${payBefore ? "on" : "off"}`);
   if (changes.booking_approval || changes.booking_approval_days) parts.push(`booking approval: ${approval === "all" ? "every booking" : approval === "short_notice" ? `events within ${approvalDays} days` : "off"}`);
+  if (changes.quote_customer_edit && (before.quote_customer_edit !== undefined || !patch.quote_customer_edit)) parts.push(`customers can change their quote: ${patch.quote_customer_edit ? "on" : "off"}`);
   if (changes.quote_follow_up_days) parts.push(`quote follow-up ${before.quote_follow_up_days ?? "—"} → ${followUp} days`);
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "automation.settings_updated", entityType: "organisation", entityId: org.id,

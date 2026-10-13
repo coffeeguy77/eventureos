@@ -257,7 +257,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
     .map((r) => `${r.kind === "percent" ? `${Number(r.value)}% off` : `${money(Number(r.value), cur)}`} ${r.service?.name ?? "item"}`);
 
   // The job's email conversations (event + its original enquiry), shown beside the quote while pricing
-  const { data: evLink } = await supabase.from("events").select("enquiry_id").eq("id", q.event.id).maybeSingle();
+  const { data: evLink } = await supabase.from("events").select("enquiry_id, venue, address").eq("id", q.event.id).maybeSingle();
   const threadFilter = [`event_id.eq.${q.event.id}`, evLink?.enquiry_id ? `enquiry_id.eq.${evLink.enquiry_id}` : null].filter(Boolean).join(",");
   const { data: thr } = await supabase.from("email_threads").select("id, subject, last_message_at").eq("organisation_id", org.id).or(threadFilter)
     .neq("classification", "spam").order("last_message_at", { ascending: false }).limit(6);
@@ -286,6 +286,8 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   return (
     <QuoteBuilder
       key={q.id}
+      travelFrom={org.name}
+      jobAddress={[evLink?.venue, evLink?.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null}
       replyTo={replyTo}
       templates={templates}
       emails={emailThreads}

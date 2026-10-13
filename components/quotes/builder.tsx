@@ -32,7 +32,7 @@ import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { SectionEditor, type Col, type LineHelper, type SectionHandlers } from "./section-editor";
 import { SaveAsTemplateButton, TemplatePicker, type TemplateChoice } from "./template-picker";
 import { EmailDrawer, type DrawerThread } from "./email-drawer";
-import { servesFromQuantity, servesLine, shiftDays } from "@/lib/quotes/line-helpers";
+import { servesFromQuantity, servesLine, shiftDays, staffLine, travelLine, type StaffDetails, type TravelDetails } from "@/lib/quotes/line-helpers";
 import { withHireDays } from "@/lib/events/days";
 import type { StaffRule } from "@/lib/pricing/engine";
 import type {
@@ -86,6 +86,9 @@ export interface BuilderProps {
   templates?: TemplateChoice[] | null;
   /** Opened from "Reply with quote" on an email: sending replies in that conversation. */
   replyTo?: { threadId: string; subject: string; backHref: string } | null;
+  /** Where travel is measured from (the business), and the job's address for the travel line */
+  travelFrom?: string | null;
+  jobAddress?: string | null;
 }
 
 export interface XeroQuoteChoice { id: string; number: string; reference: string | null; status: string; date: string | null; total: number; lines: number }
@@ -286,8 +289,14 @@ export function QuoteBuilder(p: BuilderProps) {
     const onQuote = new Set(items.filter((x) => x.service_id).map((x) => x.service_id!));
     return options.find((o) => o.hire && sameSection.has(o.hire)) ?? options.find((o) => o.hire && onQuote.has(o.hire)) ?? options[0];
   };
+  const staffItems = items.filter((x) => x.details?.kind === "staff");
   const helperFor = (it: ItemDraft): LineHelper | null => {
     const sid = it.service_id ?? null;
+    // Travel by the kilometre (e.g. the coffee van out of town)
+    if (it.details?.kind === "travel" || /^(km|kms|kilometre|kilometres|kilometer|kilometers)$/i.test((it.unit ?? "").trim())) {
+      const sd = staffItems[0]?.details as StaffDetails | undefined;
+      return { kind: "travel", from: p.travelFrom ?? null, trips: sd ? shiftDays(sd).length : 1, address: p.jobAddress ?? null, hasStaff: staffItems.length > 0 };
+    }
     const st = staffRuleFor(it);
     const unit = (it.unit ?? "").trim().toLowerCase();
     if (st || it.details?.kind === "staff" || (!sid && /^(hour|hours|hr|hrs)$/.test(unit) && /barista|staff|hire/i.test(it.name)))
@@ -303,6 +312,32 @@ export function QuoteBuilder(p: BuilderProps) {
       const q = numStr(derived.quantity);
       setItems((all) => all.map((i) => (i.id === id ? { ...i, details, quantity: q, description: derived.description } : i)));
       queue(`i:${id}`, { details, quantity: derived.quantity, description: derived.description }, sendItem(id), SAVE_DELAY);
+      // Travel: the driving time (each way) goes on every barista line, which works its hours out again
+      if (details.kind === "travel") {
+        for (const st of items.filter((x) => x.details?.kind === "staff")) {
+          const sd = st.details as StaffDetails;
+          if ((sd.travel_minutes ?? 0) === details.charge_minutes) continue;
+          const next: StaffDetails = { ...sd, travel_minutes: details.charge_minutes || undefined };
+          const rule = staffRuleFor(st);
+          const calc = staffLine(next, rule?.rule ?? null, rule?.label ?? "staff");
+          if (!calc) continue;
+          setItems((all) => all.map((i) => (i.id === st.id ? { ...i, details: next, quantity: numStr(calc.quantity), description: calc.description } : i)));
+          queue(`i:${st.id}`, { details: next, quantity: calc.quantity, description: calc.description }, sendItem(st.id), SAVE_DELAY);
+        }
+      }
+      // Barista days changed: a travel line that had one trip per day keeps one trip per day
+      if (details.kind === "staff") {
+        const before = items.find((i) => i.id === id)?.details as StaffDetails | undefined;
+        const was = before ? shiftDays(before).length : 0, now = shiftDays(details).length;
+        if (was && was !== now) {
+          for (const tr of items.filter((x) => x.details?.kind === "travel" && (x.details as TravelDetails).trips === was)) {
+            const next: TravelDetails = { ...(tr.details as TravelDetails), trips: now };
+            const r = travelLine(next, p.travelFrom ?? null);
+            setItems((all) => all.map((i) => (i.id === tr.id ? { ...i, details: next, quantity: numStr(r.quantity), description: r.description } : i)));
+            queue(`i:${tr.id}`, { details: next, quantity: r.quantity, description: r.description }, sendItem(tr.id), SAVE_DELAY);
+          }
+        }
+      }
       // Barista hours over several dates: the cart / van / caravan hire goes to one per day, dates in its description
       if (details.kind === "staff") {
         const days = shiftDays(details).filter((d) => d.date).map((d) => ({ date: d.date!, units: d.units }));

@@ -78,3 +78,37 @@ export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormDat
     return { error: e instanceof Error ? e.message : "Something went wrong — please try again." };
   }
 }
+
+export type ChangeResult = { ok: true; version: number; total: number } | { ok: false; error: string };
+
+/** The customer changed their quote on the link (catering / drinks): saved as the next version, ready to accept. */
+export async function customerChangeQuote(token: string, change: unknown): Promise<ChangeResult> {
+  try {
+    if (!/^[0-9a-f]{64}$/.test(String(token))) return { ok: false, error: "This link isn't valid." };
+    const db = createServiceClient();
+    const { data: r } = await db.from("email_send_recipients").select("name, email").eq("token", token).maybeSingle();
+    const who = (r?.name as string | null)?.trim() || (r?.email as string | null) || "The customer";
+    const { applyCustomerChange } = await import("@/lib/quotes/customer-edit-server");
+    const res = await applyCustomerChange(db, token, change, who);
+    // Let the business know by email too (the bell notification is already there)
+    try {
+      const { emailConfigured, sendEmail } = await import("@/lib/email/send");
+      const { appBaseUrl } = await import("@/lib/integrations/registry");
+      const { data: q } = await db.from("email_send_recipients").select("quote:quotes(id, number, organisation:organisations(name, contact_email))").eq("token", token).maybeSingle();
+      const quote = q?.quote as unknown as { id: string; number: number; organisation: { name: string; contact_email: string | null } | null } | null;
+      const to = quote?.organisation?.contact_email;
+      if (to && emailConfigured()) {
+        const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+        const url = `${appBaseUrl()}/quotes/${quote!.id}`;
+        const total = res.total.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
+        await sendEmail({ to, subject: `${who} changed Q-${quote!.number}`,
+          text: `${who} changed Quote Q-${quote!.number} on their quote link:\n${res.what}\n\nIt's now version ${res.version} (${total}), waiting for them to accept.\n${url}`,
+          html: `<p><b>${esc(who)}</b> changed Quote Q-${quote!.number} on their quote link:</p><p>${esc(res.what)}</p><p>It's now version ${res.version} (${total}), waiting for them to accept.</p><p><a href="${url}">Open the quote</a></p>` }).catch(() => undefined);
+      }
+    } catch { /* the notification is enough */ }
+    revalidatePath(`/q/${token}`);
+    return { ok: true, version: res.version, total: res.total };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong — please try again." };
+  }
+}

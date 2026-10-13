@@ -1,6 +1,7 @@
 import "server-only";
 import type { CrewSession } from "./server";
 import { clashes, plannedShift, shiftPay, type ShiftEvent } from "./shifts";
+import { jobPlans, planForPay } from "./job-plan";
 
 /** What the staff app shows. No prices, budgets or client billing details — only what the person needs to do the job. */
 export interface JobInfo extends ShiftEvent {
@@ -14,7 +15,7 @@ export interface Shift {
   start: string | null; finish: string | null; hours: number | null; amount: number | null; rate: number; extraApproved: number; extraPending: number;
 }
 
-const JOB_COLS = "id, name, event_date, setup_time, start_time, finish_time, venue, address, status, crew_needed, customer:customers(name)";
+const JOB_COLS = "id, name, event_date, setup_time, start_time, finish_time, days, venue, address, status, crew_needed, customer:customers(name)";
 type RawJob = Omit<JobInfo, "client"> & { customer: { name: string } | null };
 const toJob = (e: RawJob): JobInfo => ({ ...e, client: e.customer?.name ?? null });
 const TBC_STATUSES = ["enquiry", "planning", "quoted", "awaiting_approval"];
@@ -29,11 +30,14 @@ export async function myShifts(s: CrewSession, opts: { from?: string; to?: strin
   const rows = ((data ?? []) as unknown as Row[]).filter((r) => r.event && r.event.status !== "cancelled")
     .filter((r) => (!opts.from || (r.event!.event_date ?? "9999") >= opts.from) && (!opts.to || (r.event!.event_date ?? "0000") <= opts.to));
   const claims = await claimsFor(s, rows.map((r) => r.id));
+  // Several days and travel (driving before and after) come from the job and its quote
+  const plans = await jobPlans(s.db, s.org.id, rows.map((r) => r.event!)).catch(() => new Map());
   const eventShifts = rows.map((r) => {
     const job = toJob(r.event!);
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
-    const p = plannedShift(job);
-    const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
+    const plan = planForPay(plans.get(job.id));
+    const p = plan ? { start: plan.start, finish: plan.finish, hours: plan.hours } : plannedShift(job);
+    const pay = shiftPay({ plan, event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
       rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate, minHours: s.org.staff_min_hours });
     return {
       kind: "event" as const, id: r.id, status: r.status, role: r.role, boardPostedAt: r.board_posted_at, boardNote: r.board_note, calendarResponse: r.calendar_response, paymentId: r.payment_id,
@@ -154,14 +158,18 @@ export async function board(s: CrewSession, today: string): Promise<BoardItem[]>
   const isAway = (d: string | null) => !!d && ((away.data ?? []) as { starts_on: string; ends_on: string }[]).some((a) => d >= a.starts_on && d <= a.ends_on);
   const clashWith = (j: JobInfo) => working.find((w) => w.job.id !== j.id && clashes(w.job, j))?.job.name ?? null;
   const items: BoardItem[] = [];
+  // Shift times with travel / several days, as the staff will work them
+  const boardJobs = [...((posted.data ?? []) as unknown as { event: RawJob | null }[]).map((r) => r.event).filter((e): e is RawJob => !!e), ...((upcoming.data ?? []) as unknown as RawJob[])];
+  const plans = await jobPlans(s.db, s.org.id, boardJobs).catch(() => new Map());
+  const planned = (job: JobInfo) => { const pl = planForPay(plans.get(job.id)); return pl ? { start: pl.start, finish: pl.finish, hours: pl.hours } : plannedShift(job); };
   for (const r of (posted.data ?? []) as unknown as { id: string; board_note: string | null; member: { name: string } | null; event: RawJob | null }[]) {
     if (!r.event || r.event.status === "cancelled" || (r.event.event_date ?? "") < today) continue;
     if (working.some((w) => w.job.id === r.event!.id)) continue;
-    const job = toJob(r.event); const p = plannedShift(job);
+    const job = toJob(r.event); const p = planned(job);
     items.push({ kind: "swap", id: r.id, job, start: p.start, finish: p.finish, hours: p.hours, from: r.member?.name ?? "A team member", note: r.board_note, clash: clashWith(job), away: isAway(job.event_date) });
   }
   for (const e of (upcoming.data ?? []) as unknown as (RawJob & { crew: { crew_member_id: string; status: string }[] })[]) {
-    const job = toJob(e); const p = plannedShift(job);
+    const job = toJob(e); const p = planned(job);
     const rostered = e.crew.filter((c) => c.status !== "interested").length;
     const meOn = e.crew.find((c) => c.crew_member_id === s.member.id);
     if (e.status === "confirmed") {

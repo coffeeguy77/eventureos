@@ -12,7 +12,7 @@ import { QUOTE_ACCEPTANCE_ACTIONS, STANDARD_RULES, TRIGGER_ORDER, type QuoteAcce
 export const metadata = { title: "Automations" };
 
 type RuleAction = { type: string; params?: Record<string, unknown> };
-type Settings = { action: QuoteAcceptanceAction; deposit: number; terms: number; followUp: number; payBefore: boolean; approval: "off" | "short_notice" | "all"; approvalDays: number };
+type Settings = { action: QuoteAcceptanceAction; deposit: number; terms: number; followUp: number; payBefore: boolean; approval: "off" | "short_notice" | "all"; approvalDays: number; customerEdit: boolean };
 
 function whenText(trigger: string, s: Settings) {
   switch (trigger) {
@@ -83,6 +83,7 @@ export default async function AutomationsPage() {
     payBefore: raw.pay_before_event === true,
     approval: raw.booking_approval === "all" || raw.booking_approval === "short_notice" ? raw.booking_approval : "off",
     approvalDays: Number.isInteger(Number(raw.booking_approval_days)) ? Number(raw.booking_approval_days) : 2,
+    customerEdit: raw.quote_customer_edit !== false,
   };
   const connected = new Set((intRes.data ?? []).filter((i) => i.status === "connected" || i.status === "syncing").map((i) => i.provider));
   const xero = connected.has("xero");
@@ -228,6 +229,17 @@ export default async function AutomationsPage() {
                   <span className="block text-[0.75rem] text-ink-muted">
                     If the event is sooner than the payment terms, the invoice is due immediately — to lock in the date and secure the equipment and staff.
                     E.g. 7-day terms and an event in 2 days: due today. Also the default on the New invoice screen.
+                  </span>
+                </span>
+              </label>
+
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+                <input type="checkbox" name="quote_customer_edit" defaultChecked={s.customerEdit} className="mt-0.5 h-4 w-4 rounded border-line-strong text-brand-600" />
+                <span>
+                  <span className="block text-[0.8125rem] font-medium text-ink">Customers can change their quote</span>
+                  <span className="block text-[0.75rem] text-ink-muted">
+                    On the quote link they can change quantities of catering and drinks, take those lines off, and add catering from your price list.
+                    Hire, barista hours, travel and delivery stay as you set them. Each change makes a new version, and you get a notification.
                   </span>
                 </span>
               </label>

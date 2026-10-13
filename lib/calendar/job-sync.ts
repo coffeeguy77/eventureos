@@ -32,14 +32,21 @@ export async function loadJobDays(db: SupabaseClient, orgId: string, eventId: st
   if (error) throw new Error(error.message);
   if (!ev) return null;
   const e = ev as { id: string; number: number; name: string; venue: string | null; customer_id: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; days?: unknown };
-  return { ev: e, days: jobDays(e, await quoteStaffDays(db, orgId, eventId)) };
+  const { jobPlans } = await import("@/lib/crew/job-plan");
+  const plan = (await jobPlans(db, orgId, [e])).get(e.id);
+  return { ev: e, days: plan?.days ?? jobDays(e, await quoteStaffDays(db, orgId, eventId)), travel: plan?.travel ?? 0, address: plan?.address ?? null };
 }
 
-/** Start and end of a day's calendar entry (arrives at setup; 3 hours if no finish time). */
-export function dayWindow(d: EventDay, tz: string) {
+/** Where the calendar entry says it is: the venue, plus the travel address from the quote when there is one. */
+export const jobLocation = (venue: string | null, travelAddress: string | null) =>
+  [venue?.trim(), travelAddress?.trim()].filter((v): v is string => !!v).filter((v, i, a) => !a.slice(0, i).some((x) => x.toLowerCase().includes(v.toLowerCase()) || v.toLowerCase().includes(x.toLowerCase()))).join(", ") || null;
+
+/** Start and end of a day's calendar entry: arrives at setup (3 hours if no finish time), stretched by any travel each way. */
+export function dayWindow(d: EventDay, tz: string, travelMinutes = 0) {
   const startT = d.setup ?? d.start ?? "09:00";
-  const startsAt = zonedTimeUTC(d.date, startT, tz);
-  let endsAt = d.finish ? zonedTimeUTC(d.date, d.finish, tz) : new Date(Date.parse(startsAt) + 3 * 3600e3).toISOString();
+  const t = Math.max(0, travelMinutes) * 60e3;
+  const startsAt = new Date(Date.parse(zonedTimeUTC(d.date, startT, tz)) - t).toISOString();
+  let endsAt = d.finish ? new Date(Date.parse(zonedTimeUTC(d.date, d.finish, tz)) + t).toISOString() : new Date(Date.parse(startsAt) + 3 * 3600e3 + 2 * t).toISOString();
   if (Date.parse(endsAt) <= Date.parse(startsAt)) endsAt = new Date(Date.parse(startsAt) + 3600e3).toISOString();
   return { startsAt, endsAt };
 }
@@ -81,20 +88,21 @@ export async function syncJobCalendar(db: SupabaseClient, orgId: string, eventId
     if (byDate.has(d) || !job.days.some((x) => x.date === d)) spare.push(r); else byDate.set(d, r);
   }
   const ids: string[] = [];
+  const location = jobLocation(job.ev.venue, job.address);
   for (const day of job.days) {
-    const { startsAt, endsAt } = dayWindow(day, tz);
+    const { startsAt, endsAt } = dayWindow(day, tz, job.travel);
     const have = byDate.get(day.date) ?? spare.shift();
     if (have) {
-      const same = Date.parse(have.starts_at) === Date.parse(startsAt) && Date.parse(have.ends_at) === Date.parse(endsAt) && have.title === job.ev.name && (have.location ?? null) === (job.ev.venue ?? null);
+      const same = Date.parse(have.starts_at) === Date.parse(startsAt) && Date.parse(have.ends_at) === Date.parse(endsAt) && have.title === job.ev.name && (have.location ?? null) === location;
       if (!same || have.sync_status !== "synced") {
-        const { error } = await db.from("calendar_events").update({ starts_at: startsAt, ends_at: endsAt, title: job.ev.name, location: job.ev.venue, ...(have.sync_status === "local" ? {} : { sync_status: status }) }).eq("id", have.id);
+        const { error } = await db.from("calendar_events").update({ starts_at: startsAt, ends_at: endsAt, title: job.ev.name, location, ...(have.sync_status === "local" ? {} : { sync_status: status }) }).eq("id", have.id);
         if (error) throw new Error(`Couldn't update the calendar: ${error.message}`);
       }
       ids.push(have.id);
     } else {
       const { data: row, error } = await db.from("calendar_events").insert({
         organisation_id: orgId, calendar_connection_id: connId, event_id: eventId, title: job.ev.name, starts_at: startsAt, ends_at: endsAt,
-        all_day: false, location: job.ev.venue, kind: "event", sync_status: status, created_by: opts.actorId ?? null,
+        all_day: false, location, kind: "event", sync_status: status, created_by: opts.actorId ?? null,
       }).select("id").single();
       if (error) throw new Error(`Couldn't add it to the calendar: ${error.message}`);
       ids.push(row.id as string);

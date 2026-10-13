@@ -1,5 +1,5 @@
 import "server-only";
-import { isFreeDay, jobDescription, jobTitle } from "@/lib/calendar/job-invite";
+import { isFreeDay, jobDescription, jobTitle, shortTime } from "@/lib/calendar/job-invite";
 import { shiftDays, type StaffDetails } from "@/lib/quotes/line-helpers";
 import { jobDays, longDayLabel } from "@/lib/events/days";
 import { localDate } from "@/lib/ai/classify";
@@ -138,24 +138,36 @@ async function jobInfo(ctx: SyncContext, eventIds: string[]): Promise<Map<string
     const hhmm = (t: string | null) => (t ? t.slice(0, 5) : null);
     // "250 coffees (200 hot + 50 cold)" when the quote split them
     if (cold > 0 && e.serves == null) input.servesLabel = `${input.servesLabel ?? "serves"} (${hot} hot + ${cold} cold)`;
+    // Travel (from the quote's Travel line): the entry starts that long before setup and ends that long after service
+    const travel = Math.max(0, (staffRaw as { travel_minutes?: number } | undefined)?.travel_minutes ?? 0);
+    const moved = (date: string, t: string | null, by: number) => {
+      if (!t) return null;
+      const [h, m] = t.split(":").map(Number);
+      const x = Math.min(Math.max(h * 60 + m + by, 0), 1439);
+      return `${date}T${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}:00`;
+    };
+    const travelText = (from: string | null, to: string | null) => {
+      if (!travel) return "";
+      const h = Math.floor(travel / 60), m = travel % 60, each = [h ? `${h} hr${h === 1 ? "" : "s"}` : "", m ? `${m} min` : ""].filter(Boolean).join(" ");
+      const leave = from ? shortTime(from.slice(11, 16)) : null, back = to ? shortTime(to.slice(11, 16)) : null;
+      return `\nTravel ${each} each way${leave ? ` — leave ${leave}` : ""}${back ? `, back about ${back}` : ""}`;
+    };
     // A job over several days: each day's entry has that day's hours ("Day 2 of 4 · Wednesday 21st October")
     const days = new Map<string, JobDayInfo>();
     const all = jobDays(e, shifts);
     if (all.length > 1) {
       for (const [n, d] of all.entries()) {
         const di = { ...input, date: d.date, setupTime: d.setup, startTime: d.start, finishTime: d.finish };
+        const sl = moved(d.date, d.setup ?? d.start, -travel), el = moved(d.date, d.finish, travel);
         days.set(d.date, {
-          description: `Day ${n + 1} of ${all.length} · ${longDayLabel(d.date)}\n${jobDescription(di)}`,
-          startLocal: (d.setup ?? d.start) ? `${d.date}T${d.setup ?? d.start}:00` : null,
-          endLocal: d.finish ? `${d.date}T${d.finish}:00` : null,
+          description: `Day ${n + 1} of ${all.length} · ${longDayLabel(d.date)}\n${jobDescription(di)}${travelText(sl, el)}`,
+          startLocal: sl, endLocal: el,
         });
       }
     }
-    out.set(e.id, {
-      title: jobTitle(input), description: jobDescription(input), date: e.event_date, days,
-      startLocal: e.event_date && (hhmm(setupT) ?? hhmm(startT)) ? `${e.event_date}T${hhmm(setupT) ?? hhmm(startT)}:00` : null,
-      endLocal: e.event_date && hhmm(finishT) ? `${e.event_date}T${hhmm(finishT)}:00` : null,
-    });
+    const sl = e.event_date ? moved(e.event_date, hhmm(setupT) ?? hhmm(startT), -travel) : null;
+    const el = e.event_date ? moved(e.event_date, hhmm(finishT), travel) : null;
+    out.set(e.id, { title: jobTitle(input), description: `${jobDescription(input)}${travelText(sl, el)}`, date: e.event_date, days, startLocal: sl, endLocal: el });
   }
   return out;
 }

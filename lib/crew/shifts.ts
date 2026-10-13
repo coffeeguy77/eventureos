@@ -31,10 +31,11 @@ export interface PayInput {
   minHours?: number | null;
 }
 
-export function shiftPay(p: PayInput): { base: number | null; extra: number; hours: number | null; rate: number; amount: number | null } {
-  const planned = plannedShift(p.event).hours;
+export function shiftPay(p: PayInput & { plan?: JobShift | null }): { base: number | null; extra: number; hours: number | null; rate: number; amount: number | null } {
   const min = Number(p.minHours ?? 0);
-  const base = p.hoursOverride ?? (planned == null ? null : Math.max(planned, min));
+  // A job over several days, or with travel: the plan's hours (minimum applied per day); otherwise setup → finish
+  const planned = p.plan ? p.plan.paidHours(min) : plannedShift(p.event).hours;
+  const base = p.hoursOverride ?? (planned == null ? null : p.plan ? planned : Math.max(planned, min));
   const extra = Math.max(0, p.approvedExtra ?? 0);
   const rate = Number(p.rateOverride ?? p.memberRate ?? p.orgRate);
   const hours = base == null ? (extra || null) : Math.round((base + extra) * 100) / 100;
@@ -56,4 +57,32 @@ export const fmtHours = (h: number | null | undefined) => h == null ? "—" : `$
 export function staffMinHours(settings: Record<string, unknown> | null | undefined): number {
   const v = Number((settings ?? {}).staff_min_hours);
   return Number.isFinite(v) && v >= 0 && v <= 12 ? v : 3;
+}
+
+/** A day of a job: its setup / service start / service finish (HH:MM). */
+export interface PlanDay { date: string; setup: string | null; start: string | null; finish: string | null }
+export interface JobShift {
+  /** Each day's shift: leaves `travel` minutes before setup, back `travel` minutes after service ends */
+  days: { date: string; start: string | null; finish: string | null; hours: number | null }[];
+  start: string | null; finish: string | null; hours: number | null; travel: number;
+  /** Paid hours with the per-shift minimum applied to each day */
+  paidHours: (minHours: number) => number | null;
+}
+const hhmm = (m: number) => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; };
+
+/** The shift(s) for a job: every day it runs, stretched by the travel time each way. */
+export function jobShift(days: PlanDay[], travelMinutes = 0): JobShift {
+  const t = Math.max(0, Math.round(travelMinutes || 0));
+  const out = days.map((d) => {
+    const a = mins(d.setup ?? d.start), b = mins(d.finish);
+    if (a == null || b == null) return { date: d.date, start: a == null ? null : hhmm(a - t), finish: b == null ? null : hhmm(b + t), hours: null };
+    const span = (b > a ? b - a : b + 1440 - a) + 2 * t;
+    return { date: d.date, start: hhmm(a - t), finish: hhmm(b + t), hours: Math.round((span / 60) * 100) / 100 };
+  });
+  const known = out.filter((d) => d.hours != null);
+  const hours = known.length ? Math.round(known.reduce((x, d) => x + d.hours!, 0) * 100) / 100 : null;
+  return {
+    days: out, start: out[0]?.start ?? null, finish: out[0]?.finish ?? null, hours, travel: t,
+    paidHours: (min) => (known.length ? Math.round(known.reduce((x, d) => x + Math.max(d.hours!, min), 0) * 100) / 100 : null),
+  };
 }

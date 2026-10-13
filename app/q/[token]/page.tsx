@@ -7,6 +7,8 @@ import { brandVars } from "@/app/p/[slug]/portal-data";
 import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { LinkResponse, PrintButton, ViewBeacon } from "./client";
 import { readShop } from "@/lib/shop/core";
+import { loadCustomerEdit } from "@/lib/quotes/customer-edit-server";
+import { CustomerChange } from "@/components/quotes/customer-change";
 
 import { loadBillTo } from "@/lib/customers/bill-to";
 export const dynamic = "force-dynamic";
@@ -57,6 +59,8 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
   const total = money(v.total, cur, { cents: true });
   const open = (v.status === "sent" || v.status === "viewed") && !d.quote.expired;
   const isCopy = d.recipient.role === "copy";
+  // Can they change the catering / drinks themselves? (Settings → Automations; on unless switched off)
+  const edit = open && !isCopy ? await loadCustomerEdit(createServiceClient(), token).catch(() => null) : null;
 
   return (
     <main style={brandVars(safeColour(d.org.brand_colour))} className="min-h-screen bg-canvas [color-scheme:light] print:bg-white">
@@ -93,6 +97,13 @@ export default async function QuoteLinkPage({ params }: { params: Promise<{ toke
           eventLabel={d.event ? `${d.event.name}${d.event.event_date ? ` · ${fmtDate(d.event.event_date, "long")}` : ""}${d.event.venue ? ` · ${d.event.venue}` : ""}` : undefined}
           eventDate={d.event ? d.event.event_date ?? null : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />
+
+        {edit?.ok && (
+          <div className="mt-6">
+            <CustomerChange token={token} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}
+              lines={edit.data.lines.filter((l) => !l.is_optional).map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, editable: l.editable, section: l.section }))} />
+          </div>
+        )}
 
         {open && !isCopy && (
           <div className="mt-6">

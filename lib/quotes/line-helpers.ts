@@ -22,11 +22,26 @@ export interface StaffDetails {
   days: ShiftDay[];
   /** What a "unit" is called, e.g. "cart" (shown when more than one runs) */
   unit_label?: string;
+  /** Driving to and from the job, charged each way on every day (set from the quote's Travel line) */
+  travel_minutes?: number;
   // Older single-day shape (still read): start, end, staff, setup_minutes
   start?: string | null; end?: string | null; staff?: number; setup_minutes?: number;
 }
 export interface ServesDetails { kind: "serves"; hot: number; cold: number }
-export type LineDetails = StaffDetails | ServesDetails;
+/**
+ * Travel to a job (e.g. the coffee van): kilometres each way, doubled for the return trip, for each day it goes out.
+ * The driving time is charged on the barista line (travel_minutes each way) and lengthens the shift and calendar entry.
+ */
+export interface TravelDetails {
+  kind: "travel";
+  /** Where the van is going (goes into the calendar entry) */
+  address: string;
+  km: number;               // one way
+  drive_minutes: number;    // one way, as driven
+  charge_minutes: number;   // one way, as charged (e.g. 1 hr 45 → 2 hrs)
+  trips: number;            // return trips (usually one per day)
+}
+export type LineDetails = StaffDetails | ServesDetails | TravelDetails;
 
 const toMin = (t: string | null | undefined) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(t ?? "");
@@ -85,7 +100,8 @@ export function staffLine(d: StaffDetails, rule: StaffRule | null, label = "staf
     const r: StaffRule = { ...(rule ?? { service_id: "" }), setup_minutes: day.setup_minutes, packdown_minutes: rule?.packdown_minutes ?? 0 };
     const units = Math.max(1, Math.floor(day.units || 1)), per = Math.max(1, Math.floor(day.per_unit || 1));
     const staff = units * per;
-    const each = Array.from({ length: staff }, (_, n) => staffHours(r, hrs, n === 0));
+    const travel = Math.max(0, d.travel_minutes ?? 0) * 2 / 60;
+    const each = Array.from({ length: staff }, (_, n) => Math.round((staffHours(r, hrs, n === 0) + travel) * 100) / 100);
     const hours = Math.round(each.reduce((a, b) => a + b, 0) * 100) / 100;
     out.push({ day: dayLabel(day, i), staff, perPerson: each[0], hours });
     const setup = setupTime(day);
@@ -94,6 +110,7 @@ export function staffLine(d: StaffDetails, rule: StaffRule | null, label = "staf
       multi ? `${dayLabel(day, i)} – ${hrsText(each[0])}${staff > 1 ? ` x${staff} (${hrsText(hours)})` : ""}` : null,
       day.setup_minutes > 0 && setup ? `Setup ${shortTime(setup)}` : null,
       `Service ${shortTime(day.start)} – ${shortTime(day.end)}${who}`,
+      travel > 0 ? `Travel ${minutesText(d.travel_minutes!)} each way (${hrsText(travel)})` : null,
       !multi && staff > 1 ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : null,
     ].filter(Boolean);
     blocks.push(lines.join("\n"));
@@ -131,8 +148,35 @@ export function cleanDetails(raw: unknown): LineDetails | null {
         units: Math.max(1, Math.round(n(y.units ?? 1, 50))), per_unit: Math.max(1, Math.round(n(y.per_unit ?? 1, 50))) };
     });
     const unit = typeof r.unit_label === "string" ? r.unit_label.trim().slice(0, 30) : "";
-    return { kind: "staff", days, ...(unit ? { unit_label: unit } : {}) };
+    const travel = Math.round(n(r.travel_minutes, 24 * 60));
+    return { kind: "staff", days, ...(unit ? { unit_label: unit } : {}), ...(travel ? { travel_minutes: travel } : {}) };
+  }
+  if (r.kind === "travel") {
+    return { kind: "travel", address: typeof r.address === "string" ? r.address.trim().slice(0, 300) : "", km: Math.round(n(r.km, 5000) * 10) / 10,
+      drive_minutes: Math.round(n(r.drive_minutes, 24 * 60)), charge_minutes: Math.round(n(r.charge_minutes, 24 * 60)), trips: Math.max(1, Math.round(n(r.trips ?? 1, 62))) };
   }
   if (r.kind === "serves") return { kind: "serves", hot: Math.round(n(r.hot, 1_000_000)), cold: Math.round(n(r.cold, 1_000_000)) };
   return null;
+}
+
+/** "1 hr 45 min", "2 hrs", "45 min" */
+export function minutesText(m: number) {
+  const h = Math.floor(m / 60), r = Math.round(m % 60);
+  return [h ? `${h} hr${h === 1 ? "" : "s"}` : "", r ? `${r} min` : ""].filter(Boolean).join(" ") || "0 min";
+}
+
+/** Driving time rounded up to the next half hour — what's charged by default (1 hr 45 → 2 hrs). */
+export const chargeMinutes = (drive: number) => Math.ceil(Math.max(0, drive) / 30) * 30;
+
+/** The travel line: return kilometres for every trip, and its description. */
+export function travelLine(d: TravelDetails, from: string | null) {
+  const trips = Math.max(1, Math.round(d.trips || 1));
+  const quantity = Math.round(d.km * 2 * trips * 10) / 10;
+  const km = (x: number) => `${Number.isInteger(x) ? x : x.toFixed(1)} km`;
+  const lines = [
+    `${from?.trim() || "Our base"} → ${d.address.trim() || "the venue"}`,
+    `${km(d.km)} each way · ${km(d.km * 2)} return${trips > 1 ? ` × ${trips} trips = ${km(quantity)}` : ""}`,
+    d.charge_minutes > 0 ? `Driving ${minutesText(d.drive_minutes || d.charge_minutes)} each way${d.charge_minutes !== d.drive_minutes ? ` (charged as ${minutesText(d.charge_minutes)})` : ""} — on the barista hours` : null,
+  ].filter(Boolean);
+  return { quantity, description: lines.join("\n") };
 }

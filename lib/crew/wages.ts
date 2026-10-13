@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { plannedShift, shiftPay, staffMinHours } from "./shifts";
+import { jobPlans, planForPay } from "./job-plan";
 
 /** Shifts worked (confirmed, on or before `until`) with their pay worked out — for the office's wages page. */
 export interface WageShift {
@@ -17,7 +18,7 @@ export async function loadWageShifts(db: SupabaseClient, orgId: string, opts: { 
   const [{ data: org }, rows] = await Promise.all([
     db.from("organisations").select("staff_hourly_rate, settings").eq("id", orgId).single(),
     (() => {
-      let q = db.from("event_crew").select("id, crew_member_id, hours_override, rate_override, payment_id, member:crew_members(name, hourly_rate), event:events!inner(id, name, event_date, setup_time, start_time, finish_time, status)")
+      let q = db.from("event_crew").select("id, crew_member_id, hours_override, rate_override, payment_id, member:crew_members(name, hourly_rate), event:events!inner(id, name, event_date, setup_time, start_time, finish_time, days, status)")
         .eq("organisation_id", orgId).eq("status", "confirmed").neq("event.status", "cancelled").lte("event.event_date", opts.until);
       if (opts.unpaidOnly) q = q.is("payment_id", null);
       if (opts.paymentIds) q = q.in("payment_id", opts.paymentIds.length ? opts.paymentIds : ["00000000-0000-0000-0000-000000000000"]);
@@ -27,7 +28,7 @@ export async function loadWageShifts(db: SupabaseClient, orgId: string, opts: { 
   ]);
   if (rows.error) throw new Error(`Couldn't load shifts: ${rows.error.message}`);
   type Row = { id: string; crew_member_id: string; hours_override: number | null; rate_override: number | null; payment_id: string | null;
-    member: { name: string; hourly_rate: number | null } | null; event: { id: string; name: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null } };
+    member: { name: string; hourly_rate: number | null } | null; event: { id: string; name: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; days?: unknown } };
   const list = (rows.data ?? []) as unknown as Row[];
   const ids = list.map((r) => r.id);
   const claims = new Map<string, { approved: number; pending: number }>();
@@ -41,10 +42,13 @@ export async function loadWageShifts(db: SupabaseClient, orgId: string, opts: { 
   }
   const orgRate = Number((org as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30);
   const minHours = staffMinHours((org as { settings?: Record<string, unknown> } | null)?.settings);
+  // Several days and travel (driving before and after) come from the job and its quote
+  const plans = await jobPlans(db, orgId, [...new Map(list.map((r) => [r.event.id, r.event])).values()]).catch(() => new Map());
   const eventShifts = list.map((r): WageShift => {
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
-    const p = plannedShift(r.event);
-    const pay = shiftPay({ event: r.event, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
+    const plan = planForPay(plans.get(r.event.id));
+    const p = plan ? { start: plan.start, finish: plan.finish, hours: plan.hours } : plannedShift(r.event);
+    const pay = shiftPay({ plan, event: r.event, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
       rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: r.member?.hourly_rate == null ? null : Number(r.member.hourly_rate), orgRate, minHours });
     return {
       key: `e:${r.id}`, kind: "event", id: r.id, crewId: r.crew_member_id, crewName: r.member?.name ?? "Removed", eventId: r.event.id, eventName: r.event.name, date: r.event.event_date,
