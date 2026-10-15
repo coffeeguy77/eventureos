@@ -28,6 +28,15 @@ export function aiModel() {
   return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
 }
 
+/**
+ * Request headers for the Anthropic API. A key that isn't tied to one workspace needs the workspace named on every
+ * request: set ANTHROPIC_WORKSPACE_ID in Vercel (Anthropic Console → Settings → Workspaces).
+ */
+export function anthropicHeaders(key: string): Record<string, string> {
+  const ws = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  return { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json", ...(ws ? { "anthropic-workspace-id": ws } : {}) };
+}
+
 /** Call Claude and return the text of the first text block. Throws on HTTP error / timeout. */
 export async function callClaude(system: string, user: string, { maxTokens = 800, timeoutMs = 12000 } = {}): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -38,7 +47,7 @@ export async function callClaude(system: string, user: string, { maxTokens = 800
     const res = await fetch(ANTHROPIC_URL, {
       method: "POST",
       signal: ctrl.signal,
-      headers: { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json" },
+      headers: anthropicHeaders(key),
       body: JSON.stringify({
         model: aiModel(),
         max_tokens: maxTokens,

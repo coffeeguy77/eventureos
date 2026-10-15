@@ -30,6 +30,8 @@ export interface GmailSettings extends EmailFilterSettings {
   history_id?: string;
   /** Gmail ids the filter skipped during an unfinished first sync (so the next run doesn't re-fetch them). */
   skipped_ids?: string[];
+  /** Messages Gmail kept failing to return (error 500s): tries so far, by id — given up on after 3. */
+  fetch_failures?: Record<string, number>;
   ai_enabled?: boolean;
   initial_days?: number;
   import_months?: number;
@@ -237,18 +239,36 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
     let rateLimited = false;
     const batch = todo.slice(0, MAX_MESSAGES_PER_RUN);
     const FETCH_BUDGET_MS = TIME_BUDGET_MS / 2;
+    // Messages that are gone (deleted since listed) or that Gmail keeps failing to return are set aside for good,
+    // so one bad message can never hold up the rest of the mailbox
+    let settled = 0;
+    const failures: Record<string, number> = { ...(s.fetch_failures ?? {}) };
+    let failuresChanged = false;
     for (let i = 0; i < batch.length && !rateLimited; i += FETCH_CONCURRENCY) {
       if (Date.now() - started > FETCH_BUDGET_MS) break;
-      const got = await Promise.allSettled(batch.slice(i, i + FETCH_CONCURRENCY).map((r) => getMessage(ctx, r.id)));
-      for (const g of got) {
-        if (g.status === "fulfilled") { parsed.push(parseMessage(g.value)); continue; }
+      const slice = batch.slice(i, i + FETCH_CONCURRENCY);
+      const got = await Promise.allSettled(slice.map((r) => getMessage(ctx, r.id)));
+      got.forEach((g, n) => {
+        const id = slice[n].id;
+        if (g.status === "fulfilled") { parsed.push(parseMessage(g.value)); return; }
         const e = g.reason;
-        if (e instanceof RateLimited) { rateLimited = true; continue; } // keep what we have; the rest comes next sync
-        if (!(e instanceof ApiError && e.status === 404)) throw e; // 404 = deleted since listed
-      }
+        if (e instanceof RateLimited) { rateLimited = true; return; } // keep what we have; the rest comes next sync
+        if (e instanceof ApiError && (e.status === 404 || e.status === 410)) { skippedIds.add(id); settled++; return; } // deleted since listed
+        if (e instanceof ApiError && e.status >= 500) {
+          // Gmail's own error: try again next sync, give up after 3 tries
+          failures[id] = (failures[id] ?? 0) + 1; failuresChanged = true;
+          if (failures[id] >= 3) { skippedIds.add(id); delete failures[id]; settled++; }
+          return;
+        }
+        throw e;
+      });
     }
     parsed.sort((a, b) => a.sentAt.localeCompare(b.sentAt));
-    result.partial = parsed.length < todo.length;
+    result.partial = parsed.length + settled < todo.length;
+    if (settled || failuresChanged) {
+      const keep = Object.fromEntries(Object.entries(failures).slice(-200));
+      await saveIntegrationSettings(ctx, { skipped_ids: [...skippedIds].slice(-3000), fetch_failures: keep });
+    }
 
     // 3. Process
     const cache = new Map<string, SenderMatch>();
@@ -273,7 +293,8 @@ export async function syncGmail(ctx: SyncContext): Promise<GmailSyncResult> {
       (result.enquiries ? `, ${result.enquiries} enquir${result.enquiries === 1 ? "y" : "ies"} created` : "") +
       (result.review ? `, ${result.review} need review` : "") +
       (result.filtered ? `, ${result.filtered} skipped by your email filters` : "") +
-      (result.partial ? `. ${todo.length - processedCount} more will be fetched on the next sync${rateLimited ? " (Gmail asked us to slow down)" : ""}.` : ".");
+      (settled ? `, ${settled} gone from Gmail or unreadable (set aside)` : "") +
+      (result.partial ? `. ${todo.length - processedCount - settled} more will be fetched on the next sync${rateLimited ? " (Gmail asked us to slow down)" : ""}.` : ".");
     await finishSyncLog(ctx, logId, result.partial ? "partial" : "success", result.processed, result.message);
     if (result.processed) {
       await logIntegration(ctx, { action: "email.synced", entityType: "integration", entityId: ctx.integration.id, summary: result.message });
@@ -442,6 +463,16 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   if (!outbound && !bulk && thread.enquiry_id && thread.classification !== "spam" && Date.parse(pm.sentAt) > Date.now() - 14 * 86400_000) {
     await db.from("enquiries").update({ status: "needs_review", next_action: "They've emailed again — check and reply", next_action_due: new Date().toISOString() })
       .eq("id", thread.enquiry_id).eq("organisation_id", ctx.org.id).eq("status", "archived");
+  }
+  // A new conversation from a client that didn't become an enquiry (e.g. about a booking they already have): tell the team too
+  const clientId = (patch.customer_id as string | undefined) ?? thread.customer_id;
+  if (!outbound && thread.message_count === 0 && !res.enquiryCreated && clientId && !bulk && !["spam", "supplier"].includes(thread.classification)
+      && Date.parse(pm.sentAt) > Date.now() - 7 * 86400_000) {
+    await db.from("notifications").insert({
+      organisation_id: ctx.org.id, type: "email.new", title: `New email from ${pm.from.name ?? pm.from.email}`.slice(0, 200),
+      body: `${pm.subject ? `${pm.subject} — ` : ""}${bodyClean}`.slice(0, 140),
+      link: thread.event_id ? `/events/${thread.event_id}?tab=communication` : `/clients/${clientId}?tab=emails`, entity_type: "email_thread", entity_id: thread.id,
+    });
   }
   // A reply from the customer on an existing thread: tell the team
   if (!outbound && thread.message_count > 0 && thread.classification !== "spam" && !bulk) {

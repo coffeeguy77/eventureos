@@ -518,6 +518,15 @@ export function classifyRules(email: EmailInput, ctx: ClassifyContext): Classifi
       if (EXISTING_EVENT_WORDS.test(text)) reasons.push("Mentions event logistics");
       return done("existing_event", EXISTING_EVENT_WORDS.test(text) ? 0.88 : 0.76);
     }
+    // No quote waiting and no event booked: asking for a quote / a booking is a new enquiry, not a quote discussion
+    const serviceHit = SERVICE_WORDS.test(text);
+    // Not replies / forwards / calendar responses, and not about invoices or payments
+    const replyish = /^\s*(re|fw|fwd|aw|accepted|declined|tentative|tentatively accepted|invitation|updated invitation|new event)\s*:/i.test(email.subject ?? "");
+    const billing = /\b(invoice|remittance|receipt|payment|paid|statement|overdue)\b/i.test(`${email.subject ?? ""} ${text}`);
+    if (!ctx.customer_has_open_quote && !replyish && !billing && (eventHit || serviceHit) && (requestHit || quoteHit)) {
+      reasons.push("Existing customer asking for a new booking or quote (nothing open with them)");
+      return done("event_enquiry", 0.85);
+    }
     if (quoteHit) {
       reasons.push("Existing customer discussing pricing or a quote");
       return done("quote_discussion", 0.7);

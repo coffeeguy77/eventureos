@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripQuoted, localDate } from "@/lib/ai/classify";
-import { ANTHROPIC_URL, ANTHROPIC_VERSION, parseJSONObject } from "@/lib/ai/claude";
+import { ANTHROPIC_URL, anthropicHeaders, parseJSONObject } from "@/lib/ai/claude";
 import { priceJob, serviceHours, suggestedStaff, type PackageRules, type PricedService } from "@/lib/pricing/engine";
 
 /**
@@ -30,7 +30,7 @@ async function callClaudeRaw(system: string, user: string, maxTokens: number, ti
   try {
     const res = await fetch(ANTHROPIC_URL, {
       method: "POST", signal: ctrl.signal,
-      headers: { "x-api-key": key, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json" },
+      headers: anthropicHeaders(key),
       body: JSON.stringify({ model: replyModel(), max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
     });
     if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 300)}`);

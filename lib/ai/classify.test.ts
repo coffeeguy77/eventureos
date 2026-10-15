@@ -172,6 +172,27 @@ async function main() {
     assert.equal(r.extracted.event_date, "2026-12-12");
   });
 
+  await test("existing client, nothing open, asks for a quote for a new date → event_enquiry (St Clare's)", () => {
+    const r = classifyRules(mail({ subject: "Coffee Van - World Teachers' Day", from_email: "business.manager@school.example", from_name: "Vikram",
+      body: "Hello,\n\nWe would like to get a coffee van at our school on Friday - 30 October for World Teachers' Day.\n\nThe service should start at 7:30 am and end at 9:00 am. I expect that you will be making around 100 coffees during this time.\n\nCan you please send a quote for this?\n\nThanks and regards" }),
+      { ...base, known_customer: true, customer_has_open_event: false, customer_has_open_quote: false });
+    assert.equal(r.classification, "event_enquiry");
+  });
+
+  await test("existing client: calendar acceptance and remittance advice are not new enquiries", () => {
+    const ctx = { ...base, known_customer: true, customer_has_open_event: false, customer_has_open_quote: false };
+    const a = classifyRules(mail({ subject: "Accepted: Coffee Cart Dry Hire | St Matthew's Church @ Fri Oct 23 1pm", from_email: "x@church.example", body: "Accepted: Coffee Cart Dry Hire on Friday 23 October. Can you please confirm?" }), ctx);
+    assert.notEqual(a.classification, "event_enquiry");
+    const b = classifyRules(mail({ subject: "Remittance Advice", from_email: "accounts@club.example", body: "Please find attached remittance advice for your coffee cart invoice. Can you please confirm receipt?" }), ctx);
+    assert.notEqual(b.classification, "event_enquiry");
+  });
+
+  await test("existing client with a quote waiting who mentions the price → still quote_discussion", () => {
+    const r = classifyRules(mail({ subject: "Re: quote", from_email: "olivia@example.net", body: "Thanks for the quote — is that price including GST?" }),
+      { ...base, known_customer: true, customer_has_open_quote: true, customer_has_open_event: true });
+    assert.equal(r.classification, "quote_discussion");
+  });
+
   await test("personal note from unknown with no signals → needs_review", () => {
     const r = classifyRules(mail({ subject: "Hi", from_email: "someone@example.com", body: "Hey, give me a call when you can." }), base);
     assert.equal(r.classification, "needs_review");
