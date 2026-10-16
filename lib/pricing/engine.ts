@@ -23,6 +23,8 @@ export interface StaffRule {
   packdown_minutes?: number;
   /** Minimum paid hours per staff member (0 = none). */
   min_hours?: number;
+  /** Minimum paid hours for the 2nd, 3rd… staff member (e.g. 3 — nobody comes out for a 2 hr shift). */
+  min_hours_extra?: number;
   /** Hours that aren't charged (e.g. first hour included with the van). */
   included_hours?: number;
   /** "first" = only the first staff member gets the included hours; "each" = every staff member. */
@@ -114,7 +116,8 @@ export function staffHours(rule: StaffRule, serviceHrs: number, isFirst: boolean
   const appliesIncluded = (rule.included_applies_to ?? "first") === "each" || isFirst;
   let paid = worked - (appliesIncluded ? rule.included_hours ?? 0 : 0);
   paid = Math.max(0, paid);
-  if (paid > 0 && rule.min_hours) paid = Math.max(paid, rule.min_hours);
+  const min = isFirst ? rule.min_hours ?? 0 : Math.max(rule.min_hours ?? 0, rule.min_hours_extra ?? 0);
+  if (paid > 0 && min) paid = Math.max(paid, min);
   return roundUp(paid, rule.round_to_hours ?? 0.5);
 }
 
@@ -180,6 +183,8 @@ export function priceJob(rules: PackageRules, services: PricedService[], input: 
       const extras: string[] = [];
       if (rules.staff.included_hours) extras.push(`first ${fmtH(rules.staff.included_hours)} included${(rules.staff.included_applies_to ?? "first") === "first" && staffCount > 1 ? " (first " + label + ")" : ""}`);
       if (rules.staff.min_hours && per.some((p) => p <= rules.staff!.min_hours! && worked < rules.staff!.min_hours!)) extras.push(`${fmtH(rules.staff.min_hours)} minimum per ${label}`);
+      const mx = rules.staff.min_hours_extra ?? 0;
+      if (staffCount > 1 && mx > (rules.staff.min_hours ?? 0) && worked < mx) extras.push(`${fmtH(mx)} minimum for each extra ${label}`);
       add(s, paidTotal, "staff", `${breakdown} (${fmtH(hrs)} service${setup})${extras.length ? " — " + extras.join("; ") : ""}`);
     } else if (rules.staff.included_hours) {
       notes.push(`${label[0].toUpperCase() + label.slice(1)} time is within the included ${fmtH(rules.staff.included_hours)} — no staff charge.`);
@@ -209,7 +214,7 @@ export function checkRules(rules: PackageRules, serviceIds: Set<string>): string
   if (!rules.hire && !rules.delivery && !rules.staff && !rules.per_serve) out.push("A package needs at least one priced part.");
   const s = rules.staff;
   if (s) {
-    for (const [k, v, max] of [["setup minutes", s.setup_minutes, 600], ["pack-down minutes", s.packdown_minutes, 600], ["minimum hours", s.min_hours, 24], ["included hours", s.included_hours, 24]] as const) {
+    for (const [k, v, max] of [["setup minutes", s.setup_minutes, 600], ["pack-down minutes", s.packdown_minutes, 600], ["minimum hours", s.min_hours, 24], ["minimum for extra staff", s.min_hours_extra, 24], ["included hours", s.included_hours, 24]] as const) {
       if (v != null && (!Number.isFinite(v) || v < 0 || v > max)) out.push(`Staff ${k} must be between 0 and ${max}.`);
     }
   }

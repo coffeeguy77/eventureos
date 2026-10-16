@@ -24,6 +24,11 @@ export interface StaffDetails {
   unit_label?: string;
   /** Driving to and from the job, charged each way on every day (set from the quote's Travel line) */
   travel_minutes?: number;
+  /**
+   * Override for this quote: charge every staff member at least this many hours a shift, with no included hour
+   * (e.g. a regular on a cheaper coffee price, where the van's free first hour doesn't pay).
+   */
+  min_shift?: number;
   // Older single-day shape (still read): start, end, staff, setup_minutes
   start?: string | null; end?: string | null; staff?: number; setup_minutes?: number;
 }
@@ -84,34 +89,37 @@ export function nextShiftDay(days: ShiftDay[]): ShiftDay {
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 || w.endsWith("s") ? "" : "s"}`;
+const hrLabel = (h: number) => `${Number.isInteger(h) ? h : Number(h.toFixed(2))} hr${h === 1 ? "" : "s"}`;
 const hrsText = (h: number) => `${Number.isInteger(h) ? h : Number(h.toFixed(2))}hrs`;
 
 /** Hours to charge across every day and person, the line's description, and per-day workings. */
 export function staffLine(d: StaffDetails, rule: StaffRule | null, label = "staff") {
   const days = shiftDays(d);
   const unitWord = d.unit_label?.trim() || "cart";
-  const out: { day: string; staff: number; perPerson: number; hours: number }[] = [];
+  const out: { day: string; staff: number; perPerson: number; hours: number; each: number[] }[] = [];
   const blocks: string[] = [];
   const multi = days.length > 1 || days.some((x) => x.date);
   for (const [i, day] of days.entries()) {
     const s = toMin(day.start), e = toMin(day.end);
     if (s == null || e == null) return null;
     const hrs = serviceHours(s, e);
-    const r: StaffRule = { ...(rule ?? { service_id: "" }), setup_minutes: day.setup_minutes, packdown_minutes: rule?.packdown_minutes ?? 0 };
+    const ms = Math.max(0, d.min_shift ?? 0);
+    const r: StaffRule = { ...(rule ?? { service_id: "" }), setup_minutes: day.setup_minutes, packdown_minutes: rule?.packdown_minutes ?? 0,
+      ...(ms ? { included_hours: 0, min_hours: Math.max(rule?.min_hours ?? 0, ms), min_hours_extra: Math.max(rule?.min_hours_extra ?? 0, ms) } : {}) };
     const units = Math.max(1, Math.floor(day.units || 1)), per = Math.max(1, Math.floor(day.per_unit || 1));
     const staff = units * per;
     const travel = Math.max(0, d.travel_minutes ?? 0) * 2 / 60;
     const each = Array.from({ length: staff }, (_, n) => Math.round((staffHours(r, hrs, n === 0) + travel) * 100) / 100);
     const hours = Math.round(each.reduce((a, b) => a + b, 0) * 100) / 100;
-    out.push({ day: dayLabel(day, i), staff, perPerson: each[0], hours });
+    out.push({ day: dayLabel(day, i), staff, perPerson: each[0], hours, each });
     const setup = setupTime(day);
     const who = units > 1 ? ` – ${plural(per, label)} / per ${unitWord}` : staff > 1 && multi ? ` – ${plural(staff, label)}` : "";
     const lines = [
-      multi ? `${dayLabel(day, i)} – ${hrsText(each[0])}${staff > 1 ? ` x${staff} (${hrsText(hours)})` : ""}` : null,
+      multi ? `${dayLabel(day, i)} – ${hrsText(each[0])}${staff > 1 && each.some((x) => x !== each[0]) ? ` + ${each.slice(1).map(hrLabel).join(" + ")} (${hrsText(hours)})` : staff > 1 ? ` x${staff} (${hrsText(hours)})` : ""}` : null,
       day.setup_minutes > 0 && setup ? `Setup ${shortTime(setup)}` : null,
       `Service ${shortTime(day.start)} – ${shortTime(day.end)}${who}`,
       travel > 0 ? `Travel ${minutesText(d.travel_minutes!)} each way (${hrsText(travel)})` : null,
-      !multi && staff > 1 ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : null,
+      !multi && staff > 1 ? (each.every((x) => x === each[0]) ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : `${plural(staff, label)}: ${each.map(hrLabel).join(" + ")}`) : null,
     ].filter(Boolean);
     blocks.push(lines.join("\n"));
   }
@@ -149,7 +157,8 @@ export function cleanDetails(raw: unknown): LineDetails | null {
     });
     const unit = typeof r.unit_label === "string" ? r.unit_label.trim().slice(0, 30) : "";
     const travel = Math.round(n(r.travel_minutes, 24 * 60));
-    return { kind: "staff", days, ...(unit ? { unit_label: unit } : {}), ...(travel ? { travel_minutes: travel } : {}) };
+    const minShift = Math.round(n(r.min_shift, 12) * 4) / 4;
+    return { kind: "staff", days, ...(unit ? { unit_label: unit } : {}), ...(travel ? { travel_minutes: travel } : {}), ...(minShift ? { min_shift: minShift } : {}) };
   }
   if (r.kind === "travel") {
     return { kind: "travel", address: typeof r.address === "string" ? r.address.trim().slice(0, 300) : "", km: Math.round(n(r.km, 5000) * 10) / 10,

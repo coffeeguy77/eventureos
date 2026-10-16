@@ -398,7 +398,8 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
     const withTravel = { ...next, travel_minutes: travel || undefined };
     setD(withTravel);
     const calc = staffLine(withTravel, helper.rule, helper.label);
-    if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}), ...(travel ? { travel_minutes: travel } : {}) }, { quantity: calc.quantity, description: calc.description });
+    if (calc) h.onDetails(it.id, { kind: "staff", days: next.days, ...(next.unit_label ? { unit_label: next.unit_label } : {}), ...(travel ? { travel_minutes: travel } : {}),
+      ...(next.min_shift ? { min_shift: next.min_shift } : {}) }, { quantity: calc.quantity, description: calc.description });
   };
   const setDay = (i: number, patch: Partial<ShiftDay>) => commit({ ...d, days: d.days.map((x, n) => (n === i ? { ...x, ...patch } : x)) });
   // Keep the line in step with the rules: if the hours worked out now differ from what's saved, update the line
@@ -436,7 +437,9 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
               <label className="w-20"><span className={lab}>{label}s{day.units > 1 ? `/${unit}` : ""}</span>
                 <input type="number" min={1} max={50} inputMode="numeric" value={day.per_unit} onChange={(e) => setDay(i, { per_unit: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label={`Day ${i + 1} ${helper.label}s per ${unit}`} /></label>
               <span className="pb-2 text-[0.75rem] text-ink-muted">
-                {calc ? <>{setupTime(day) && day.setup_minutes > 0 ? `${shortTime(setupTime(day))} setup · ` : ""}<b className="text-ink">{calc.perPerson} hrs</b>{calc.staff > 1 ? <> × {calc.staff} = <b className="text-ink">{calc.hours} hrs</b></> : null}
+                {calc ? <>{setupTime(day) && day.setup_minutes > 0 ? `${shortTime(setupTime(day))} setup · ` : ""}{calc.staff > 1 && calc.each.some((x) => x !== calc.each[0])
+                  ? <><b className="text-ink">{calc.each.join(" + ")} hrs</b> = <b className="text-ink">{calc.hours} hrs</b></>
+                  : <><b className="text-ink">{calc.perPerson} hrs</b>{calc.staff > 1 ? <> × {calc.staff} = <b className="text-ink">{calc.hours} hrs</b></> : null}</>}
                   {minH > 0 && calc.perPerson === minH && workedHours(day) < minH ? <span className="text-amber-700"> · {minH} hr minimum</span> : null}</> : "Add the service times"}
               </span>
               {d.days.length > 1 && (
@@ -455,6 +458,22 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
             Same hours &amp; team every day (copy {dayLabel(d.days[0], 0).split(" ")[0]})
           </button>
         )}
+        {/* Override for this quote: a minimum shift for every staff member, no free included hour */}
+        <span className="inline-flex flex-wrap items-center gap-1.5 text-[0.75rem]" title={`Charge every ${helper.label} at least this many hours a shift${helper.rule?.included_hours ? `, and drop the ${helper.rule.included_hours} hr included` : ""} — for jobs where the package pricing doesn't pay (e.g. a regular on a cheaper per-coffee price)`}>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 font-medium text-ink-muted hover:text-ink">
+            <input type="checkbox" checked={!!d.min_shift} aria-label="Minimum shift for every staff member"
+              onChange={(e) => commit({ ...d, min_shift: e.target.checked ? (helper.rule?.min_hours_extra || helper.rule?.min_hours || 3) : undefined })} className="h-4 w-4 rounded border-line-strong" />
+            Minimum shift
+          </label>
+          {d.min_shift ? (
+            <>
+              <input type="number" min={0.5} max={12} step={0.5} inputMode="decimal" value={d.min_shift} aria-label="Minimum shift hours"
+                onChange={(e) => { const v = Math.min(12, Math.max(0.5, Math.round((Number(e.target.value) || 0) * 2) / 2)); commit({ ...d, min_shift: v }); }}
+                className={cn(helperInput, "h-7 w-14 tabular text-right")} />
+              <span className="text-ink-muted">hrs per {helper.label}{helper.rule?.included_hours ? ", no included hour" : ""}</span>
+            </>
+          ) : null}
+        </span>
         <span className="ml-auto text-[0.75rem] text-ink-muted">
           {r ? <>Total <b className="text-ink">{r.quantity} hrs</b>{d.days.length > 1 ? ` over ${d.days.length} days` : ""}</> : "Enter service times — setup and hours are worked out for you."}
           {minH ? <span className="text-ink-faint"> · {minH} hr minimum per {helper.label}{minSetup ? `, incl. ${minSetup} min setup` : ""}</span> : null}

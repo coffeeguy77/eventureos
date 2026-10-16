@@ -59,4 +59,13 @@ eq("travel hours total (same as the quote sent)", josh.quantity, 18.5);
 eq("travel on the description", /Travel 2 hrs each way \(4hrs\)/.test(josh.description), true);
 eq("clean travel", cleanDetails({ kind: "travel", address: " Farm ", km: "140", drive_minutes: 105, charge_minutes: 120, trips: 2 }), { kind: "travel", address: "Farm", km: 140, drive_minutes: 105, charge_minutes: 120, trips: 2 });
 eq("clean keeps travel minutes", (cleanDetails({ kind: "staff", days: [], travel_minutes: 120 }) as StaffDetails).travel_minutes, 120);
+
+// Minimums: a 2nd barista on the van is charged at least 3 hrs; "Minimum shift" drops the free hour for everyone
+const van3 = { service_id: "x", included_hours: 1, round_to_hours: 0.5, included_applies_to: "first" as const, min_hours_extra: 3 };
+const school = (o: Partial<StaffDetails> = {}) => staffLine({ kind: "staff", days: [day({ start: "07:30", end: "09:00", setup_minutes: 30, per_unit: 2 })], ...o }, van3, "barista")!;
+eq("van, 2 baristas, 1.5 hr service: 1 + 3 hrs", school().days[0].hours, 4);
+eq("van, 2 baristas, description", school().description.split("\n").pop(), "2 baristas: 1 hr + 3 hrs");
+eq("minimum shift 3: 3 + 3 hrs", school({ min_shift: 3 }).days[0].hours, 6);
+eq("minimum shift 3, one barista", staffLine({ kind: "staff", min_shift: 3, days: [day({ start: "07:30", end: "09:00", setup_minutes: 30 })] }, van3, "barista")!.quantity, 3);
+eq("minimum shift kept by cleanDetails", (cleanDetails({ kind: "staff", days: [], min_shift: 3 }) as StaffDetails).min_shift, 3);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }

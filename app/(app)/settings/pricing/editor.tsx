@@ -102,6 +102,7 @@ function describeRules(r: PackageRules, byId: Map<string, Service>, currency: st
     if (s.setup_minutes) bits.push(`charged from ${s.setup_minutes} min before service`);
     if (s.packdown_minutes) bits.push(`plus ${s.packdown_minutes} min after`);
     if (s.min_hours) bits.push(`${s.min_hours} hr minimum per person`);
+    if (s.min_hours_extra && s.min_hours_extra > (s.min_hours ?? 0)) bits.push(`${s.min_hours_extra} hr minimum for extra staff`);
     if (s.included_hours) bits.push(`first ${s.included_hours} hr included${(s.included_applies_to ?? "first") === "first" ? " (first staff member only)" : " (each staff member)"}`);
     if (s.round_to_hours) bits.push(`rounded up to ${s.round_to_hours} hr`);
     out.push(`Staff: ${bits.join(", ")}`);
@@ -192,6 +193,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
   const [setup, setSetup] = useState(String(r.staff?.setup_minutes ?? 0));
   const [packdown, setPackdown] = useState(String(r.staff?.packdown_minutes ?? 0));
   const [minH, setMinH] = useState(String(r.staff?.min_hours ?? 0));
+  const [minX, setMinX] = useState(String(r.staff?.min_hours_extra ?? 0));
   const [incl, setIncl] = useState(String(r.staff?.included_hours ?? 0));
   const [inclTo, setInclTo] = useState<"first" | "each">(r.staff?.included_applies_to ?? "first");
   const [round, setRound] = useState(String(r.staff?.round_to_hours ?? 0.5));
@@ -210,7 +212,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
       per_serve: perServe ? { service_id: perServe } : null,
       staff: staffSvc ? {
         service_id: staffSvc, label: label.trim() || "staff", setup_minutes: Number(setup) || 0, packdown_minutes: Number(packdown) || 0,
-        min_hours: Number(minH) || 0, included_hours: Number(incl) || 0, included_applies_to: inclTo, round_to_hours: Number(round) || 0,
+        min_hours: Number(minH) || 0, min_hours_extra: Number(minX) || 0, included_hours: Number(incl) || 0, included_applies_to: inclTo, round_to_hours: Number(round) || 0,
       } : null,
       ...(calLabel.trim() ? { calendar_label: calLabel.trim().slice(0, 60) } : {}),
       ...(servesLabel.trim() ? { serves_label: servesLabel.trim().slice(0, 30) } : {}),
@@ -265,6 +267,7 @@ function PackageForm({ initial, services, onDone }: { initial: Pkg; services: Se
           {num("pk-setup", "Paid before service", setup, setSetup, "min", "5")}
           {num("pk-pack", "Paid after service", packdown, setPackdown, "min", "5")}
           {num("pk-min", "Minimum per person", minH, setMinH, "hrs")}
+          {num("pk-minx", "Minimum for extra staff", minX, setMinX, "2nd, 3rd… hrs")}
           {num("pk-incl", "Hours included", incl, setIncl, "not charged")}
         </div>
         {Number(incl) > 0 && (
