@@ -21,6 +21,7 @@ type Row = {
   id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; amount_paid: number; balance: number;
   status: InvoiceStatus; xero_invoice_id: string | null; xero_synced_at: string | null; event_id: string | null;
   origin?: string; quote_id: string | null; created_by: string | null;
+  emailed_at?: string | null; view_count?: number; last_viewed_at?: string | null; reminders?: { key: string; at: string }[];
   customer: { id: string; name: string } | null; event: { id: string; number: number; name: string } | null;
 };
 
@@ -39,14 +40,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
   const src: "eventureos" | "xero" = sp.src === "xero" ? "xero" : "eventureos";
   const cols = "id, number, kind, issue_date, due_date, total, amount_paid, balance, status, xero_invoice_id, xero_synced_at, event_id, quote_id, created_by, customer:customers(id, name), event:events(id, number, name)";
   const listQuery = (withOrigin: boolean) => {
-    let q = supabase.from("invoices").select(withOrigin ? `${cols}, origin` : cols).eq("organisation_id", org.id);
+    let q = supabase.from("invoices").select(withOrigin ? `${cols}, origin, emailed_at, view_count, last_viewed_at, reminders` : cols).eq("organisation_id", org.id);
     if (src === "xero") q = q.not("xero_invoice_id", "is", null);
     else if (withOrigin) q = q.eq("origin", "eventureos");
     return q.order("issue_date", { ascending: false }).order("created_at", { ascending: false }).limit(2000);
   };
 
   const [invRes, payRes, xeroRes] = await Promise.all([
-    listQuery(true).then((r) => (r.error && /origin/.test(r.error.message) ? listQuery(false) : r)),
+    listQuery(true).then((r) => (r.error && /origin|emailed_at|view_count|last_viewed_at|reminders/.test(r.error.message) ? listQuery(false) : r)),
     supabase.from("payments").select("amount, invoice:invoices(id, xero_invoice_id, quote_id, created_by, kind)").eq("organisation_id", org.id).gte("paid_at", month.start).lt("paid_at", month.end),
     supabase.from("integrations").select("status, last_sync_at, last_sync_status, last_error, account_label").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle(),
   ]);
@@ -171,6 +172,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                       <div className={cn("mt-0.5 truncate text-[0.75rem]", late ? "font-medium text-rose-700" : "text-ink-faint")}>
                         Due {fmtDate(i.due_date)}{late && lateDays > 0 ? ` · ${lateDays}d overdue` : ""}
                       </div>
+                      <SentLine i={i} />
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <span className={cn("tabular text-[0.8125rem] font-medium", late ? "text-rose-700" : i.status === "void" ? "text-ink-faint" : "text-ink")}>{money(i.balance, cur)}</span>
@@ -205,9 +207,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                         <Link href={`/invoices/${i.id}`} className={cn("font-medium after:absolute after:inset-0", i.status === "void" ? "text-ink-faint line-through" : "text-ink")}>{i.number}</Link>
                         {src === "eventureos" && i.xero_invoice_id && <XeroPill />}
                         {src === "xero" && !fromXero(i) && <span className="ml-1.5 inline-flex items-center rounded-full bg-brand-50 px-1.5 py-px align-middle text-[0.625rem] font-semibold uppercase tracking-wide text-brand-700 ring-1 ring-inset ring-brand-100" title="Raised in EventureOS">Ours</span>}
-                        <span className={cn("block text-[0.7188rem]", i.xero_invoice_id ? "text-emerald-700" : "text-ink-faint")}>
-                          {i.xero_invoice_id ? `Synced with Xero · ${i.xero_synced_at ? relative(i.xero_synced_at) : "not yet"}` : "Not in Xero yet"}
-                        </span>
+                        <SentLine i={i} />
                       </td>
                       <td className="max-w-[200px] truncate px-4 py-3 text-ink">{i.customer?.name ?? "—"}</td>
                       <td className="max-w-[220px] truncate px-4 py-3 text-ink-muted">{i.event?.name ?? "—"}</td>
@@ -247,4 +247,22 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
 /** "Sent to Xero" marker on an invoice raised in EventureOS. */
 function XeroPill() {
   return <span className="ml-1.5 inline-flex items-center rounded-full bg-sky-50 px-1.5 py-px align-middle text-[0.625rem] font-semibold uppercase tracking-wide text-sky-700 ring-1 ring-inset ring-sky-100" title="Sent to Xero">Xero</span>;
+}
+
+/** "Emailed 19 Oct · Viewed 2× · 1 reminder" — or "Not sent yet" (for invoices raised here). */
+function SentLine({ i }: { i: Row }) {
+  if (i.emailed_at === undefined) return null; // before the database update
+  const fromXero = i.origin === "xero";
+  if (fromXero) return <span className="block text-[0.7188rem] text-ink-faint">From Xero</span>;
+  if (i.status === "void") return null;
+  const d = (x: string) => new Date(x).toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: "Australia/Sydney" });
+  const rem = Array.isArray(i.reminders) ? i.reminders.length : 0;
+  if (!i.emailed_at) return <span className={cn("block text-[0.7188rem] font-medium", i.status === "paid" ? "text-ink-faint" : "text-amber-700")}>{i.status === "paid" ? "Paid" : "Not sent yet"}</span>;
+  return (
+    <span className="block text-[0.7188rem] text-ink-faint">
+      Emailed {d(i.emailed_at)}
+      {i.view_count ? <span className="text-emerald-700"> · Viewed{i.view_count > 1 ? ` ${i.view_count}×` : ""}{i.last_viewed_at ? ` ${d(i.last_viewed_at)}` : ""}</span> : <span> · Not opened</span>}
+      {rem ? ` · ${rem} reminder${rem === 1 ? "" : "s"}` : ""}
+    </span>
+  );
 }

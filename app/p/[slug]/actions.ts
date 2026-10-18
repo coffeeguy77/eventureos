@@ -153,8 +153,8 @@ export async function respondToQuote(_prev: ActionResult | undefined, form: Form
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
       await alertBookingApproval(supabase, ev.id);
       const { createServiceClient } = await import("@/lib/integrations/runtime");
-      const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
-      await jobCalendarAfterAccept(createServiceClient(), ev.id);
+      const { afterQuoteAccepted } = await import("@/lib/quotes/after-accept");
+      await afterQuoteAccepted(createServiceClient(), ev.id);
     }
     revalidatePath(`/p/${slug}`, "layout");
     return { ok: true };

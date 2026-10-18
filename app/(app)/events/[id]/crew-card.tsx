@@ -10,10 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormError, inputClass } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
+import { isRosterOnly, skillLabel } from "@/lib/crew/skills";
 
-export interface CrewRow { id: string; crew_member_id: string; name: string; email: string | null; role: string | null; status: "interested" | "offered" | "confirmed"; calendar: string | null; onBoard: boolean }
-export interface CrewNeeds { ready: boolean; needed: number | null; notes: string | null }
-export interface CrewOption { id: string; name: string; email: string | null; role: string | null; always_invite: boolean }
+export interface CrewRow { id: string; crew_member_id: string; name: string; email: string | null; role: string | null; status: "interested" | "offered" | "confirmed"; calendar: string | null; onBoard: boolean; skills?: string[] }
+export interface CrewNeeds {
+  ready: boolean; needed: number | null; notes: string | null;
+  /** Staff the accepted quote's staff lines add up to */
+  fromQuote?: number | null;
+  /** Coffee van job — someone with a licence has to be rostered */
+  van?: boolean; skillsReady?: boolean;
+}
+export interface CrewOption { id: string; name: string; email: string | null; role: string | null; always_invite: boolean; skills?: string[] }
 
 /** Staff-list people (no login) working this job. They — and "always invite" people — get the calendar invite. */
 export function CrewCard({ eventId, rows: all, options, canEdit, needs, confirmed }: { eventId: string; rows: CrewRow[]; options: CrewOption[]; canEdit: boolean; needs?: CrewNeeds; confirmed?: boolean }) {
@@ -27,8 +34,13 @@ export function CrewCard({ eventId, rows: all, options, canEdit, needs, confirme
   const [pick, setPick] = useState("");
   const always = options.filter((o) => o.always_invite);
   const available = options.filter((o) => !o.always_invite && !rows.some((r) => r.crew_member_id === o.id));
-  const want = needs?.needed ?? 1;
-  const accepted = rows.filter((r) => r.status === "confirmed" && r.calendar !== "declined").length;
+  const want = needs?.needed ?? needs?.fromQuote ?? 1;
+  const staff = rows.filter((r) => !isRosterOnly(r.skills));
+  const accepted = staff.filter((r) => r.status === "confirmed" && r.calendar !== "declined").length;
+  const working = staff.filter((r) => r.calendar !== "declined");
+  const anyDriverOnList = options.some((o) => o.skills?.includes("driver"));
+  const noDriver = !!needs?.van && !!needs?.skillsReady && working.length > 0 && !working.some((r) => r.skills?.includes("driver"));
+  const skillText = (k?: string[]) => (k?.length ? ` — ${k.map(skillLabel).join(", ")}` : "");
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>) => start(async () => {
     setError(null);
     const r = await fn().catch(() => ({ ok: false, error: "Couldn't reach the server." }));
@@ -52,6 +64,8 @@ export function CrewCard({ eventId, rows: all, options, canEdit, needs, confirme
                       : r.status === "confirmed" ? <Badge tone="green">Accepted</Badge>
                       : <Badge tone="amber">Hasn&apos;t accepted yet</Badge>}
                     {r.onBoard && <Badge tone="amber">On the job board — looking for cover</Badge>}
+                    {r.skills?.includes("driver") && <Badge tone="green">Licence</Badge>}
+                    {isRosterOnly(r.skills) && <Badge tone="slate">Rosters only — not counted</Badge>}
                   </p>
                 )}
               </div>
@@ -83,7 +97,7 @@ export function CrewCard({ eventId, rows: all, options, canEdit, needs, confirme
         <div className="mt-2 flex flex-wrap gap-2">
           <select value={pick} onChange={(e) => setPick(e.target.value)} className={cn(inputClass, "w-auto min-w-[10rem] flex-1 py-1.5")} aria-label="Staff list person">
             <option value="">Add from the staff list…</option>
-            {available.map((o) => <option key={o.id} value={o.id}>{o.name}{o.role ? ` (${o.role})` : ""}</option>)}
+            {available.map((o) => <option key={o.id} value={o.id}>{o.name}{o.role ? ` (${o.role})` : ""}{skillText(o.skills)}</option>)}
           </select>
           <Button size="sm" className="h-9" disabled={!pick || pending} onClick={() => run(async () => { const r = await addEventCrew(eventId, pick, null); if (r.ok) setPick(""); return r; })}>Add</Button>
         </div>
@@ -96,14 +110,23 @@ export function CrewCard({ eventId, rows: all, options, canEdit, needs, confirme
       {options.length === 0 && canEdit && (
         <p className="mt-2 text-[0.75rem] text-ink-muted">No staff list yet. <Link href="/settings/team" className="font-medium text-brand-700 hover:underline">Add people</Link> without giving them a login.</p>
       )}
+      {noDriver && (
+        <p className="mt-2 rounded-md bg-rose-50 px-3 py-2 text-[0.75rem] font-medium text-rose-800 ring-1 ring-inset ring-rose-200">
+          Coffee van job — nobody rostered has a licence to drive the van.{anyDriverOnList ? ` Licensed: ${options.filter((o) => o.skills?.includes("driver")).map((o) => o.name).join(", ")}.` : ""}
+        </p>
+      )}
+      {needs?.van && needs?.skillsReady && !anyDriverOnList && options.length > 0 && (
+        <p className="mt-2 text-[0.7188rem] text-ink-faint">Tick &ldquo;Licence&rdquo; on the <Link href="/settings/team" className="text-brand-700 hover:underline">staff list</Link> for whoever can drive the van, and van jobs will check one is rostered.</p>
+      )}
       {needs?.ready && (
         <div className="mt-3 space-y-2 border-t border-line pt-3">
           <div className="flex flex-wrap items-center gap-2 text-[0.75rem] text-ink-muted">
             <span>Staff needed</span>
-            <input value={needed} disabled={!canEdit || pending} inputMode="numeric" placeholder="1" onChange={(e) => setNeeded(e.target.value.replace(/\D/g, ""))}
+            <input value={needed} disabled={!canEdit || pending} inputMode="numeric" placeholder={String(needs.fromQuote ?? 1)} onChange={(e) => setNeeded(e.target.value.replace(/\D/g, ""))}
               onBlur={() => { const n = needed === "" ? null : Number(needed); if (n !== needs.needed) run(() => setCrewNeeds(eventId, n, notes)); }}
               className="h-8 w-14 rounded-md border border-line bg-surface px-2 text-right tabular text-ink" aria-label="Staff needed" />
             <span className={accepted >= want ? "text-emerald-700" : "text-amber-700"}>{accepted} of {want} accepted</span>
+            {needs.needed == null && needs.fromQuote != null && <span className="text-ink-faint">(from the quote&apos;s staff line)</span>}
           </div>
           <textarea value={notes} disabled={!canEdit || pending} rows={2} maxLength={4000} onChange={(e) => setNotes(e.target.value)}
             onBlur={() => { if ((notes || null) !== (needs.notes || null)) run(() => setCrewNeeds(eventId, needed === "" ? null : Number(needed), notes)); }}

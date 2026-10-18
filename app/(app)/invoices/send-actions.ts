@@ -318,6 +318,11 @@ export async function sendInvoiceEmail(invoiceId: string, input: SendInvoiceInpu
         ? `${actorName(profile)} emailed ${inv.number} (${money(inv.balance, org.currency)} due) to ${sent.join(", ")}${gm ? ` from ${gm.address}` : ""}${target ? ` as a reply to “${(target.thread.subject ?? "").slice(0, 60)}”` : ""}${markedSent ? " — marked as awaiting payment" : ""}`
         : `${actorName(profile)} tried to email ${inv.number} — it failed`,
     });
+    if (sent.length) {
+      // Sent / viewed tracking (before the 0059 database update these columns don't exist — skipped)
+      const { data: cur } = await supabase.from("invoices").select("emailed_at, email_count").eq("id", inv.id).maybeSingle();
+      if (cur) await supabase.from("invoices").update({ emailed_at: (cur as { emailed_at: string | null }).emailed_at ?? new Date().toISOString(), email_count: Number((cur as { email_count: number }).email_count ?? 0) + 1 }).eq("id", inv.id);
+    }
     revalidatePath(`/invoices/${inv.id}`);
     revalidatePath("/invoices");
     if (inv.event_id) revalidatePath(`/events/${inv.event_id}`);

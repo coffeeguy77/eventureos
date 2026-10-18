@@ -30,6 +30,7 @@ import { DeleteConfirm } from "@/components/records/delete-confirm";
 import { deleteJob } from "../actions";
 import { rankForJob, type InvoiceForMatch } from "@/lib/invoices/match-job";
 import { LinkInvoiceButton } from "@/components/invoices/link-job";
+import { InvoiceSentStatus } from "@/components/invoices/sent-status";
 import { quoteStaffDays } from "@/lib/calendar/job-sync";
 import { formDays, jobDays, parseDays } from "@/lib/events/days";
 
@@ -84,6 +85,19 @@ export default async function EventPage({ params, searchParams }: { params: Prom
       status: (r.status ?? "confirmed") as CrewRow["status"], calendar: r.calendar_response ?? null, onBoard: !!r.board_posted_at }));
   const crewNeeds = { ready: "crew_needed" in (e as object), needed: (e as { crew_needed?: number | null }).crew_needed ?? null, notes: (e as { crew_notes?: string | null }).crew_notes ?? null };
   const crewOptions = (crewOpts ?? []) as CrewOption[];
+  // What each person can do, how many the quote says, and whether it's a van job (someone with a licence has to drive)
+  {
+    const { data: sk, error: skErr } = await supabase.from("crew_members").select("id, skills").eq("organisation_id", org.id);
+    if (!skErr) {
+      const m = new Map(((sk ?? []) as { id: string; skills: string[] | null }[]).map((x) => [x.id, x.skills ?? []]));
+      for (const o of crewOptions) o.skills = m.get(o.id) ?? [];
+      for (const r of crewList) r.skills = m.get(r.crew_member_id) ?? [];
+    }
+    const { data: aq } = await supabase.from("quotes").select("items:quote_items(name, details)").eq("event_id", e.id).eq("status", "accepted");
+    const items = ((aq ?? []) as unknown as { items: { name: string; details: unknown }[] }[]).flatMap((q) => q.items ?? []);
+    const { staffNeededFromLines, isVanJob } = await import("@/lib/crew/skills");
+    Object.assign(crewNeeds, { fromQuote: staffNeededFromLines(items), van: isVanJob([e.name as string, ...items.map((i) => i.name)]), skillsReady: !skErr });
+  }
   const people: PersonRow[] = ((peopleRows ?? []) as unknown as { id: string; contact_id: string; role: string | null; invited_at: string | null; contact: { first_name: string; last_name: string | null; email: string | null; phone: string | null } | null }[])
     .map((r) => ({ id: r.id, contact_id: r.contact_id, name: r.contact ? `${r.contact.first_name} ${r.contact.last_name ?? ""}`.trim() : "Contact", email: r.contact?.email ?? null, phone: r.contact?.phone ?? null, role: r.role, primary: r.contact_id === e.primary_contact_id, invited_at: r.invited_at }))
     .sort((a, b) => Number(b.primary) - Number(a.primary));
@@ -522,6 +536,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                       <Link href={`/invoices/${i.id}`} className="text-[0.8438rem] font-medium text-ink after:absolute after:inset-0">{i.number}</Link>
                       <Badge tone={INVOICE_STATUS[i.status].tone} dot>{INVOICE_STATUS[i.status].label}</Badge>
                     </div>
+                    <InvoiceSentStatus i={i as never} />
                     <div className="mt-1 flex items-baseline justify-between gap-3 text-[0.7812rem]">
                       <span className={cn("capitalize", i.status === "overdue" ? "font-medium text-rose-700" : "text-ink-muted")}>{i.kind} · due {fmtDate(i.due_date)}</span>
                       <span className="tabular shrink-0 text-ink-muted">{money(i.total, cur)}</span>
@@ -541,7 +556,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   <tbody className="divide-y divide-line">
                     {invoices.map((i) => (
                       <tr key={i.id}>
-                        <td className="px-5 py-3 font-medium"><Link href={`/invoices/${i.id}`} className="text-ink hover:text-brand-700">{i.number}</Link></td>
+                        <td className="px-5 py-3 font-medium"><Link href={`/invoices/${i.id}`} className="text-ink hover:text-brand-700">{i.number}</Link><InvoiceSentStatus i={i as never} className="font-normal" /></td>
                         <td className="px-5 py-3 capitalize text-ink-muted">{i.kind}</td>
                         <td className="px-5 py-3 text-ink-muted">{fmtDate(i.issue_date)}</td>
                         <td className={cn("px-5 py-3", i.status === "overdue" ? "font-medium text-rose-700" : "text-ink-muted")}>{fmtDate(i.due_date)}</td>

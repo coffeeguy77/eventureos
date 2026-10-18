@@ -31,6 +31,7 @@ type Inv = {
   amount_paid: number; balance: number; status: InvoiceStatus; currency: string; xero_invoice_id: string | null; xero_synced_at: string | null;
   quote_id: string | null; created_at: string; updated_at: string; reference: string | null; line_items: XeroLine[] | null;
   origin?: string; created_by: string | null;
+  emailed_at?: string | null; email_count?: number; first_viewed_at?: string | null; last_viewed_at?: string | null; view_count?: number; reminders?: { key: string; at: string }[];
   customer: { id: string; name: string; email: string | null; phone: string | null; company: string | null } | null;
   event: { id: string; number: number; name: string; event_date: string | null; venue: string | null } | null;
 };
@@ -49,9 +50,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const today = todayISO(tz);
 
   const cols = "id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, created_by, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)";
-  let { data, error } = await supabase.from("invoices").select(`${cols}, origin`).eq("id", id).eq("organisation_id", org.id).maybeSingle();
-  // Before the 0058 database update there's no origin column
-  if (error && /origin/.test(error.message)) ({ data, error } = await supabase.from("invoices").select(cols).eq("id", id).eq("organisation_id", org.id).maybeSingle());
+  let { data, error } = await supabase.from("invoices").select(`${cols}, origin, emailed_at, email_count, first_viewed_at, last_viewed_at, view_count, reminders`).eq("id", id).eq("organisation_id", org.id).maybeSingle();
+  // Before the 0058 / 0059 database updates these columns don't exist
+  if (error && /origin|emailed_at|email_count|viewed|view_count|reminders/.test(error.message)) ({ data, error } = await supabase.from("invoices").select(cols).eq("id", id).eq("organisation_id", org.id).maybeSingle());
   if (error) throw new Error(`Could not load invoice: ${error.message}`);
   if (!data) notFound();
   const inv = data as unknown as Inv;
@@ -132,6 +133,13 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             {inv.customer && <Link href={`/clients/${inv.customer.id}`} className="font-medium text-ink hover:text-brand-700">{inv.customer.name}</Link>}
             <span>Issued {fmtDate(inv.issue_date)}</span>
             <span className={cn(late && "font-medium text-rose-700")}>Due {fmtDate(inv.due_date)}{late ? ` · ${lateDays}d overdue` : ""}</span>
+            {inv.emailed_at !== undefined && inv.status !== "void" && (
+              <span className={cn("text-[0.7812rem] font-medium", inv.emailed_at ? "text-ink" : "text-amber-700")}>
+                {inv.emailed_at
+                  ? <>Emailed {fmtDateTime(inv.emailed_at, tz)}{(inv.email_count ?? 0) > 1 ? ` (${inv.email_count} emails)` : ""} · {inv.view_count ? <span className="text-emerald-700">viewed {inv.view_count}× · last {relative(inv.last_viewed_at!)}</span> : "not opened yet"}{inv.reminders?.length ? ` · ${inv.reminders.length} reminder${inv.reminders.length === 1 ? "" : "s"}` : ""}</>
+                  : inv.status === "paid" ? null : "Not sent to the client yet"}
+              </span>
+            )}
             <span className={cn("text-[0.7812rem]", xeroManaged ? "text-emerald-700" : "text-ink-faint")}>
               {xeroManaged ? `Synced with Xero · ${inv.xero_synced_at ? `last sync ${relative(inv.xero_synced_at)}` : "awaiting first sync"}` : "Not in Xero"}
             </span>

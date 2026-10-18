@@ -49,11 +49,15 @@ export default async function TeamPage() {
     ? (await supabase.from("crew_members").select("id, name, email, phone, role, always_invite, active").eq("organisation_id", org.id).order("name")).data
     : crewRes.data;
   const crew = (crewData ?? []) as CrewMember[];
+  // What each person can do (after the database update that adds it)
+  const { data: skillRows, error: skillErr } = await supabase.from("crew_members").select("id, skills").eq("organisation_id", org.id);
+  const skillsReady = !skillErr;
+  for (const c of crew) c.skills = ((skillRows ?? []) as { id: string; skills: string[] | null }[]).find((x) => x.id === c.id)?.skills ?? [];
   const { data: extraRows } = await supabase.from("crew_member_emails").select("crew_member_id, email").eq("organisation_id", org.id);
   for (const c of crew) c.extra_emails = ((extraRows ?? []) as { crew_member_id: string; email: string }[]).filter((x) => x.crew_member_id === c.id).map((x) => x.email);
   const { data: orgRow } = await supabase.from("organisations").select("slug, staff_hourly_rate, settings").eq("id", org.id).maybeSingle();
   const staffApp = { ready: !crewRes.error, slug: (orgRow as { slug?: string } | null)?.slug ?? "", rate: Number((orgRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30),
-    minHours: staffMinHours((orgRow as { settings?: Record<string, unknown> } | null)?.settings) };
+    minHours: staffMinHours((orgRow as { settings?: Record<string, unknown> } | null)?.settings), skillsReady };
   if (membersRes.error) throw new Error(`Could not load team: ${membersRes.error.message}`);
   if (invitesRes.error) throw new Error(`Could not load invitations: ${invitesRes.error.message}`);
 

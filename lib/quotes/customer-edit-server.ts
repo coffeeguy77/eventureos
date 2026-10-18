@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { changeText, cleanChange, customerCanChange, customerCatalogue, servesDescription, type EditLine, type EditService } from "./customer-edit";
+import { changeText, cleanChange, customerCanChange, customerCatalogue, isEquipment, isSupplies, servesDescription, type EditLine, type EditService } from "./customer-edit";
 
 /** Everything the quote link needs to let the customer change their quote — or why they can't. */
 export interface CustomerEditData {
@@ -44,7 +44,7 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
         details: i.details, is_optional: i.is_optional, section_id: i.section_id, category: i.service?.category ?? null };
       return { ...l, description: i.description, editable: customerCanChange(l, ps), section: i.section?.title ?? "" };
     });
-  const catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })));
+  const catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })), { supplies: lines.some((l) => isEquipment(l.category)) });
   if (!lines.some((l) => l.editable) && !catalogue.length) return { ok: false, reason: "nothing" };
   return { ok: true, data: { quoteId: q.id, quoteNumber: q.number as number, orgId: q.organisation_id as string, customerId: q.customer_id as string, eventId: q.event_id as string | null,
     lines, catalogue, perServe, busy: !!q.has_unpublished_changes } };
@@ -78,7 +78,22 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
     const { error } = await db.from("quote_items").delete().eq("quote_id", d.quoteId).in("id", change.remove);
     if (error) throw new Error(`Couldn't save the change: ${error.message}`);
   }
-  if (change.add.length) {
+  // Supplies go in with the equipment hire
+  const supplyAdds = change.add.filter((a) => isSupplies(d.catalogue.find((x) => x.id === a.service_id)?.category));
+  const equipSection = d.lines.find((l) => isEquipment(l.category) && !change.remove.includes(l.id))?.section_id ?? null;
+  const otherAdds = supplyAdds.length && equipSection ? change.add.filter((a) => !supplyAdds.includes(a)) : change.add;
+  if (supplyAdds.length && equipSection) {
+    const { data: last } = await db.from("quote_items").select("position").eq("section_id", equipSection).order("position", { ascending: false }).limit(1).maybeSingle();
+    let pos = (last?.position ?? -1) + 1;
+    const rows = supplyAdds.map((a) => {
+      const s = d.catalogue.find((x) => x.id === a.service_id)!;
+      return { organisation_id: d.orgId, quote_id: d.quoteId, section_id: equipSection, service_id: s.id, name: s.name, description: s.description, quantity: a.quantity,
+        unit: s.unit, unit_price: s.unit_price, tax_rate: s.tax_rate, position: pos++ };
+    });
+    const { error } = await db.from("quote_items").insert(rows);
+    if (error) throw new Error(`Couldn't save the change: ${error.message}`);
+  }
+  if (otherAdds.length) {
     // Into the section that already has the catering, else a new "Catering" section at the end
     let sectionId = d.lines.find((l) => /^catering\b/i.test(l.category ?? "") && !change.remove.includes(l.id))?.section_id ?? null;
     if (!sectionId) {
@@ -93,7 +108,7 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
     }
     const { data: last } = await db.from("quote_items").select("position").eq("section_id", sectionId).order("position", { ascending: false }).limit(1).maybeSingle();
     let pos = (last?.position ?? -1) + 1;
-    const rows = change.add.map((a) => {
+    const rows = otherAdds.map((a) => {
       const s = d.catalogue.find((x) => x.id === a.service_id)!;
       return { organisation_id: d.orgId, quote_id: d.quoteId, section_id: sectionId, service_id: s.id, name: s.name, description: s.description, quantity: a.quantity,
         unit: s.unit, unit_price: s.unit_price, tax_rate: s.tax_rate, position: pos++ };

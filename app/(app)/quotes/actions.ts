@@ -598,8 +598,10 @@ export async function recordQuoteResponse(
     // staff_record_quote_response writes the audit entry and runs the acceptance automation (or holds it for approval).
     if (decision === "accepted" && q.event_id) {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
-      await alertBookingApproval(supabase, q.event_id);  const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
-      await jobCalendarAfterAccept(supabase, q.event_id);
+      await alertBookingApproval(supabase, q.event_id);
+      // Accepted from the office: calendar now; the invoice is emailed from the invoice screen (not automatically)
+      const { afterQuoteAccepted } = await import("@/lib/quotes/after-accept");
+      await afterQuoteAccepted(supabase, q.event_id, { emailInvoice: false });
     }
     refresh(q);
     revalidatePath("/invoices");
@@ -996,8 +998,10 @@ export async function adminAcceptQuote(quoteId: string, acceptedBy: string, how:
     if (error) fail(`Couldn't accept the quote: ${error.message}`);
     if (q.event_id) {
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
-      await alertBookingApproval(supabase, q.event_id);  const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
-      await jobCalendarAfterAccept(supabase, q.event_id);
+      await alertBookingApproval(supabase, q.event_id);
+      // Accepted from the office: calendar now; the invoice is emailed from the invoice screen (not automatically)
+      const { afterQuoteAccepted } = await import("@/lib/quotes/after-accept");
+      await afterQuoteAccepted(supabase, q.event_id, { emailInvoice: false });
     }
     refresh(q);
     revalidatePath("/invoices");

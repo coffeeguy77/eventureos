@@ -570,3 +570,27 @@ export async function regenerateFormKey() {
   if (error) throw new Error(`Couldn't regenerate the key: ${error.message}`);
   revalidatePath("/settings/website-form");
 }
+
+/** Invoices: email automatically when a client accepts, and payment reminders (before the event / overdue) with their wording. */
+export async function savePaymentSettings(input: { autoEmail: boolean; reminders: unknown }): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, role, user, profile } = await requireOrg();
+    if (!isOwnerOrAdmin(role)) return { ok: false, error: "Only owners and admins can change invoice settings." };
+    const { readReminders } = await import("@/lib/invoices/reminder-rules");
+    const r = readReminders({ payment_reminders: input.reminders });
+    const { data: cur, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    if (e1) return { ok: false, error: e1.message };
+    const before = (cur.settings ?? {}) as Record<string, unknown>;
+    const next = { ...before, invoice_auto_email: !!input.autoEmail, payment_reminders: r };
+    const { error } = await supabase.from("organisations").update({ settings: next }).eq("id", org.id);
+    if (error) return { ok: false, error: error.message };
+    const parts = [
+      before.invoice_auto_email !== !!input.autoEmail ? `email the invoice on acceptance ${input.autoEmail ? "on" : "off"}` : null,
+      (before.payment_reminders as { enabled?: boolean } | undefined)?.enabled !== r.enabled ? `payment reminders ${r.enabled ? "on" : "off"}` : null,
+    ].filter(Boolean);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "automation.settings_updated", entityType: "organisation", entityId: org.id,
+      summary: `${actorName(profile)} updated invoice emails and payment reminders${parts.length ? ` (${parts.join("; ")})` : ""}` });
+    revalidatePath("/settings/automations");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

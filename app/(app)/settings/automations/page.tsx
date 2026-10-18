@@ -6,6 +6,8 @@ import { Input, Label } from "@/components/ui/form";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { Tone } from "@/lib/status";
 import { ActionButton, ActionForm, SubmitButton, Toggle } from "../forms";
+import { PaymentReminderSettings } from "@/components/settings/payment-reminders";
+import { readReminders } from "@/lib/invoices/reminder-rules";
 import { addStandardRule, saveAutomationSettings, setRuleEnabled } from "../actions";
 import { QUOTE_ACCEPTANCE_ACTIONS, STANDARD_RULES, TRIGGER_ORDER, type QuoteAcceptanceAction, type TriggerType } from "../constants";
 
@@ -184,6 +186,11 @@ export default async function AutomationsPage() {
             </ul>
           </div>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader title="Invoice emails & payment reminders" subtitle="Get the invoice out the moment a job is won, and paid before the event." />
+        <PaymentReminderSettings autoEmail={raw.invoice_auto_email === true} reminders={readReminders(raw)} canEdit={canSettings} />
       </Card>
 
       <Card>

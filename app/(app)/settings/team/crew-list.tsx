@@ -9,12 +9,14 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label } from "@/components/ui/form";
+import { STAFF_SKILLS, skillLabel } from "@/lib/crew/skills";
 
 export interface CrewMember {
   id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
   hourly_rate?: number | null; rank?: number; extra_emails?: string[]; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
+  skills?: string[];
 }
-type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number };
+type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number; skillsReady?: boolean };
 
 /** People who work jobs but don't log in to EventureOS — they receive the calendar invites. */
 export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewMember[]; canEdit: boolean; canAdmin?: boolean; app?: AppInfo }) {
@@ -47,7 +49,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
       {rows.length === 0 && editing !== "new" && <p className="text-[0.8125rem] text-ink-muted">Nobody yet. Add your casual staff here — no login needed.</p>}
       <ul className="divide-y divide-line">
         {[...active, ...inactive].map((r) => editing === r.id
-          ? <li key={r.id} className="py-3"><CrewForm initial={r} onDone={() => setEditing(null)} /></li>
+          ? <li key={r.id} className="py-3"><CrewForm initial={r} skills={!!app?.skillsReady} onDone={() => setEditing(null)} /></li>
           : (
             <li key={r.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${r.active ? "" : "opacity-60"}`}>
               {canEdit && app?.ready && r.active && (
@@ -62,6 +64,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                 <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-medium text-ink">{r.name}
                   {r.role && <span className="font-normal text-ink-muted">· {r.role}</span>}
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
+                  {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : "brand"}>{skillLabel(k)}</Badge>)}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
                 <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>
@@ -83,13 +86,13 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
             </li>
           ))}
       </ul>
-      {editing === "new" && <div className="mt-3 rounded-xl p-3 ring-1 ring-inset ring-line"><CrewForm onDone={() => setEditing(null)} /></div>}
+      {editing === "new" && <div className="mt-3 rounded-xl p-3 ring-1 ring-inset ring-line"><CrewForm skills={!!app?.skillsReady} onDone={() => setEditing(null)} /></div>}
       {canEdit && editing === null && <Button size="sm" className="mt-3" onClick={() => setEditing("new")}><Plus className="h-4 w-4" />Add to staff list</Button>}
     </div>
   );
 }
 
-function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => void }) {
+function CrewForm({ initial, onDone, skills: skillsReady = false }: { initial?: CrewMember; onDone: () => void; skills?: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -97,11 +100,12 @@ function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => voi
     name: initial?.name ?? "", email: initial?.email ?? "", phone: initial?.phone ?? "", role: initial?.role ?? "",
     always_invite: initial?.always_invite ?? false, active: initial?.active ?? true,
   });
+  const [skills, setSkills] = useState<string[]>(initial?.skills ?? []);
   const [extras, setExtras] = useState((initial?.extra_emails ?? []).join(", "));
   const set = (k: keyof CrewInput, val: string | boolean) => setV((x) => ({ ...x, [k]: val }));
   const save = () => start(async () => {
     setError(null);
-    const r = await saveCrewMember(initial?.id ?? null, { ...v, extra_emails: extras.split(/[,\s;]+/).filter(Boolean) }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    const r = await saveCrewMember(initial?.id ?? null, { ...v, extra_emails: extras.split(/[,\s;]+/).filter(Boolean), ...(skillsReady ? { skills } : {}) }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setError(r.error); return; }
     router.refresh(); onDone();
   });
@@ -115,6 +119,20 @@ function CrewForm({ initial, onDone }: { initial?: CrewMember; onDone: () => voi
         <div className="sm:col-span-2"><Label htmlFor="cr-extra" hint="they can sign in to the staff app with any of these">Other emails they use</Label>
           <Input id="cr-extra" value={extras} onChange={(e) => setExtras(e.target.value)} placeholder="e.g. jim.smith@gmail.com, jim@bigpond.com" /></div>
       </div>
+      {skillsReady && (
+        <fieldset>
+          <legend className="text-[0.75rem] font-medium text-ink">What they can do</legend>
+          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+            {STAFF_SKILLS.map((k) => (
+              <label key={k.key} className="flex items-start gap-2 text-[0.8125rem] text-ink">
+                <input type="checkbox" checked={skills.includes(k.key)} onChange={(e) => setSkills((x) => e.target.checked ? [...x, k.key] : x.filter((y) => y !== k.key))} className="mt-0.5 h-4 w-4 accent-brand-500" />
+                <span>{k.label}</span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-[0.7188rem] text-ink-faint">Coffee van jobs need someone with a licence rostered on. &ldquo;Rosters only&rdquo; people still get the invites but are never counted as event staff.</p>
+        </fieldset>
+      )}
       <label className="flex items-start gap-2 text-[0.8125rem] text-ink">
         <input type="checkbox" checked={v.always_invite} onChange={(e) => set("always_invite", e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-500" />
         <span>Invite to every job <span className="text-ink-faint">(e.g. whoever does the rosters)</span></span>

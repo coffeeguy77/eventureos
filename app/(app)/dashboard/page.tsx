@@ -20,6 +20,7 @@ import {
 import { ENQUIRY_SOURCE, EVENT_STATUS, INVOICE_STATUS } from "@/lib/status";
 import type { ActivityLog, EventStatus, InvoiceStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { PagedList } from "@/components/dashboard/paged-list";
 
 export const metadata = { title: "Dashboard" };
 
@@ -99,6 +100,29 @@ export default async function DashboardPage() {
   const { data: held } = await supabase.from("events").select("id, name, event_date, approval_requested_at, customer:customers(name)")
     .eq("organisation_id", org.id).eq("approval_status", "pending").not("status", "in", "(confirmed,completed,cancelled)").order("event_date");
   const heldBookings = (held ?? []) as unknown as { id: string; name: string; event_date: string | null; approval_requested_at: string | null; customer: { name: string } | null }[];
+  // ---- Get paid before the event: confirmed jobs coming up with money still owing (or no invoice yet), and overdue invoices
+  const in60 = addDaysISO(today, 59);
+  const { data: soon } = await supabase.from("events").select("id, name, event_date, status, customer:customers(name)")
+    .eq("organisation_id", org.id).eq("status", "confirmed").gte("event_date", today).lte("event_date", in60).order("event_date");
+  const soonJobs = (soon ?? []) as unknown as { id: string; name: string; event_date: string; customer: { name: string } | null }[];
+  const invCols = "id, number, status, total, balance, due_date, event_id";
+  let jobInv: unknown[] = [];
+  if (soonJobs.length) {
+    const ids = soonJobs.map((j) => j.id);
+    const r1 = await supabase.from("invoices").select(`${invCols}, emailed_at, view_count, reminders`).eq("organisation_id", org.id).in("event_id", ids).neq("status", "void");
+    if (!r1.error) jobInv = r1.data ?? [];
+    else { const r2 = await supabase.from("invoices").select(invCols).eq("organisation_id", org.id).in("event_id", ids).neq("status", "void"); jobInv = r2.data ?? []; }
+  }
+  type JI = { id: string; number: string; status: string; total: number; balance: number; due_date: string | null; event_id: string; emailed_at?: string | null; view_count?: number; reminders?: unknown[] };
+  const invByJob = new Map<string, JI[]>();
+  for (const i of jobInv as JI[]) invByJob.set(i.event_id, [...(invByJob.get(i.event_id) ?? []), i]);
+  const toChase = soonJobs.map((j) => {
+    const list = invByJob.get(j.id) ?? [];
+    const owing = list.filter((i) => Number(i.balance) > 0 && i.status !== "draft");
+    const drafts = list.filter((i) => i.status === "draft");
+    return { job: j, list, owing, balance: owing.reduce((t, i) => t + Number(i.balance), 0), noInvoice: list.length === 0, drafts };
+  }).filter((x) => x.noInvoice || x.balance > 0 || x.drafts.length);
+
   const { data: integ } = await supabase.from("integrations").select("provider, status, last_sync_at").eq("organisation_id", org.id);
   const conn = (p: string) => (integ ?? []).find((i) => i.provider === p);
   const connLabel = (p: string, name: string) => {
@@ -231,43 +255,6 @@ export default async function DashboardPage() {
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Inbox & enquiry attention centre" subtitle="Everything that needs a human. Nothing gets lost." />
-            <ClientTabs
-              tabs={buckets.map((b) => ({
-                key: b.key, label: b.label, count: b.items.length, tone: b.alert ? "alert" : undefined,
-                content: b.items.length === 0 ? (
-                  <EmptyState title="All clear">Nothing waiting in {b.label.toLowerCase()}.</EmptyState>
-                ) : (
-                  <ul className="divide-y divide-line border-t border-line">
-                    {b.items.map((it) => (
-                      <li key={it.key}>
-                        <Link href={it.href} className="flex items-center gap-4 px-5 py-3 hover:bg-zinc-50/70">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[0.8438rem] font-medium text-ink">{it.title}</p>
-                            <p className="truncate text-[0.7812rem] text-ink-muted">{it.subtitle}</p>
-                          </div>
-                          <span className={cn("shrink-0 text-right text-[0.75rem]", it.alert ? "font-medium text-rose-700" : "text-ink-faint")}>{it.meta}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ),
-              }))}
-            />
-          </Card>
-
-          <Card>
-            <CardHeader title="Upcoming events" action={<Link href="/events" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">All events</Link>} />
-            <ClientTabs
-              tabs={[
-                { key: "today", label: "Today", count: eventsToday.length, content: <EventList rows={eventsToday} today={today} /> },
-                { key: "week", label: "Next 7 days", count: eventsWeek.length, content: <EventList rows={eventsWeek} today={today} /> },
-                { key: "month", label: "Next 30 days", count: events.length, content: <EventList rows={events} today={today} /> },
-              ]}
-            />
-          </Card>
-
-          <Card>
             <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[0.7188rem] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line sm:grid-cols-7">
               {days.map((d) => {
@@ -294,6 +281,72 @@ export default async function DashboardPage() {
               })}
             </div>
           </Card>
+          <Card id="get-paid">
+            <CardHeader title="Get paid before the event" subtitle={`${toChase.length ? `${toChase.length} confirmed job${toChase.length === 1 ? "" : "s"} in the next 60 days still owing` : "Every confirmed job in the next 60 days is paid"}${overdueInvoices.length ? ` · ${overdueInvoices.length} overdue invoice${overdueInvoices.length === 1 ? "" : "s"}` : ""}`}
+              action={<Link href="/invoices" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">Invoices</Link>} />
+            <ClientTabs
+              tabs={[
+                {
+                  key: "before", label: "Before the event", count: toChase.length,
+                  content: toChase.length === 0 ? <EmptyState title="All paid up">Confirmed jobs coming up have nothing owing.</EmptyState> : (
+                    <PagedList items={toChase.map((x) => {
+                      const days = daysBetween(today, x.job.event_date);
+                      const i = x.owing[0] ?? x.drafts[0];
+                      const sent = i && "emailed_at" in i ? (i.emailed_at ? `emailed${i.view_count ? `, viewed ${i.view_count}×` : ", not opened"}${Array.isArray(i.reminders) && i.reminders.length ? `, ${i.reminders.length} reminder${i.reminders.length === 1 ? "" : "s"}` : ""}` : "NOT SENT") : null;
+                      return {
+                        key: "c" + x.job.id,
+                        title: `${x.job.name}${x.job.customer?.name ? ` · ${x.job.customer.name}` : ""}`,
+                        subtitle: x.noInvoice ? "No invoice yet — raise one" : i ? `${i.number} · ${x.balance > 0 ? `${money(x.balance, cur)} owing` : "draft"}${sent ? ` · ${sent}` : ""}${i.status === "overdue" ? " · overdue" : ""}` : "",
+                        href: x.noInvoice ? `/events/${x.job.id}?tab=invoice` : `/invoices/${i!.id}`,
+                        meta: days === 0 ? "TODAY" : days === 1 ? "Tomorrow" : `In ${days} days`,
+                        alert: days <= 7 || x.noInvoice || (!!sent && sent === "NOT SENT"),
+                      };
+                    })} />
+                  ),
+                },
+                {
+                  key: "overdue", label: "Overdue", count: overdueInvoices.length, tone: overdueInvoices.length ? "alert" : undefined,
+                  content: overdueInvoices.length === 0 ? <EmptyState title="Nothing overdue" /> : (
+                    <PagedList items={overdueInvoices.map((i) => ({
+                      key: "o" + i.id, title: `${i.customer?.name ?? ""} · ${i.number}`, subtitle: `${money(i.balance, cur)} · ${i.event?.name ?? "No event"}`,
+                      href: `/invoices/${i.id}`, meta: i.due_date ? `${daysBetween(i.due_date, today)}d overdue` : "Overdue", alert: true,
+                    }))} />
+                  ),
+                },
+                {
+                  key: "all", label: "All owing", count: invoices.length,
+                  content: invoices.length === 0 ? <EmptyState title="Everything is paid" /> : (
+                    <PagedList items={invoices.map((i) => ({
+                      key: "a" + i.id, title: `${i.customer?.name ?? ""} · ${i.number}`, subtitle: `${money(i.balance, cur)} · ${i.event?.name ?? "No event"}`,
+                      href: `/invoices/${i.id}`, meta: i.status === "overdue" && i.due_date ? `${daysBetween(i.due_date, today)}d overdue` : i.due_date ? `Due ${fmtDate(i.due_date, "short")}` : "", alert: i.status === "overdue",
+                    }))} />
+                  ),
+                },
+              ]}
+            />
+          </Card>
+
+          <Card>
+            <CardHeader title="Inbox" subtitle="Enquiries, replies and quotes waiting on you" />
+            <ClientTabs
+              tabs={buckets.map((b) => ({
+                key: b.key, label: b.label, count: b.items.length, tone: b.alert ? "alert" : undefined,
+                content: b.items.length === 0 ? <EmptyState title="All clear">Nothing waiting in {b.label.toLowerCase()}.</EmptyState> : <PagedList items={b.items} />,
+              }))}
+            />
+          </Card>
+
+          <Card>
+            <CardHeader title="Upcoming events" action={<Link href="/events" className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">All events</Link>} />
+            <ClientTabs
+              tabs={[
+                { key: "today", label: "Today", count: eventsToday.length, content: <EventList rows={eventsToday} today={today} /> },
+                { key: "week", label: "Next 7 days", count: eventsWeek.length, content: <EventList rows={eventsWeek} today={today} /> },
+                { key: "month", label: "Next 30 days", count: events.length, content: <EventList rows={events} today={today} /> },
+              ]}
+            />
+          </Card>
+
         </div>
 
         <div className="space-y-6">
@@ -320,35 +373,6 @@ export default async function DashboardPage() {
                         </span>
                         {t.assigned_to && <Avatar name={names[t.assigned_to]} size={18} />}
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-
-          <Card id="outstanding">
-            <CardHeader title="Outstanding payments" subtitle={`${money(outstanding, cur)} across ${invoices.length} invoices`}
-              action={<span className="text-[0.7188rem] text-ink-faint">{connLabel("xero", "Xero")}</span>} />
-            {invoices.length === 0 ? <EmptyState title="Everything is paid" /> : (
-              <ul className="divide-y divide-line border-t border-line">
-                {invoices.slice(0, 6).map((i) => {
-                  const s = INVOICE_STATUS[i.status as InvoiceStatus];
-                  const daysLate = i.due_date ? daysBetween(i.due_date, today) : 0;
-                  return (
-                    <li key={i.id}>
-                      <Link href={`/invoices/${i.id}`} className="flex items-center gap-3 px-5 py-2.5 hover:bg-zinc-50/70">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[0.8125rem] font-medium text-ink">{i.customer?.name}</p>
-                          <p className="truncate text-[0.75rem] text-ink-muted">{i.number} · {i.event?.name ?? "No event"}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="tabular text-[0.8125rem] font-medium text-ink">{money(i.balance, cur)}</p>
-                          <p className={cn("text-[0.7188rem]", i.status === "overdue" ? "text-rose-700" : "text-ink-faint")}>
-                            {i.status === "overdue" ? `${daysLate}d overdue` : i.due_date ? `Due ${fmtDate(i.due_date, "short")}` : s.label}
-                          </p>
-                        </div>
-                      </Link>
                     </li>
                   );
                 })}

@@ -5,6 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 import { invoiceByToken, payable } from "@/lib/payments/service";
 import { fmtDate, money } from "@/lib/format";
 import { PayButton } from "./pay-button";
+import { InvoiceViewBeacon } from "./view-beacon";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pay invoice", robots: { index: false, follow: false } };
@@ -33,6 +34,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
 
   return (
     <main className="min-h-screen bg-canvas px-4 py-10 sm:py-16">
+      {!justPaid && <InvoiceViewBeacon token={token} />}
       <div className="mx-auto max-w-md">
         <div className="mb-6 flex items-center justify-center">
           {inv.org.logo_url && /^https:\/\//.test(inv.org.logo_url)

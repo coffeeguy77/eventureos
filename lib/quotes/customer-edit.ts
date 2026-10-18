@@ -15,16 +15,21 @@ export interface CustomerChange { set: { id: string; quantity: number }[]; remov
 export const MAX_QTY = 10000;
 /** Catering from the price list ("Catering · Breakfast", "Catering · Lunch", …). */
 export const isCatering = (category: string | null | undefined) => /^catering\b/i.test((category ?? "").trim());
+/** Supplies for do-it-yourself equipment hire ("Coffee supplies (DIY)", "Supplies …") — e.g. coffee beans by the kg. */
+export const isSupplies = (category: string | null | undefined) => /^(coffee\s+)?supplies\b/i.test((category ?? "").trim());
+/** Equipment hire on the quote ("Coffee equipment (DIY)") — supplies can be added to those quotes. */
+export const isEquipment = (category: string | null | undefined) => /equipment/i.test(category ?? "");
 
 /** Can the customer change (or take off) this line? Catering and per-drink lines only. */
 export function customerCanChange(l: Pick<EditLine, "service_id" | "details" | "category">, perServe: Set<string>): boolean {
   if (l.details?.kind === "staff" || l.details?.kind === "travel") return false;
   if (!l.service_id) return false;
-  return isCatering(l.category) || perServe.has(l.service_id) || l.details?.kind === "serves";
+  return isCatering(l.category) || isSupplies(l.category) || perServe.has(l.service_id) || l.details?.kind === "serves";
 }
 
-/** What they can add: the catering on the price list. */
-export const customerCatalogue = (services: EditService[]) => services.filter((s) => isCatering(s.category));
+/** What they can add: the catering on the price list, and — on equipment-hire quotes — the supplies. */
+export const customerCatalogue = (services: EditService[], opts: { supplies?: boolean } = {}) =>
+  services.filter((s) => isCatering(s.category) || (opts.supplies && isSupplies(s.category)));
 
 const qty = (v: unknown, what: string) => {
   const n = Number(v);
@@ -47,7 +52,8 @@ export function cleanChange(raw: unknown, lines: EditLine[], services: EditServi
     const n = qty(o.quantity, l.name);
     if (n !== Number(l.quantity)) setMap.set(l.id, n);
   }
-  const catalogue = new Map(customerCatalogue(services).map((s) => [s.id, s]));
+  // (the caller passes only what this quote may add — supplies only on equipment-hire quotes)
+  const catalogue = new Map(customerCatalogue(services, { supplies: true }).map((s) => [s.id, s]));
   const add: CustomerChange["add"] = [];
   for (const x of Array.isArray(r.add) ? r.add : []) {
     const o = (x ?? {}) as Record<string, unknown>;

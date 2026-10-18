@@ -270,7 +270,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
 async function upsertInvoices(ctx: SyncContext, list: XeroInvoice[], linked: Map<string, string>, today: string) {
   const rows = list.filter((i) => linked.has(i.Contact!.ContactID));
   if (!rows.length) return 0;
-  const { data: existing, error } = await ctx.db.from("invoices").select("id, xero_invoice_id, number, customer_id, line_items")
+  const { data: existing, error } = await ctx.db.from("invoices").select("id, xero_invoice_id, number, customer_id, line_items, status")
     .eq("organisation_id", ctx.org.id).in("xero_invoice_id", rows.map((r) => r.InvoiceID));
   if (error) throw new Error(`Could not load invoices: ${error.message}`);
   const have = new Map((existing ?? []).map((e) => [e.xero_invoice_id as string, e]));
@@ -287,6 +287,9 @@ async function upsertInvoices(ctx: SyncContext, list: XeroInvoice[], linked: Map
     // Lines edited on the invoice in EventureOS (GST inclusive, marked inc) stay as written — they're sent to Xero from here
     const mine = have.get(inv.InvoiceID)!.line_items as { inc?: boolean }[] | null;
     if (Array.isArray(mine) && mine[0]?.inc) delete (v as { line_items?: unknown }).line_items;
+    // Still a draft in Xero, but already sent / owing here: keep EventureOS's status (Xero isn't where it was sent from)
+    const localStatus = have.get(inv.InvoiceID)!.status as string;
+    if (v.status === "draft" && localStatus !== "draft") delete (v as { status?: unknown }).status;
     const { error: uErr } = await ctx.db.from("invoices").update(v).eq("id", have.get(inv.InvoiceID)!.id);
     if (uErr) throw new Error(`Could not update invoice ${inv.InvoiceNumber}: ${uErr.message}`);
     written++;

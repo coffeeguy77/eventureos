@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CustomerPricingCard, type CustomerPriceRow } from "./pricing-card";
+import { PaymentTermsControl } from "./terms-control";
 import { Building2, CalendarDays, Link2, Mail, MapPin, Phone, User } from "lucide-react";
 import { requireOrg, getMembers, canManage } from "@/lib/context";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
@@ -409,6 +410,11 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <Card>
                 <CardHeader title="Contacts" subtitle={contacts.length > 1 ? `${contacts.length} people` : undefined} />
                 <ContactsManager customerId={c.id} contacts={contacts} canRemove={canManage(role)} />
+              </Card>
+              <Card>
+                <CardHeader title="Payment terms" subtitle="When their invoices are due" />
+                <PaymentTermsControl customerId={c.id} days={(c as unknown as { payment_terms_days?: number | null }).payment_terms_days ?? null}
+                  orgDefault={Math.max(0, Number((org.settings as Record<string, unknown> | null)?.default_payment_terms_days ?? 14))} canEdit={canManage(role)} />
               </Card>
               <Card>
                 <CardHeader title="Customer pricing" subtitle="Special terms for this client" />

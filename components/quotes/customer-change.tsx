@@ -63,7 +63,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[0.9375rem] font-semibold text-ink">Need to change something?</p>
-            <p className="text-[0.8125rem] text-ink-muted">Change the catering and drinks numbers, take items off, or add more catering — the quote updates straight away.</p>
+            <p className="text-[0.8125rem] text-ink-muted">Change the catering, drinks and supplies numbers, take items off, or add more — the quote updates straight away.</p>
           </div>
           <button type="button" onClick={() => { setDone(null); setOpen(true); }}
             className="inline-flex h-11 items-center gap-2 rounded-xl px-4 text-[0.9375rem] font-semibold text-[color:var(--portal-brand-ink)] ring-1 ring-inset ring-[color:var(--portal-brand)] hover:bg-zinc-50">
@@ -123,9 +123,9 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
 
       {catalogue.length > 0 && (
         <div className="mt-4 rounded-xl bg-zinc-50 p-3">
-          <p className="mb-2 text-[0.8125rem] font-semibold text-ink">Add catering</p>
+          <p className="mb-2 text-[0.8125rem] font-semibold text-ink">{catalogue.some((c) => !/^catering\b/i.test(c.category ?? "")) ? "Add catering or supplies" : "Add catering"}</p>
           <div className="flex flex-wrap gap-2">
-            <select aria-label="Choose catering to add" value={pick} onChange={(e) => setPick(e.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-[0.875rem] text-ink">
+            <select aria-label="Choose an item to add" value={pick} onChange={(e) => setPick(e.target.value)} className="h-11 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-[0.875rem] text-ink">
               <option value="">Choose an item…</option>
               {groups.map(([g, list]) => (
                 <optgroup key={g} label={g}>{list.map((c) => <option key={c.id} value={c.id}>{c.name} · {money(c.unit_price, currency, { cents: true })}{c.unit ? ` / ${c.unit}` : ""} + GST</option>)}</optgroup>

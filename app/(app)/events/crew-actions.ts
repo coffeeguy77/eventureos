@@ -1,5 +1,6 @@
 "use server";
 
+import { cleanSkills } from "@/lib/crew/skills";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
@@ -33,7 +34,7 @@ async function resync(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase
   }
 }
 
-export interface CrewInput { name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active?: boolean; extra_emails?: string[] }
+export interface CrewInput { name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active?: boolean; extra_emails?: string[]; skills?: string[] }
 
 function clean(input: CrewInput) {
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
@@ -43,6 +44,7 @@ function clean(input: CrewInput) {
   return {
     name, email, phone: String(input.phone ?? "").trim().slice(0, 40) || null, role: String(input.role ?? "").trim().slice(0, 60) || null,
     always_invite: !!input.always_invite, ...(input.active === undefined ? {} : { active: !!input.active }),
+    ...(input.skills === undefined ? {} : { skills: cleanSkills(input.skills) }),
   };
 }
 
@@ -50,9 +52,15 @@ export async function saveCrewMember(id: string | null, input: CrewInput): Promi
   return wrap(async () => {
     const { supabase, org } = await manager();
     const row = clean(input);
-    const res = id
-      ? (UUID.test(id) ? await supabase.from("crew_members").update(row).eq("id", id).eq("organisation_id", org.id).select("id").single() : (() => { throw new Error("Refresh and try again."); })())
-      : await supabase.from("crew_members").insert({ organisation_id: org.id, ...row }).select("id").single();
+    const save = (r: Record<string, unknown>) => id
+      ? (UUID.test(id) ? supabase.from("crew_members").update(r).eq("id", id).eq("organisation_id", org.id).select("id").single() : (() => { throw new Error("Refresh and try again."); })())
+      : supabase.from("crew_members").insert({ organisation_id: org.id, ...r }).select("id").single();
+    let res = await save(row);
+    if (res.error && /skills/.test(res.error.message)) {
+      // before the database update that adds skills
+      const rest: Record<string, unknown> = { ...row }; delete rest.skills;
+      res = await save(rest);
+    }
     if (res.error) throw new Error(res.error.code === "23505" ? "Someone on the staff list already has that email." : res.error.message);
     // Extra emails they can sign in to the staff app with
     if (input.extra_emails) {

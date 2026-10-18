@@ -19,6 +19,7 @@ export function StaffingCard({ issues }: { issues: StaffingIssue[] }) {
               </Link>
               <p className="mt-0.5 flex flex-wrap gap-x-2 text-[0.7188rem]">
                 {i.short > 0 && <span className="font-medium text-rose-700">Needs {i.short} more</span>}
+                {i.noDriver && <span className="font-medium text-rose-700">Nobody rostered has a licence to drive the van</span>}
                 {i.declined.length > 0 && <span className="font-medium text-rose-700">{i.declined.join(", ")} declined in Google Calendar</span>}
                 {i.cover.length > 0 && <span className="text-amber-700">{i.cover.join(", ")} looking for cover</span>}
                 {i.waiting.length > 0 && <span className="text-amber-700">{i.waiting.join(", ")} not accepted yet</span>}

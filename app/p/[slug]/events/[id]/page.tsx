@@ -14,6 +14,8 @@ import {
 } from "../../portal-data";
 import { Detail, Panel, PortalLink, portalButton } from "../../ui";
 import { AddPersonForm, MessageForm, PortalTabsNav, QuoteResponse, UploadButton } from "./client";
+import { DiyCalculator } from "./diy-calculator";
+import { hasDiyHire } from "@/lib/diy/coffee-guide";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -236,6 +238,12 @@ function Overview({ e, today, quote, current, cur, base, next }: {
           )}
         </dl>
       </Panel>
+
+      {current && hasDiyHire((current.snapshot.sections ?? []).flatMap((s) => [s.title, ...(s.items ?? []).map((i) => i.name)])) && (
+        <Panel title="How much coffee and milk do I need?">
+          <DiyCalculator guests={e.guest_count} />
+        </Panel>
+      )}
 
       {e.customer_notes && (
         <Panel title="Notes for you">

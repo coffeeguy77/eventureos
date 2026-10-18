@@ -285,3 +285,18 @@ export async function dismissDetailUpdate(threadId: string): Promise<{ ok: true 
   if (t.customer_id) refresh(t.customer_id);
   return { ok: true };
 }
+
+/** This client's own payment terms (null = the business default). Used for invoices raised when they accept a quote. */
+export async function setCustomerTerms(customerId: string, days: number | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, role, user, profile } = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(role)) return { ok: false, error: "Only owners, admins and managers can change payment terms." };
+    if (days != null && (!Number.isInteger(days) || days < 0 || days > 120)) return { ok: false, error: "Payment terms must be 0–120 days." };
+    const { data: c, error } = await supabase.from("customers").update({ payment_terms_days: days }).eq("id", customerId).eq("organisation_id", org.id).select("name").single();
+    if (error) return { ok: false, error: /payment_terms_days/.test(error.message) ? "Run the 0059 database update in Supabase first." : error.message };
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.updated", entityType: "customer", entityId: customerId, customerId,
+      summary: `${actorName(profile)} set ${c.name}'s payment terms to ${days == null ? "the business default" : days === 0 ? "due on receipt" : `${days} days`}` });
+    revalidatePath(`/clients/${customerId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
