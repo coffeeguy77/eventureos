@@ -45,7 +45,7 @@ export async function saveItemAlias(code: string, serviceId: string | null): Pro
   }
 }
 
-export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; id: string; prices: "old" | "current"; name?: string; contactIds?: string[] }): Promise<Result<{ quoteId: string; number: number }>> {
+export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; id: string; prices: "old" | "current"; name?: string; contactIds?: string[]; eventId?: string | null }): Promise<Result<{ quoteId: string; number: number }>> {
   try {
     const { supabase, org, user, profile } = await requireOrg();
     if (!UUID.test(input.id)) return { ok: false, error: "That record link isn't valid." };
@@ -81,17 +81,36 @@ export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; 
     const fallback = (clientPeople ?? [])[0] as { id: string } | undefined;
     const peopleIds = chosen.length ? chosen : fallback ? [fallback.id] : [];
     const contact = peopleIds.length ? { id: peopleIds[0] } : null;
-    const { data: ev, error: evErr } = await supabase.from("events").insert({
-      organisation_id: org.id, name, customer_id: customer.id, primary_contact_id: contact?.id ?? null,
-      status: "planning", assigned_to: user.id, next_action: "Check the copied quote and send it", created_by: user.id,
-    }).select("id, number").single();
-    if (evErr) return { ok: false, error: `Couldn't create the job: ${evErr.message}` };
-    if (peopleIds.length) await supabase.from("event_contacts").insert(peopleIds.map((cid, i) => ({ organisation_id: org.id, event_id: ev.id, contact_id: cid, role: i === 0 ? "Primary contact" : null })));
+    // An existing open job of this client's (e.g. the one made from their enquiry) — else a new job
+    let ev: { id: string; number: number | null };
+    let jobName = name;
+    if (input.eventId) {
+      if (!UUID.test(input.eventId)) return { ok: false, error: "That job link isn't valid." };
+      const { data: job } = await supabase.from("events").select("id, number, name, status, primary_contact_id").eq("id", input.eventId).eq("organisation_id", org.id).eq("customer_id", customer.id).maybeSingle();
+      if (!job) return { ok: false, error: "That job isn't one of this client's — refresh and try again." };
+      if (job.status === "completed" || job.status === "cancelled") return { ok: false, error: `${job.name} is ${job.status} — choose another job or start a new one.` };
+      ev = { id: job.id as string, number: job.number as number | null };
+      jobName = job.name as string;
+      // Add anyone ticked who isn't on the job yet
+      const { data: have } = await supabase.from("event_contacts").select("contact_id").eq("event_id", job.id);
+      const on = new Set(((have ?? []) as { contact_id: string }[]).map((h) => h.contact_id));
+      const add = chosen.filter((cid) => !on.has(cid));
+      if (add.length) await supabase.from("event_contacts").insert(add.map((cid) => ({ organisation_id: org.id, event_id: job.id, contact_id: cid, role: !on.size && cid === add[0] && !job.primary_contact_id ? "Primary contact" : null })));
+      if (!job.primary_contact_id && contact) await supabase.from("events").update({ primary_contact_id: contact.id }).eq("id", job.id);
+    } else {
+      const { data: created, error: evErr } = await supabase.from("events").insert({
+        organisation_id: org.id, name, customer_id: customer.id, primary_contact_id: contact?.id ?? null,
+        status: "planning", assigned_to: user.id, next_action: "Check the copied quote and send it", created_by: user.id,
+      }).select("id, number").single();
+      if (evErr) return { ok: false, error: `Couldn't create the job: ${evErr.message}` };
+      ev = created as { id: string; number: number | null };
+      if (peopleIds.length) await supabase.from("event_contacts").insert(peopleIds.map((cid, i) => ({ organisation_id: org.id, event_id: ev.id, contact_id: cid, role: i === 0 ? "Primary contact" : null })));
+    }
 
     // … with a draft quote holding the copied lines
     const today = todayISO(org.timezone);
     const { data: q, error: qErr } = await supabase.from("quotes").insert({
-      organisation_id: org.id, event_id: ev.id, customer_id: customer.id, title: name,
+      organisation_id: org.id, event_id: ev.id, customer_id: customer.id, title: input.eventId ? jobName : name,
       status: "draft", issue_date: today, expiry_date: addDaysISO(today, 14), created_by: user.id,
     }).select("id, number").single();
     if (qErr) return { ok: false, error: `The job was created but the quote couldn't be: ${qErr.message}` };
@@ -105,11 +124,12 @@ export async function copyToNewQuote(input: { source: "xero_quote" | "invoice"; 
 
     await logActivity(supabase, {
       orgId: org.id, actorId: user.id, action: "quote.created", entityType: "quote", entityId: q.id, eventId: ev.id, customerId: customer.id,
-      summary: `${actorName(profile)} created Quote Q-${q.number} (EV-${ev.number}) by copying ${src.number}${prices === "current" ? " at today's prices" : ""}`,
+      summary: `${actorName(profile)} created Quote Q-${q.number} (EV-${ev.number}${input.eventId ? `, ${jobName}` : ""}) by copying ${src.number}${prices === "current" ? " at today's prices" : ""}`,
       metadata: { copied_from: { source: input.source, id: input.id, number: src.number }, lines: lines.length, unmatched: lines.filter((l) => !l.service_id && l.unit_price).length },
     });
     revalidatePath("/quotes");
     revalidatePath("/events");
+    revalidatePath(`/events/${ev.id}`);
     revalidatePath(`/clients/${customer.id}`);
     return { ok: true, data: { quoteId: q.id, number: q.number } };
   } catch (e) {

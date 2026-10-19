@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { inputClass } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { money } from "@/lib/format";
+import { fmtDate, money } from "@/lib/format";
+import type { CopyJob } from "@/lib/quotes/history";
 import { copyToNewQuote, saveItemAlias } from "@/app/(app)/history/actions";
 
 export interface OldLine {
@@ -21,8 +22,10 @@ export interface PriceOption { id: string; name: string; code: string | null; un
  * An old quote's or invoice's lines, each checked against today's price list. Lines that match nothing are
  * highlighted, and (for managers) can be matched to a current item — remembered for that old item code everywhere.
  */
-export function OldLines({ lines, options, currency, canEdit, source, sourceId, defaultName, total, people = [] }: {
+export function OldLines({ lines, options, currency, canEdit, source, sourceId, defaultName, total, people = [], jobs = [] }: {
   lines: OldLine[]; options: PriceOption[]; currency: string; canEdit: boolean;
+  /** The client's open jobs — the copy can go on one of these instead of a new job */
+  jobs?: CopyJob[];
   /** The client's people; `picked` = on the job last time (or the main contact) */
   people?: CopyPerson[];
   source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; total: number;
@@ -55,7 +58,7 @@ export function OldLines({ lines, options, currency, canEdit, source, sourceId, 
           {lines.map((l, i) => <LineRow key={i} l={l} groups={groups} currency={currency} canEdit={canEdit} />)}
         </ul>
       </Card>
-      <CopyPanel source={source} sourceId={sourceId} defaultName={defaultName} unmatched={unmatched.length} people={people}
+      <CopyPanel source={source} sourceId={sourceId} defaultName={defaultName} unmatched={unmatched.length} people={people} jobs={jobs}
         priceChanges={priced.filter((l) => l.item?.unit_price != null && Math.abs(Number(l.item.unit_price) - l.unitAmount) > 0.004).length} />
     </div>
   );
@@ -138,7 +141,8 @@ function LineRow({ l, groups, currency, canEdit }: { l: OldLine; groups: [string
   );
 }
 
-function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, people }: { source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; unmatched: number; priceChanges: number; people: CopyPerson[] }) {
+function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, people, jobs }: { source: "xero_quote" | "invoice"; sourceId: string; defaultName: string; unmatched: number; priceChanges: number; people: CopyPerson[]; jobs: CopyJob[] }) {
+  const [job, setJob] = useState<string>(jobs.find((j) => j.suggested)?.id ?? "new");
   const [picked, setPicked] = useState<string[]>(people.filter((p) => p.picked).map((p) => p.id));
   const router = useRouter();
   const [name, setName] = useState(defaultName);
@@ -147,7 +151,7 @@ function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, peo
   const [pending, start] = useTransition();
   const go = () => start(async () => {
     setErr(null);
-    const r = await copyToNewQuote({ source, id: sourceId, prices, name, contactIds: picked }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    const r = await copyToNewQuote({ source, id: sourceId, prices, name, contactIds: picked, eventId: job === "new" ? null : job }).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setErr(r.error); return; }
     router.push(`/quotes/${r.data.quoteId}`);
   });
@@ -159,19 +163,41 @@ function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, peo
   );
   return (
     <Card>
-      <CardHeader title="Copy to a new quote" subtitle="Starts a new job (date TBC) with a draft quote holding these lines. Nothing changes on this one or in Xero." />
+      <CardHeader title="Copy to a new quote" subtitle="Makes a draft quote holding these lines — on a job you choose, or a new one. Nothing changes on this one or in Xero." />
       <div className="space-y-3 px-5 pb-5">
-        <label className="block">
-          <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">Job name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={200} className={inputClass} />
-        </label>
+        {jobs.length > 0 && (
+          <div role="radiogroup" aria-label="Which job the quote goes on">
+            <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">Put the quote on</span>
+            <div className="space-y-1.5">
+              {jobs.map((j) => (
+                <label key={j.id} className={cn("flex cursor-pointer gap-2 rounded-lg px-3 py-2.5 ring-1 ring-inset", job === j.id ? "bg-brand-50/70 ring-brand-300" : "ring-line hover:bg-zinc-50")}>
+                  <input type="radio" name="copy-job" checked={job === j.id} onChange={() => setJob(j.id)} className="mt-0.5 h-4 w-4 accent-brand-600" />
+                  <span className="min-w-0">
+                    <span className="block text-[0.8125rem] font-medium text-ink">{j.number ? `EV-${j.number} · ` : ""}{j.name}{j.suggested && <span className="ml-1.5 font-normal text-brand-700">· no quote yet</span>}</span>
+                    <span className="block text-[0.7188rem] text-ink-muted">{j.event_date ? fmtDate(j.event_date, "long") : "Date TBC"} · {j.status.replace(/_/g, " ")}{j.quotes.length ? ` · already has ${j.quotes.join(", ")}` : ""}</span>
+                  </span>
+                </label>
+              ))}
+              <label className={cn("flex cursor-pointer gap-2 rounded-lg px-3 py-2.5 ring-1 ring-inset", job === "new" ? "bg-brand-50/70 ring-brand-300" : "ring-line hover:bg-zinc-50")}>
+                <input type="radio" name="copy-job" checked={job === "new"} onChange={() => setJob("new")} className="mt-0.5 h-4 w-4 accent-brand-600" />
+                <span className="text-[0.8125rem] font-medium text-ink">A new job <span className="font-normal text-ink-muted">(date TBC)</span></span>
+              </label>
+            </div>
+          </div>
+        )}
+        {job === "new" && (
+          <label className="block">
+            <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">Job name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={200} className={inputClass} />
+          </label>
+        )}
         <div className="flex flex-wrap gap-2">
           {opt("current", "Today's prices", priceChanges ? `${priceChanges} matched line${priceChanges === 1 ? " changes" : "s change"} to the price-list price` : "Matched lines use the price list")}
           {opt("old", "Same prices as last time", "Every line keeps its old price")}
         </div>
         {people.length > 0 && (
           <div>
-            <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">Who this job is with <span className="font-normal text-ink-faint">— only they get the quote emails</span></span>
+            <span className="mb-1 block text-[0.75rem] font-medium text-ink-muted">{job === "new" ? "Who this job is with" : "People on the job"} <span className="font-normal text-ink-faint">— {job === "new" ? "only they get the quote emails" : "anyone ticked is added if they aren't on it already"}</span></span>
             <div className="flex flex-wrap gap-1.5">
               {people.map((p) => {
                 const on = picked.includes(p.id);
@@ -189,8 +215,8 @@ function CopyPanel({ source, sourceId, defaultName, unmatched, priceChanges, peo
         {unmatched > 0 && <p className="text-[0.75rem] text-amber-800">{unmatched} unmatched line{unmatched === 1 ? "" : "s"} will be highlighted on the new quote so you can swap {unmatched === 1 ? "it" : "them"} for a current item.</p>}
         {err && <p className="text-[0.75rem] text-rose-700">{err}</p>}
         <div className="flex justify-end">
-          <Button variant="primary" size="sm" className="h-10 sm:h-9" disabled={pending || !name.trim()} onClick={go}>
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}Copy to new quote
+          <Button variant="primary" size="sm" className="h-10 sm:h-9" disabled={pending || (job === "new" && !name.trim())} onClick={go}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}{job === "new" ? "Copy to new quote" : "Copy to a quote on this job"}
           </Button>
         </div>
       </div>

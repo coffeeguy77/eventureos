@@ -46,3 +46,23 @@ export async function copyPeople(db: import("@supabase/supabase-js").SupabaseCli
   return list.map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name ?? ""}`.trim(), email: p.email, picked: was.has(p.id) || p.id === fallback }))
     .sort((a, b) => Number(b.picked) - Number(a.picked));
 }
+
+export interface CopyJob { id: string; number: number | null; name: string; event_date: string | null; status: string; quotes: string[]; suggested: boolean }
+
+/**
+ * The client's open jobs, so "Copy to a quote" can put the quote on a job you've already set up (e.g. made from their
+ * enquiry) instead of starting a second one. Suggested: the newest open job that has no quote yet.
+ */
+export async function copyJobs(db: import("@supabase/supabase-js").SupabaseClient, orgId: string, customerId: string): Promise<CopyJob[]> {
+  const { data } = await db.from("events").select("id, number, name, event_date, status, created_at, quotes(number, status)")
+    .eq("organisation_id", orgId).eq("customer_id", customerId).in("status", ["enquiry", "planning", "quoted", "awaiting_approval", "confirmed"])
+    .order("created_at", { ascending: false }).limit(12);
+  type Row = { id: string; number: number | null; name: string; event_date: string | null; status: string; quotes: { number: number; status: string }[] | null };
+  const rows = ((data ?? []) as unknown as Row[]).map((r) => ({
+    id: r.id, number: r.number, name: r.name, event_date: r.event_date, status: r.status,
+    quotes: (r.quotes ?? []).filter((q) => q.status !== "superseded").map((q) => `Q-${q.number} (${q.status})`), suggested: false,
+  }));
+  const pick = rows.find((r) => !r.quotes.length && r.status !== "confirmed");
+  if (pick) pick.suggested = true;
+  return rows;
+}

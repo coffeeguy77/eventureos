@@ -16,7 +16,7 @@ import { cn } from "@/lib/cn";
 import { EmailInvoiceButton, InvoiceActions } from "./controls";
 import { InvoiceJobPicker } from "@/components/invoices/link-job";
 import { OldLines } from "@/components/history/old-lines";
-import { copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
+import { copyJobs, copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
 import { InvoiceLinesEditor, type PriceItem } from "@/components/invoices/lines-editor";
 import { startLines } from "@/lib/invoices/lines";
@@ -89,6 +89,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
     ? await loadMatchContext(org.id).then(({ priceList, aliases }) => forView(matchLines(inv.line_items!, priceList, aliases), priceList)).catch(() => null)
     : null;
   const copyList = oldView && inv.customer ? await copyPeople(supabase, org.id, inv.customer.id, inv.event?.id ?? null).catch(() => []) : [];
+  const copyJobList = oldView && inv.customer ? await copyJobs(supabase, org.id, inv.customer.id).catch(() => []) : [];
 
   // Raised here (not brought in from Xero): its lines can be changed — "Edit invoice"
   const fromXero = inv.origin ? inv.origin === "xero" : !!inv.xero_invoice_id && !inv.quote_id && !inv.created_by && inv.kind === "other";
@@ -182,7 +183,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             </Card>
           ) : oldView ? (
             <OldLines lines={oldView.lines} options={oldView.options} currency={cur} canEdit={canManage(role)}
-              source="invoice" sourceId={inv.id} people={copyList} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
+              source="invoice" sourceId={inv.id} people={copyList} jobs={copyJobList} defaultName={inv.reference || inv.event?.name || inv.customer?.name || ""} total={Number(inv.total)} />
           ) : (
           <Card>
             <CardHeader
