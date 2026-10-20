@@ -28,11 +28,17 @@ export const viewport: Viewport = {
   themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ffffff" }, { media: "(prefers-color-scheme: dark)", color: "#17171D" }],
 };
 
+const CUSTOMER_PAGES = ["/p/", "/pay/", "/q/", "/order/", "/hire/", "/shop/", "/cafe/", "/jobs/", "/print/"];
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Display preferences come from a cookie so the first paint is already in the right theme
   let prefs = parsePrefs((await cookies()).get(PREFS_COOKIE)?.value);
   // Public booking pages (often inside a customer's website) always look the same: light, standard text size
-  if (((await headers()).get("x-pathname") ?? "").startsWith("/book/")) prefs = { ...prefs, scheme: "light", contrast: "normal", text: 100 };
+  const path = (await headers()).get("x-pathname") ?? "";
+  if (path.startsWith("/book/")) prefs = { ...prefs, scheme: "light", contrast: "normal", text: 100 };
+  // Pages customers see (quote and ordering links, the website, shop, café, jobs board) are designed light — your own
+  // night-mode choice is for the app, so it never turns them into white text on white boxes
+  else if (path === "/" || CUSTOMER_PAGES.some((p) => path.startsWith(p))) prefs = { ...prefs, scheme: "light", contrast: "normal" };
   return (
     <html lang="en-AU" className={`${GeistSans.variable} ${GeistMono.variable}`} {...htmlAttrs(prefs)} suppressHydrationWarning>
       <body className="min-h-screen font-sans">{children}</body>

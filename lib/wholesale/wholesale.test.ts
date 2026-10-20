@@ -107,3 +107,26 @@ test("matching the customer on an order email", () => {
   assert.equal(matchCustomer({ customerName: "Someone New", customerBlock: "Someone New 1 Road", phone: "+61 478 000 111" }, cs)?.id, "1");
   assert.equal(matchCustomer({ customerName: "Someone New", customerBlock: "Someone New 1 Road", phone: null }, cs), null);
 });
+
+test("packBoxes: 10 kg boxes, biggest bags first, other items in their own box", async () => {
+  const { packBoxes } = await import("./rules");
+  const thirty = packBoxes([{ name: "Parliament 1kg", quantity: 30, weight_kg: 1 }]);
+  assert.equal(thirty.length, 3);
+  assert.deepEqual(thirty.map((b) => b.kg), [10, 10, 10]);
+  const mixed = packBoxes([{ name: "Blend 1kg", quantity: 12, weight_kg: 1 }, { name: "Decaf 250g", quantity: 4, weight_kg: 0.25 }, { name: "Machine cleaner", quantity: 2, weight_kg: null }]);
+  assert.deepEqual(mixed.map((b) => [b.kind, b.kg]), [["coffee", 10], ["coffee", 3], ["other", 0]]);
+  assert.deepEqual(mixed[2].items, [{ name: "Machine cleaner", quantity: 2 }]);
+  assert.equal(packBoxes([{ name: "Green 30kg", quantity: 1, weight_kg: 30 }]).length, 1);
+  assert.equal(packBoxes([{ name: "Cups", quantity: 5, weight_kg: null }]).length, 1);
+  assert.equal(packBoxes([]).length, 0);
+  assert.equal(packBoxes([{ name: "Blend 5kg", quantity: 3, weight_kg: 5 }], 12).length, 2);
+});
+
+test("readWholesale: box size, categories and price groups", async () => {
+  const { readWholesale, mergeNames } = await import("./settings");
+  const w = readWholesale({ wholesale: { box_kg: 12, categories: ["Coffee", " Coffee ", "", 3], price_groups: ["Husk"] } });
+  assert.equal(w.boxKg, 12);
+  assert.deepEqual(w.categories, ["Coffee"]);
+  assert.equal(readWholesale({}).boxKg, 10);
+  assert.deepEqual(mergeNames(["Husk"], ["husk", "Cafe", null]), ["Cafe", "Husk"]);
+});

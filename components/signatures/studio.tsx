@@ -210,7 +210,7 @@ export function SignatureStudio({ orgId, initial, published, publishedVersion, b
                 <button key={k} type="button" role="switch" aria-checked={design.show[k]} onClick={() => show({ [k]: !design.show[k] })}
                   className={cn("flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] ring-1 ring-inset transition-colors",
                     design.show[k] ? "bg-brand-50/70 text-ink ring-brand-200" : "text-ink-muted ring-line hover:text-ink")}>
-                  <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded ring-1 ring-inset", design.show[k] ? "bg-brand-500 ring-brand-500 text-white" : "ring-line-strong")}>
+                  <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded ring-1 ring-inset", design.show[k] ? "bg-brand-500 ring-brand-500 text-on-brand" : "ring-line-strong")}>
                     {design.show[k] && <Check className="h-3 w-3" strokeWidth={3} />}
                   </span>
                   <span className="min-w-0 truncate">{l}</span>

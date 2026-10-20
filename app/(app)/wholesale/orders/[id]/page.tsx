@@ -32,6 +32,7 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
           {o.delivery_date && <Link href={`/wholesale?run=${o.delivery_date}`} className="hover:underline">Delivery {fmtDate(o.delivery_date, "long")}</Link>}
           {direct && <span>{o.payment_status === "paid" ? `Paid${o.paid_at ? ` ${fmtDateTime(o.paid_at, org.timezone)}` : ""}` : o.payment_mode === "invoice" ? `On account${o.due_date ? `, due ${fmtDate(o.due_date)}` : ""}` : "Not paid"}</span>}
           {!direct && <span>Payment handled by Ordermentum</span>}
+          <span className="flex gap-3 print:hidden"><Link href={`/print/wholesale-labels?order=${o.id}&size=4x6`} className="font-medium text-brand-700 hover:underline">Labels 4×6</Link><Link href={`/print/wholesale-labels?order=${o.id}&size=a4`} className="font-medium text-brand-700 hover:underline">Labels A4</Link></span>
         </p>
       </div>
       {o.needs_check && <div className="mb-4 flex gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />Check this order: {o.needs_check}</div>}

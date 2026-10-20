@@ -836,7 +836,7 @@ export function QuoteBuilder(p: BuilderProps) {
       )}
       {toast && (
         <div role="status" className={cn("fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 z-50 flex lg:bottom-4 w-[calc(100%-32px)] max-w-md -translate-x-1/2 items-start gap-3 rounded-xl px-4 py-3 text-[0.8125rem] shadow-pop",
-          toast.tone === "error" ? "bg-danger text-white" : "bg-ink text-surface")}>
+          toast.tone === "error" ? "bg-danger text-surface" : "bg-ink text-surface")}>
           {toast.tone === "error" ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}
           <span className="min-w-0 flex-1">{toast.message}</span>
           {toast.undo && <button type="button" onClick={toast.undo} className="-my-2 shrink-0 px-1 py-2 font-semibold text-brand-200 hover:text-white">Undo</button>}

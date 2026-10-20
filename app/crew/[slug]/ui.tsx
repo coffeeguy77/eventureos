@@ -31,7 +31,7 @@ function useRun() {
     setTimeout(() => setMsg(null), 6000);
   });
   const toast = msg && (
-    <div role="status" className={cn("fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-xl px-4 py-3 text-[0.875rem] shadow-pop", msg.ok ? "bg-ink text-surface" : "bg-rose-600 text-white")}
+    <div role="status" className={cn("fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-xl px-4 py-3 text-[0.875rem] shadow-pop", msg.ok ? "bg-ink text-surface" : "bg-rose-600 text-surface")}
       style={{ marginBottom: "env(safe-area-inset-bottom)" }}>{msg.text}</div>
   );
   return { run, pending, toast };

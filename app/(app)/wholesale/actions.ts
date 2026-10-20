@@ -155,7 +155,7 @@ export async function saveGroupPrice(productId: string, group: string, price: nu
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
-export interface WholesaleSettingsInput { delivery_weekday: number; email_import: boolean; import_from: string; import_subject: string; ordering: boolean; freight: number; free_freight_over: number }
+export interface WholesaleSettingsInput { delivery_weekday: number; email_import: boolean; import_from: string; import_subject: string; ordering: boolean; freight: number; free_freight_over: number; box_kg: number }
 export async function saveWholesaleSettings(input: WholesaleSettingsInput): Promise<Result> {
   try {
     const { supabase, org, user, profile } = await manager();
@@ -168,6 +168,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
       ...prev, delivery_weekday: Math.min(6, Math.max(0, Math.round(Number(input.delivery_weekday)))),
       email_import: { ...((prev.email_import ?? {}) as object), enabled: !!input.email_import, from, subject: input.import_subject.trim().slice(0, 120) || "Invoice -" },
       ordering: !!input.ordering, freight: Math.max(0, Number(input.freight) || 0), free_freight_over: Math.max(0, Number(input.free_freight_over) || 0),
+      box_kg: Number(input.box_kg) > 0 && Number(input.box_kg) <= 100 ? Math.round(Number(input.box_kg) * 100) / 100 : 10,
     };
     const { error } = await supabase.from("organisations").update({ settings: { ...settings, wholesale } }).eq("id", org.id);
     if (error) throw new Error(error.message);
@@ -184,5 +185,117 @@ export async function importOrderEmailsNow(): Promise<Result<string>> {
     const r = await importOrderEmails(createServiceClient(), org.id, { max: 120 });
     done();
     return { ok: true, data: r.imported ? `${r.imported} new order${r.imported === 1 ? "" : "s"} imported${r.flagged ? ` (${r.flagged} to check)` : ""}.` : "No new orders." };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ---------------- Products: delete; categories and price groups ---------------- */
+
+const label = (v: unknown) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, 80) : "");
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** Change the wholesale settings' saved list of categories or price groups. */
+async function editList(supabase: Awaited<ReturnType<typeof manager>>["supabase"], orgId: string, key: "categories" | "price_groups", fn: (list: string[]) => string[]) {
+  const { data: o } = await supabase.from("organisations").select("settings").eq("id", orgId).single();
+  const settings = (o?.settings ?? {}) as Record<string, unknown>;
+  const prev = (settings.wholesale ?? {}) as Record<string, unknown>;
+  const list = (Array.isArray(prev[key]) ? (prev[key] as unknown[]) : []).filter((x): x is string => typeof x === "string");
+  const { error } = await supabase.from("organisations").update({ settings: { ...settings, wholesale: { ...prev, [key]: fn(list) } } }).eq("id", orgId);
+  if (error) throw new Error(error.message);
+}
+
+/** Delete a product for good. Past orders keep its name and price; its special group prices go with it. */
+export async function deleteProduct(id: string): Promise<Result> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const { data: p } = await supabase.from("wholesale_products").select("name").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    if (!p) throw new Error("That product has already gone.");
+    const { error } = await supabase.from("wholesale_products").delete().eq("id", id).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "wholesale.product_deleted", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} deleted the wholesale product ${p.name}` });
+    done(); return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+export async function addCategory(name: string): Promise<Result> {
+  try {
+    const { supabase, org } = await manager();
+    const n = label(name);
+    if (!n) throw new Error("Type the category name.");
+    await editList(supabase, org.id, "categories", (l) => (l.some((x) => same(x, n)) ? l : [...l, n]));
+    done(); return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Rename a category — every product in it moves to the new name. */
+export async function renameCategory(from: string, to: string): Promise<Result<number>> {
+  try {
+    const { supabase, org } = await manager();
+    const a = label(from), b = label(to);
+    if (!a || !b) throw new Error("Type the new name.");
+    const { data, error } = await supabase.from("wholesale_products").update({ category: b, updated_at: new Date().toISOString() }).eq("organisation_id", org.id).ilike("category", a.replace(/[%_\\]/g, "\\$&")).select("id");
+    if (error) throw new Error(error.message);
+    await editList(supabase, org.id, "categories", (l) => { const out = l.filter((x) => !same(x, a) && !same(x, b)); return [...out, b]; });
+    done(); return { ok: true, data: (data ?? []).length };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Delete a category. Its products move to `moveTo` (another category), or to no category. */
+export async function deleteCategory(name: string, moveTo: string | null): Promise<Result<number>> {
+  try {
+    const { supabase, org } = await manager();
+    const a = label(name), b = moveTo ? label(moveTo) : "";
+    if (!a) throw new Error("Refresh and try again.");
+    if (b && same(a, b)) throw new Error("Choose a different category to move the products to.");
+    const { data, error } = await supabase.from("wholesale_products").update({ category: b || null, updated_at: new Date().toISOString() }).eq("organisation_id", org.id).ilike("category", a.replace(/[%_\\]/g, "\\$&")).select("id");
+    if (error) throw new Error(error.message);
+    await editList(supabase, org.id, "categories", (l) => l.filter((x) => !same(x, a)));
+    done(); return { ok: true, data: (data ?? []).length };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+export async function addPriceGroup(name: string): Promise<Result> {
+  try {
+    const { supabase, org } = await manager();
+    const n = label(name);
+    if (!n) throw new Error("Type the price group name.");
+    await editList(supabase, org.id, "price_groups", (l) => (l.some((x) => same(x, n)) ? l : [...l, n]));
+    done(); return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Rename a price group — its customers and special prices move with it. */
+export async function renamePriceGroup(from: string, to: string): Promise<Result> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const a = label(from), b = label(to);
+    if (!a || !b) throw new Error("Type the new name.");
+    if (!same(a, b)) {
+      const { data: clash } = await supabase.from("wholesale_group_prices").select("id").eq("organisation_id", org.id).eq("price_group", b).limit(1);
+      if ((clash ?? []).length) throw new Error(`There's already a price group called ${b}.`);
+    }
+    const r1 = await supabase.from("wholesale_group_prices").update({ price_group: b }).eq("organisation_id", org.id).eq("price_group", a);
+    if (r1.error) throw new Error(r1.error.message);
+    const r2 = await supabase.from("wholesale_customers").update({ price_group: b, updated_at: new Date().toISOString() }).eq("organisation_id", org.id).eq("price_group", a);
+    if (r2.error) throw new Error(r2.error.message);
+    await editList(supabase, org.id, "price_groups", (l) => [...l.filter((x) => !same(x, a) && !same(x, b)), b]);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "wholesale.price_group_renamed", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} renamed the wholesale price group ${a} to ${b}` });
+    done(); return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Delete a price group: its special prices are removed and its customers go back to the standard prices. */
+export async function deletePriceGroup(name: string): Promise<Result<number>> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const a = label(name);
+    if (!a) throw new Error("Refresh and try again.");
+    const r1 = await supabase.from("wholesale_group_prices").delete().eq("organisation_id", org.id).eq("price_group", a);
+    if (r1.error) throw new Error(r1.error.message);
+    const { data, error } = await supabase.from("wholesale_customers").update({ price_group: null, updated_at: new Date().toISOString() }).eq("organisation_id", org.id).eq("price_group", a).select("id");
+    if (error) throw new Error(error.message);
+    await editList(supabase, org.id, "price_groups", (l) => l.filter((x) => !same(x, a)));
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "wholesale.price_group_deleted", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} deleted the wholesale price group ${a} (${(data ?? []).length} customer${(data ?? []).length === 1 ? "" : "s"} back on standard prices)` });
+    done(); return { ok: true, data: (data ?? []).length };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

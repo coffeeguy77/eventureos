@@ -55,7 +55,7 @@ export function GiftActions({ id, active, viewUrl }: { id: string; active: boole
       <a href={viewUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg px-2 py-1 text-[0.75rem] font-medium text-brand-700 hover:bg-brand-50">View</a>
       {active && <button type="button" disabled={pending} onClick={() => go(() => resendGift(id))} className="rounded-lg px-2 py-1 text-[0.75rem] font-medium text-ink-muted hover:bg-zinc-100">Resend</button>}
       {active && !ask && <button type="button" onClick={() => setAsk(true)} className="rounded-lg px-2 py-1 text-[0.75rem] font-medium text-rose-700 hover:bg-rose-50">Void</button>}
-      {ask && <span className="flex items-center gap-1 text-[0.75rem]">Void it?<button type="button" onClick={() => setAsk(false)} className="rounded px-1.5 py-0.5 ring-1 ring-line">No</button><button type="button" disabled={pending} onClick={() => go(() => voidGift(id))} className="rounded bg-rose-600 px-1.5 py-0.5 text-white">Void</button></span>}
+      {ask && <span className="flex items-center gap-1 text-[0.75rem]">Void it?<button type="button" onClick={() => setAsk(false)} className="rounded px-1.5 py-0.5 ring-1 ring-line">No</button><button type="button" disabled={pending} onClick={() => go(() => voidGift(id))} className="rounded bg-rose-600 px-1.5 py-0.5 text-surface">Void</button></span>}
       {msg && <span className="text-[0.72rem] text-ink-muted">{msg}</span>}
     </div>
   );

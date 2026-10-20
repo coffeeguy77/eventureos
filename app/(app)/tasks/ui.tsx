@@ -35,7 +35,7 @@ function useToast() {
   };
   const node = msg && (
     <div role="status" className={cn("fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-lg px-4 py-2 text-[0.8125rem] shadow-pop lg:bottom-6",
-      msg.ok ? "bg-ink text-surface" : "bg-rose-600 text-white")}>{msg.text}</div>
+      msg.ok ? "bg-ink text-surface" : "bg-rose-600 text-surface")}>{msg.text}</div>
   );
   return { show, node };
 }

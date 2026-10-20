@@ -70,3 +70,35 @@ export function runTotals(lines: { name: string; quantity: number; weight_kg: nu
   }
   return [...m.values()].sort((a, b) => (b.kg ?? -1) - (a.kg ?? -1) || a.name.localeCompare(b.name));
 }
+
+export interface BoxLine { name: string; quantity: number; weight_kg: number | null }
+export interface Box { kind: "coffee" | "other"; kg: number; items: { name: string; quantity: number }[] }
+
+/**
+ * How an order packs into boxes for labels: coffee (lines with a weight) fills boxes of `boxKg` kilos, biggest bags
+ * first; a bag bigger than a box gets a box of its own. Everything else (no weight — cleaner, cups, hire) goes in one
+ * extra box. Returns at least one box when the order has anything on it.
+ */
+export function packBoxes(lines: BoxLine[], boxKg = 10): Box[] {
+  const cap = boxKg > 0 ? boxKg : 10;
+  const units: { name: string; kg: number }[] = [];
+  const other: Box = { kind: "other", kg: 0, items: [] };
+  for (const l of lines) {
+    const q = Math.round(Number(l.quantity));
+    if (!(q > 0)) continue;
+    const w = l.weight_kg == null ? null : Number(l.weight_kg);
+    if (w && w > 0) for (let i = 0; i < Math.min(q, 2000); i++) units.push({ name: l.name, kg: w });
+    else other.items.push({ name: l.name, quantity: q });
+  }
+  units.sort((a, b) => b.kg - a.kg);
+  const boxes: Box[] = [];
+  for (const u of units) {
+    const fit = boxes.find((b) => b.kg + u.kg <= cap + 1e-9);
+    const box = fit ?? (boxes[boxes.push({ kind: "coffee", kg: 0, items: [] }) - 1]);
+    box.kg = Math.round((box.kg + u.kg) * 1000) / 1000;
+    const it = box.items.find((x) => x.name === u.name);
+    if (it) it.quantity += 1; else box.items.push({ name: u.name, quantity: 1 });
+  }
+  if (other.items.length) boxes.push(other);
+  return boxes;
+}

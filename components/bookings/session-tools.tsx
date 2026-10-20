@@ -56,7 +56,7 @@ export function RosterRow({ b, currency, others, isPast }: { b: RosterBooking; c
       <div className="flex items-start gap-3">
         {live ? (
           <button type="button" disabled={pending} onClick={() => go(() => setBookingStatus(b.id, here ? "confirmed" : "attended"))} aria-pressed={here} title={here ? "Checked in — tap to undo" : "Check in"}
-            className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ring-1 ring-inset transition print:hidden", here ? "bg-emerald-500 text-white ring-emerald-500" : "text-ink-faint ring-line-strong hover:bg-zinc-50")}>
+            className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full ring-1 ring-inset transition print:hidden", here ? "bg-emerald-500 text-surface ring-emerald-500" : "text-ink-faint ring-line-strong hover:bg-zinc-50")}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           </button>
         ) : <span className="mt-0.5 h-8 w-8 shrink-0" />}

@@ -41,7 +41,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader title="Orders" subtitle={shop.enabled ? <>Shop is live at <a href={`/shop/${org.slug}`} target="_blank" rel="noreferrer" className="font-medium text-ink underline">/shop/{org.slug}</a></> : <>The shop is switched off — turn it on in <Link href="/store/settings" className="font-medium text-ink underline">Settings</Link>.</>} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {TABS.map((t) => <Link key={t.k} href={`/store?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab.k ? "bg-ink text-white" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
+        {TABS.map((t) => <Link key={t.k} href={`/store?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab.k ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
         <form className="ml-auto"><input type="hidden" name="tab" value={tab.k} /><input name="q" defaultValue={q} placeholder="Order #, name or email" className="h-9 w-56 rounded-lg border border-line-strong bg-surface px-3 text-[0.8125rem]" /></form>
       </div>
       {rows.length === 0 ? <Card><EmptyState title={tab.k === "todo" ? "Nothing to roast right now" : "No orders here"}>Paid orders and subscription deliveries show up here, sorted by the day they ship.</EmptyState></Card> : <OrdersTable rows={rows} currency={org.currency} />}

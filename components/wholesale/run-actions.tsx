@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCheck, Download, Loader2, PackageCheck, Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { CheckCheck, Download, Loader2, PackageCheck, Printer, Tag } from "lucide-react";
+import { Button, buttonClass } from "@/components/ui/button";
 import { importOrderEmailsNow, setOrderStatus, setRunStatus } from "@/app/(app)/wholesale/actions";
 import { cn } from "@/lib/cn";
 
@@ -30,7 +31,9 @@ export function RunActions({ run, canImport, open }: { run: string; canImport: b
       {open.placed + open.packed > 0 && (
         <Button size="sm" disabled={pending} onClick={() => go(() => setRunStatus(run, "delivered"), (n) => `${n} order${n === 1 ? "" : "s"} marked delivered.`)}><CheckCheck className="h-4 w-4" />Mark all delivered</Button>
       )}
-      <Button size="sm" variant="primary" onClick={() => window.print()}><Printer className="h-4 w-4" />Print</Button>
+      <Button size="sm" variant="primary" onClick={() => window.print()}><Printer className="h-4 w-4" />Print run sheet</Button>
+      <Link href={`/print/wholesale-labels?run=${run}&size=4x6`} className={buttonClass("secondary", "sm")} title="4×6 inch labels for a label printer (e.g. DYMO LabelWriter 4XL)"><Tag className="h-4 w-4" />Labels 4×6</Link>
+      <Link href={`/print/wholesale-labels?run=${run}&size=a4`} className={buttonClass("secondary", "sm")} title="Four labels to an A4 page"><Tag className="h-4 w-4" />Labels A4</Link>
       {note && <span className={cn("text-[0.75rem]", note.ok ? "text-emerald-700" : "text-rose-700")}>{note.text}</span>}
     </div>
   );

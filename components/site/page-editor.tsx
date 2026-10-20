@@ -160,7 +160,7 @@ export function PageEditor({ slug }: { slug: string }) {
       )}
 
       {msg && !target && (
-        <div className={`fixed bottom-20 left-5 z-[96] max-w-sm rounded-xl px-4 py-3 text-[0.875rem] font-medium shadow-lg ${msg.ok ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`} role="status">{msg.text}</div>
+        <div className={`fixed bottom-20 left-5 z-[96] max-w-sm rounded-xl px-4 py-3 text-[0.875rem] font-medium shadow-lg ${msg.ok ? "bg-emerald-600 text-surface" : "bg-rose-600 text-surface"}`} role="status">{msg.text}</div>
       )}
 
       {target && (

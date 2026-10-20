@@ -413,7 +413,7 @@ export function SentScreen({ result, quoteId, quoteNumber, names, after, onDone,
         {after && (
           <div className="mt-6 space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
-              <Link href={after.emailsHref} className="flex items-center gap-3 rounded-xl bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-700">
+              <Link href={after.emailsHref} className="flex items-center gap-3 rounded-xl bg-brand-600 px-4 py-3 text-on-brand shadow-sm hover:bg-brand-700">
                 <ArrowLeft className="h-5 w-5 shrink-0" />
                 <span className="min-w-0"><span className="block text-[0.875rem] font-semibold">{after.emailsLabel ?? `Back to ${after.clientName}'s emails`}</span><span className="block text-[0.72rem] text-white/80">See the conversation with this quote in it</span></span>
               </Link>

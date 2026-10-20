@@ -32,7 +32,7 @@ export default async function WholesaleCustomersPage({ searchParams }: { searchP
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {(["active", "inactive"] as const).map((k) => <Link key={k} href={`/wholesale/customers?show=${k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", k === show ? "bg-ink text-white" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{k === "active" ? "Active" : `Inactive${inactive ? ` (${inactive})` : ""}`}</Link>)}
+        {(["active", "inactive"] as const).map((k) => <Link key={k} href={`/wholesale/customers?show=${k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", k === show ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{k === "active" ? "Active" : `Inactive${inactive ? ` (${inactive})` : ""}`}</Link>)}
         <form className="ml-auto flex w-full gap-2 sm:w-auto"><input type="hidden" name="show" value={show} /><input name="q" defaultValue={q} placeholder="Name, email or suburb" aria-label="Search customers" className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-[0.8125rem] sm:h-9 sm:w-56" /></form>
         <ButtonLink href="/wholesale/customers/new" size="sm" variant="primary" className="h-10 sm:h-9"><Plus className="h-4 w-4" />Add customer</ButtonLink>
       </div>

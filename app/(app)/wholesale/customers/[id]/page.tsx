@@ -8,7 +8,7 @@ import { OrderLinkBox } from "@/components/wholesale/order-link";
 import type { CustomerInput } from "@/app/(app)/wholesale/actions";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { fmtDate, money } from "@/lib/format";
-import { readWholesale } from "@/lib/wholesale/settings";
+import { mergeNames, readWholesale } from "@/lib/wholesale/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
   const { supabase, org, role } = await requireOrg();
   const ws = readWholesale(org.settings);
   const { data: groupRows } = await supabase.from("wholesale_group_prices").select("price_group").eq("organisation_id", org.id);
-  const groups = [...new Set(((groupRows ?? []) as { price_group: string }[]).map((g) => g.price_group))].sort();
+  const groups = mergeNames(ws.priceGroups, ((groupRows ?? []) as { price_group: string }[]).map((g) => g.price_group));
   if (isNew) {
     return (
       <div className="max-w-3xl">

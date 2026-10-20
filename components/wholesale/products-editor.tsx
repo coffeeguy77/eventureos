@@ -2,27 +2,27 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/form";
-import { saveGroupPrice, saveProduct, type ProductInput } from "@/app/(app)/wholesale/actions";
+import { deleteProduct, saveGroupPrice, saveProduct, type ProductInput } from "@/app/(app)/wholesale/actions";
 import { cn } from "@/lib/cn";
 
 export interface ProductRow extends ProductInput { id: string; groupPrices: Record<string, number> }
 
 /** Wholesale products: prices (ex GST), GST, weight, on/off, and special prices per price group. */
-export function ProductsEditor({ rows, groups, canEdit }: { rows: ProductRow[]; groups: string[]; canEdit: boolean }) {
+export function ProductsEditor({ rows, groups, categories, canEdit }: { rows: ProductRow[]; groups: string[]; categories: string[]; canEdit: boolean }) {
   const [adding, setAdding] = useState(false);
-  const cats = [...new Set(rows.map((r) => r.category || "Other"))];
+  const cats = [...new Set(rows.map((r) => r.category || "No category"))].sort((a, b) => (a === "No category" ? 1 : b === "No category" ? -1 : a.localeCompare(b)));
   return (
     <div className="space-y-6">
-      {canEdit && (adding ? <div className="rounded-xl bg-surface p-4 ring-1 ring-line"><Row p={{ id: "", name: "", unit_price: 0, tax_rate: 0, active: true, groupPrices: {} }} groups={[]} canEdit isNew onDone={() => setAdding(false)} /></div>
+      {canEdit && (adding ? <div className="rounded-xl bg-surface p-4 ring-1 ring-line"><Row p={{ id: "", name: "", unit_price: 0, tax_rate: 0, active: true, groupPrices: {} }} groups={[]} categories={categories} canEdit isNew onDone={() => setAdding(false)} /></div>
         : <Button size="sm" variant="primary" onClick={() => setAdding(true)}><Plus className="h-4 w-4" />Add product</Button>)}
       {cats.map((cat) => (
         <section key={cat}>
           <h2 className="mb-2 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{cat}</h2>
           <div className="divide-y divide-line overflow-hidden rounded-xl bg-surface ring-1 ring-line">
-            {rows.filter((r) => (r.category || "Other") === cat).map((p) => <Row key={p.id} p={p} groups={groups} canEdit={canEdit} />)}
+            {rows.filter((r) => (r.category || "No category") === cat).map((p) => <Row key={p.id} p={p} groups={groups} categories={categories} canEdit={canEdit} />)}
           </div>
         </section>
       ))}
@@ -30,7 +30,10 @@ export function ProductsEditor({ rows, groups, canEdit }: { rows: ProductRow[]; 
   );
 }
 
-function Row({ p, groups, canEdit, isNew, onDone }: { p: ProductRow; groups: string[]; canEdit: boolean; isNew?: boolean; onDone?: () => void }) {
+function Row({ p, groups, categories, canEdit, isNew, onDone }: { p: ProductRow; groups: string[]; categories: string[]; canEdit: boolean; isNew?: boolean; onDone?: () => void }) {
+  const [newCat, setNewCat] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
+  const catList = [...new Set([...categories, ...(p.category ? [p.category] : [])])].sort((a, b) => a.localeCompare(b));
   const router = useRouter();
   const [v, setV] = useState<ProductInput>({ sku: p.sku ?? "", name: p.name, category: p.category ?? "", unit_price: p.unit_price, tax_rate: p.tax_rate, weight_kg: p.weight_kg ?? null, min_qty: p.min_qty ?? 1, active: p.active, description: p.description ?? "" });
   const [open, setOpen] = useState(!!isNew);
@@ -58,7 +61,15 @@ function Row({ p, groups, canEdit, isNew, onDone }: { p: ProductRow; groups: str
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="text-[0.7188rem] text-ink-muted sm:col-span-2">Name<input value={v.name} disabled={!canEdit} onChange={(e) => set("name", e.target.value)} className={field} /></label>
             <label className="text-[0.7188rem] text-ink-muted">SKU<input value={v.sku ?? ""} disabled={!canEdit} onChange={(e) => set("sku", e.target.value)} className={field} /></label>
-            <label className="text-[0.7188rem] text-ink-muted">Category<input value={v.category ?? ""} disabled={!canEdit} onChange={(e) => set("category", e.target.value)} className={field} /></label>
+            <label className="text-[0.7188rem] text-ink-muted">Category
+              {newCat
+                ? <input value={v.category ?? ""} autoFocus placeholder="New category name" disabled={!canEdit} onChange={(e) => set("category", e.target.value)} className={field} />
+                : <select value={v.category ?? ""} disabled={!canEdit} onChange={(e) => { if (e.target.value === "__new") { setNewCat(true); set("category", ""); } else set("category", e.target.value); }} className={field}>
+                    <option value="">No category</option>
+                    {catList.map((c) => <option key={c} value={c}>{c}</option>)}
+                    <option value="__new">+ New category…</option>
+                  </select>}
+            </label>
             <label className="text-[0.7188rem] text-ink-muted">Weight per unit (kg)<input type="number" min={0} step="0.001" value={v.weight_kg ?? ""} disabled={!canEdit} onChange={(e) => set("weight_kg", e.target.value === "" ? null : Number(e.target.value))} className={field} /></label>
             <label className="text-[0.7188rem] text-ink-muted">Minimum quantity<input type="number" min={1} value={v.min_qty ?? 1} disabled={!canEdit} onChange={(e) => set("min_qty", Number(e.target.value))} className={field} /></label>
             <label className="text-[0.7188rem] text-ink-muted sm:col-span-3">Description (shown when ordering)<input value={v.description ?? ""} disabled={!canEdit} onChange={(e) => set("description", e.target.value)} className={field} /></label>
@@ -68,6 +79,11 @@ function Row({ p, groups, canEdit, isNew, onDone }: { p: ProductRow; groups: str
             <label className="flex items-center gap-1.5"><input type="checkbox" className="h-4 w-4 accent-brand-500" checked={v.active} disabled={!canEdit} onChange={(e) => set("active", e.target.checked)} />Customers can order it</label>
             {canEdit && <Button size="sm" variant="primary" disabled={pending || !v.name.trim()} onClick={save}>{isNew ? "Add product" : "Save"}</Button>}
             {isNew && <Button size="sm" variant="ghost" onClick={onDone}>Cancel</Button>}
+            {!isNew && canEdit && (askDelete
+              ? <span className="flex items-center gap-2 text-[0.75rem] text-rose-700">Delete {v.name || "this product"} for good? Past orders keep it.
+                  <Button size="sm" variant="danger" disabled={pending} onClick={() => start(async () => { const r = await deleteProduct(p.id).catch(() => ({ ok: false as const, error: "Couldn't reach the server." })); if (!r.ok) setMsg({ ok: false, text: r.error }); router.refresh(); })}>Yes, delete</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAskDelete(false)}>No</Button></span>
+              : <Button size="sm" variant="ghost" className="text-rose-700" onClick={() => setAskDelete(true)}><Trash2 className="h-3.5 w-3.5" />Delete</Button>)}
             {msg && <span className={cn("text-[0.75rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</span>}
           </div>
           {!isNew && groups.length > 0 && (
@@ -82,7 +98,7 @@ function Row({ p, groups, canEdit, isNew, onDone }: { p: ProductRow; groups: str
   );
 }
 
-function GroupPrice({ productId, group, value, canEdit }: { productId: string; group: string; value: number | undefined; canEdit: boolean }) {
+export function GroupPrice({ productId, group, value, canEdit }: { productId: string; group: string; value: number | undefined; canEdit: boolean }) {
   const router = useRouter();
   const [v, setV] = useState(value == null ? "" : String(value));
   const [pending, start] = useTransition();

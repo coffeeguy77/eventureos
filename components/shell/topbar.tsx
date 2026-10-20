@@ -245,7 +245,7 @@ function Notifications({ items, unread }: { items: TopbarProps["notifications"];
         <button aria-label="Notifications" className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted hover:bg-zinc-100 hover:text-ink">
           <Bell className="h-[18px] w-[18px]" strokeWidth={1.8} />
           {unread > 0 && (
-            <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[0.625rem] font-semibold leading-4 text-white">{unread}</span>
+            <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[0.625rem] font-semibold leading-4 text-surface">{unread}</span>
           )}
         </button>
       )}

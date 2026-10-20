@@ -32,7 +32,7 @@ export default async function SubsPage({ searchParams }: { searchParams: Promise
     <>
       <PageHeader title="Subscriptions" subtitle={`${active.length} active · about ${money(monthly, org.currency)} a month from card and WooCommerce subscriptions`} />
       <div className="mb-3 flex flex-wrap gap-2">
-        {TABS.map((t) => <Link key={t.k} href={`/store/subscriptions?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab ? "bg-ink text-white" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
+        {TABS.map((t) => <Link key={t.k} href={`/store/subscriptions?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
       </div>
       {list.length === 0 ? <Card><EmptyState title="None here">Subscriptions started in the shop (or imported from WooCommerce) appear here.</EmptyState></Card> : (
         <Card className="divide-y divide-line overflow-hidden">

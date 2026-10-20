@@ -69,7 +69,7 @@ export function StarPanel({ id, starred, note, by }: { id: string; starred: bool
       <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} rows={2}
         onBlur={() => { if (text.trim() !== (note ?? "").trim()) run(() => setStarNote(id, text)); }}
         placeholder="What do we need to think about? e.g. They expect us to sell direct to ~6,000 people — is it worth it? Staff, stock, float, minimum spend…"
-        className="mt-2 w-full resize-y rounded-lg border border-amber-200 bg-white px-3 py-2 text-base text-ink placeholder:text-ink-faint focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 sm:text-[0.8125rem]" />
+        className="mt-2 w-full resize-y rounded-lg border border-amber-200 bg-surface px-3 py-2 text-base text-ink placeholder:text-ink-faint focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-100 sm:text-[0.8125rem]" />
       <p className="mt-1 text-[0.7rem] text-amber-800/80">{pending ? "Saving…" : msg ? <span className={msg.ok ? "" : "text-rose-700"}>{msg.text}</span> : "Saves when you click away. The whole team sees it, and it shows in the Starred tab."}</p>
     </div>
   );

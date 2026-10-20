@@ -21,7 +21,7 @@ export function OrderEdit({ id, status, delivery, payment, note, needsCheck, dir
   });
   const statusBtn = (to: "placed" | "packed" | "delivered", label: string) => (
     <button type="button" disabled={pending || status === to} onClick={() => run(() => setOrderStatus(id, to), `Marked ${label.toLowerCase()}.`)}
-      className={cn("h-10 rounded-lg px-3 text-[0.8125rem] font-medium ring-1 ring-inset sm:h-9", status === to ? "bg-ink text-white ring-ink" : "text-ink ring-line hover:bg-zinc-50")}>{label}</button>
+      className={cn("h-10 rounded-lg px-3 text-[0.8125rem] font-medium ring-1 ring-inset sm:h-9", status === to ? "bg-ink text-surface ring-ink" : "text-ink ring-line hover:bg-zinc-50")}>{label}</button>
   );
   if (status === "pending") return <p className="text-[0.8125rem] text-ink-muted">Waiting for the customer to finish paying by card. Unpaid orders are not on the run sheet.</p>;
   return (

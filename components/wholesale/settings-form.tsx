@@ -21,6 +21,9 @@ export function WholesaleSettingsForm({ initial, gmail, stripe, canEdit }: { ini
         <div className="max-w-xs"><Label htmlFor="ws-day">Usual delivery day</Label>
           <Select id="ws-day" value={v.delivery_weekday} onChange={(e) => set("delivery_weekday", Number(e.target.value))} disabled={!canEdit}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</Select></div>
         <p className="text-[0.75rem] text-ink-faint">No cut-off: anything ordered before the delivery day goes on that week&apos;s run; orders on the day go on the next one. Customers can have their own day.</p>
+        <div className="max-w-xs"><Label htmlFor="ws-box" hint="for box labels">Coffee per box (kg)</Label>
+          <Input id="ws-box" type="number" min={1} max={100} step="0.5" value={v.box_kg} onChange={(e) => set("box_kg", Number(e.target.value))} disabled={!canEdit} /></div>
+        <p className="text-[0.75rem] text-ink-faint">Labels: one per box of coffee (e.g. 30 kg = 3 labels at 10 kg a box), plus one more box when an order has other items.</p>
       </section>
       <section className="space-y-3 border-t border-line pt-5">
         <h2 className="text-[0.9375rem] font-semibold text-ink">Orders from Ordermentum emails</h2>

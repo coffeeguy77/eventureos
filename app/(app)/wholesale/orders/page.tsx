@@ -43,7 +43,7 @@ export default async function WholesaleOrdersPage({ searchParams }: { searchPara
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        {TABS.map((t) => <Link key={t.k} href={`/wholesale/orders?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab.k ? "bg-ink text-white" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
+        {TABS.map((t) => <Link key={t.k} href={`/wholesale/orders?tab=${t.k}`} className={cn("rounded-full px-3 py-1.5 text-[0.8125rem] font-medium", t.k === tab.k ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{t.label}</Link>)}
         <form className="ml-auto w-full sm:w-auto"><input type="hidden" name="tab" value={tab.k} /><input name="q" defaultValue={q} placeholder="Order number or customer" aria-label="Search orders" className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-[0.8125rem] sm:h-9 sm:w-60" /></form>
       </div>
       {rows.length === 0 ? <Card><EmptyState title={tab.k === "check" ? "Nothing to check" : "No orders here"} /></Card> : (

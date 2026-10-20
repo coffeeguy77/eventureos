@@ -41,8 +41,11 @@ export function CustomerForm({ id, initial, groups, defaultDay, canEdit }: { id:
         <div className="grid grid-cols-2 gap-3">{text("state", "State")}{text("postcode", "Postcode")}</div>
         {text("abn", "ABN")}
         <div><Label htmlFor="wc-group" hint="their special prices">Price group</Label>
-          <Input id="wc-group" list="wc-groups" value={v.price_group ?? ""} onChange={(e) => set("price_group", e.target.value)} disabled={!canEdit} placeholder="Standard prices" />
-          <datalist id="wc-groups">{groups.map((g) => <option key={g} value={g} />)}</datalist></div>
+          <Select id="wc-group" value={v.price_group ?? ""} onChange={(e) => set("price_group", e.target.value)} disabled={!canEdit}>
+            <option value="">Standard prices</option>
+            {[...new Set([...groups, ...(v.price_group ? [v.price_group] : [])])].map((g) => <option key={g} value={g}>{g}</option>)}
+          </Select>
+          <p className="mt-1 text-[0.7188rem] text-ink-faint">Add or rename groups in Products &amp; prices → Price groups.</p></div>
       </div>
       <fieldset className="rounded-xl p-4 ring-1 ring-inset ring-line">
         <legend className="px-1 text-[0.8125rem] font-semibold text-ink">Ordering & payment</legend>

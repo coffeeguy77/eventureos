@@ -49,7 +49,7 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
         <label className="text-[0.75rem] text-ink-muted">From<input type="date" name="from" defaultValue={from} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
         <label className="text-[0.75rem] text-ink-muted">To<input type="date" name="to" defaultValue={to} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
         <label className="flex items-center gap-1.5 text-[0.75rem] text-ink-muted"><select name="all" defaultValue={includeQuoted ? "1" : "0"} className="rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]"><option value="1">Confirmed + quoted</option><option value="0">Confirmed only</option></select></label>
-        <button className="h-8 rounded-lg bg-ink px-3 text-[0.7812rem] font-medium text-white">Show</button>
+        <button className="h-8 rounded-lg bg-ink px-3 text-[0.7812rem] font-medium text-surface">Show</button>
         <PrintButton />
       </form>
     );

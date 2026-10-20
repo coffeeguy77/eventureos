@@ -69,7 +69,7 @@ export default async function WebsitePage() {
           <CopyField value={snippet} multiline />
           <div className="mt-4 rounded-lg bg-zinc-50 p-3 text-[0.8125rem] text-ink-muted">
             <p className="font-medium text-ink">WordPress</p>
-            <p className="mt-1">Install the EventureOS Bookings plugin, then use the <b>EventureOS booking</b> block, or the shortcode <code className="rounded bg-white px-1">[eventureos_booking]</code> (options: <code className="rounded bg-white px-1">course=&quot;…&quot;</code>, <code className="rounded bg-white px-1">page=&quot;gift&quot;</code>).</p>
+            <p className="mt-1">Install the EventureOS Bookings plugin, then use the <b>EventureOS booking</b> block, or the shortcode <code className="rounded bg-zinc-100 px-1">[eventureos_booking]</code> (options: <code className="rounded bg-zinc-100 px-1">course=&quot;…&quot;</code>, <code className="rounded bg-zinc-100 px-1">page=&quot;gift&quot;</code>).</p>
             <a href="/downloads/eventureos-bookings.zip" className="mt-2 inline-flex h-9 items-center rounded-lg bg-brand-500 px-3.5 text-[0.8125rem] font-medium text-on-brand hover:bg-brand-600">Download the WordPress plugin</a>
           </div>
         </Card>

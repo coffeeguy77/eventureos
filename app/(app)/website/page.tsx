@@ -69,7 +69,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
       <Card><EmptyState title="No visits recorded yet">Visits, clicks and form use on your events, classes, shop, gift and job pages show here as they happen. Nothing personal is recorded.</EmptyState></Card>
     ) : (
       <div className="space-y-5">
-        <div className="flex gap-1.5">{[7, 30, 90].map((d) => <Link key={d} href={`/website?days=${d}`} className={`rounded-full px-3 py-1 text-[0.7812rem] font-medium ${d === days ? "bg-ink text-white" : "bg-zinc-100 text-ink-muted hover:text-ink"}`}>Last {d} days</Link>)}</div>
+        <div className="flex gap-1.5">{[7, 30, 90].map((d) => <Link key={d} href={`/website?days=${d}`} className={`rounded-full px-3 py-1 text-[0.7812rem] font-medium ${d === days ? "bg-ink text-surface" : "bg-zinc-100 text-ink-muted hover:text-ink"}`}>Last {d} days</Link>)}</div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           {[["Visitors", r.visitors], ["Visits", r.sessions], ["Pages viewed", r.views], ["Contact forms sent", r.formsSent], ["Quotes & orders sent", r.quotes], ["Added to cart", r.cartAdds], ["Checkouts started", r.checkouts]].map(([l, n]) => (
             <Card key={l as string} className="p-4"><p className="text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">{l}</p><p className="mt-1 text-[1.5rem] font-semibold tabular-nums text-ink">{n}</p></Card>

@@ -17,7 +17,7 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
   const [pending, start] = useTransition();
   const set = <K extends keyof ShopSettings>(k: K, v: ShopSettings[K]) => setS({ ...s, [k]: v });
   const days = (k: "roastDays" | "dispatchDays") => (
-    <div className="flex flex-wrap gap-1.5">{[1, 2, 3, 4, 5, 6, 7].map((d) => { const on = s[k].includes(d); return <button key={d} type="button" onClick={() => set(k, on ? s[k].filter((x) => x !== d) : [...s[k], d].sort())} className={`h-9 rounded-lg px-3 text-[0.8125rem] font-medium ring-1 ${on ? "bg-ink text-white ring-ink" : "bg-surface text-ink-muted ring-line-strong"}`}>{WEEKDAYS[d].slice(0, 3)}</button>; })}</div>
+    <div className="flex flex-wrap gap-1.5">{[1, 2, 3, 4, 5, 6, 7].map((d) => { const on = s[k].includes(d); return <button key={d} type="button" onClick={() => set(k, on ? s[k].filter((x) => x !== d) : [...s[k], d].sort())} className={`h-9 rounded-lg px-3 text-[0.8125rem] font-medium ring-1 ${on ? "bg-ink text-surface ring-ink" : "bg-surface text-ink-muted ring-line-strong"}`}>{WEEKDAYS[d].slice(0, 3)}</button>; })}</div>
   );
   const [nf, setNf] = useState<{ unit: IntervalUnit; count: number }>({ unit: "week", count: 5 });
   return (
@@ -59,7 +59,7 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
           <div className="flex flex-wrap gap-1.5">{s.frequencies.map((f, i) => <span key={i} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[0.8125rem]">{frequencyLabel(f.unit, f.count)}<button type="button" onClick={() => set("frequencies", s.frequencies.filter((_, k) => k !== i))} aria-label="Remove"><Trash2 className="h-3 w-3" /></button></span>)}
             <span className="inline-flex items-center gap-1 text-[0.8125rem]"><Input type="number" min={1} max={26} value={nf.count} onChange={(e) => setNf({ ...nf, count: Number(e.target.value) })} className="h-8 w-14" />
               <select value={nf.unit} onChange={(e) => setNf({ ...nf, unit: e.target.value as IntervalUnit })} className="h-8 rounded-md border border-line-strong bg-surface px-1"><option value="week">weeks</option><option value="month">months</option></select>
-              <button type="button" onClick={() => set("frequencies", [...s.frequencies, nf])} className="grid h-8 w-8 place-items-center rounded-md bg-ink text-white" aria-label="Add"><Plus className="h-4 w-4" /></button></span></div></div>
+              <button type="button" onClick={() => set("frequencies", [...s.frequencies, nf])} className="grid h-8 w-8 place-items-center rounded-md bg-ink text-surface" aria-label="Add"><Plus className="h-4 w-4" /></button></span></div></div>
       </Card>
       <Card className="space-y-4 p-5">
         <h2 className="font-semibold text-ink">Coffee gift cards</h2>

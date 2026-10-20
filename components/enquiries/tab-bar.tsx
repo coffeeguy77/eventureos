@@ -78,7 +78,7 @@ export function EnquiryTabBar({ tabs, pinned, active }: { tabs: EnquiryTab[]; pi
                 <li key={t.key}>
                   <button type="button" disabled={pending} onClick={() => save(on ? chosen.filter((k) => k !== t.key) : [...chosen, t.key])}
                     className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[0.8125rem] text-ink hover:bg-zinc-50">
-                    <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded ring-1 ring-inset", on ? "bg-brand-500 text-white ring-brand-500" : "ring-line-strong")}>{on && <Check className="h-3 w-3" />}</span>
+                    <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded ring-1 ring-inset", on ? "bg-brand-500 text-on-brand ring-brand-500" : "ring-line-strong")}>{on && <Check className="h-3 w-3" />}</span>
                     <span className="flex-1">{t.label}</span><span className="text-[0.72rem] text-ink-faint">{t.count}</span>
                   </button>
                 </li>

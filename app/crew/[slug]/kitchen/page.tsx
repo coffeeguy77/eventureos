@@ -71,7 +71,7 @@ export default async function CrewKitchen({ params, searchParams }: { params: Pr
       </div>
       {tab === "make" && (
         <div className="mb-4 flex gap-2 text-[0.75rem]">
-          {RANGES.map((n) => <Link key={n} href={`${base}?tab=make&days=${n}`} className={cn("rounded-md px-2.5 py-1", n === days ? "bg-ink text-white" : "bg-surface text-ink-muted ring-1 ring-inset ring-line")}>Next {n} days</Link>)}
+          {RANGES.map((n) => <Link key={n} href={`${base}?tab=make&days=${n}`} className={cn("rounded-md px-2.5 py-1", n === days ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-inset ring-line")}>Next {n} days</Link>)}
         </div>
       )}
       {tab === "jobs" && <p className="mb-3 text-[0.8125rem] text-ink-muted">Confirmed catering for the next {JOBS_AHEAD} days.</p>}

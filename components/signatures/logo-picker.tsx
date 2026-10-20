@@ -77,7 +77,7 @@ export function LogoPicker({ orgId, brandLogo, company, width, onCompany, onWidt
           {url ? <img src={url} alt="" className="max-h-16 max-w-[90%] object-contain" /> : <span className="px-2 text-center text-[0.6875rem] text-ink-faint">None yet</span>}
         </div>
         <div className="mt-2 flex items-start gap-1.5">
-          <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full ring-1", on ? "bg-brand-500 text-white ring-brand-500" : "ring-line-strong")}>{on && <Check className="h-3 w-3" strokeWidth={3} />}</span>
+          <span className={cn("mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full ring-1", on ? "bg-brand-500 text-on-brand ring-brand-500" : "ring-line-strong")}>{on && <Check className="h-3 w-3" strokeWidth={3} />}</span>
           <span className="min-w-0"><span className="block text-[0.8125rem] font-medium text-ink">{title}</span><span className="block text-[0.6875rem] leading-snug text-ink-muted">{hint}</span></span>
         </div>
       </div>

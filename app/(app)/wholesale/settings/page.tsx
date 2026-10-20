@@ -13,7 +13,7 @@ export default async function WholesaleSettingsPage() {
   return (
     <Card className="max-w-3xl p-5 sm:p-6">
       <WholesaleSettingsForm canEdit={canManage(role)} gmail={on("gmail")} stripe={on("stripe")}
-        initial={{ delivery_weekday: ws.deliveryWeekday, email_import: ws.emailImport.enabled, import_from: ws.emailImport.from, import_subject: ws.emailImport.subject, ordering: ws.ordering, freight: ws.freight, free_freight_over: ws.freeFreightOver }} />
+        initial={{ delivery_weekday: ws.deliveryWeekday, email_import: ws.emailImport.enabled, import_from: ws.emailImport.from, import_subject: ws.emailImport.subject, ordering: ws.ordering, freight: ws.freight, free_freight_over: ws.freeFreightOver, box_kg: ws.boxKg }} />
     </Card>
   );
 }

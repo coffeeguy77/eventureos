@@ -146,7 +146,7 @@ export function CafeForm({ initial, slug, base, orgId, ig }: {
               ) : ig.configured ? (
                 <>
                   <p className="mt-1 text-[0.8125rem] text-ink-muted">Shows your latest posts on the café page. Until then it shows a “Follow us” link. Needs an Instagram business or creator account.</p>
-                  <a href="/api/instagram/connect" className="mt-2 inline-flex h-[34px] items-center rounded-md bg-ink px-3 text-[0.8125rem] font-semibold text-white">Connect Instagram</a>
+                  <a href="/api/instagram/connect" className="mt-2 inline-flex h-[34px] items-center rounded-md bg-ink px-3 text-[0.8125rem] font-semibold text-surface">Connect Instagram</a>
                 </>
               ) : (
                 <p className="mt-1 text-[0.8125rem] text-ink-muted">Until Instagram is connected the café page shows a “Follow us” link. Connecting needs a Meta app first: set {ig.missing.join(", ")} in the hosting settings.</p>
@@ -226,7 +226,7 @@ export function CafeForm({ initial, slug, base, orgId, ig }: {
         <div><p className="mb-2 text-[0.875rem] font-semibold text-ink">Questions</p><FaqEditor value={v.wholesaleFaq} onChange={(x) => set("wholesaleFaq", x)} /></div>
       </Card>
 
-      <div className="sticky bottom-3 z-10 flex items-center gap-3 rounded-xl bg-white/95 p-3 shadow-lg ring-1 ring-line backdrop-blur">
+      <div className="sticky bottom-3 z-10 flex items-center gap-3 rounded-xl bg-surface/95 p-3 shadow-lg ring-1 ring-line backdrop-blur">
         <Button type="button" variant="primary" disabled={pending} onClick={save}>{pending ? "Saving…" : "Save café pages"}</Button>
         {msg && <span className={`text-[0.8125rem] font-medium ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</span>}
       </div>
