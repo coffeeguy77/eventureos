@@ -141,6 +141,8 @@ export interface StartBookingInput {
   caseManagerId?: string | null; newCaseManager?: { name: string; email: string; phone?: string | null; site?: string | null } | null;
   /** Set only by the server action when a signed-in case manager is booking (their job seeker's email is then optional) */
   agentBooking?: boolean;
+  /** Add the online course (Learn) to this card payment */
+  learnAddon?: boolean;
 }
 export type StartResult = { ok: true; redirect: string } | { ok: false; error: string; soldOut?: boolean };
 
@@ -277,13 +279,16 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   const cfg = org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
   if (!cfg) { await cancelHold("Card payments not set up"); return { ok: false, error: `${org.name} can't take card payments online right now. Please contact them to book.` }; }
   const w = sessionWhen(session.starts_at, session.ends_at, org.timezone);
+  // The online course added at checkout: paid in the same payment, switched on when the booking is paid
+  const addon = input.learnAddon && studentId ? await import("@/lib/learn/server").then((m) => m.prepareAddon(db, org, studentId!, bookingId, course.id)).catch(() => null) : null;
   try {
     const cs = await createCheckout(cfg.secretKey, {
+      extraLines: addon ? [{ name: addon.name, amountCents: toCents(addon.price), description: "Online course access" }] : undefined,
       amountCents: toCents(due), currency: org.currency, name: `${course.name}${seats > 1 ? ` × ${seats}` : ""}`,
       description: `${w.day}, ${w.time}${promo ? ` · ${promo.code} −${money(promo.discount, org.currency, { cents: true })}` : ""}${Number(bk.gift_amount) > 0 ? ` · gift certificate ${money(bk.gift_amount, org.currency, { cents: true })} applied` : ""} · ${bk.reference}`,
       email, successUrl: `${doneUrl}?paid=1`, cancelUrl: bookUrl(org, `/done/${bk.manage_token}?cancelled=1`),
-      metadata: { eventureos_booking_id: bookingId, eventureos_org_id: org.id, booking_reference: bk.reference },
-      idempotencyKey: `bk-${bookingId}`, account: cfg.account, expiresAt: Math.floor(Date.now() / 1000) + holdMinutes * 60,
+      metadata: { eventureos_booking_id: bookingId, eventureos_org_id: org.id, booking_reference: bk.reference, ...(addon ? { eventureos_learn_addon: addon.id, eventureos_learn_amount: String(addon.price) } : {}) },
+      idempotencyKey: `bk-${bookingId}${addon ? "-learn" : ""}`, account: cfg.account, expiresAt: Math.floor(Date.now() / 1000) + holdMinutes * 60,
     });
     if (!cs.url) throw new Error("Stripe didn't return a payment page");
     await db.from("bookings").update({ stripe_session_id: cs.id }).eq("id", bookingId);
@@ -292,6 +297,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     return { ok: true, redirect: cs.url };
   } catch (e) {
     await cancelHold("Couldn't start the card payment");
+    if (addon) await db.from("learn_access").update({ status: "cancelled", last_error: "Checkout didn't open" }).eq("id", addon.id);
     return { ok: false, error: `Couldn't open the card payment page: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
@@ -301,7 +307,10 @@ export async function confirmPaidBooking(db: SupabaseClient, orgId: string, book
   const { data: b } = await db.from("bookings").select("id, status, total, gift_amount, reference, stripe_payment_intent").eq("id", bookingId).eq("organisation_id", orgId).maybeSingle();
   if (!b) throw new Error("Booking not found");
   if (b.stripe_payment_intent && ["confirmed", "attended", "no_show"].includes(b.status as string)) return `booking ${b.reference} already confirmed`;
-  const paid = (s.amount_total ?? 0) / 100;
+  // The online course added at checkout is part of this payment, but not part of the booking
+  const learnAddon = s.metadata?.eventureos_learn_addon ?? null;
+  const learnAmount = learnAddon ? Number(s.metadata?.eventureos_learn_amount ?? 0) || 0 : 0;
+  const paid = Math.max(0, Math.round(((s.amount_total ?? 0) / 100 - learnAmount) * 100) / 100);
   const late = b.status === "cancelled";
   await db.from("bookings").update({
     status: "confirmed", hold_expires_at: null, confirmed_at: new Date().toISOString(), cancelled_at: null, cancel_reason: null,
@@ -322,8 +331,12 @@ export async function confirmPaidBooking(db: SupabaseClient, orgId: string, book
     await db.from("activity_logs").insert({ organisation_id: orgId, actor_type: "system", actor_label: "Bookings", action: "booking.paid_late", entity_type: "booking", entity_id: bookingId,
       summary: `${b.reference} was paid after its seat hold ran out — it's confirmed, but check the session isn't overbooked` });
   }
+  if (learnAddon) {
+    try { const { settleAddon } = await import("@/lib/learn/server"); await settleAddon(db, orgId, learnAddon, s); }
+    catch (e) { console.error("[learn] add-on:", e); }
+  }
   await finalizeBooking(db, bookingId);
-  return `booking ${b.reference} confirmed (${paid})`;
+  return `booking ${b.reference} confirmed (${paid})${learnAddon ? " + online course" : ""}`;
 }
 
 interface FullBooking {

@@ -66,6 +66,8 @@ export function createCheckout(key: string, o: {
   expiresAt?: number;
   /** Keep the card on file for later charges (subscriptions): reuse a Stripe customer, or create one. */
   saveCard?: { customerId?: string | null } | null;
+  /** More lines on the same payment (e.g. an add-on). amountCents is the first line only. */
+  extraLines?: { name: string; amountCents: number; description?: string }[];
 }) {
   const save = o.saveCard ?? null;
   return call<CheckoutSession>(key, "POST", "/checkout/sessions", {
@@ -75,7 +77,10 @@ export function createCheckout(key: string, o: {
     customer: save?.customerId || undefined,
     customer_email: save?.customerId ? undefined : o.email || undefined,
     customer_creation: save && !save.customerId ? "always" : undefined,
-    line_items: [{ quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } }],
+    line_items: [
+      { quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } },
+      ...(o.extraLines ?? []).filter((l) => l.amountCents > 0).map((l) => ({ quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: l.amountCents, product_data: { name: l.name, description: l.description || undefined } } })),
+    ],
     metadata: o.metadata,
     expires_at: o.expiresAt,
     payment_intent_data: { metadata: o.metadata, description: o.name, setup_future_usage: save ? "off_session" : undefined },

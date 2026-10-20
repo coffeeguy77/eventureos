@@ -19,6 +19,7 @@ import { MasterNav } from "@/components/site/master-nav";
 import { readSiteNav } from "@/lib/site-nav";
 import { AgentBanner } from "./agent-banner";
 import { BookCourseButton, LandingBooking } from "./landing-booking";
+import { addonOffer } from "@/lib/learn/core";
 import { LandingNav, RevealOnScroll, ReviewWall, Stars, StickyBook } from "./landing-client";
 
 const dur = (m: number) => (m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : m > 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`);
@@ -281,7 +282,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
               base={{ org: { slug: org.slug, name: org.name, currency: org.currency, timezone: org.timezone, stripeReady: org.stripeReady, showSeatsLeft: org.settings.show_seats_left, waitlist: org.settings.waitlist, terms: org.settings.terms, cancelHours: org.settings.cancel_hours, friend: org.settings.friend },
                 utm, embed: false, source, promo,
                 agent: agent ? { code: agent.agency.code, agency: agent.agency.name, price: agent.agency.price === null ? null : Number(agent.agency.price), poRequired: agent.agency.po_required, name: agent.cm.name, site: agent.cm.site } : null }}
-              courses={courses.map((c) => ({ slug: c.slug, label: clean(c.name), meta: `${dur(c.duration_minutes)} · ${price(c)}`, course: { id: c.id, name: c.name, price: Number(c.price), maxSeats: c.max_seats_per_booking, questions: c.questions ?? [] }, sessions: byCourse(c.id) }))} />
+              courses={courses.map((c) => ({ slug: c.slug, label: clean(c.name), meta: `${dur(c.duration_minutes)} · ${price(c)}`, course: { id: c.id, name: c.name, price: Number(c.price), maxSeats: c.max_seats_per_booking, questions: c.questions ?? [] }, sessions: byCourse(c.id), learn: addonOffer(org.rawSettings, c.id) }))} />
           </div>
           <div className="space-y-3 lg:col-start-1 lg:row-start-2">
               {whatToBring && (

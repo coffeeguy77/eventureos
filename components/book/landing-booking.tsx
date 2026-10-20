@@ -19,7 +19,7 @@ export function BookCourseButton({ slug, session, className, children }: { slug:
 
 /** The booking form for every course on one page: step 1 picks the course, then the normal booking steps. */
 export function LandingBooking({ courses, initial, base, dateStyle = "list" }: {
-  courses: { slug: string; label: string; meta?: string; course: FlowProps["course"]; sessions: FlowProps["sessions"] }[];
+  courses: { slug: string; label: string; meta?: string; course: FlowProps["course"]; sessions: FlowProps["sessions"]; learn?: FlowProps["learn"] }[];
   initial: string | null;
   base: Omit<FlowProps, "course" | "sessions" | "preselect">;
   dateStyle?: "list" | "cards";
@@ -75,7 +75,7 @@ export function LandingBooking({ courses, initial, base, dateStyle = "list" }: {
         </div>
       ))}
       {/* key: a fresh form for each course (and for a date picked from elsewhere on the page) */}
-      <BookingFlow key={`${c.slug}:${pre ?? ""}`} {...base} course={c.course} sessions={c.sessions} preselect={pre}
+      <BookingFlow key={`${c.slug}:${pre ?? ""}`} {...base} course={c.course} sessions={c.sessions} preselect={pre} learn={c.learn ?? null}
         dateStyle={dateStyle} stepOffset={many && dateStyle === "cards" ? 1 : 0} />
     </div>
   );

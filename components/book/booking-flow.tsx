@@ -25,6 +25,8 @@ interface Props {
   stepOffset?: number;
   /** An offer code from the link (?code=) — applied once a date is chosen */
   promo?: string | null;
+  /** The online course, offered as an add-on to a card payment */
+  learn?: { name: string; price: number; yearly: number; months: number; tagline: string } | null;
 }
 
 type Pay = "card" | "gift" | "agency";
@@ -32,7 +34,7 @@ type Pay = "card" | "gift" | "agency";
 const input = "h-12 w-full rounded-xl border border-line-strong bg-surface px-3.5 text-base text-ink placeholder:text-ink-faint focus:border-[var(--b)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_srgb,var(--b)_25%,transparent)]";
 const label = "mb-1.5 block text-[0.8125rem] font-medium text-ink";
 
-export function BookingFlow({ org, course, sessions, preselect, utm, source, agent, dateStyle = "list", stepOffset = 0, promo = null }: Props) {
+export function BookingFlow({ org, course, sessions, preselect, utm, source, agent, dateStyle = "list", stepOffset = 0, promo = null, learn = null }: Props) {
   const fmt = useMemo(() => ({
     month: new Intl.DateTimeFormat("en-AU", { month: "long", year: "numeric", timeZone: org.timezone }),
     day: new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: org.timezone }),
@@ -108,6 +110,10 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
   const afterOffer = Math.max(0, Math.round((total - (useFriend ? friendOff : offerOn?.discount ?? 0)) * 100) / 100);
   const giftApplied = pay === "gift" && giftOk ? Math.min(giftOk.balance, afterOffer) : 0;
   const due = Math.max(0, afterOffer - giftApplied);
+  const [addLearn, setAddLearn] = useState(false);
+  const learnOn = !!learn && !waitlist && pay === "card" && due > 0 && org.stripeReady;
+  const learnAdd = learnOn && addLearn ? learn!.price : 0;
+  const learnSave = learn && learn.yearly > learn.price ? Math.round((1 - learn.price / learn.yearly) * 100) : 0;
 
   const visible = sessions.filter((x) => keyOf(x.starts_at) === month);
   const monthName = monthTabs.find((x) => x.key === month)?.label ?? "";
@@ -138,7 +144,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
         giftCode: pay === "gift" ? gift : null, agencyCode: pay === "agency" ? agency : null, po: pay === "agency" ? po : null,
         caseManagerId: pay === "agency" && !agent && cmId && cmId !== "new" ? cmId : null,
         newCaseManager: pay === "agency" && !agent && cmId === "new" && newCm.email.trim() ? newCm : null,
-        waitlist, utm, source, promoCode: offerOn?.code ?? null,
+        waitlist, utm, source, promoCode: offerOn?.code ?? null, learnAddon: learnOn && addLearn,
       }).catch(() => ({ ok: false as const, error: "Couldn't reach the booking system — check your connection and try again." }));
       if (!r.ok) { setErr(r.error); return; }
       if (!goTop(r.redirect)) setFallback(r.redirect);
@@ -367,6 +373,22 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
             </section>
           )}
 
+          {/* The online course add-on */}
+          {learnOn && (
+            <section className={`rounded-2xl border bg-surface p-5 shadow-card sm:p-6 ${addLearn ? "border-[var(--b)] ring-2 ring-[var(--b)]" : "border-line"}`}>
+              <label className="flex cursor-pointer items-start gap-3">
+                <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[var(--b)]" checked={addLearn} onChange={(e) => setAddLearn(e.target.checked)} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="text-[1rem] font-semibold text-ink">Add the {learn!.name}</span>
+                    <span className="text-[1rem] font-bold text-ink">{$(learn!.price)}{learnSave > 0 && <span className="ml-2 text-[0.8125rem] font-medium text-ink-faint line-through">{$(learn!.yearly)}</span>}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[0.875rem] text-ink-muted">{learn!.months} months of online lessons, quizzes, a roast simulator and more to keep learning after your class{learnSave > 0 ? ` — save ${learnSave}% when you add it now` : ""}.</span>
+                </span>
+              </label>
+            </section>
+          )}
+
           {/* Summary */}
           <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
             {!waitlist && pay !== "agency" && (
@@ -382,8 +404,9 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
               {useFriend && offer && <p className="text-[0.75rem] text-ink-muted">Your code {offer.code} saves less than bring-a-friend, so we&apos;ve used the bigger saving.</p>}
               {offerOn && <div className="flex justify-between gap-3 font-medium text-[var(--b)]"><span>{offerOn.code}</span><span>−{$(offerOn.discount)}</span></div>}
               {giftApplied > 0 && <div className="flex justify-between gap-3 text-emerald-700"><span>Gift certificate</span><span>−{$(giftApplied)}</span></div>}
+              {learnAdd > 0 && <div className="flex justify-between gap-3"><span className="text-ink-muted">{learn!.name} ({learn!.months} months)</span><span className="text-ink">{$(learnAdd)}</span></div>}
               <div className="flex justify-between gap-3 border-t border-line pt-2.5 text-[1.125rem] font-bold text-ink">
-                <span>{waitlist ? "Waitlist" : pay === "agency" ? "Invoiced to your agency" : "Total to pay"}</span><span>{waitlist ? "No charge" : $(pay === "agency" ? total : due)}</span>
+                <span>{waitlist ? "Waitlist" : pay === "agency" ? "Invoiced to your agency" : "Total to pay"}</span><span>{waitlist ? "No charge" : $(pay === "agency" ? total : due + learnAdd)}</span>
               </div>
             </div>
             <label className="mt-4 flex items-start gap-3 text-[0.875rem] text-ink-muted"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--b)]" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />Email me about new classes and offers (unsubscribe any time).</label>
@@ -403,7 +426,7 @@ export function BookingFlow({ org, course, sessions, preselect, utm, source, age
               <button type="submit" disabled={pending || (!org.stripeReady && pay === "card" && !waitlist && due > 0)}
                 className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[var(--b)] text-[1.0625rem] font-semibold text-[var(--on-b)] transition hover:opacity-90 disabled:opacity-50">
                 {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : waitlist ? null : pay === "agency" || due === 0 ? <Check className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
-                {waitlist ? "Join the waitlist" : pay === "agency" ? "Confirm booking" : due === 0 ? "Confirm booking" : `Pay ${$(due)} securely`}
+                {waitlist ? "Join the waitlist" : pay === "agency" ? "Confirm booking" : due === 0 ? "Confirm booking" : `Pay ${$(due + learnAdd)} securely`}
               </button>
             )}
             {!org.stripeReady && pay === "card" && !waitlist && <p className="mt-2 text-center text-[0.8125rem] text-ink-muted">Card payments aren&apos;t switched on yet — please contact {org.name}.</p>}

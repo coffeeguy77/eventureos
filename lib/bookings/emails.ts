@@ -160,11 +160,11 @@ export function waitlistMissedEmail(b: Brand, o: { firstName: string; course: st
   });
 }
 
-export function loginEmail(b: Brand, o: { firstName: string; url: string; minutes: number }) {
+export function loginEmail(b: Brand, o: { firstName: string; url: string; minutes: number; what?: string }) {
   return shell(b, {
     title: `Your sign-in link — ${b.businessName}`,
     heading: `Hi ${o.firstName}, here's your sign-in link`,
-    intro: [`Tap the button to see your bookings and certificates with ${b.businessName}. No password needed.`],
+    intro: [`Tap the button to open ${o.what ?? "your bookings and certificates"} with ${b.businessName}. No password needed.`],
     buttons: [{ label: "Sign in", url: o.url }],
     after: [`The link works once and expires in ${o.minutes} minutes. If you didn't ask for it, you can ignore this email.`],
   });

@@ -146,6 +146,14 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     const shop = await import("@/lib/shop/server");
     return shop.settleShopCheckout(db, orgId, s.metadata.eventureos_shop_checkout, s as CheckoutSession & { id: string });
   }
+  if (s.metadata?.eventureos_org_id === orgId && (s.metadata?.eventureos_learn_access || s.metadata?.eventureos_learn_hire)) {
+    // Online course passes and training-room hires (lib/learn)
+    const learn = await import("@/lib/learn/server");
+    const session = s as CheckoutSession & { id: string };
+    return s.metadata.eventureos_learn_access
+      ? learn.settleLearnCheckout(db, orgId, s.metadata.eventureos_learn_access, session)
+      : learn.settleHire(db, orgId, s.metadata.eventureos_learn_hire, session);
+  }
   if (s.metadata?.eventureos_org_id === orgId && s.metadata?.eventureos_wholesale_order) {
     // Wholesale orders placed on a customer's ordering link (lib/wholesale)
     const ws = await import("@/lib/wholesale/orders");

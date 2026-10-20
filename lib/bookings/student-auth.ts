@@ -21,7 +21,7 @@ export const cookieName = (orgId: string) => `eos_student_${orgId.slice(0, 8)}`;
 
 export type LoginResult = { ok: true; message: string } | { ok: false; error: string };
 
-export async function requestLogin(orgSlug: string, rawEmail: string, opts: { target?: "account" | "jobs"; signupName?: string | null } = {}): Promise<LoginResult> {
+export async function requestLogin(orgSlug: string, rawEmail: string, opts: { target?: "account" | "jobs" | "learn"; signupName?: string | null } = {}): Promise<LoginResult> {
   const db = createServiceClient();
   const org = await publicOrg(orgSlug, db);
   if (!org) return { ok: false, error: "Not found." };
@@ -54,8 +54,8 @@ export async function requestLogin(orgSlug: string, rawEmail: string, opts: { ta
   const { error } = await db.from("booking_student_logins").insert({ organisation_id: org.id, student_id: st.id, token_hash: sha(token), expires_at: new Date(Date.now() + LINK_MINUTES * 60e3).toISOString() });
   if (error) return { ok: false, error: /booking_student_logins/.test(error.message) ? "Sign-in is being set up — please try again soon." : error.message };
   if (!emailConfigured()) return { ok: false, error: "Email isn't set up yet — please contact us." };
-  const url = opts.target === "jobs" ? `${appBaseUrl()}/jobs/${org.slug}/verify?t=${token}` : bookUrl(org, `/account/verify?t=${token}`);
-  const m = loginEmail(brandOf(org), { firstName: String(st.name).split(/\s+/)[0] || "there", url, minutes: LINK_MINUTES });
+  const url = opts.target === "jobs" ? `${appBaseUrl()}/jobs/${org.slug}/verify?t=${token}` : opts.target === "learn" ? `${appBaseUrl()}/academy/${org.slug}/verify?t=${token}` : bookUrl(org, `/account/verify?t=${token}`);
+  const m = loginEmail(brandOf(org), { firstName: String(st.name).split(/\s+/)[0] || "there", url, minutes: LINK_MINUTES, what: opts.target === "learn" ? "your online course" : undefined });
   try { await sendEmail({ to: email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name }); }
   catch { return { ok: false, error: "We couldn't send the email just now — please try again." }; }
   return sent;

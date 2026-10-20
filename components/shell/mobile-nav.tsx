@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -25,6 +25,7 @@ const MORE = [
   { href: "/crm", label: "CRM", icon: Workflow },
   { href: "/quotes", label: "Quotes", icon: FileText },
   { href: "/bookings", label: "Bookings", icon: Ticket },
+  { href: "/learn", label: "Learn", icon: GraduationCap },
   { href: "/store", label: "Shop", icon: Coffee },
   { href: "/wholesale", label: "Wholesale", icon: Truck },
   { href: "/offers", label: "Offers", icon: BadgePercent },

@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ffffff" }, { media: "(prefers-color-scheme: dark)", color: "#17171D" }],
 };
 
-const CUSTOMER_PAGES = ["/p/", "/pay/", "/q/", "/order/", "/hire/", "/shop/", "/cafe/", "/jobs/", "/print/"];
+const CUSTOMER_PAGES = ["/p/", "/pay/", "/q/", "/order/", "/hire/", "/shop/", "/cafe/", "/jobs/", "/print/", "/academy/"];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Display preferences come from a cookie so the first paint is already in the right theme

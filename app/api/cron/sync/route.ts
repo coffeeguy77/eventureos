@@ -78,6 +78,13 @@ export async function GET(req: NextRequest) {
     shopJobs = await runShopJobs(db);
   } catch (e) { shopJobs = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Online course (Learn): end passes that have run out, renew monthly plans (only while the business has it switched on)
+  let learn: unknown = null;
+  try {
+    const { runLearnJobs } = await import("@/lib/learn/server");
+    learn = await runLearnJobs(db);
+  } catch (e) { learn = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Website "come back and finish" reminders — only for businesses that switched them on (off by default)
   let reminders: unknown = null;
   if (!only.length) try {
@@ -133,5 +140,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, learn });
 }
