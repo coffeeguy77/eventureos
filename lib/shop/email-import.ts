@@ -25,7 +25,7 @@ export function readShopImport(settings: unknown, orgName: string): ShopImportSe
 
 export interface ShopImportResult { found: number; imported: number; bookings: number; flagged: number; error?: string }
 
-const norm = (s: string) => s.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
 const toAddress = (a: WooEmailAddress | null): Address | Record<string, never> => a
   ? { name: a.name, company: a.company, line1: a.line1, line2: a.line2, suburb: a.suburb, state: a.state, postcode: a.postcode, country: "AU", phone: a.phone }
   : {};
