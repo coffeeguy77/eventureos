@@ -5,10 +5,12 @@ import { isKitchen } from "@/lib/crew/skills";
 import { addDaysISO, todayISO } from "@/lib/format";
 import type { Ingredient, RecipeLine } from "@/lib/kitchen/core";
 import { cateringMenu, loadCateringJobs } from "@/lib/kitchen/jobs";
+import { loadIngredients } from "@/lib/kitchen/store";
 import { readSent } from "@/lib/kitchen/changes";
 import { MakeOrderView, RunSheetView } from "@/components/kitchen/views";
 import { IngredientsEditor, RecipesEditor } from "@/components/kitchen/editors";
 import { KitchenCalculator } from "@/components/kitchen/calculator";
+import { KitchenLabels } from "@/components/kitchen/labels";
 import { cn } from "@/lib/cn";
 import { Card } from "../parts";
 import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe } from "./actions";
@@ -16,7 +18,7 @@ import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe } from "./act
 export const metadata = { title: "Kitchen" };
 export const dynamic = "force-dynamic";
 
-const TABS = [{ key: "jobs", label: "Jobs" }, { key: "make", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }];
+const TABS = [{ key: "jobs", label: "Jobs" }, { key: "make", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "labels", label: "Labels" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }];
 const RANGES = [7, 14, 28];
 const JOBS_AHEAD = 60;
 
@@ -32,18 +34,20 @@ export default async function CrewKitchen({ params, searchParams }: { params: Pr
   const base = `/crew/${slug}/kitchen`;
 
   const [ingR, recR, menu] = await Promise.all([
-    s.db.from("catering_ingredients").select("id, name, unit, pack_size, pack_label, supplier, station, notes, active").eq("organisation_id", s.org.id).order("name"),
+    loadIngredients(s.db, s.org.id),
     s.db.from("catering_recipe_lines").select("id, service_id, ingredient_id, qty_per_serve, prep_note").eq("organisation_id", s.org.id),
     cateringMenu(s.db, s.org.id),
   ]);
-  const ingredients = ((ingR.data ?? []) as (Ingredient & { active: boolean })[]).map((i) => ({ ...i, pack_size: i.pack_size == null ? null : Number(i.pack_size) }));
+  const ingredients = ingR.rows;
+  const labelsReady = ingR.labels;
   const recipes = ((recR.data ?? []) as RecipeLine[]).map((r) => ({ ...r, qty_per_serve: Number(r.qty_per_serve) }));
   const actions = { saveIngredient: chefSaveIngredient.bind(null, slug), archiveIngredient: chefArchiveIngredient.bind(null, slug), saveRecipe: chefSaveRecipe.bind(null, slug) };
 
   let body: React.ReactNode;
-  if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
+  if (tab === "labels") body = <KitchenLabels menu={menu} recipes={recipes} ingredients={ingredients} business={s.org.name} ready={labelsReady} />;
+  else if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
   else if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} actions={actions} />;
-  else if (tab === "ingredients") body = <IngredientsEditor items={ingredients} actions={actions} />;
+  else if (tab === "ingredients") body = <IngredientsEditor labels={labelsReady} items={ingredients} actions={actions} />;
   else {
     const to = addDaysISO(today, tab === "make" ? days - 1 : JOBS_AHEAD);
     const { deliveries, warnings } = await loadCateringJobs(s.db, s.org.id, { from: today, to, statuses: ["confirmed"], menu });

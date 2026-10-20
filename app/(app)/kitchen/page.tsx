@@ -4,11 +4,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { cateringGroup, isCatering } from "@/lib/events/core";
+import { loadIngredients } from "@/lib/kitchen/store";
 import { type Ingredient, type RecipeLine } from "@/lib/kitchen/core";
 import { FIRM_STATUSES, loadCateringJobs } from "@/lib/kitchen/jobs";
 import { IngredientsEditor, PrintButton, RecipesEditor } from "@/components/kitchen/editors";
 import { MakeOrderView, RunSheetView } from "@/components/kitchen/views";
 import { KitchenCalculator } from "@/components/kitchen/calculator";
+import { KitchenLabels } from "@/components/kitchen/labels";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Kitchen" };
@@ -20,7 +22,7 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (role === "staff" || role === "customer") redirect("/dashboard");
   const sp = await searchParams;
-  const tab = ["orders", "calculator", "recipes", "ingredients"].includes(sp.tab ?? "") ? sp.tab! : "run";
+  const tab = ["orders", "calculator", "labels", "recipes", "ingredients"].includes(sp.tab ?? "") ? sp.tab! : "run";
   const tz = (org as { timezone?: string }).timezone ?? "Australia/Sydney";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
   const from = sp.from && DATE.test(sp.from) ? sp.from : today;
@@ -28,21 +30,23 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
   const includeQuoted = sp.all !== "0";
 
   const [ingR, recR, svcR] = await Promise.all([
-    supabase.from("catering_ingredients").select("id, name, unit, pack_size, pack_label, supplier, station, notes, active").eq("organisation_id", org.id).order("name"),
+    loadIngredients(supabase, org.id),
     supabase.from("catering_recipe_lines").select("id, service_id, ingredient_id, qty_per_serve, prep_note").eq("organisation_id", org.id),
     supabase.from("services").select("id, name, category, unit, active, position").eq("organisation_id", org.id).order("position"),
   ]);
   if (ingR.error && /catering_ingredients|does not exist/i.test(ingR.error.message)) {
     return <><PageHeader title="Kitchen" /><p className="text-[0.875rem] text-ink-muted">The kitchen needs the website database update (0057_events_site.sql).</p></>;
   }
-  const ingredients = ((ingR.data ?? []) as (Ingredient & { active: boolean })[]).map((i) => ({ ...i, pack_size: i.pack_size == null ? null : Number(i.pack_size) }));
+  const ingredients = ingR.rows;
+  const labelsReady = ingR.labels;
   const recipes = ((recR.data ?? []) as RecipeLine[]).map((r) => ({ ...r, qty_per_serve: Number(r.qty_per_serve) }));
   const menu = ((svcR.data ?? []) as { id: string; name: string; category: string | null; unit: string | null; active: boolean }[]).filter((s) => s.active && isCatering(s.category)).map((s) => ({ id: s.id, name: s.name, unit: s.unit, group: cateringGroup(s.category) }));
 
   let body: React.ReactNode = null;
-  if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
+  if (tab === "labels") body = <KitchenLabels menu={menu} recipes={recipes} ingredients={ingredients} business={org.name} ready={labelsReady} />;
+  else if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
   else if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} />;
-  else if (tab === "ingredients") body = <IngredientsEditor items={ingredients} />;
+  else if (tab === "ingredients") body = <IngredientsEditor labels={labelsReady} items={ingredients} />;
   else {
     const { deliveries, warnings } = await loadCateringJobs(supabase, org.id, { from, to, statuses: includeQuoted ? undefined : FIRM_STATUSES, menu });
     const range = (
@@ -63,7 +67,7 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader eyebrow="Catering" title="Kitchen" subtitle="Run sheet for each day, what to make, and the order list for your suppliers — from upcoming catering and your recipes." />
-      <div className="mb-5 print:hidden"><Tabs baseHref="/kitchen" active={tab} tabs={[{ key: "run", label: "Run sheet" }, { key: "orders", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }]} /></div>
+      <div className="mb-5 print:hidden"><Tabs baseHref="/kitchen" active={tab} tabs={[{ key: "run", label: "Run sheet" }, { key: "orders", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "labels", label: "Labels" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }]} /></div>
       {body}
     </>
   );

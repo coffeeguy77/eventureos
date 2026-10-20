@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
 import type { Ingredient, RecipeLine } from "@/lib/kitchen/core";
+import { AFCD, afcdSource } from "@/lib/kitchen/afcd";
+import { ALLERGENS } from "@/lib/kitchen/nutrition";
 import * as office from "@/app/(app)/kitchen/actions";
 import type { IngredientInput, RecipeInput } from "@/lib/kitchen/store";
 
@@ -22,9 +24,12 @@ export function PrintButton() {
 }
 
 const UNITS = ["each", "g", "kg", "ml", "L", "slice", "loaf", "dozen", "punnet", "bunch", "tbsp"];
-const blank = { id: null as string | null, name: "", unit: "each", pack_size: null as number | null, pack_label: "", supplier: "", station: "", notes: "" };
+const NUT_FIELDS: [string, string][] = [["energy_kj", "Energy (kJ)"], ["protein", "Protein (g)"], ["fat", "Fat, total (g)"], ["sat_fat", "– saturated (g)"], ["carbs", "Carbohydrate (g)"], ["sugars", "– sugars (g)"], ["fibre", "Dietary fibre (g)"], ["sodium_mg", "Sodium (mg)"]];
+const blank = { id: null as string | null, name: "", unit: "each", pack_size: null as number | null, pack_label: "", supplier: "", station: "", notes: "",
+  grams_each: "" as string, nut: {} as Record<string, string>, source: "", allergens: [] as string[] };
+type LabelInfo = { nutrition?: Record<string, number> | null; nutrition_source?: string | null; grams_each?: number | null; allergens?: string[] | null };
 
-export function IngredientsEditor({ items, actions = OFFICE }: { items: (Ingredient & { active: boolean })[]; actions?: KitchenActions }) {
+export function IngredientsEditor({ items, actions = OFFICE, labels = false }: { items: (Ingredient & { active: boolean } & LabelInfo)[]; actions?: KitchenActions; labels?: boolean }) {
   const { saveIngredient, archiveIngredient } = actions;
   const [edit, setEdit] = useState<typeof blank | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -32,7 +37,10 @@ export function IngredientsEditor({ items, actions = OFFICE }: { items: (Ingredi
   const [pending, start] = useTransition();
   const list = items.filter((i) => showHidden || i.active);
   const save = () => edit && start(async () => {
-    const r = await saveIngredient({ ...edit, pack_label: edit.pack_label || null, supplier: edit.supplier || null, station: edit.station || null, notes: edit.notes || null });
+    const nutrition = NUT_FIELDS.every(([k]) => k === "fibre" || (edit.nut[k] ?? "").trim() !== "") ? Object.fromEntries(NUT_FIELDS.filter(([k]) => (edit.nut[k] ?? "").trim() !== "").map(([k]) => [k, Number(edit.nut[k])])) : null;
+    const { grams_each, nut: _n, source, allergens, ...rest } = edit;
+    const r = await saveIngredient({ ...rest, pack_label: edit.pack_label || null, supplier: edit.supplier || null, station: edit.station || null, notes: edit.notes || null,
+      ...(labels ? { nutrition, nutrition_source: source.trim() || null, grams_each: grams_each ? Number(grams_each) : null, allergens } : {}) });
     if (r.ok) { setEdit(null); setMsg("Saved."); } else setMsg(r.error);
   });
   return (
@@ -52,24 +60,51 @@ export function IngredientsEditor({ items, actions = OFFICE }: { items: (Ingredi
           <div className="sm:col-span-2"><Label htmlFor="ing-pl">Pack name</Label><Input id="ing-pl" value={edit.pack_label ?? ""} onChange={(e) => setEdit({ ...edit, pack_label: e.target.value })} placeholder="10 kg bag" /></div>
           <div className="sm:col-span-2"><Label htmlFor="ing-s">Supplier</Label><Input id="ing-s" value={edit.supplier ?? ""} onChange={(e) => setEdit({ ...edit, supplier: e.target.value })} /></div>
           <div className="sm:col-span-2"><Label htmlFor="ing-st">Kitchen station</Label><Input id="ing-st" value={edit.station ?? ""} onChange={(e) => setEdit({ ...edit, station: e.target.value })} placeholder="Bakery, cold prep…" /></div>
+          {labels && (
+            <div className="space-y-3 rounded-lg bg-surface p-3 ring-1 ring-line sm:col-span-6">
+              <div className="flex flex-wrap items-end gap-3">
+                <p className="mr-auto text-[0.8125rem] font-semibold text-ink">For labels <span className="font-normal text-ink-muted">— nutrition per 100 g and allergens</span></p>
+                <label className="text-[0.75rem] text-ink-muted">Fill from the food database
+                  <Select aria-label="Fill from the Australian Food Composition Database" value="" onChange={(e) => { const f = AFCD.find((x) => x.key === e.target.value); if (f) setEdit({ ...edit, nut: Object.fromEntries(Object.entries(f.per100).map(([k, v]) => [k, String(v)])), source: afcdSource(f) }); }} className="mt-1 max-w-xs">
+                    <option value="">Choose the closest food…</option>
+                    {AFCD.map((f) => <option key={f.key} value={f.key}>{f.name}</option>)}
+                  </Select></label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-4">
+                {NUT_FIELDS.map(([k, label]) => <div key={k}><Label htmlFor={`nut-${k}`}>{label}</Label><Input id={`nut-${k}`} inputMode="decimal" value={edit.nut[k] ?? ""} onChange={(e) => setEdit({ ...edit, nut: { ...edit.nut, [k]: e.target.value.replace(/[^\d.]/g, "") } })} /></div>)}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-4">
+                <div className="sm:col-span-3"><Label htmlFor="nut-src">Where the numbers came from</Label><Input id="nut-src" value={edit.source} onChange={(e) => setEdit({ ...edit, source: e.target.value })} placeholder="Supplier label, or the food database" /></div>
+                {!["g", "kg", "ml", "l"].includes(edit.unit.toLowerCase()) && <div><Label htmlFor="nut-ge" hint="weigh one">Grams per {edit.unit}</Label><Input id="nut-ge" inputMode="decimal" value={edit.grams_each} onChange={(e) => setEdit({ ...edit, grams_each: e.target.value.replace(/[^\d.]/g, "") })} /></div>}
+              </div>
+              <div>
+                <p className="text-[0.75rem] text-ink-muted">Allergens in this ingredient (check the supplier&apos;s label)</p>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  {ALLERGENS.map((a) => <label key={a} className="flex items-center gap-1.5 text-[0.8125rem] text-ink"><input type="checkbox" className="h-4 w-4 accent-brand-500" checked={edit.allergens.includes(a)} onChange={(e) => setEdit({ ...edit, allergens: e.target.checked ? [...edit.allergens, a] : edit.allergens.filter((x) => x !== a) })} />{a}</label>)}
+                </div>
+              </div>
+            </div>
+          )}
           <div className="flex items-end gap-2 sm:col-span-2"><Button type="button" variant="primary" disabled={pending} onClick={save}><Save className="h-3.5 w-3.5" />Save</Button><Button type="button" variant="ghost" onClick={() => setEdit(null)}>Cancel</Button></div>
         </div>
       )}
       {msg && <p className="mt-3 text-[0.8125rem] text-ink-muted" role="status">{msg}</p>}
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[620px] text-[0.8125rem]">
-          <thead><tr className="text-left text-ink-faint"><th className="py-2 font-medium">Name</th><th className="font-medium">Unit</th><th className="font-medium">Pack</th><th className="font-medium">Supplier</th><th className="font-medium">Station</th><th /></tr></thead>
+          <thead><tr className="text-left text-ink-faint"><th className="py-2 font-medium">Name</th><th className="font-medium">Unit</th><th className="font-medium">Pack</th><th className="font-medium">Supplier</th><th className="font-medium">Station</th>{labels && <th className="font-medium">Label</th>}<th /></tr></thead>
           <tbody className="divide-y divide-line">
             {list.map((i) => (
               <tr key={i.id} className={i.active ? "" : "opacity-50"}>
                 <td className="py-2 font-medium text-ink">{i.name}</td><td>{i.unit}</td><td>{i.pack_size ? `${i.pack_size} ${i.unit}${i.pack_label ? ` (${i.pack_label})` : ""}` : "—"}</td><td>{i.supplier ?? "—"}</td><td>{i.station ?? "—"}</td>
+                {labels && <td className="text-[0.75rem]">{i.nutrition ? <span className="text-emerald-700">Nutrition ✓</span> : <span className="text-amber-700">No nutrition</span>}{i.allergens?.length ? <span className="block text-ink-muted">{i.allergens.join(", ")}</span> : null}{!["g", "kg", "ml", "l"].includes(i.unit.toLowerCase()) && !i.grams_each ? <span className="block text-amber-700">Weight per {i.unit} not set</span> : null}</td>}
                 <td className="text-right">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setEdit({ id: i.id, name: i.name, unit: i.unit, pack_size: i.pack_size, pack_label: i.pack_label ?? "", supplier: i.supplier ?? "", station: i.station ?? "", notes: i.notes ?? "" })}>Edit</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEdit({ id: i.id, name: i.name, unit: i.unit, pack_size: i.pack_size, pack_label: i.pack_label ?? "", supplier: i.supplier ?? "", station: i.station ?? "", notes: i.notes ?? "",
+                    grams_each: i.grams_each ? String(i.grams_each) : "", nut: Object.fromEntries(Object.entries(i.nutrition ?? {}).map(([k, v]) => [k, String(v)])), source: i.nutrition_source ?? "", allergens: i.allergens ?? [] })}>Edit</Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => start(async () => { const r = await archiveIngredient(i.id, !i.active); setMsg(r.ok ? r.data : r.error); })}>{i.active ? "Hide" : "Use again"}</Button>
                 </td>
               </tr>
             ))}
-            {!list.length && <tr><td colSpan={6} className="py-6 text-center text-ink-muted">No ingredients yet — add the things you buy for catering.</td></tr>}
+            {!list.length && <tr><td colSpan={7} className="py-6 text-center text-ink-muted">No ingredients yet — add the things you buy for catering.</td></tr>}
           </tbody>
         </table>
       </div>
