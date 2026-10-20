@@ -92,6 +92,13 @@ export async function GET(req: NextRequest) {
     paymentReminders = await runPaymentReminders(db);
   } catch (e) { paymentReminders = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Wholesale orders from another system's order emails (e.g. Ordermentum) — with the frequent Gmail sync; only businesses that switched it on
+  let wholesale: unknown = null;
+  if (providers.includes("gmail" as LiveProviderId)) try {
+    const { runOrderEmailImports } = await import("@/lib/wholesale/email-import");
+    wholesale = await runOrderEmailImports(db);
+  } catch (e) { wholesale = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -112,5 +119,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale });
 }

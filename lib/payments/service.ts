@@ -146,6 +146,11 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     const shop = await import("@/lib/shop/server");
     return shop.settleShopCheckout(db, orgId, s.metadata.eventureos_shop_checkout, s as CheckoutSession & { id: string });
   }
+  if (s.metadata?.eventureos_org_id === orgId && s.metadata?.eventureos_wholesale_order) {
+    // Wholesale orders placed on a customer's ordering link (lib/wholesale)
+    const ws = await import("@/lib/wholesale/orders");
+    return ws.settleWholesaleCheckout(db, orgId, s.metadata.eventureos_wholesale_order, s as CheckoutSession & { id: string });
+  }
   const invoiceId = s.metadata?.eventureos_invoice_id;
   if (!invoiceId || s.metadata?.eventureos_org_id !== orgId) return "not an EventureOS payment";
   const pi = s.payment_intent ?? s.id;

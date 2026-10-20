@@ -41,26 +41,27 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <PrefsSync saved={(profile as { ui_prefs?: unknown }).ui_prefs ?? null} />
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
-      <Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} />
-      <div className="app-column lg:pl-[232px]">
-        <Topbar
+      {/* Printing (run sheets, kitchen lists): only the page itself */}
+      <div className="print:hidden"><Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} /></div>
+      <div className="app-column lg:pl-[232px] print:!pl-0">
+        <div className="print:hidden"><Topbar
           role={role}
           user={{ name: profile.full_name ?? profile.email, email: profile.email }}
           orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
           currentOrgId={org.id}
           notifications={notif.data ?? []}
           unread={unread.count ?? 0}
-        />
-        <main className="mx-auto max-w-[var(--page-max)] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        /></div>
+        <main className="mx-auto max-w-[var(--page-max)] px-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] pt-5 sm:px-6 lg:px-8 lg:py-8 print:max-w-none print:p-0">{children}</main>
       </div>
-      <MobileTabBar
+      <div className="print:hidden"><MobileTabBar
         role={role}
         enquiries={openEnquiries.count ?? 0}
         isSuperAdmin={admin}
         orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
         currentOrgId={org.id}
         user={{ name: profile.full_name ?? profile.email, email: profile.email }}
-      />
+      /></div>
     </div>
   );
 }
