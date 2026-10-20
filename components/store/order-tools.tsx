@@ -16,7 +16,8 @@ export function OrderTools({ id, status, tracking, note, dispatchOn, woo }: { id
   const flow = ["paid", "roasting", "packed", "shipped", "completed"];
   return (
     <div className="space-y-4">
-      {!woo && (
+      {woo && <p className="text-[0.75rem] text-ink-faint">From WooCommerce — changes here don&apos;t update WooCommerce.</p>}
+      {(
         <div className="flex flex-wrap gap-2">
           {flow.map((s) => <Button key={s} type="button" size="sm" variant={s === status ? "primary" : "secondary"} disabled={pending || s === status} onClick={() => start(async () => { const r = await setOrderStatus([id], s); setMsg(r.ok ? "Updated." : r.error); router.refresh(); })}>{ORDER_STATUS[s]}</Button>)}
           <Button type="button" size="sm" variant="secondary" disabled={pending} onClick={() => start(async () => { const r = await setOrderStatus([id], "on_hold"); setMsg(r.ok ? "On hold." : r.error); router.refresh(); })}>On hold</Button>
@@ -24,7 +25,8 @@ export function OrderTools({ id, status, tracking, note, dispatchOn, woo }: { id
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
-        <div><Label htmlFor="ot-t">Tracking number</Label><Input id="ot-t" value={f.tracking} onChange={(e) => setF({ ...f, tracking: e.target.value })} /></div>
+        <div><Label htmlFor="ot-t">Tracking number</Label><Input id="ot-t" value={f.tracking} onChange={(e) => setF({ ...f, tracking: e.target.value })} />
+          {tracking && <a href={`https://auspost.com.au/mypost/track/details/${encodeURIComponent(tracking)}`} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[0.75rem] font-medium text-brand-700 hover:underline">Track with Australia Post</a>}</div>
         <div><Label htmlFor="ot-d">Ships on</Label><Input id="ot-d" type="date" value={f.dispatchOn} onChange={(e) => setF({ ...f, dispatchOn: e.target.value })} /></div>
         <div className="sm:col-span-2"><Label htmlFor="ot-n">Office note</Label><Textarea id="ot-n" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
       </div>

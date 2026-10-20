@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { Truck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { setOrderStatus } from "@/app/(app)/store/actions";
 import { ORDER_STATUS } from "@/lib/shop/core";
 import { Badge } from "@/components/ui/badge";
 
-export interface OrderRow { id: string; number: number; created_at: string; name: string | null; email: string | null; status: string; kind: string; source: string; total: number; delivery: string; dispatch_on: string | null; summary: string; place: string; woo: boolean }
+export interface OrderRow { id: string; number: number; created_at: string; name: string | null; email: string | null; status: string; kind: string; source: string; total: number; delivery: string; dispatch_on: string | null; summary: string; place: string; woo: boolean; tracking?: string | null }
 
 const tone = (s: string) => (s === "paid" ? "amber" : s === "roasting" ? "brand" : s === "packed" ? "blue" : s === "shipped" || s === "completed" ? "green" : s === "failed" || s === "cancelled" || s === "refunded" ? "red" : "neutral") as "amber";
 const KIND: Record<string, string> = { one_off: "One-off", subscription_first: "New subscription", subscription_renewal: "Subscription", prepaid: "Prepaid", event_addon: "With event", gift_card: "Gift card" };
@@ -19,7 +20,8 @@ export function OrdersTable({ rows, currency }: { rows: OrderRow[]; currency: st
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const money = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n);
-  const all = rows.filter((r) => !r.woo).map((r) => r.id);
+  const all = rows.map((r) => r.id);
+  const postable = sel.filter((id) => rows.find((r) => r.id === id)?.delivery === "post");
   const bulk = (status: string) => start(async () => {
     const r = await setOrderStatus(sel, status);
     setMsg(r.ok ? `${r.data} order${r.data === 1 ? "" : "s"} marked ${ORDER_STATUS[status].toLowerCase()}.` : r.error);
@@ -32,9 +34,10 @@ export function OrdersTable({ rows, currency }: { rows: OrderRow[]; currency: st
           <>
             <span className="font-medium text-ink">{sel.length} selected</span>
             {["roasting", "packed", "shipped", "completed"].map((s) => <button key={s} type="button" disabled={pending} onClick={() => bulk(s)} className="h-8 rounded-lg border border-line-strong bg-surface px-3 font-medium text-ink hover:bg-zinc-50">Mark {ORDER_STATUS[s].toLowerCase()}</button>)}
+            {postable.length > 0 && <Link href={`/store/ship?ids=${postable.join(",")}`} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-brand-500 px-3 font-medium text-on-brand hover:bg-brand-600"><Truck className="h-4 w-4" />Post with Australia Post ({postable.length})</Link>}
             {pending && <Loader2 className="h-4 w-4 animate-spin text-ink-faint" />}
           </>
-        ) : <span className="text-ink-faint">Tick orders to mark them roasting, packed or shipped together.</span>}
+        ) : <span className="text-ink-faint">Tick orders to mark them roasting, packed or shipped together, or to post them with Australia Post.</span>}
         {msg && <span className="text-ink-muted">{msg}</span>}
       </div>
       <div className="overflow-x-auto rounded-xl border border-line bg-surface">
@@ -46,14 +49,14 @@ export function OrdersTable({ rows, currency }: { rows: OrderRow[]; currency: st
           <tbody className="divide-y divide-line">
             {rows.map((r) => (
               <tr key={r.id} className="align-top hover:bg-zinc-50/60">
-                <td className="px-3 py-2.5">{!r.woo && <input type="checkbox" aria-label={`Select order ${r.number}`} checked={sel.includes(r.id)} onChange={(e) => setSel(e.target.checked ? [...sel, r.id] : sel.filter((x) => x !== r.id))} />}</td>
-                <td className="px-3 py-2.5"><Link href={`/store/orders/${r.id}`} className="font-semibold text-ink hover:underline">#{r.number}</Link><p className="text-[0.75rem] text-ink-faint">{new Date(r.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" })} · {r.woo ? "WooCommerce" : KIND[r.kind] ?? r.kind}</p></td>
+                <td className="px-3 py-2.5">{<input type="checkbox" aria-label={`Select order ${r.number}`} checked={sel.includes(r.id)} onChange={(e) => setSel(e.target.checked ? [...sel, r.id] : sel.filter((x) => x !== r.id))} />}</td>
+                <td className="px-3 py-2.5"><Link href={`/store/orders/${r.id}`} className="font-semibold text-ink hover:underline">#{r.number}</Link><p className="text-[0.75rem] text-ink-faint">{new Date(r.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "2-digit" })} · {KIND[r.kind] ?? r.kind}{r.woo ? " · WooCommerce" : ""}</p></td>
                 <td className="px-3 py-2.5"><p className="text-ink">{r.name ?? "—"}</p><p className="text-[0.75rem] text-ink-faint">{r.email}</p></td>
                 <td className="max-w-[280px] px-3 py-2.5 text-ink">{r.summary}</td>
                 <td className="px-3 py-2.5 text-ink-muted">{r.place}</td>
                 <td className="px-3 py-2.5 text-ink-muted">{r.dispatch_on ? new Date(`${r.dispatch_on}T00:00:00`).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : "—"}</td>
                 <td className="px-3 py-2.5 text-right font-medium text-ink">{money(r.total)}</td>
-                <td className="px-3 py-2.5"><Badge tone={tone(r.status)}>{ORDER_STATUS[r.status] ?? r.status}</Badge></td>
+                <td className="px-3 py-2.5"><Badge tone={tone(r.status)}>{ORDER_STATUS[r.status] ?? r.status}</Badge>{r.tracking && <a href={`https://auspost.com.au/mypost/track/details/${encodeURIComponent(r.tracking)}`} target="_blank" rel="noreferrer" className="mt-1 block text-[0.7188rem] text-brand-700 hover:underline">{r.tracking}</a>}</td>
               </tr>
             ))}
           </tbody>

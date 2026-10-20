@@ -14,6 +14,7 @@ import {
   addInterval, addressLine, cleanAddress, couponProblem, frequencyLabel, grindLabel, nextDispatch, prepaidDeliveries, priceCart, readShop, round2,
   type Address, type CartLine, type Coupon, type Delivery, type IntervalUnit, type Mode, type Priced, type Product, type ShopSettings, type Variant,
   boxSummary, resolveBox,
+  gramsOf,
 } from "./core";
 import { shopEmail } from "./emails";
 
@@ -808,7 +809,7 @@ export async function roastPlan(db: SupabaseClient, org: ShopOrg, days = 7) {
     const r = rows.get(k) ?? { name, size, grind: grind ?? "—", qty: 0, grams: 0, sources: { orders: 0, subs: 0, woo: 0 } };
     r.qty += qty; r.grams += (grams ?? 0) * qty; r.sources[src] += qty; rows.set(k, r);
   };
-  const { data: orders } = await db.from("shop_orders").select("items, dispatch_on").eq("organisation_id", org.id).in("status", ["paid", "roasting"]).neq("source", "woocommerce").or(`dispatch_on.is.null,dispatch_on.lte.${end}`);
+  const { data: orders } = await db.from("shop_orders").select("items, dispatch_on").eq("organisation_id", org.id).in("status", ["paid", "roasting"]).or(`dispatch_on.is.null,dispatch_on.lte.${end}`);
   // A selection box is roasted as its coffees: one bag of each, at the box's bag size
   const boxBag = (productId: string | undefined) => { const b = org.shop.boxes.find((x) => x.productId === productId); return b ? { label: b.bag, grams: Number(/(\d+)\s*g/i.exec(b.bag)?.[1]) || null } : null; };
   const addBox = (contents: { id: string; name: string }[], productId: string | undefined, grind: string | null, qty: number, src: "orders" | "subs" | "woo") => {
@@ -818,7 +819,7 @@ export async function roastPlan(db: SupabaseClient, org: ShopOrg, days = 7) {
   for (const o of orders ?? []) for (const i of (o.items as { product_id?: string; variant_id?: string; name: string; variant: string; grind_label: string | null; qty: number; kind?: string; contents?: { id: string; name: string }[] }[]) ?? []) {
     if (i.kind === "gift_card") continue;
     if (Array.isArray(i.contents) && i.contents.length) { addBox(i.contents, i.product_id, i.grind_label, i.qty, "orders"); continue; }
-    add(i.name, i.variant, i.grind_label, i.qty, (i.variant_id && vmap.get(i.variant_id)?.v.grams) || null, "orders");
+    add(i.name, i.variant, i.grind_label, i.qty, (i.variant_id && vmap.get(i.variant_id)?.v.grams) || gramsOf(i.variant ?? "") || null, "orders");
   }
   const { data: subs } = await db.from("shop_subscriptions").select("id, billing, next_date").eq("organisation_id", org.id).eq("status", "active").gte("next_date", today).lte("next_date", end);
   const subViews = subs?.length ? await loadSubs(db, org.id, { ids: subs.map((s) => s.id as string) }) : [];

@@ -34,7 +34,7 @@ export async function setOrderStatus(ids: string[], status: string): Promise<Res
     if (!clean.length) return 0;
     const patch: Record<string, unknown> = { status };
     if (status === "shipped") patch.shipped_at = new Date().toISOString();
-    const { data, error } = await supabase.from("shop_orders").update(patch).eq("organisation_id", org.id).in("id", clean).neq("source", "woocommerce").select("id");
+    const { data, error } = await supabase.from("shop_orders").update(patch).eq("organisation_id", org.id).in("id", clean).select("id");
     if (error) throw new Error(error.message);
     revalidatePath("/store");
     return data?.length ?? 0;
@@ -224,5 +224,69 @@ export async function saveSiteNav(labels: Record<string, string>): Promise<Resul
     if (error) throw new Error(error.message);
     revalidatePath("/store/settings");
     return "Saved.";
+  });
+}
+
+
+/* ------------------------------------------------------------------ WooCommerce order emails, Australia Post */
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Read shop orders from WooCommerce's order emails in Gmail (bookings left out). */
+export async function saveShopImportSettings(input: { enabled: boolean; subjects: string[]; since: string | null }): Promise<Result> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const subjects = (input.subjects ?? []).map((x) => String(x).trim().slice(0, 120)).filter(Boolean).slice(0, 6);
+    if (input.enabled && !subjects.length) throw new Error("Add the subject the order emails start with.");
+    const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = (o?.settings ?? {}) as Record<string, unknown>;
+    const prev = (settings.shop_import ?? {}) as Record<string, unknown>;
+    const since = input.since && DATE_RE.test(input.since) ? input.since : (prev.since as string | undefined) ?? null;
+    const { error } = await supabase.from("organisations").update({ settings: { ...settings, shop_import: { ...prev, enabled: !!input.enabled, subjects, since } } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/store", "layout");
+    return input.enabled ? "Saved — new orders are read every 10 minutes." : "Saved — order emails aren't read.";
+  });
+}
+
+export async function importShopEmailsNow(): Promise<Result> {
+  return run(async () => {
+    const { org } = await staffer();
+    const { importShopOrderEmails } = await import("@/lib/shop/email-import");
+    const r = await importShopOrderEmails(createServiceClient(), org.id, { max: 80 });
+    revalidatePath("/store");
+    return r.imported ? `${r.imported} new order${r.imported === 1 ? "" : "s"}${r.flagged ? ` (${r.flagged} to check)` : ""}.` : "No new orders.";
+  });
+}
+
+export async function saveAusPostSettings(input: Record<string, unknown>): Promise<Result> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const { readAusPost } = await import("@/lib/shop/auspost");
+    const clean = readAusPost({ auspost: input });
+    const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = (o?.settings ?? {}) as Record<string, unknown>;
+    const { error } = await supabase.from("organisations").update({ settings: { ...settings, auspost: clean } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/store", "layout");
+    return "Saved.";
+  });
+}
+
+/** Tracking numbers for orders (from MyPost Business): saved on the order, and the order marked shipped. */
+export async function saveTrackingNumbers(pairs: { id: string; tracking: string }[]): Promise<Result<number>> {
+  return run(async () => {
+    const { supabase, org } = await staffer();
+    let n = 0;
+    for (const p of (pairs ?? []).slice(0, 300)) {
+      const t = String(p.tracking ?? "").trim().toUpperCase().slice(0, 60);
+      if (!isUuid(p.id) || !/^[A-Z0-9]{8,60}$/.test(t)) continue;
+      const { data, error } = await supabase.from("shop_orders").update({ tracking_number: t, status: "shipped", shipped_at: new Date().toISOString() })
+        .eq("organisation_id", org.id).eq("id", p.id).in("status", ["paid", "roasting", "packed", "shipped", "on_hold"]).select("id");
+      if (error) throw new Error(error.message);
+      n += (data ?? []).length;
+    }
+    revalidatePath("/store");
+    return n;
   });
 }

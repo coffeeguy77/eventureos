@@ -21,10 +21,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const q = (sp.q ?? "").trim().slice(0, 60);
   const { supabase, org } = await requireOrg();
   const shop = readShop(org.settings);
-  let query = supabase.from("shop_orders").select("id, number, created_at, name, email, status, kind, source, total, delivery, dispatch_on, items, address").eq("organisation_id", org.id).neq("status", "pending")
+  let query = supabase.from("shop_orders").select("id, number, created_at, name, email, status, kind, source, total, delivery, dispatch_on, items, address, tracking_number").eq("organisation_id", org.id).neq("status", "pending")
     .order(tab.k === "todo" ? "dispatch_on" : "created_at", { ascending: tab.k === "todo", nullsFirst: false }).limit(400);
   if (tab.statuses.length) query = query.in("status", tab.statuses);
-  if (tab.k === "todo") query = query.neq("source", "woocommerce"); // WooCommerce still handles its own orders until the switch
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = /^\d+$/.test(q) ? query.eq("number", Number(q)) : query.or(`name.ilike.${like},email.ilike.${like}`); }
   const { data } = await query;
   const rows: OrderRow[] = (data ?? []).map((o) => {
@@ -32,7 +31,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     const a = o.address as { suburb?: string; state?: string } | null;
     return {
       id: o.id as string, number: o.number as number, created_at: o.created_at as string, name: o.name as string | null, email: o.email as string | null, status: o.status as string, kind: o.kind as string, source: o.source as string,
-      total: Number(o.total), delivery: o.delivery as string, dispatch_on: o.dispatch_on as string | null, woo: o.source === "woocommerce",
+      total: Number(o.total), delivery: o.delivery as string, dispatch_on: o.dispatch_on as string | null, woo: o.source === "woocommerce", tracking: (o.tracking_number as string | null) ?? null,
       summary: items.map((i) => `${i.qty}× ${i.name} ${i.variant}${i.grind_label ? ` (${i.grind_label})` : ""}`).join(", ") || "—",
       place: o.delivery === "pickup" ? "Pick up" : o.delivery === "event" ? "With event" : [a?.suburb, a?.state].filter(Boolean).join(" ") || "Post",
     };

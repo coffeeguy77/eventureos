@@ -125,7 +125,7 @@ const addr = (a: J | undefined | null) => {
   };
 };
 
-async function customerFor(db: SupabaseClient, orgId: string, cache: Map<string, string>, o: { email: string; name: string | null; phone: string | null; wooId?: number | null }) {
+export async function customerFor(db: SupabaseClient, orgId: string, cache: Map<string, string>, o: { email: string; name: string | null; phone: string | null; wooId?: number | null }) {
   const email = o.email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
   const hit = cache.get(email);

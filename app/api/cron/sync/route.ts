@@ -99,6 +99,13 @@ export async function GET(req: NextRequest) {
     wholesale = await runOrderEmailImports(db);
   } catch (e) { wholesale = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Shop orders from WooCommerce's order emails (coffee orders and subscription renewals; bookings left out) — only businesses that switched it on
+  let shopEmails: unknown = null;
+  if (providers.includes("gmail" as LiveProviderId)) try {
+    const { runShopEmailImports } = await import("@/lib/shop/email-import");
+    shopEmails = await runShopEmailImports(db);
+  } catch (e) { shopEmails = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Kitchen staff: email them confirmed catering jobs that are new, changed or cancelled (only businesses with someone ticked "Kitchen")
   let kitchen: unknown = null;
   try {
@@ -126,5 +133,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails });
 }
