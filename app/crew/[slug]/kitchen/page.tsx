@@ -8,6 +8,7 @@ import { cateringMenu, loadCateringJobs } from "@/lib/kitchen/jobs";
 import { readSent } from "@/lib/kitchen/changes";
 import { MakeOrderView, RunSheetView } from "@/components/kitchen/views";
 import { IngredientsEditor, RecipesEditor } from "@/components/kitchen/editors";
+import { KitchenCalculator } from "@/components/kitchen/calculator";
 import { cn } from "@/lib/cn";
 import { Card } from "../parts";
 import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe } from "./actions";
@@ -15,7 +16,7 @@ import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe } from "./act
 export const metadata = { title: "Kitchen" };
 export const dynamic = "force-dynamic";
 
-const TABS = [{ key: "jobs", label: "Jobs" }, { key: "make", label: "Make & order" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }];
+const TABS = [{ key: "jobs", label: "Jobs" }, { key: "make", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }];
 const RANGES = [7, 14, 28];
 const JOBS_AHEAD = 60;
 
@@ -40,7 +41,8 @@ export default async function CrewKitchen({ params, searchParams }: { params: Pr
   const actions = { saveIngredient: chefSaveIngredient.bind(null, slug), archiveIngredient: chefArchiveIngredient.bind(null, slug), saveRecipe: chefSaveRecipe.bind(null, slug) };
 
   let body: React.ReactNode;
-  if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} actions={actions} />;
+  if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
+  else if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} actions={actions} />;
   else if (tab === "ingredients") body = <IngredientsEditor items={ingredients} actions={actions} />;
   else {
     const to = addDaysISO(today, tab === "make" ? days - 1 : JOBS_AHEAD);

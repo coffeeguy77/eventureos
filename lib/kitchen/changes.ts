@@ -17,7 +17,7 @@ export function readSent(v: unknown): Sent | null {
 /** A fingerprint of everything the kitchen cares about for one job: days, times, items, where, how many people, notes. */
 export function signature(deliveries: Delivery[]): string {
   const parts = deliveries
-    .map((d) => [d.date, d.time ?? "", d.items.map((i) => `${i.service_id ?? i.name.toLowerCase()}=${i.qty}`).sort().join(","), d.address ?? "", d.venue ?? "", d.guests ?? "", d.notes ?? ""].join("|"))
+    .map((d) => [d.date, d.time ?? "", d.items.map((i) => `${i.service_id ?? i.name.toLowerCase()}=${i.qty}${i.note ? `(${i.note})` : ""}`).sort().join(","), d.address ?? "", d.venue ?? "", d.guests ?? "", d.notes ?? "", ...(d.ready ? [`ready ${d.ready}`] : [])].join("|"))
     .sort();
   let h = 5381;
   const s = parts.join("\n");
@@ -62,7 +62,7 @@ export function changeLines(c: KitchenChange): string[] {
   const head = `${LABEL[c.kind]} — ${c.title}${first?.event_number ? ` (${first.event_number})` : ""}`;
   if (c.kind === "cancelled") return [head, c.reason ?? ""];
   const lines = [head];
-  for (const d of c.deliveries) lines.push(`${nice(d.date)}, ${fmtT(d.time)}: ${d.items.map((i) => `${i.qty} × ${i.name}`).join(", ")}`);
+  for (const d of c.deliveries) lines.push(`${nice(d.date)}${d.ready ? `, ready by ${fmtT(d.ready)}` : ""}${d.time ? `, ${d.ready ? "at the event" : ""} ${fmtT(d.time)}`.replace(",  ", ", ") : ""}: ${d.items.map((i) => `${i.qty} × ${i.name}${i.note ? ` (${i.note})` : ""}`).join(", ")}`);
   const where = [first?.venue, first?.address].filter(Boolean).join(", ");
   if (where) lines.push(`Where: ${where}`);
   if (first?.guests) lines.push(`Guests: ${first.guests}`);

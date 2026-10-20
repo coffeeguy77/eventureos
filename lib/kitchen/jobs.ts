@@ -8,7 +8,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cateringGroup, isCatering } from "@/lib/events/core";
 import { deliveriesFromEvent, type Delivery } from "./core";
-import { readCateringDays, splitByDay, type CateringDays } from "./split";
+import { compareWithQuote, readCateringDays, readKitchenOrder, splitByDay, type CateringDays, type KitchenOrder } from "./split";
 
 export const ACTIVE_STATUSES = ["planning", "quoted", "awaiting_approval", "confirmed"];
 export const FIRM_STATUSES = ["confirmed", "awaiting_approval"];
@@ -27,13 +27,13 @@ export async function cateringMenu(db: SupabaseClient, orgId: string): Promise<M
     .filter((s) => s.active && isCatering(s.category)).map((s) => ({ id: s.id, name: s.name, unit: s.unit, group: cateringGroup(s.category) }));
 }
 
-/** The saved catering-by-day plans for some jobs (empty if the 0061 update hasn't been run yet). */
-export async function cateringPlans(db: SupabaseClient, orgId: string, eventIds: string[]): Promise<Map<string, CateringDays>> {
-  const out = new Map<string, CateringDays>();
+/** The saved catering plans for some jobs: a kitchen order (v2) or an older by-day split (empty before the 0061 update). */
+export async function cateringPlans(db: SupabaseClient, orgId: string, eventIds: string[]): Promise<Map<string, { order: KitchenOrder | null; split: CateringDays }>> {
+  const out = new Map<string, { order: KitchenOrder | null; split: CateringDays }>();
   if (!eventIds.length) return out;
   const { data, error } = await db.from("events").select("id, catering_days").eq("organisation_id", orgId).in("id", eventIds);
   if (error) return out;
-  for (const r of (data ?? []) as { id: string; catering_days: unknown }[]) out.set(r.id, readCateringDays(r.catering_days));
+  for (const r of (data ?? []) as { id: string; catering_days: unknown }[]) out.set(r.id, { order: readKitchenOrder(r.catering_days), split: readCateringDays(r.catering_days) });
   return out;
 }
 
@@ -62,26 +62,41 @@ export async function loadCateringJobs(db: SupabaseClient, orgId: string, opts: 
   if (opts.eventIds) q = q.in("id", opts.eventIds);
   const { data: evs } = await q;
   const events = (evs ?? []) as unknown as EvRow[];
-  const deliveries: Delivery[] = events.flatMap((e) => deliveriesFromEvent({ ...e, title: e.name, customer: e.customer?.name ?? null }));
   const warnings: Record<string, string[]> = {};
+  const deliveries: Delivery[] = [];
+  if (!events.length) return { deliveries, warnings };
+  const menu = opts.menu ?? await cateringMenu(db, orgId);
+  const ids = events.map((e) => e.id);
+  const [items, plans] = await Promise.all([quoteCatering(db, orgId, ids, new Set(menu.map((m) => m.id))), cateringPlans(db, orgId, ids)]);
+  const base = (e: EvRow) => ({ event_id: e.id, event_number: e.number ? `EV-${e.number}` : null, title: e.name, customer: e.customer?.name ?? null, status: e.status, address: e.address, venue: e.venue, guests: e.guest_count });
 
-  const without = events.filter((e) => (!Array.isArray(e.catering) || !e.catering.length) && e.event_date);
-  if (without.length) {
-    const menu = opts.menu ?? await cateringMenu(db, orgId);
-    const ids = without.map((e) => e.id);
-    const [items, plans] = await Promise.all([quoteCatering(db, orgId, ids, new Set(menu.map((m) => m.id))), cateringPlans(db, orgId, ids)]);
-    for (const e of without) {
-      const mine = items.get(e.id);
-      if (!mine) continue;
-      const plan = plans.get(e.id) ?? { days: [], qty: {} };
-      const { parts, warnings: w } = splitByDay(mine, plan, { date: e.event_date!, time: e.start_time?.slice(0, 5) ?? null });
+  for (const e of events) {
+    const plan = plans.get(e.id);
+    const quoted = items.get(e.id) ?? [];
+    // 1. A kitchen order set on the job: exactly that, day by day
+    if (plan?.order && plan.order.days.some((d) => d.items.length)) {
+      const days = plan.order.days.filter((d) => d.items.length);
+      const w = quoted.length ? compareWithQuote(plan.order, quoted) : [];
       if (w.length) warnings[e.id] = w;
-      for (const p of parts) deliveries.push({
-        event_id: e.id, event_number: e.number ? `EV-${e.number}` : null, title: e.name, customer: e.customer?.name ?? null, status: e.status, firm: true,
-        date: p.date, time: p.time, label: parts.length > 1 ? `Catering — day ${parts.indexOf(p) + 1} of ${parts.length}` : "Catering",
-        address: e.address, venue: e.venue, guests: e.guest_count, notes: e.customer_notes, items: p.items,
+      for (const [i, d] of days.entries()) deliveries.push({
+        ...base(e), firm: FIRM_STATUSES.includes(e.status) || quoted.length > 0,
+        date: d.date, time: d.deliver, ready: d.ready, label: days.length > 1 ? `Catering — day ${i + 1} of ${days.length}` : "Catering",
+        notes: [d.note, plan.order.notes, e.customer_notes].filter(Boolean).join("\n") || null,
+        items: d.items.map((x) => ({ service_id: x.service_id, name: x.name, qty: x.qty, note: x.note })),
       });
+      continue;
     }
+    // 2. A website catering order (already one entry per delivery date)
+    if (Array.isArray(e.catering) && e.catering.length) { deliveries.push(...deliveriesFromEvent({ ...e, title: e.name, customer: e.customer?.name ?? null })); continue; }
+    // 3. The accepted quote's catering, split by day when the job has an older split
+    if (!quoted.length || !e.event_date) continue;
+    const { parts, warnings: w } = splitByDay(quoted, plan?.split ?? { days: [], qty: {} }, { date: e.event_date, time: e.start_time?.slice(0, 5) ?? null });
+    if (w.length) warnings[e.id] = w;
+    for (const p of parts) deliveries.push({
+      ...base(e), firm: true, date: p.date, time: p.time, ready: null,
+      label: parts.length > 1 ? `Catering — day ${parts.indexOf(p) + 1} of ${parts.length}` : "Catering",
+      notes: e.customer_notes, items: p.items,
+    });
   }
   return { deliveries: deliveries.filter((d) => d.date >= opts.from && d.date <= opts.to), warnings };
 }

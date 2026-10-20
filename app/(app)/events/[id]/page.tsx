@@ -6,7 +6,7 @@ import { requireOrg, getMembers } from "@/lib/context";
 import { StaffCard, type StaffRow } from "./staff-card";
 import { CrewCard, type CrewOption, type CrewRow } from "./crew-card";
 import { PeopleCard, type PersonRow } from "./people-card";
-import { CateringDaysCard } from "./catering-days-card";
+import { KitchenOrderCard } from "./kitchen-order-card";
 import { ApprovalBanner } from "./approval-banner";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -158,28 +158,33 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const ownDays = parseDays(evDays.days);
   const startDays = formDays({ ...e, days: evDays.days, fleet_dates: evDays.fleet_dates }, staffDays);
   const daysSaved = "days" in evDays;
-  // Catering by day (multi-day jobs): the catering items on the accepted quote (else the current one) and the saved split
-  const catering = await (async () => {
-    const webOrder = Array.isArray((e as { catering?: unknown }).catering) && ((e as { catering?: unknown[] }).catering ?? []).length > 0;
-    if (webOrder || !quotes.length) return null;
+  // Kitchen order: what the kitchen makes for this job, day by day (saved, or a draft from the quote / website order)
+  const kitchen = await (async () => {
     const { cateringMenu } = await import("@/lib/kitchen/jobs");
-    const { itemKey, readCateringDays } = await import("@/lib/kitchen/split");
-    const menuIds = new Set((await cateringMenu(supabase, org.id)).map((m) => m.id));
-    if (!menuIds.size) return null;
+    const { draftKitchenOrder, readCateringDays, readKitchenOrder, compareWithQuote } = await import("@/lib/kitchen/split");
+    const { deliveriesFromEvent } = await import("@/lib/kitchen/core");
+    const menu = await cateringMenu(supabase, org.id);
+    const menuIds = new Set(menu.map((m) => m.id));
     const accepted = quotes.find((q) => q.status === "accepted");
     const q = accepted ?? quotes.find((x) => x.status !== "superseded") ?? null;
-    if (!q) return null;
-    const { data: qi } = await supabase.from("quote_items").select("service_id, name, quantity, position").eq("organisation_id", org.id).eq("quote_id", q.id).order("position");
-    const merged = new Map<string, { key: string; name: string; qty: number }>();
-    for (const i of (qi ?? []) as { service_id: string | null; name: string; quantity: number }[]) {
-      if (!i.service_id || !menuIds.has(i.service_id) || !(Number(i.quantity) > 0)) continue;
-      const key = itemKey({ service_id: i.service_id, name: i.name });
-      const m = merged.get(key);
-      if (m) m.qty += Number(i.quantity); else merged.set(key, { key, name: i.name, qty: Number(i.quantity) });
+    let quoted: { service_id: string | null; name: string; qty: number }[] = [];
+    if (q) {
+      const { data: qi } = await supabase.from("quote_items").select("service_id, name, quantity, position").eq("organisation_id", org.id).eq("quote_id", q.id).order("position");
+      quoted = ((qi ?? []) as { service_id: string | null; name: string; quantity: number }[]).filter((i) => i.service_id && menuIds.has(i.service_id) && Number(i.quantity) > 0).map((i) => ({ service_id: i.service_id, name: i.name, qty: Number(i.quantity) }));
     }
-    if (!merged.size) return null;
-    const ready = "catering_days" in (e as object);
-    return { lines: [...merged.values()], saved: readCateringDays((e as { catering_days?: unknown }).catering_days), ready, fromAccepted: !!accepted };
+    const raw = (e as { catering_days?: unknown }).catering_days;
+    const saved = readKitchenOrder(raw);
+    const web = deliveriesFromEvent({ id: e.id, number: e.number as number | null, title: e.name as string, status: e.status as string, event_date: e.event_date, start_time: e.start_time, address: null, venue: null, guest_count: null, customer_notes: null, catering: (e as { catering?: unknown }).catering });
+    const first = runDays[0];
+    const draft = web.length
+      ? { days: web.map((d) => ({ date: d.date, ready: null, deliver: d.time, note: null, items: d.items.map((i) => ({ service_id: i.service_id, name: i.name, qty: i.qty, note: null })) })), notes: null }
+      : draftKitchenOrder(quoted, readCateringDays(raw), { date: e.event_date ?? first?.date ?? new Date().toISOString().slice(0, 10), deliver: first?.start ?? e.start_time?.slice(0, 5) ?? null, ready: null });
+    return {
+      menu: menu.map((m) => ({ id: m.id, name: m.name, group: m.group })), saved, draft,
+      warnings: saved && quoted.length ? compareWithQuote(saved, quoted) : [],
+      source: web.length ? "website" as const : quoted.length ? (accepted ? "accepted" as const : "quote" as const) : "none" as const,
+      ready: "catering_days" in (e as object),
+    };
   })().catch(() => null);
   const cal = (calRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; kind: string; sync_status: string; calendar_connection_id: string; calendar: { name: string; colour: string; provider: string } | null }[];
   const sameDay = (sameDayRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; event_id: string | null; calendar_connection_id: string; calendar: { name: string; colour: string } | null }[];
@@ -306,11 +311,10 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   </div>
                 } />
               </Card>
-              {catering && (
-                <Card>
-                  <CardHeader title="Catering by day" subtitle="For jobs over more than one day — how many of each item go out each day, and when" />
-                  <CateringDaysCard eventId={e.id} lines={catering.lines} saved={catering.saved} ready={catering.ready} fromAccepted={catering.fromAccepted}
-                    suggested={runDays.map((d) => ({ date: d.date, time: d.start }))} fallback={{ date: e.event_date, time: e.start_time?.slice(0, 5) ?? null }}
+              {kitchen && (kitchen.saved || kitchen.source !== "none" || e.status !== "cancelled") && (
+                <Card id="kitchen-order">
+                  <CardHeader title="Kitchen order" subtitle="What the kitchen makes for this job — each day, ready-by time, items and notes" />
+                  <KitchenOrderCard eventId={e.id} menu={kitchen.menu} saved={kitchen.saved} draft={kitchen.draft} warnings={kitchen.warnings} source={kitchen.source} ready={kitchen.ready}
                     canEdit={["owner", "admin", "manager", "sales"].includes(role)} />
                 </Card>
               )}

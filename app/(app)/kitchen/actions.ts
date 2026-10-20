@@ -59,3 +59,26 @@ export async function saveCateringDays(eventId: string, plan: { days: { date: st
     return "Saved";
   });
 }
+
+
+/** The kitchen order for a job (days, ready-by times, items, notes). null = go back to what the quote says. */
+export async function saveKitchenOrder(eventId: string, order: { days: { date: string; ready: string | null; deliver: string | null; note: string | null; items: { service_id: string | null; name: string; qty: number; note: string | null }[] }[]; notes: string | null } | null): Promise<Result> {
+  return run(async () => {
+    if (!UUID.test(eventId)) throw new Error("Unknown job.");
+    const { supabase, org } = await office();
+    const { readKitchenOrder, kitchenOrderValue } = await import("@/lib/kitchen/split");
+    let value: unknown = {};
+    if (order) {
+      if (!order.days?.length) throw new Error("Add at least one day.");
+      const clean = readKitchenOrder({ v: 2, ...order });
+      if (!clean || clean.days.length !== order.days.length) throw new Error("Each day needs a different, valid date.");
+      if (!clean.days.some((d) => d.items.length)) throw new Error("Add at least one item.");
+      value = kitchenOrderValue(clean);
+    }
+    const { error } = await supabase.from("events").update({ catering_days: value }).eq("id", eventId).eq("organisation_id", org.id);
+    if (error) throw new Error(/catering_days/.test(error.message) ? "The kitchen order needs the database update (0061_kitchen_salary_catering_days.sql)." : error.message);
+    revalidatePath(`/events/${eventId}`);
+    revalidatePath("/kitchen");
+    return order ? "Kitchen order saved." : "Back to what the quote says.";
+  });
+}

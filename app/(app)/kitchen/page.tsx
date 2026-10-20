@@ -8,6 +8,7 @@ import { type Ingredient, type RecipeLine } from "@/lib/kitchen/core";
 import { FIRM_STATUSES, loadCateringJobs } from "@/lib/kitchen/jobs";
 import { IngredientsEditor, PrintButton, RecipesEditor } from "@/components/kitchen/editors";
 import { MakeOrderView, RunSheetView } from "@/components/kitchen/views";
+import { KitchenCalculator } from "@/components/kitchen/calculator";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Kitchen" };
@@ -19,7 +20,7 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (role === "staff" || role === "customer") redirect("/dashboard");
   const sp = await searchParams;
-  const tab = ["orders", "recipes", "ingredients"].includes(sp.tab ?? "") ? sp.tab! : "run";
+  const tab = ["orders", "calculator", "recipes", "ingredients"].includes(sp.tab ?? "") ? sp.tab! : "run";
   const tz = (org as { timezone?: string }).timezone ?? "Australia/Sydney";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
   const from = sp.from && DATE.test(sp.from) ? sp.from : today;
@@ -39,15 +40,16 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
   const menu = ((svcR.data ?? []) as { id: string; name: string; category: string | null; unit: string | null; active: boolean }[]).filter((s) => s.active && isCatering(s.category)).map((s) => ({ id: s.id, name: s.name, unit: s.unit, group: cateringGroup(s.category) }));
 
   let body: React.ReactNode = null;
-  if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} />;
+  if (tab === "calculator") body = <KitchenCalculator menu={menu} recipes={recipes} ingredients={ingredients.filter((i) => i.active !== false)} />;
+  else if (tab === "recipes") body = <RecipesEditor menu={menu} ingredients={ingredients} recipes={recipes} />;
   else if (tab === "ingredients") body = <IngredientsEditor items={ingredients} />;
   else {
     const { deliveries, warnings } = await loadCateringJobs(supabase, org.id, { from, to, statuses: includeQuoted ? undefined : FIRM_STATUSES, menu });
     const range = (
       <form className="flex flex-wrap items-end gap-3 print:hidden" action="/kitchen">
         <input type="hidden" name="tab" value={tab} />
-        <label className="text-[0.75rem] text-ink-muted">From<input type="date" name="from" defaultValue={from} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
-        <label className="text-[0.75rem] text-ink-muted">To<input type="date" name="to" defaultValue={to} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
+        <label className="text-[0.75rem] text-ink-muted">Catering going out from<input type="date" name="from" defaultValue={from} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
+        <label className="text-[0.75rem] text-ink-muted">to<input type="date" name="to" defaultValue={to} className="ml-2 rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]" /></label>
         <label className="flex items-center gap-1.5 text-[0.75rem] text-ink-muted"><select name="all" defaultValue={includeQuoted ? "1" : "0"} className="rounded-lg border border-line-strong px-2 py-1.5 text-[0.8125rem]"><option value="1">Confirmed + quoted</option><option value="0">Confirmed only</option></select></label>
         <button className="h-8 rounded-lg bg-ink px-3 text-[0.7812rem] font-medium text-surface">Show</button>
         <PrintButton />
@@ -55,13 +57,13 @@ export default async function KitchenPage({ searchParams }: { searchParams: Prom
     );
     if (!deliveries.length) body = <>{range}<Card className="mt-4"><EmptyState title="No catering in these dates">Website catering orders and jobs with catering on an accepted quote show here.</EmptyState></Card></>;
     else if (tab === "orders") body = <>{range}<div className="mt-4"><MakeOrderView deliveries={deliveries} recipes={recipes} ingredients={ingredients} from={from} to={to} /></div></>;
-    else body = <>{range}<div className="mt-4"><RunSheetView deliveries={deliveries} jobHref={(id) => `/events/${id}`} warnings={warnings} /></div></>;
+    else body = <>{range}<div className="mt-4"><RunSheetView deliveries={deliveries} jobHref={(id) => `/events/${id}`} editHref={(id) => `/events/${id}#kitchen-order`} warnings={warnings} /></div></>;
   }
 
   return (
     <>
       <PageHeader eyebrow="Catering" title="Kitchen" subtitle="Run sheet for each day, what to make, and the order list for your suppliers — from upcoming catering and your recipes." />
-      <div className="mb-5 print:hidden"><Tabs baseHref="/kitchen" active={tab} tabs={[{ key: "run", label: "Run sheet" }, { key: "orders", label: "Make & order" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }]} /></div>
+      <div className="mb-5 print:hidden"><Tabs baseHref="/kitchen" active={tab} tabs={[{ key: "run", label: "Run sheet" }, { key: "orders", label: "Make & order" }, { key: "calculator", label: "Calculator" }, { key: "recipes", label: "Recipes" }, { key: "ingredients", label: "Ingredients" }]} /></div>
       {body}
     </>
   );

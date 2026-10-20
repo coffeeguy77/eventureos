@@ -14,10 +14,10 @@ const tag = (d: Delivery) => d.firm
   : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-amber-700">Not confirmed yet</span>;
 
 /** Notes worth showing the kitchen: dietary lines if there are any, else the last line. */
-const kitchenNotes = (notes: string) => notes.split("\n").filter((l) => /customer notes|dietary|gluten|vegan|allerg/i.test(l)).join("\n") || notes.split("\n").slice(-1)[0];
+const kitchenNotes = (notes: string) => notes.length <= 400 ? notes : notes.split("\n").filter((l) => /customer notes|dietary|gluten|vegan|allerg/i.test(l)).join("\n") || notes.split("\n").slice(-1)[0];
 
-export function RunSheetView({ deliveries, jobHref, warnings = {}, changed = new Set<string>(), compact = false }: {
-  deliveries: Delivery[]; jobHref?: (eventId: string) => string; warnings?: Record<string, string[]>; changed?: Set<string>; compact?: boolean;
+export function RunSheetView({ deliveries, jobHref, editHref, warnings = {}, changed = new Set<string>(), compact = false }: {
+  deliveries: Delivery[]; jobHref?: (eventId: string) => string; editHref?: (eventId: string) => string; warnings?: Record<string, string[]>; changed?: Set<string>; compact?: boolean;
 }) {
   const sheet = runSheet(deliveries);
   return (
@@ -29,7 +29,11 @@ export function RunSheetView({ deliveries, jobHref, warnings = {}, changed = new
             {day.deliveries.map((d, i) => (
               <Card key={d.event_id + d.date + i} className="break-inside-avoid p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <div><p className="text-[1.125rem] font-semibold tabular-nums text-ink">{fmtTime(d.time)}</p><p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">{d.label}</p></div>
+                  <div>
+                    {d.ready ? <p className="text-[1.125rem] font-semibold tabular-nums text-ink">Ready {fmtTime(d.ready)}</p> : <p className="text-[0.9375rem] font-semibold text-amber-700">Ready-by time not set</p>}
+                    <p className="text-[0.75rem] text-ink-muted">{d.time ? `At the event ${fmtTime(d.time)}` : "Event time TBC"}</p>
+                    <p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">{d.label}</p>
+                  </div>
                   <div className="flex flex-col items-end gap-1">
                     {tag(d)}
                     {changed.has(d.event_id) && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-sky-700">Changed</span>}
@@ -42,10 +46,11 @@ export function RunSheetView({ deliveries, jobHref, warnings = {}, changed = new
                 {(d.venue || d.address) && <p className="text-[0.8125rem] text-ink-muted">{[d.venue, d.address].filter(Boolean).join(" · ")}</p>}
                 {d.guests ? <p className="text-[0.75rem] text-ink-faint">{d.guests} guests</p> : null}
                 <ul className="mt-3 space-y-1 border-t border-line pt-3 text-[0.8125rem]">
-                  {d.items.map((it) => <li key={it.name} className="flex justify-between gap-3"><span><span className="mr-2 inline-block h-3 w-3 rounded border border-line-strong align-middle" />{it.name}</span><span className="font-semibold tabular-nums">{it.qty}</span></li>)}
+                  {d.items.map((it, k) => <li key={it.name + k} className="flex justify-between gap-3"><span><span className="mr-2 inline-block h-3 w-3 rounded border border-line-strong align-middle" />{it.name}{it.note && <span className="block pl-5 text-[0.75rem] font-medium text-amber-800">{it.note}</span>}</span><span className="font-semibold tabular-nums">{it.qty}</span></li>)}
                 </ul>
                 {d.notes && <p className="mt-3 whitespace-pre-line rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-900">{kitchenNotes(d.notes)}</p>}
                 {(warnings[d.event_id] ?? []).length > 0 && <p className="mt-2 text-[0.7188rem] text-amber-700">{warnings[d.event_id].join(" · ")}</p>}
+                {editHref && <a href={editHref(d.event_id)} className="mt-3 inline-block text-[0.75rem] font-medium text-brand-700 hover:underline print:hidden">Edit kitchen order</a>}
               </Card>
             ))}
           </div>
@@ -64,19 +69,31 @@ export function MakeOrderView({ deliveries, recipes, ingredients, from, to, reci
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
       <Card>
-        <CardHeader title="What to make" subtitle={`${niceDate(from)} – ${niceDate(to)}`} />
-        <ul className="divide-y divide-line px-5 pb-4 text-[0.8125rem]">
-          {prod.map((p) => (
-            <li key={p.name} className="py-2.5">
-              <p className="flex justify-between gap-3"><span className="font-medium text-ink">{p.name}</span><span className="font-semibold tabular-nums">{p.total}</span></p>
-              <p className="text-[0.75rem] text-ink-faint">{Object.entries(p.byDate).map(([d, n]) => `${niceDate(d).split(",")[0]} ${n}`).join(" · ")}{p.noRecipe ? <span className="ml-2 text-amber-600">· no recipe yet</span> : null}</p>
-              {p.prep.length > 0 && <p className="mt-0.5 text-[0.75rem] text-ink-muted">{p.prep.join(" · ")}</p>}
-            </li>
-          ))}
-        </ul>
+        <CardHeader title="What to make, day by day" subtitle={`Catering going out ${niceDate(from)} – ${niceDate(to)}`} />
+        <div className="space-y-4 px-5 pb-4 text-[0.8125rem]">
+          {[...new Set(deliveries.map((d) => d.date))].sort().map((date) => {
+            const today = deliveries.filter((d) => d.date === date);
+            const rows = production(today, recipes);
+            const earliest = today.map((d) => d.ready).filter(Boolean).sort()[0] ?? null;
+            return (
+              <div key={date}>
+                <p className="flex flex-wrap items-baseline gap-x-2 font-semibold text-ink">{niceDate(date)}<span className="text-[0.75rem] font-normal text-ink-muted">{earliest ? `first ready by ${fmtTime(earliest)}` : "ready-by time not set"} · {today.length} job{today.length === 1 ? "" : "s"}</span></p>
+                <ul className="mt-1 divide-y divide-line">
+                  {rows.map((p) => (
+                    <li key={p.name} className="py-1.5">
+                      <p className="flex justify-between gap-3"><span className="text-ink">{p.name}</span><span className="font-semibold tabular-nums">{p.total}</span></p>
+                      {(p.noRecipe || p.prep.length > 0) && <p className="text-[0.7188rem] text-ink-faint">{p.prep.join(" · ")}{p.noRecipe ? <span className="text-amber-600">{p.prep.length ? " · " : ""}no recipe yet</span> : null}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {prod.length > 0 && <p className="border-t border-line pt-2 text-[0.75rem] text-ink-muted">All days: {prod.map((p) => `${p.total} ${p.name}`).join(" · ")}</p>}
+        </div>
       </Card>
       <Card>
-        <CardHeader title="Order list" subtitle="Rounded up to whole packs. Grouped by supplier." />
+        <CardHeader title="Order list" subtitle={`Ingredients for everything above (${niceDate(from)} – ${niceDate(to)}), rounded up to whole packs, by supplier.`} />
         <div className="space-y-4 px-5 pb-5">
           {!shop.length && <p className="text-[0.8125rem] text-ink-muted">Add recipes for these items ({recipesHref ? <Link href={recipesHref} className="font-medium text-brand-600">Recipes</Link> : "Recipes tab"}) and the shopping list builds itself.</p>}
           {suppliers.map((sup) => (

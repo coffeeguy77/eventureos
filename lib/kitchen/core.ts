@@ -5,10 +5,11 @@
 
 export interface Ingredient { id: string; name: string; unit: string; pack_size: number | null; pack_label: string | null; supplier: string | null; station: string | null; notes?: string | null; active?: boolean }
 export interface RecipeLine { id?: string; service_id: string; ingredient_id: string; qty_per_serve: number; prep_note: string | null }
-export interface DeliveryItem { service_id: string | null; name: string; qty: number }
+export interface DeliveryItem { service_id: string | null; name: string; qty: number; note?: string | null }
 export interface Delivery {
   event_id: string; event_number: string | null; title: string; customer: string | null; status: string; firm: boolean;
-  date: string; time: string | null; label: string; address: string | null; venue: string | null; guests: number | null; notes: string | null;
+  /** time = delivery / at the event; ready = when the kitchen must have it ready (null = not set) */
+  date: string; time: string | null; ready?: string | null; label: string; address: string | null; venue: string | null; guests: number | null; notes: string | null;
   items: DeliveryItem[];
 }
 
