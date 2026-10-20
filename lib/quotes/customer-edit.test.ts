@@ -43,3 +43,15 @@ test("servesDescription keeps the rest of the wording", () => {
   assert.equal(servesDescription("120 Hot drinks \n(Client to provide 12oz custom cups)", 150, 0), "150 Hot drinks \n(Client to provide 12oz custom cups)");
   assert.equal(servesDescription("Custom", 10, 0), "Custom");
 });
+
+test("catering locks 48 hours before the event starts (business timezone)", async () => {
+  const { cateringLocked } = await import("./customer-edit");
+  const tz = "Australia/Sydney"; // 22 Oct 2026 is AEDT (UTC+11)
+  // Event 22 Oct 7:00am Sydney = 21 Oct 20:00 UTC; locks from 19 Oct 20:00 UTC
+  assert.equal(cateringLocked("2026-10-22", "07:00", tz, new Date("2026-10-19T19:59:00Z")), false);
+  assert.equal(cateringLocked("2026-10-22", "07:00", tz, new Date("2026-10-19T20:01:00Z")), true);
+  // No start time: from midnight at the start of the day
+  assert.equal(cateringLocked("2026-10-22", null, tz, new Date("2026-10-19T12:59:00Z")), false);
+  assert.equal(cateringLocked("2026-10-22", null, tz, new Date("2026-10-19T13:01:00Z")), true);
+  assert.equal(cateringLocked(null, null, tz), false);
+});

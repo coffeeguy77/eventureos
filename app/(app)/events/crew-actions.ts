@@ -126,6 +126,16 @@ export async function removeEventCrew(id: string): Promise<CrewResult> {
 // Staff app: pay rates, preference order, invites, shift status
 // ---------------------------------------------------------------------------
 
+/** On salary: no hourly pay is worked out for their shifts (the Wages page leaves them out). */
+export async function setStaffSalaried(crewId: string, salaried: boolean): Promise<CrewResult> {
+  return wrap(async () => {
+    const { supabase, org } = await manager();
+    if (!UUID.test(crewId)) throw new Error("Refresh and try again.");
+    const { error } = await supabase.from("crew_members").update({ salaried: !!salaried }).eq("id", crewId).eq("organisation_id", org.id);
+    if (error) throw new Error(/salaried/.test(error.message) ? "Run the database update (0061) first." : error.message);
+  });
+}
+
 export async function setStaffRate(crewId: string, rate: number | null): Promise<CrewResult> {
   return wrap(async () => {
     const { supabase, org } = await manager();

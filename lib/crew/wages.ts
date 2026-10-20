@@ -58,7 +58,10 @@ export async function loadWageShifts(db: SupabaseClient, orgId: string, opts: { 
     };
   });
   const custom = await loadCustomWageShifts(db, orgId, opts, orgRate, minHours);
-  return [...eventShifts, ...custom].sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.start ?? "").localeCompare(b.start ?? ""));
+  // Staff on salary aren't paid by the hour — leave their shifts out (past payments still show)
+  const { data: sal, error: salErr } = opts.paymentIds ? { data: [], error: null } : await db.from("crew_members").select("id").eq("organisation_id", orgId).eq("salaried", true);
+  const salaried = new Set(salErr ? [] : ((sal ?? []) as { id: string }[]).map((r) => r.id));
+  return [...eventShifts, ...custom].filter((w) => !salaried.has(w.crewId)).sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "") || (a.start ?? "").localeCompare(b.start ?? ""));
 }
 
 /** Shifts that aren't event shifts (regular / one-off / from a Google booking). Empty before the database update. */

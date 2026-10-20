@@ -4,6 +4,8 @@
  * Pure — used by the quote link page, its save action and tests.
  */
 
+import { zonedTimeUTC } from "@/lib/format";
+
 export interface EditLine {
   id: string; name: string; quantity: number; unit: string | null; unit_price: number; tax_rate: number;
   service_id: string | null; details: { kind?: string } | null; is_optional: boolean; section_id: string;
@@ -92,4 +94,18 @@ export function servesDescription(description: string | null, hot: number, cold:
   const head = cold ? `${hot} Hot + ${cold} Cold drinks` : `${hot} Hot drinks`;
   const d = description ?? "";
   return /^\d+ Hot( \+ \d+ Cold)? drinks/.test(d) ? d.replace(/^\d+ Hot( \+ \d+ Cold)? drinks/, head) : d;
+}
+
+/** Customers can't change catering on their quote link within this many hours of the event starting (the office still can). */
+export const CATERING_LOCK_HOURS = 48;
+
+/**
+ * Is catering locked for the customer? True from 48 hours before the event starts (event date + start time in the
+ * business's timezone; with no start time, from midnight at the start of the event day).
+ */
+export function cateringLocked(eventDate: string | null, startTime: string | null, tz: string, now: Date = new Date()): boolean {
+  if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return false;
+  const time = startTime && /^\d{1,2}:\d{2}/.test(startTime) ? startTime.slice(0, 5).padStart(5, "0") : "00:00";
+  const starts = Date.parse(zonedTimeUTC(eventDate, time, tz));
+  return starts - now.getTime() < CATERING_LOCK_HOURS * 3_600_000;
 }

@@ -21,11 +21,19 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
   return (
     <div>
       <h1 className="mb-4 text-[1.5rem] font-bold tracking-tight text-ink">Pay</h1>
-      <Card className="mb-6 bg-[var(--crew-brand)] text-white ring-0">
-        <p className="text-[0.75rem] font-semibold uppercase tracking-wide opacity-80">Owed to you</p>
-        <p className="mt-1 text-[2rem] font-bold leading-none">{money(owedTotal, cur, { cents: true })}</p>
-        <p className="mt-1 text-[0.8125rem] opacity-80">{fmtHours(Math.round(owedHours * 100) / 100)} across {owed.length} shift{owed.length === 1 ? "" : "s"} · rate {money(s.member.hourly_rate ?? s.org.staff_hourly_rate, cur, { cents: true })}/hr</p>
-      </Card>
+      {s.member.salaried ? (
+        <Card className="mb-6 bg-[var(--crew-brand)] text-white ring-0">
+          <p className="text-[0.75rem] font-semibold uppercase tracking-wide opacity-80">On salary</p>
+          <p className="mt-1 text-[1.25rem] font-bold leading-tight">You&apos;re paid a salary, not by the hour</p>
+          <p className="mt-1 text-[0.8125rem] opacity-80">Your shifts are listed below so you can see your hours. Talk to the office about your pay.</p>
+        </Card>
+      ) : (
+        <Card className="mb-6 bg-[var(--crew-brand)] text-white ring-0">
+          <p className="text-[0.75rem] font-semibold uppercase tracking-wide opacity-80">Owed to you</p>
+          <p className="mt-1 text-[2rem] font-bold leading-none">{money(owedTotal, cur, { cents: true })}</p>
+          <p className="mt-1 text-[0.8125rem] opacity-80">{fmtHours(Math.round(owedHours * 100) / 100)} across {owed.length} shift{owed.length === 1 ? "" : "s"} · rate {money(s.member.hourly_rate ?? s.org.staff_hourly_rate, cur, { cents: true })}/hr</p>
+        </Card>
+      )}
 
       <Section title="Payments">
         {payments.length === 0 && <Card><p className="text-[0.875rem] text-ink-muted">No payments recorded yet.</p></Card>}
@@ -49,10 +57,12 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
                 <p className="truncate text-[0.9375rem] font-semibold text-ink">{x.job.name}</p>
                 <p className="text-[0.8125rem] text-ink-muted">{x.job.event_date ? fmtDate(x.job.event_date) : "TBC"} · {fmtHours(x.hours)}{x.extraPending ? ` · +${fmtHours(x.extraPending)} waiting` : ""}</p>
               </div>
-              <div className="text-right">
-                <p className="text-[0.9375rem] font-semibold text-ink">{x.amount != null ? money(x.amount, cur, { cents: true }) : "—"}</p>
-                {x.paymentId ? <Pill tone="green">Paid</Pill> : <Pill tone="amber">Owed</Pill>}
-              </div>
+              {!s.member.salaried && (
+                <div className="text-right">
+                  <p className="text-[0.9375rem] font-semibold text-ink">{x.amount != null ? money(x.amount, cur, { cents: true }) : "—"}</p>
+                  {x.paymentId ? <Pill tone="green">Paid</Pill> : <Pill tone="amber">Owed</Pill>}
+                </div>
+              )}
             </Card>
           </Link>
         ))}

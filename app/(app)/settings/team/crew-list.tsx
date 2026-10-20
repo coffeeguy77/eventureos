@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, Copy, Pencil, Plus, Send, Smartphone } from "lucide-react";
-import { inviteCrewToApp, moveCrewRank, saveCrewMember, setDefaultStaffRate, setStaffRate, type CrewInput } from "@/app/(app)/events/crew-actions";
+import { inviteCrewToApp, moveCrewRank, saveCrewMember, setDefaultStaffRate, setStaffRate, setStaffSalaried, type CrewInput } from "@/app/(app)/events/crew-actions";
 import { setStaffMinHours } from "@/app/(app)/wages/shift-actions";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,9 @@ import { STAFF_SKILLS, skillLabel } from "@/lib/crew/skills";
 export interface CrewMember {
   id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
   hourly_rate?: number | null; rank?: number; extra_emails?: string[]; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
-  skills?: string[];
+  skills?: string[]; salaried?: boolean;
 }
-type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number; skillsReady?: boolean };
+type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number; skillsReady?: boolean; salaryReady?: boolean };
 
 /** People who work jobs but don't log in to EventureOS — they receive the calendar invites. */
 export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewMember[]; canEdit: boolean; canAdmin?: boolean; app?: AppInfo }) {
@@ -64,7 +64,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                 <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-medium text-ink">{r.name}
                   {r.role && <span className="font-normal text-ink-muted">· {r.role}</span>}
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
-                  {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : "brand"}>{skillLabel(k)}</Badge>)}
+                  {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : k === "kitchen" ? "amber" : "brand"}>{skillLabel(k)}</Badge>)}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
                 <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>
@@ -73,8 +73,13 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                 )}
               </div>
               {app?.ready && r.active && (
-                <span className="flex items-center gap-1 text-[0.75rem] text-ink-muted">
-                  <RateInput value={r.hourly_rate ?? null} placeholder={String(app.rate)} disabled={!canEdit || pending} onSave={(v) => run(() => setStaffRate(r.id, v), "Rate saved.")} />/hr
+                <span className="flex items-center gap-2 text-[0.75rem] text-ink-muted">
+                  {r.salaried ? <span className="font-medium text-ink">On salary</span> : <span className="flex items-center gap-1"><RateInput value={r.hourly_rate ?? null} placeholder={String(app.rate)} disabled={!canEdit || pending} onSave={(v) => run(() => setStaffRate(r.id, v), "Rate saved.")} />/hr</span>}
+                  {app.salaryReady && (
+                    <label className="flex items-center gap-1" title="On salary: no hourly pay is worked out for their shifts">
+                      <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={!!r.salaried} disabled={!canEdit || pending} onChange={(e) => run(() => setStaffSalaried(r.id, e.target.checked), e.target.checked ? `${r.name} is on salary.` : `${r.name} is paid by the hour.`)} />Salary
+                    </label>
+                  )}
                 </span>
               )}
               {canEdit && app?.ready && r.active && r.email && (

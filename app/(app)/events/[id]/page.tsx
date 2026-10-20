@@ -6,6 +6,7 @@ import { requireOrg, getMembers } from "@/lib/context";
 import { StaffCard, type StaffRow } from "./staff-card";
 import { CrewCard, type CrewOption, type CrewRow } from "./crew-card";
 import { PeopleCard, type PersonRow } from "./people-card";
+import { CateringDaysCard } from "./catering-days-card";
 import { ApprovalBanner } from "./approval-banner";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -157,6 +158,29 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const ownDays = parseDays(evDays.days);
   const startDays = formDays({ ...e, days: evDays.days, fleet_dates: evDays.fleet_dates }, staffDays);
   const daysSaved = "days" in evDays;
+  // Catering by day (multi-day jobs): the catering items on the accepted quote (else the current one) and the saved split
+  const catering = await (async () => {
+    const webOrder = Array.isArray((e as { catering?: unknown }).catering) && ((e as { catering?: unknown[] }).catering ?? []).length > 0;
+    if (webOrder || !quotes.length) return null;
+    const { cateringMenu } = await import("@/lib/kitchen/jobs");
+    const { itemKey, readCateringDays } = await import("@/lib/kitchen/split");
+    const menuIds = new Set((await cateringMenu(supabase, org.id)).map((m) => m.id));
+    if (!menuIds.size) return null;
+    const accepted = quotes.find((q) => q.status === "accepted");
+    const q = accepted ?? quotes.find((x) => x.status !== "superseded") ?? null;
+    if (!q) return null;
+    const { data: qi } = await supabase.from("quote_items").select("service_id, name, quantity, position").eq("organisation_id", org.id).eq("quote_id", q.id).order("position");
+    const merged = new Map<string, { key: string; name: string; qty: number }>();
+    for (const i of (qi ?? []) as { service_id: string | null; name: string; quantity: number }[]) {
+      if (!i.service_id || !menuIds.has(i.service_id) || !(Number(i.quantity) > 0)) continue;
+      const key = itemKey({ service_id: i.service_id, name: i.name });
+      const m = merged.get(key);
+      if (m) m.qty += Number(i.quantity); else merged.set(key, { key, name: i.name, qty: Number(i.quantity) });
+    }
+    if (!merged.size) return null;
+    const ready = "catering_days" in (e as object);
+    return { lines: [...merged.values()], saved: readCateringDays((e as { catering_days?: unknown }).catering_days), ready, fromAccepted: !!accepted };
+  })().catch(() => null);
   const cal = (calRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; kind: string; sync_status: string; calendar_connection_id: string; calendar: { name: string; colour: string; provider: string } | null }[];
   const sameDay = (sameDayRes.data ?? []) as unknown as { id: string; title: string; starts_at: string; ends_at: string; event_id: string | null; calendar_connection_id: string; calendar: { name: string; colour: string } | null }[];
   const integrations = Object.fromEntries((gmailRes.data ?? []).map((i) => [i.provider, i.status]));
@@ -282,6 +306,14 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   </div>
                 } />
               </Card>
+              {catering && (
+                <Card>
+                  <CardHeader title="Catering by day" subtitle="For jobs over more than one day — how many of each item go out each day, and when" />
+                  <CateringDaysCard eventId={e.id} lines={catering.lines} saved={catering.saved} ready={catering.ready} fromAccepted={catering.fromAccepted}
+                    suggested={runDays.map((d) => ({ date: d.date, time: d.start }))} fallback={{ date: e.event_date, time: e.start_time?.slice(0, 5) ?? null }}
+                    canEdit={["owner", "admin", "manager", "sales"].includes(role)} />
+                </Card>
+              )}
               <Card>
                 <CardHeader title="Notes" />
                 <NotesPanel notes={(notesRes.data ?? []) as NoteRow[]} names={names} action={addNote.bind(null, { eventId: e.id, customerId: e.customer_id })} />

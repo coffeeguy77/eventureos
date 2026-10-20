@@ -7,7 +7,7 @@ import { brandVars } from "@/app/p/[slug]/portal-data";
 import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { LinkResponse, PrintButton, ViewBeacon } from "./client";
 import { readShop } from "@/lib/shop/core";
-import { loadCustomerEdit } from "@/lib/quotes/customer-edit-server";
+import { CATERING_LOCKED_MESSAGE, loadCustomerEdit } from "@/lib/quotes/customer-edit-server";
 import { CustomerChange } from "@/components/quotes/customer-change";
 
 import { loadBillTo } from "@/lib/customers/bill-to";
@@ -114,6 +114,9 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
           eventDate={d.event ? d.event.event_date ?? null : undefined}
           versionLabel={v.number > 1 ? String(v.number) : undefined} />
 
+        {((edit?.ok && edit.data.cateringLocked) || (edit && !edit.ok && edit.reason === "locked")) && (
+          <p className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900 print:hidden">{CATERING_LOCKED_MESSAGE}</p>
+        )}
         {edit?.ok && (!edit.data.busy || preview) && (
           <div className="mt-6">
             <CustomerChange token={token} preview={preview} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}

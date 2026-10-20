@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { changeText, cleanChange, customerCanChange, customerCatalogue, isEquipment, isSupplies, servesDescription, type EditLine, type EditService } from "./customer-edit";
+import { CATERING_LOCK_HOURS, cateringLocked, changeText, cleanChange, customerCanChange, customerCatalogue, isCatering, isEquipment, isSupplies, servesDescription, type EditLine, type EditService } from "./customer-edit";
 
 /** Everything the quote link needs to let the customer change their quote — or why they can't. */
 export interface CustomerEditData {
@@ -10,7 +10,11 @@ export interface CustomerEditData {
   perServe: string[];
   /** The business has unsent changes of its own — changes from the link wait until they're sent */
   busy: boolean;
+  /** Within 48 hours of the event: catering can't be changed from the link (only by the business) */
+  cateringLocked: boolean;
 }
+
+export const CATERING_LOCKED_MESSAGE = `Catering can't be changed online within ${CATERING_LOCK_HOURS} hours of the event — please contact us and we'll see what we can do.`;
 
 export async function loadCustomerEdit(db: SupabaseClient, token: string): Promise<{ ok: true; data: CustomerEditData } | { ok: false; reason: string }> {
   if (!/^[0-9a-f]{64}$/.test(token)) return { ok: false, reason: "This link isn't valid." };
@@ -44,10 +48,21 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
         details: i.details, is_optional: i.is_optional, section_id: i.section_id, category: i.service?.category ?? null };
       return { ...l, description: i.description, editable: customerCanChange(l, ps), section: i.section?.title ?? "" };
     });
-  const catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })), { supplies: lines.some((l) => isEquipment(l.category)) });
-  if (!lines.some((l) => l.editable) && !catalogue.length) return { ok: false, reason: "nothing" };
+  let catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })), { supplies: lines.some((l) => isEquipment(l.category)) });
+  // 48-hour lock: from 48 hours before the event the customer can't change, take off or add catering
+  let locked = false;
+  if (q.event_id) {
+    const { data: ev } = await db.from("events").select("event_date, start_time").eq("id", q.event_id).eq("organisation_id", q.organisation_id).maybeSingle();
+    locked = cateringLocked((ev?.event_date as string | null) ?? null, (ev?.start_time as string | null) ?? null, o?.timezone || "Australia/Sydney");
+  }
+  const hadCatering = lines.some((l) => l.editable && isCatering(l.category)) || catalogue.some((s) => isCatering(s.category));
+  if (locked) {
+    for (const l of lines) if (isCatering(l.category)) l.editable = false;
+    catalogue = catalogue.filter((s) => !isCatering(s.category));
+  }
+  if (!lines.some((l) => l.editable) && !catalogue.length) return { ok: false, reason: locked && hadCatering ? "locked" : "nothing" };
   return { ok: true, data: { quoteId: q.id, quoteNumber: q.number as number, orgId: q.organisation_id as string, customerId: q.customer_id as string, eventId: q.event_id as string | null,
-    lines, catalogue, perServe, busy: !!q.has_unpublished_changes } };
+    lines, catalogue, perServe, busy: !!q.has_unpublished_changes, cateringLocked: locked && hadCatering } };
 }
 
 /**
@@ -56,7 +71,7 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
  */
 export async function applyCustomerChange(db: SupabaseClient, token: string, raw: unknown, who: string) {
   const loaded = await loadCustomerEdit(db, token);
-  if (!loaded.ok) throw new Error(loaded.reason === "off" || loaded.reason === "nothing" ? "Changes can't be made online for this quote — please contact us." : loaded.reason);
+  if (!loaded.ok) throw new Error(loaded.reason === "locked" ? CATERING_LOCKED_MESSAGE : loaded.reason === "off" || loaded.reason === "nothing" ? "Changes can't be made online for this quote — please contact us." : loaded.reason);
   const d = loaded.data;
   const { data: q } = await db.from("quotes").select("has_unpublished_changes").eq("id", d.quoteId).single();
   if (q?.has_unpublished_changes) throw new Error("We're updating this quote right now — please contact us, or try again shortly.");

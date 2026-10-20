@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { CalendarCheck, CalendarOff, Check, Download, Hand, Loader2, Megaphone, Share, Wallet, X } from "lucide-react";
+import { CalendarCheck, CalendarOff, ChefHat, Check, Download, Hand, Loader2, Megaphone, Share, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   acceptShift, addAway, claimExtraHours, crewLinkSignIn, crewSignIn, declineShift, postToBoard, removeAway, setInterest, takeOffBoard, takeOpenShift, takeSwap,
@@ -38,7 +38,7 @@ function useRun() {
 }
 
 /* ---------------- navigation ---------------- */
-export function BottomNav({ slug }: { slug: string }) {
+export function BottomNav({ slug, kitchen = false }: { slug: string; kitchen?: boolean }) {
   const path = usePathname();
   const base = `/crew/${slug}`;
   const tabs = [
@@ -47,9 +47,10 @@ export function BottomNav({ slug }: { slug: string }) {
     { href: `${base}/away`, label: "Away", icon: CalendarOff, on: path.startsWith(`${base}/away`) },
     { href: `${base}/pay`, label: "Pay", icon: Wallet, on: path.startsWith(`${base}/pay`) },
   ];
+  if (kitchen) tabs.splice(1, 0, { href: `${base}/kitchen`, label: "Kitchen", icon: ChefHat, on: path.startsWith(`${base}/kitchen`) });
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className="mx-auto grid max-w-xl grid-cols-4">
+      <div className={cn("mx-auto grid max-w-xl", tabs.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {tabs.map((t) => (
           <Link key={t.href} href={t.href} className={cn("flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium", t.on ? "text-[var(--crew-brand)]" : "text-ink-faint")}>
             <t.icon className="h-6 w-6" strokeWidth={t.on ? 2.2 : 1.8} />{t.label}

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { crewOrg, crewSession } from "@/lib/crew/server";
 import { BottomNav, InstallPrompt, RegisterSW } from "./ui";
 import { crewSignOut } from "./actions";
+import { isKitchen } from "@/lib/crew/skills";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -49,7 +50,7 @@ export default async function CrewLayout({ children, params }: { children: React
         {s && <InstallPrompt appName={`${org.name} Staff`} />}
         {children}
       </main>
-      {s && <BottomNav slug={slug} />}
+      {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} />}
     </div>
   );
 }

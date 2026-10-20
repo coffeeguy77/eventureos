@@ -99,6 +99,13 @@ export async function GET(req: NextRequest) {
     wholesale = await runOrderEmailImports(db);
   } catch (e) { wholesale = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Kitchen staff: email them confirmed catering jobs that are new, changed or cancelled (only businesses with someone ticked "Kitchen")
+  let kitchen: unknown = null;
+  try {
+    const { runKitchenNotices } = await import("@/lib/kitchen/notify");
+    kitchen = await runKitchenNotices(db);
+  } catch (e) { kitchen = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -119,5 +126,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen });
 }

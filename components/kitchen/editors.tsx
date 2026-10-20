@@ -5,7 +5,17 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
 import type { Ingredient, RecipeLine } from "@/lib/kitchen/core";
-import { archiveIngredient, saveIngredient, saveRecipe } from "@/app/(app)/kitchen/actions";
+import * as office from "@/app/(app)/kitchen/actions";
+import type { IngredientInput, RecipeInput } from "@/lib/kitchen/store";
+
+type R<T = string> = { ok: true; data: T } | { ok: false; error: string };
+/** Where the editors save — the office Kitchen actions by default, or the chef's staff-app actions. */
+export interface KitchenActions {
+  saveIngredient: (i: IngredientInput) => Promise<R>;
+  archiveIngredient: (id: string, active: boolean) => Promise<R>;
+  saveRecipe: (serviceId: string, lines: RecipeInput[]) => Promise<R>;
+}
+const OFFICE: KitchenActions = { saveIngredient: office.saveIngredient, archiveIngredient: office.archiveIngredient, saveRecipe: office.saveRecipe };
 
 export function PrintButton() {
   return <Button type="button" size="sm" onClick={() => window.print()} className="print:hidden"><Printer className="h-3.5 w-3.5" />Print</Button>;
@@ -14,7 +24,8 @@ export function PrintButton() {
 const UNITS = ["each", "g", "kg", "ml", "L", "slice", "loaf", "dozen", "punnet", "bunch", "tbsp"];
 const blank = { id: null as string | null, name: "", unit: "each", pack_size: null as number | null, pack_label: "", supplier: "", station: "", notes: "" };
 
-export function IngredientsEditor({ items }: { items: (Ingredient & { active: boolean })[] }) {
+export function IngredientsEditor({ items, actions = OFFICE }: { items: (Ingredient & { active: boolean })[]; actions?: KitchenActions }) {
+  const { saveIngredient, archiveIngredient } = actions;
   const [edit, setEdit] = useState<typeof blank | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -66,7 +77,8 @@ export function IngredientsEditor({ items }: { items: (Ingredient & { active: bo
   );
 }
 
-export function RecipesEditor({ menu, ingredients, recipes }: { menu: { id: string; name: string; group: string; unit: string | null }[]; ingredients: Ingredient[]; recipes: RecipeLine[] }) {
+export function RecipesEditor({ menu, ingredients, recipes, actions = OFFICE }: { menu: { id: string; name: string; group: string; unit: string | null }[]; ingredients: Ingredient[]; recipes: RecipeLine[]; actions?: KitchenActions }) {
+  const { saveRecipe } = actions;
   const [sel, setSel] = useState(menu[0]?.id ?? "");
   const current = useMemo(() => recipes.filter((r) => r.service_id === sel).map((r) => ({ ingredient_id: r.ingredient_id, qty_per_serve: r.qty_per_serve, prep_note: r.prep_note ?? "" })), [recipes, sel]);
   const [lines, setLines] = useState(current);

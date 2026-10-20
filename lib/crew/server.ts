@@ -13,7 +13,7 @@ export interface CrewOrg {
   id: string; name: string; slug: string; logo_url: string | null; brand_colour: string | null; timezone: string; currency: string;
   contact_email: string | null; contact_phone: string | null; staff_hourly_rate: number; staff_min_hours: number;
 }
-export interface CrewMember { id: string; name: string; email: string | null; phone: string | null; role: string | null; hourly_rate: number | null; rank: number }
+export interface CrewMember { id: string; name: string; email: string | null; phone: string | null; role: string | null; hourly_rate: number | null; rank: number; skills: string[]; salaried: boolean }
 export interface CrewSession { db: SupabaseClient; org: CrewOrg; member: CrewMember; userId: string }
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -56,9 +56,13 @@ export async function crewSession(slug: string): Promise<CrewSession | null> {
   if (!m) return null;
   const seen = m.app_last_seen_at ? Date.parse(m.app_last_seen_at as string) : 0;
   if (Date.now() - seen > 15 * 60_000) await db.from("crew_members").update({ app_last_seen_at: new Date().toISOString() }).eq("id", m.id);
+  // What they do (Kitchen gets the kitchen tab) and whether they're on salary — read separately so it works before the 0059/0061 updates
+  const { data: extra } = await db.from("crew_members").select("skills, salaried").eq("id", m.id).maybeSingle();
+  const { data: skillsOnly } = extra ? { data: null } : await db.from("crew_members").select("skills").eq("id", m.id).maybeSingle();
+  const x = (extra ?? skillsOnly ?? {}) as { skills?: string[] | null; salaried?: boolean | null };
   return {
     db, org, userId: user.id,
-    member: { id: m.id, name: m.name, email: m.email, phone: m.phone, role: m.role, hourly_rate: m.hourly_rate == null ? null : Number(m.hourly_rate), rank: Number(m.rank ?? 100) },
+    member: { id: m.id, name: m.name, email: m.email, phone: m.phone, role: m.role, hourly_rate: m.hourly_rate == null ? null : Number(m.hourly_rate), rank: Number(m.rank ?? 100), skills: x.skills ?? [], salaried: !!x.salaried },
   };
 }
 

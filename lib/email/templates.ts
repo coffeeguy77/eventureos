@@ -123,3 +123,12 @@ export function wholesaleOrderEmail(o: { businessName: string; customerName: str
   const text = `${paragraphs.join("\n\n")}\n\nOrder again: ${o.url}`;
   return { subject, html, text };
 }
+
+/** To kitchen staff: catering jobs that are new, changed or cancelled (one block of lines per job). */
+export function kitchenJobsEmail(o: { businessName: string; firstName: string; subject: string; blocks: string[][]; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = [`Hi ${o.firstName},`, "Here's what's new or changed in catering:", ...o.blocks.map((b) => b.filter(Boolean).join(" · "))];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: o.subject, paragraphs,
+    button: { label: "Open the Kitchen tab", url: o.url }, footer: `Sent by ${o.businessName} because you're set up as kitchen staff.` });
+  const text = `Hi ${o.firstName},\n\nHere's what's new or changed in catering:\n\n${o.blocks.map((b) => b.filter(Boolean).join("\n")).join("\n\n")}\n\nOpen the Kitchen tab: ${o.url}`;
+  return { subject: o.subject, html, text };
+}

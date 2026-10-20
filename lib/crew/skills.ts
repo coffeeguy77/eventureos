@@ -4,10 +4,11 @@
  */
 
 export const STAFF_SKILLS = [
-  { key: "coffee_cart", label: "Coffee cart" },
-  { key: "coffee_van", label: "Coffee van" },
+  { key: "coffee_cart", label: "Barista — coffee cart", short: "Coffee cart" },
+  { key: "coffee_van", label: "Barista — coffee van", short: "Coffee van" },
   { key: "equipment", label: "Equipment hire" },
-  { key: "catering", label: "Catering" },
+  { key: "catering", label: "Catering service (serving at events)", short: "Catering" },
+  { key: "kitchen", label: "Kitchen / chef — gets confirmed catering jobs, recipes and stock in the staff app", short: "Kitchen" },
   { key: "driver", label: "Licence — can drive the van", short: "Licence" },
   { key: "roster", label: "Rosters / office only — not event staff", short: "Rosters only" },
 ] as const;
@@ -21,6 +22,9 @@ export const skillLabel = (k: string) => {
   const s = STAFF_SKILLS.find((x) => x.key === k) as { label: string; short?: string } | undefined;
   return s ? s.short ?? s.label : k;
 };
+
+/** Kitchen people (the chef) get catering jobs sent to them and the Kitchen tab in the staff app. */
+export const isKitchen = (skills: readonly string[] | null | undefined) => !!skills?.includes("kitchen");
 
 /** Rostering / office people are never counted as people working the job. */
 export const isRosterOnly = (skills: readonly string[] | null | undefined) => !!skills?.includes("roster");
