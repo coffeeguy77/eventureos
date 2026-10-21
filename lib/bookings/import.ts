@@ -266,3 +266,28 @@ export async function importBooklyCustomers(db: SupabaseClient, orgId: string, l
   }
   return out;
 }
+
+/* ------------------------------------------------------------------ ClassBento (read from its "New booking" emails) */
+
+/**
+ * ClassBento bookings, read from its emails. The course is found by the listing title (a course's external names can
+ * include "classbento:<listing title>"), else by name, else a hidden course is made for the office to sort out.
+ * ClassBento's order number is the booking's id, so reading the same email again changes nothing.
+ */
+export async function importClassBentoBookings(db: SupabaseClient, orgId: string, list: (import("./classbento").ClassBentoBooking & { sentAt: string })[]) {
+  const c = await loadCtx(db, orgId);
+  const rows: Row[] = list.map((b) => {
+    const startsAt = zonedTimeUTC(b.date, b.start, c.tz);
+    const endsAt = b.end ? zonedTimeUTC(b.date, b.end, c.tz) : null;
+    const mins = endsAt ? Math.round((Date.parse(endsAt) - Date.parse(startsAt)) / 60000) : null;
+    const notes = [`ClassBento order ${b.order}`, b.bookedBy ? `gift — booked by ${b.bookedBy}` : null, b.payout != null ? `ClassBento pays $${b.payout}` : null].filter(Boolean).join(" · ");
+    return {
+      externalRef: `classbento:${b.order}`, source: "classbento" as const, courseKey: `classbento:${b.listing.toLowerCase()}`, courseTitle: b.listing,
+      serviceDuration: mins && mins > 0 ? mins * 60 : null, startsAt, endsAt: endsAt && mins && mins > 0 ? endsAt : null, seats: b.guests,
+      status: mapStatus(null, Date.parse(endsAt ?? startsAt) < Date.now()), name: b.name, email: b.email, phone: b.phone, notes, paid: b.payout ?? 0, createdAt: b.sentAt,
+    };
+  });
+  const r = await upsertRows(c, rows);
+  await finish(c);
+  return r;
+}

@@ -113,6 +113,13 @@ export async function GET(req: NextRequest) {
     shopEmails = await runShopEmailImports(db);
   } catch (e) { shopEmails = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // ClassBento bookings from its "New booking" emails — only businesses that switched it on
+  let classbento: unknown = null;
+  if (providers.includes("gmail" as LiveProviderId)) try {
+    const { runClassBentoImports } = await import("@/lib/bookings/classbento-email");
+    classbento = await runClassBentoImports(db);
+  } catch (e) { classbento = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Kitchen staff: email them confirmed catering jobs that are new, changed or cancelled (only businesses with someone ticked "Kitchen")
   let kitchen: unknown = null;
   try {
@@ -140,5 +147,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }
