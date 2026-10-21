@@ -11,7 +11,7 @@ export const metadata = { title: "Certificate", robots: { index: false, follow: 
 export default async function Certificate({ params }: { params: Promise<{ org: string; level: string }> }) {
   const { org: slug, level: key } = await params;
   const { org, me, state, c } = await academy(slug);
-  if (!me || !state) redirect(`/academy/${slug}#sign-in`);
+  if (!me || !state) redirect(`/academy/${slug}?signin=1#sign-in`);
   const level = c.levels.find((l) => l.key === key);
   if (!level || !level.certificate_title || !state.badges.has(`level-${level.key}`)) notFound();
   const { data: aw } = await createServiceClient().from("learn_badge_awards").select("awarded_at").eq("organisation_id", org.id).eq("student_id", me.id).eq("badge_key", `level-${level.key}`).maybeSingle();

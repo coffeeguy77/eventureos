@@ -16,7 +16,7 @@ export default async function QuizPage({ params }: { params: Promise<{ org: stri
   if (!ready || (!org.learn.enabled && !state?.live)) return <AcademyShell org={org} tab="course" signedIn={!!me}><NotReady org={org} /></AcademyShell>;
   const m = c.modules.find((x) => x.id === id);
   if (!m) notFound();
-  if (!me) redirect(`/academy/${org.slug}#sign-in`);
+  if (!me) redirect(`/academy/${org.slug}?signin=1#sign-in`);
   const level = c.levels.find((l) => l.id === m.level_id)!;
   const base = `/academy/${org.slug}`;
   if (!canOpenLesson(c, state, m.id) || !levelOpen(level, state?.learner.xp ?? 0)) return <AcademyShell org={org} tab="course" signedIn streak={state?.learner.streak_days}><Locked org={org} what="This quiz" /></AcademyShell>;

@@ -53,7 +53,7 @@ export default async function ModulePage({ params }: { params: Promise<{ org: st
             <p className="mt-1 text-[0.875rem] text-ink-muted">{qs.length} questions from this module. Score 80% to master it{m.xp_reward ? ` and earn ${m.xp_reward} XP` : ""}.</p>
             {mastered ? <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[0.875rem] font-medium text-emerald-800">Mastered ✓</p> : null}
             {state ? <Link href={`${base}/quiz/${m.id}`} className={`${btn} mt-4 w-full`}>{mastered ? "Take it again" : "Start the quiz"}</Link>
-              : <Link href={`${base}#sign-in`} className={`${btn} mt-4 w-full`}>Sign in to take it</Link>}
+              : <Link href={`${base}?signin=1#sign-in`} className={`${btn} mt-4 w-full`}>Sign in to take it</Link>}
           </aside>
         )}
       </div>

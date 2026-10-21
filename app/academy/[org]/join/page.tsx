@@ -29,7 +29,7 @@ export default async function Join({ params, searchParams }: { params: Promise<{
         </div>
         {sp.cancelled && <p className="rounded-xl bg-amber-50 px-4 py-3 text-[0.9063rem] text-amber-900">Payment cancelled — nothing was charged.</p>}
         {live && <p className="rounded-xl bg-emerald-50 px-4 py-3 text-[0.9063rem] text-emerald-900">You already have access{live.ends_at ? ` until ${new Date(live.ends_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: org.timezone })}` : ""}. Buying again adds time after that date.</p>}
-        {!me && org.learn.plans.with_course && <p className="rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted">Booked on one of our barista courses? <Link href={`/academy/${org.slug}#sign-in`} className="font-semibold text-[var(--b)]">Sign in first</Link> to get the course price ({money(org.learn.prices.with_course, org.currency)}).</p>}
+        {!me && org.learn.plans.with_course && <p className="rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink-muted">Booked on one of our barista courses? <Link href={`/academy/${org.slug}?signin=1#sign-in`} className="font-semibold text-[var(--b)]">Sign in first</Link> to get the course price ({money(org.learn.prices.with_course, org.currency)}).</p>}
         <section className={card}>
           {plans.length ? <JoinForm slug={org.slug} plans={plans} initial={initial} signedIn={!!me} /> : <p className="text-ink-muted">No plans are available right now.</p>}
         </section>

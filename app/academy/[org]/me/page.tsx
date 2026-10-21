@@ -13,7 +13,7 @@ export const metadata = { title: "My account", robots: { index: false, follow: f
 
 export default async function Me({ params }: { params: Promise<{ org: string }> }) {
   const { org, me, state } = await academy((await params).org);
-  if (!me || !state) redirect(`/academy/${org.slug}#sign-in`);
+  if (!me || !state) redirect(`/academy/${org.slug}?signin=1#sign-in`);
   const d = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: org.timezone }) : "—");
   const live = state.live;
   const history = state.access.filter((a) => (a.status !== "pending" && a.status !== "cancelled") || !!a.cancelled_at);

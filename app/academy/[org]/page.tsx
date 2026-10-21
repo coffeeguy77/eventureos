@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
   return org ? { title: { absolute: `${org.learn.name} — ${org.name}` }, description: org.learn.tagline } : { title: "Online course" };
 }
 
-export default async function AcademyHome({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ welcome?: string }> }) {
+export default async function AcademyHome({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ welcome?: string; signin?: string }> }) {
   const { org: slug } = await params;
   const sp = await searchParams;
   const { org, me, state, c, ready } = await academy(slug);
@@ -38,7 +38,7 @@ export default async function AcademyHome({ params, searchParams }: { params: Pr
     const levels = courseOrder(c).levels.map((l) => ({ id: l.id, key: l.key, number: l.number, title: l.title, description: l.description ?? null }));
     return (
       <AcademyShell org={org} tab="home" signedIn={false} bare>
-        <AcademySales org={org} counts={counts} levels={levels} freeLesson={firstFree?.id ?? null} />
+        <AcademySales org={org} counts={counts} levels={levels} freeLesson={firstFree?.id ?? null} signIn={!!sp.signin} />
       </AcademyShell>
     );
   }

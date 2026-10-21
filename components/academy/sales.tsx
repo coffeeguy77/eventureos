@@ -6,21 +6,23 @@ import {
 import { money } from "@/lib/format";
 import { priceStory } from "@/lib/learn/core";
 import type { LearnOrg } from "@/lib/learn/server";
-import { WRAP } from "@/components/shop/frame";
 import { LearnLogin } from "./forms";
 
 type Level = { id: string; key: string; number: number; title: string; description: string | null };
 
 const pk = "text-[var(--pk)]";
-const btnPk = "shop-btn inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[var(--pk)] px-7 text-[0.9375rem] font-semibold text-white shadow-[0_14px_28px_-16px_var(--pk)] hover:brightness-105";
-const btnLine = "shop-btn inline-flex h-12 items-center justify-center gap-2 rounded-full border-[1.5px] border-[#1F1B19] bg-white/70 px-7 text-[0.9375rem] font-semibold text-[#1F1B19] hover:bg-white";
+const btnPk = "shop-btn inline-flex h-[52px] items-center justify-center gap-2 rounded-full bg-[var(--pk)] px-7 text-[0.9375rem] font-semibold text-white shadow-[0_14px_28px_-16px_var(--pk)] hover:brightness-105";
+const btnLine = "shop-btn inline-flex h-[52px] items-center justify-center gap-2 rounded-full border border-[#1F1B19] bg-white/70 px-7 text-[0.9375rem] font-semibold text-[#1F1B19] hover:bg-white";
 const eyebrow = "text-[0.8125rem] font-semibold uppercase tracking-[0.16em] text-[var(--pk)]";
-const h2 = "shop-serif text-[2rem] font-medium leading-[1.08] text-[#151312] sm:text-[2.625rem]";
+const h2 = "shop-serif text-[2.125rem] font-medium leading-[1.06] text-[#151312] sm:text-[2.875rem]";
+const NARROW = "mx-auto w-full max-w-[1060px] px-5 sm:px-6";
+const MID = "mx-auto w-full max-w-[1200px] px-5 sm:px-6";
 const muted = "text-[#5E5853]";
 const LEVEL_ICONS = [Coffee, Gauge, Milk, Leaf, Flame, Star, Briefcase, Home, Settings2];
 
 /** The public sales page for the online course (people who aren't signed in). Every number comes from the course and the prices. */
-export function AcademySales({ org, counts, levels, freeLesson }: {
+export function AcademySales({ org, counts, levels, freeLesson, signIn }: {
+  /** "Sign in" was clicked — show the sign-in box */ signIn?: boolean;
   org: LearnOrg; counts: { lessons: number; modules: number; levels: number; quizzes: number }; levels: Level[]; freeLesson: string | null;
 }) {
   const s = org.learn, st = priceStory(s);
@@ -44,43 +46,54 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
 
   return (
     <div className="text-[#151312]">
-      {/* Hero */}
+      {/* Hero: text on the left, the photo bleeding off the right edge */}
       <section className="relative overflow-hidden">
-        <div className={`${WRAP} grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-16`}>
-          <div className="relative z-10">
+        {s.heroImage && (
+          <div className="relative h-[280px] sm:h-[380px] lg:absolute lg:inset-y-0 lg:right-0 lg:h-auto lg:w-[56%]">
+            <img src={s.heroImage} alt="" className="h-full w-full object-cover object-[35%_center]" />
+            <div className="absolute inset-y-0 left-0 hidden w-40 bg-gradient-to-r from-[#FCFAF7] to-transparent lg:block" />
+          </div>
+        )}
+        <div className="relative mx-auto w-full max-w-[1240px] px-5 sm:px-6">
+          <div className={`py-10 lg:min-h-[640px] lg:max-w-[520px] lg:py-[110px] ${s.heroImage ? "" : "lg:max-w-[720px]"}`}>
             <p className={eyebrow}>{s.name}</p>
-            <h1 className="shop-serif mt-3 text-[2.75rem] font-medium leading-[1.02] sm:text-[3.75rem]">
+            <h1 className="shop-serif mt-4 text-[2.75rem] font-medium leading-[1.04] tracking-[-0.02em] sm:text-[4rem]">
               Learn to be a barista.<br /><span className={pk}>From anywhere.</span>
             </h1>
-            <p className={`mt-5 max-w-[460px] text-[1.0625rem] leading-relaxed ${muted}`}>Build your skills, grow your confidence and make better coffee. Learn online, at your own pace.</p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              {sell && <Link href={`${base}/join`} className={btnPk} data-track="Academy: start learning (hero)">Start learning<ArrowRight className="h-4 w-4" /></Link>}
-              {freeLesson && <Link href={`${base}/lesson/${freeLesson}`} className={btnLine} data-track="Academy: free lesson (hero)">Try a free lesson</Link>}
+            <p className={`mt-5 max-w-[430px] text-[1.125rem] leading-[1.6] text-[#2B2522]`}>Build your skills, grow your confidence and make better coffee. Learn online, at your own pace.</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              {sell && <Link href={`${base}/join`} className={`${btnPk} px-8`} data-track="Academy: start learning (hero)">Start learning<ArrowRight className="h-4 w-4" /></Link>}
+              {freeLesson && <Link href={`${base}/lesson/${freeLesson}`} className={`${btnLine} px-8`} data-track="Academy: free lesson (hero)">Try a free lesson</Link>}
             </div>
-            <ul className="mt-9 grid max-w-[480px] grid-cols-2 gap-5 sm:grid-cols-4">
+            <ul className="mt-10 grid max-w-[460px] grid-cols-4 gap-3">
               {[
                 { Icon: BookOpen, t: `${counts.lessons} lessons` },
                 { Icon: BarChart3, t: `${counts.levels} learning levels` },
                 ...(s.ai.enabled ? [{ Icon: Bot, t: "AI coffee coach" }] : [{ Icon: Sparkles, t: `${counts.quizzes} knowledge checks` }]),
                 { Icon: Globe, t: "Learn at your pace" },
               ].map(({ Icon, t }) => (
-                <li key={t} className="text-center sm:text-left"><Icon className={`mx-auto h-7 w-7 sm:mx-0 ${pk}`} strokeWidth={1.6} /><p className="mt-2 text-[0.8125rem] font-medium leading-snug text-[#3A3431]">{t}</p></li>
+                <li key={t} className="text-center"><Icon className={`mx-auto h-9 w-9 ${pk}`} strokeWidth={1.5} /><p className="mx-auto mt-2 max-w-[90px] text-[0.8125rem] leading-snug text-[#2B2522]">{t}</p></li>
               ))}
             </ul>
           </div>
-          <div className="relative">
-            {s.heroImage
-              ? <img src={s.heroImage} alt="" className="aspect-[16/11] w-full rounded-[28px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.6)] lg:aspect-[4/3.2]" />
-              : <div className="grid aspect-[16/11] w-full place-items-center rounded-[28px] bg-[color-mix(in_srgb,var(--pk)_10%,white)]"><Coffee className={`h-20 w-20 ${pk}`} strokeWidth={1.2} /></div>}
-            {s.logo && <img src={s.logo} alt={s.name} className="absolute -bottom-6 -left-4 h-28 w-28 object-contain drop-shadow-[0_18px_24px_rgba(40,20,10,.35)] sm:h-36 sm:w-36" />}
+        </div>
+      </section>
+
+      {/* Sign in — opens from "Sign in" in the menu (#sign-in) */}
+      <section id="sign-in" className={signIn ? "scroll-mt-28" : "hidden scroll-mt-28 target:block"}>
+        <div className="mx-auto max-w-[520px] px-5 pb-6 pt-2">
+          <div className="rounded-xl bg-white p-6 ring-1 ring-[#EDE3DB]">
+            <p className="shop-serif text-[1.5rem] font-medium">Sign in</p>
+            <p className={`mb-4 mt-1 text-[0.875rem] ${muted}`}>Joined already, or booked a class with us? Use the same email.</p>
+            <LearnLogin slug={org.slug} />
           </div>
         </div>
       </section>
 
       {/* Add-on with a hands-on class */}
       {addon && (
-        <div className={WRAP}>
-          <Link href={`/${org.slug}`} data-track="Academy: add-on banner" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-5 py-4 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)] hover:brightness-[1.02]">
+        <div className={`${MID} pt-6`}>
+          <Link href={`/${org.slug}`} data-track="Academy: add-on banner" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-5 py-4 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)] hover:brightness-[1.02]">
             <GraduationCap className={`h-6 w-6 shrink-0 ${pk}`} />
             <p className="shop-serif text-[1.1875rem] font-medium">Taking a hands-on class? Add online training for {st.courseSavePct}% off.</p>
             <p className={`text-[0.8125rem] ${muted}`}>{s.accessMonths} months for {$(s.prices.with_course)} with an eligible course.</p>
@@ -90,13 +103,13 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
       )}
 
       {/* Journey */}
-      <section className={`${WRAP} py-14 sm:py-20`}>
+      <section className={`${NARROW} py-16 sm:py-[72px]`}>
         <p className={eyebrow}>Your coffee journey</p>
         <h2 className={`${h2} mt-2`}>Learn it. Practise it. Pour it.</h2>
         <div className="mt-8 grid gap-5 md:grid-cols-3">
           {journey.map(({ Icon, title, text, cta, href }) => (
-            <Link key={title} href={href} className="shop-card flex flex-col overflow-hidden rounded-[22px] bg-white ring-1 ring-[#EDE3DB]">
-              <div className="grid h-40 place-items-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,#FFF6F1),#F6EDE6)]"><Icon className={`h-14 w-14 ${pk}`} strokeWidth={1.3} /></div>
+            <Link key={title} href={href} className="shop-card flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_10px_30px_-24px_rgba(60,30,20,.45)] ring-1 ring-[#EFE6DF]">
+              <div className="grid h-[190px] place-items-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,#FFF6F1),#F6EDE6)]"><Icon className={`h-14 w-14 ${pk}`} strokeWidth={1.3} /></div>
               <div className="flex flex-1 flex-col p-5">
                 <p className="shop-serif text-[1.375rem] font-medium">{title}</p>
                 <p className={`mt-2 flex-1 text-[0.9063rem] leading-relaxed ${muted}`}>{text}</p>
@@ -109,15 +122,15 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
 
       {/* AI coach */}
       {s.ai.enabled && (
-        <section className="bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)] py-14 sm:py-20">
-          <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
+        <section className="bg-[color-mix(in_srgb,var(--pk)_7%,#FFF8F5)] py-16 sm:py-[72px]">
+          <div className={`${NARROW} grid items-center gap-10 lg:grid-cols-[1fr_470px]`}>
             <div>
               <p className={eyebrow}>Meet Bean Coach</p>
               <h2 className={`${h2} mt-2`}>A little guidance.<br />A better next cup.</h2>
               <p className={`mt-4 max-w-[440px] text-[1rem] leading-relaxed ${muted}`}>Ask questions, get personalised advice and even upload a photo of your latte art for feedback from our AI coffee coach.</p>
               <Link href={`${base}/coach`} className={`${btnPk} mt-6`}>Meet your AI coach<ArrowRight className="h-4 w-4" /></Link>
             </div>
-            <div className="rounded-[24px] bg-white p-5 shadow-[0_30px_60px_-40px_rgba(80,40,30,.45)] ring-1 ring-[#EDE3DB] sm:p-6" aria-label="Example of the AI coach's feedback">
+            <div className="rounded-xl bg-white p-5 shadow-[0_30px_60px_-40px_rgba(80,40,30,.45)] ring-1 ring-[#EDE3DB] sm:p-6" aria-label="Example of the AI coach's feedback">
               <span className="rounded-full bg-[#F4ECE6] px-3 py-1 text-[0.75rem] font-semibold text-[#5E5853]">Example AI feedback</span>
               <div className="mt-4 flex items-start justify-end gap-3">
                 <div className="grid h-24 w-28 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,#C8946A,#7A4A2E)]"><Coffee className="h-10 w-10 text-white/90" strokeWidth={1.4} /></div>
@@ -134,15 +147,15 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
       )}
 
       {/* Curriculum */}
-      <section className={`${WRAP} py-14 sm:py-20`}>
+      <section className={`${NARROW} py-16 sm:py-[72px]`}>
         <p className={eyebrow}>Our curriculum</p>
         <h2 className={`${h2} mt-2`}>From your first shot to your next level.</h2>
         <p className={`mt-3 text-[0.9375rem] ${muted}`}>{counts.modules} modules. {counts.lessons} lessons. Knowledge checks as you go.</p>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {levels.map((l, i) => {
             const Icon = LEVEL_ICONS[i % LEVEL_ICONS.length];
             return (
-              <Link key={l.id} href={levelHref(l)} className="shop-card flex items-start gap-4 rounded-[18px] bg-white p-5 ring-1 ring-[#EDE3DB]">
+              <Link key={l.id} href={levelHref(l)} className="shop-card flex items-start gap-4 rounded-lg bg-white px-5 py-[18px] ring-1 ring-[#EFE6DF]">
                 <Icon className={`mt-0.5 h-8 w-8 shrink-0 ${pk}`} strokeWidth={1.4} />
                 <span><span className="shop-serif block text-[1.1875rem] font-medium leading-snug">{l.title}</span>{l.description && <span className={`mt-1 block text-[0.8438rem] leading-relaxed ${muted}`}>{l.description}</span>}</span>
               </Link>
@@ -152,8 +165,8 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
       </section>
 
       {/* Roast simulator */}
-      <section className="bg-[#1B1514] py-14 text-white sm:py-20">
-        <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
+      <section className="bg-[radial-gradient(ellipse_at_20%_30%,#3A2A24,#1B1514_60%)] py-16 text-white sm:py-[64px]">
+        <div className={`${NARROW} grid items-center gap-12 lg:grid-cols-[440px_1fr]`}>
           <RoastPreview />
           <div>
             <p className={eyebrow}>Interactive roast simulator</p>
@@ -169,7 +182,7 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
 
       {/* Pricing */}
       {sell && (s.plans.yearly || s.plans.monthly) && (
-        <section className={`${WRAP} py-14 sm:py-20`} id="pricing">
+        <section className={`${MID} py-16 sm:py-[72px]`} id="pricing">
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
             <div>
               <p className={eyebrow}>Pricing</p>
@@ -177,7 +190,7 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {s.plans.yearly && (
-                <div className="relative flex flex-col rounded-[20px] bg-white p-6 ring-1 ring-[#EDE3DB]">
+                <div className="relative flex flex-col rounded-xl bg-white p-6 ring-1 ring-[#EFE6DF]">
                   {st.monthsFree > 0 && <span className="absolute right-5 top-5 rounded-full bg-[var(--pk)] px-3 py-1 text-[0.6875rem] font-bold text-white">Best value</span>}
                   <p className="font-semibold">{s.accessMonths === 12 ? "Annual" : `${s.accessMonths} months`}</p>
                   <p className="shop-serif mt-2 text-[2rem] font-medium">{$(s.prices.yearly)}<span className={`text-[0.9375rem] ${muted}`}> / {s.accessMonths === 12 ? "year" : `${s.accessMonths} months`}</span></p>
@@ -186,7 +199,7 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
                 </div>
               )}
               {s.plans.monthly && (
-                <div className="flex flex-col rounded-[20px] bg-white p-6 ring-1 ring-[#EDE3DB]">
+                <div className="flex flex-col rounded-xl bg-white p-6 ring-1 ring-[#EFE6DF]">
                   <p className="font-semibold">Monthly</p>
                   <p className="shop-serif mt-2 text-[2rem] font-medium">{$(s.prices.monthly)}<span className={`text-[0.9375rem] ${muted}`}> / month</span></p>
                   <p className={`mt-2 flex-1 text-[0.875rem] ${muted}`}>Full access to all lessons, tools{s.ai.enabled ? " and your AI coffee coach" : ""}. Cancel any time.</p>
@@ -197,7 +210,7 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
           </div>
           {addon && (
             <>
-              <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-6 py-5 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)]">
+              <div className="mt-6 flex flex-wrap items-center gap-4 rounded-xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-6 py-5 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)]">
                 <GraduationCap className={`h-8 w-8 shrink-0 ${pk}`} strokeWidth={1.5} />
                 <div className="min-w-0 flex-1">
                   <p className="shop-serif text-[1.375rem] font-medium">Hands-on training. A year of learning.</p>
@@ -212,23 +225,18 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
       )}
 
       {/* FAQ + sign in */}
-      <section className={`${WRAP} grid gap-10 pb-16 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]`}>
+      <section className={`${MID} grid gap-10 pb-20 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]`}>
         <div>
           <p className={eyebrow}>FAQ</p>
           <h2 className={`${h2} mt-2`}>A few good questions.</h2>
         </div>
         <div className="space-y-3">
           {faqs.map((f) => (
-            <details key={f.q} className="group rounded-2xl bg-white px-5 ring-1 ring-[#EDE3DB]">
+            <details key={f.q} className="group rounded-lg bg-white px-5 ring-1 ring-[#EFE6DF]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 font-medium">{f.q}<ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" /></summary>
               <p className={`pb-4 text-[0.9375rem] leading-relaxed ${muted}`}>{f.a}</p>
             </details>
           ))}
-          <div className="rounded-2xl bg-white p-5 ring-1 ring-[#EDE3DB]" id="sign-in">
-            <p className="font-semibold">Already joined, or booked a class with us? Sign in</p>
-            <p className={`mb-4 mt-1 text-[0.875rem] ${muted}`}>Use the same email you joined or booked with.</p>
-            <LearnLogin slug={org.slug} />
-          </div>
         </div>
       </section>
 
@@ -236,9 +244,8 @@ export function AcademySales({ org, counts, levels, freeLesson }: {
       <section className="relative overflow-hidden bg-[#1F3A2E] text-white">
         <Leaf aria-hidden className="pointer-events-none absolute -left-10 -top-6 h-48 w-48 rotate-[-25deg] text-white/[0.06]" strokeWidth={0.8} />
         <Leaf aria-hidden className="pointer-events-none absolute -bottom-10 right-10 h-56 w-56 rotate-[35deg] text-white/[0.06]" strokeWidth={0.8} />
-        <div className={`${WRAP} relative flex flex-wrap items-center justify-between gap-6 py-12`}>
+        <div className={`${MID} relative flex flex-wrap items-center justify-between gap-6 py-14`}>
           <div className="flex items-center gap-5">
-            {s.logo && <img src={s.logo} alt="" className="hidden h-20 w-20 object-contain sm:block" />}
             <div>
               <h2 className="shop-serif text-[2rem] font-medium leading-tight sm:text-[2.5rem]">Your barista journey<br />starts here.</h2>
               <p className="mt-2 text-[0.9375rem] text-white/75">Learn at your own pace, with practical skills and expert guidance.</p>
