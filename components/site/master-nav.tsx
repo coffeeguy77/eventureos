@@ -6,6 +6,7 @@ import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
 import { readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
+import { readLearnSettings } from "@/lib/learn/core";
 import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
@@ -22,7 +23,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const base = org.slug;
   const items: { key: SiteSection; href: string; on: boolean }[] = [
     { key: "events", href: `/hire/${base}`, on: readEvents(org.rawSettings).enabled },
-    { key: "lessons", href: `/${base}`, on: org.settings.enabled },
+    { key: "lessons", href: org.settings.enabled ? `/${base}` : `/academy/${base}`, on: org.settings.enabled || readLearnSettings(org.rawSettings).enabled },
     { key: "jobs", href: `/jobs/${base}`, on: readJobSettings(org.rawSettings, org.name).enabled },
     { key: "shop", href: `/shop/${base}`, on: readShop(org.rawSettings).enabled },
     { key: "cafe", href: `/cafe/${base}`, on: false },
@@ -38,6 +39,12 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const giftItem = items.find((i) => i.key === "gifts")!;
   giftItem.on = gifts.length > 0;
   if (gifts.length === 1) giftItem.href = gifts[0].href;
+  // Barista lessons: the hands-on classes and, when it's selling, the online course
+  const learn = readLearnSettings(org.rawSettings);
+  const lessonLinks = [
+    org.settings.enabled ? { kind: "lessons" as const, href: `/${base}`, label: "Hands-on classes", note: "Courses & upcoming dates" } : null,
+    learn.enabled ? { kind: "academy" as const, href: `/academy/${base}`, label: learn.name, note: "Learn online, at your own pace" } : null,
+  ].filter((x): x is NonNullable<typeof x> => !!x);
   // Café: the café page, plus ordering, table bookings, roasting club and wholesale when they're on.
   const cafe = readCafe(org.rawSettings);
   const cp = cafePages(cafe);
@@ -52,7 +59,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const shown = items.filter((i) => i.on);
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
   const mobile: MobileItem[] = shown.map((i) => ({ key: i.key, label: labels[i.key], href: i.href, note: NOTE[i.key],
-    children: i.key === "gifts" && gifts.length > 1 ? gifts : i.key === "cafe" && cafeLinks.length > 1 ? cafeLinks : undefined }));
+    children: i.key === "gifts" && gifts.length > 1 ? gifts : i.key === "lessons" && lessonLinks.length > 1 ? lessonLinks : i.key === "cafe" && cafeLinks.length > 1 ? cafeLinks : undefined }));
   return (
     <>
     <div className={`relative z-50 border-b ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav>
@@ -65,8 +72,8 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
           {shown.map((i, n) => (
             <span key={i.key} className="flex shrink-0 items-center">
               {n > 0 && <span aria-hidden className={`mx-1 hidden h-4 w-px sm:block ${light ? "bg-[#E2D8D0]" : "bg-white/20"}`} />}
-              {(i.key === "gifts" && gifts.length > 1) || (i.key === "cafe" && cafeLinks.length > 1) ? (
-                <GiftMenu label={labels[i.key]} items={i.key === "gifts" ? gifts : cafeLinks} light={light} active={active === i.key} track={i.key === "gifts" ? "Gift menu" : "Café menu"}
+              {(i.key === "gifts" && gifts.length > 1) || (i.key === "cafe" && cafeLinks.length > 1) || (i.key === "lessons" && lessonLinks.length > 1) ? (
+                <GiftMenu label={labels[i.key]} items={i.key === "gifts" ? gifts : i.key === "lessons" ? lessonLinks : cafeLinks} light={light} active={active === i.key} track={i.key === "gifts" ? "Gift menu" : i.key === "lessons" ? "Lessons menu" : "Café menu"}
                   itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${active === i.key ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
               ) : (
               <Link href={i.href} aria-current={active === i.key ? "page" : undefined}

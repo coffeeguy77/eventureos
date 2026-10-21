@@ -1,0 +1,283 @@
+import "@fontsource-variable/newsreader/opsz.css";
+import Link from "next/link";
+import {
+  ArrowRight, BookOpen, Briefcase, ChevronDown, Coffee, Flame, Gauge, GraduationCap, Home, Leaf, Milk, Send, Settings2, Sparkles, Star, Store, Globe, BarChart3, Bot,
+} from "lucide-react";
+import { money } from "@/lib/format";
+import { priceStory } from "@/lib/learn/core";
+import type { LearnOrg } from "@/lib/learn/server";
+import { WRAP } from "@/components/shop/frame";
+import { LearnLogin } from "./forms";
+
+type Level = { id: string; key: string; number: number; title: string; description: string | null };
+
+const pk = "text-[var(--pk)]";
+const btnPk = "shop-btn inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[var(--pk)] px-7 text-[0.9375rem] font-semibold text-white shadow-[0_14px_28px_-16px_var(--pk)] hover:brightness-105";
+const btnLine = "shop-btn inline-flex h-12 items-center justify-center gap-2 rounded-full border-[1.5px] border-[#1F1B19] bg-white/70 px-7 text-[0.9375rem] font-semibold text-[#1F1B19] hover:bg-white";
+const eyebrow = "text-[0.8125rem] font-semibold uppercase tracking-[0.16em] text-[var(--pk)]";
+const h2 = "shop-serif text-[2rem] font-medium leading-[1.08] text-[#151312] sm:text-[2.625rem]";
+const muted = "text-[#5E5853]";
+const LEVEL_ICONS = [Coffee, Gauge, Milk, Leaf, Flame, Star, Briefcase, Home, Settings2];
+
+/** The public sales page for the online course (people who aren't signed in). Every number comes from the course and the prices. */
+export function AcademySales({ org, counts, levels, freeLesson }: {
+  org: LearnOrg; counts: { lessons: number; modules: number; levels: number; quizzes: number }; levels: Level[]; freeLesson: string | null;
+}) {
+  const s = org.learn, st = priceStory(s);
+  const base = `/academy/${org.slug}`;
+  const $ = (n: number) => money(n, org.currency).replace(/\.00$/, "");
+  const sell = s.enabled;
+  const addon = sell && s.plans.with_course && st.courseSavePct > 0;
+  const find = (re: RegExp) => levels.find((l) => re.test(l.title));
+  const levelHref = (l: Level | undefined) => (l ? `${base}/course#level-${l.key}` : `${base}/course`);
+  const journey = [
+    { Icon: Home, title: "Better coffee at home", text: "Learn the skills to make café-quality coffee in your own kitchen, with clear, step-by-step lessons.", cta: "Explore home coffee", href: levelHref(find(/home/i)) },
+    { Icon: Store, title: "Build your café knowledge", text: "Develop the practical skills and theory used in professional cafés, from espresso to service.", cta: "Explore café skills", href: levelHref(find(/work|basics/i)) },
+    { Icon: Leaf, title: "Go deeper into coffee", text: "Explore origins, tasting, processing and roasting, and build a deeper understanding of what's in your cup.", cta: "Explore coffee knowledge", href: levelHref(find(/specialty|origin/i)) },
+  ];
+  const faqs = [
+    { q: "Can I learn from anywhere?", a: "Yes. Everything is online, so you can learn on your phone, tablet or computer, whenever it suits you." },
+    { q: "Do I need a coffee machine?", a: "Not to start. The lessons, knowledge checks and roast simulator all work without one. To practise your shots and pours you'll want a machine at home or at work." },
+    ...(freeLesson ? [{ q: "Can I try a lesson free?", a: "Yes — the first module is free. Start it now, no payment needed." }] : []),
+    ...(addon ? [{ q: "I'm booked on a hands-on class. Do I get a discount?", a: `Yes. Add ${s.accessMonths} months online for ${$(s.prices.with_course)} when you book an eligible class — ${st.courseSavePct}% off the yearly price. Already booked? Sign in with the email you booked with.` }] : []),
+  ];
+
+  return (
+    <div className="text-[#151312]">
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className={`${WRAP} grid items-center gap-8 py-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-12 lg:py-16`}>
+          <div className="relative z-10">
+            <p className={eyebrow}>{s.name}</p>
+            <h1 className="shop-serif mt-3 text-[2.75rem] font-medium leading-[1.02] sm:text-[3.75rem]">
+              Learn to be a barista.<br /><span className={pk}>From anywhere.</span>
+            </h1>
+            <p className={`mt-5 max-w-[460px] text-[1.0625rem] leading-relaxed ${muted}`}>Build your skills, grow your confidence and make better coffee. Learn online, at your own pace.</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              {sell && <Link href={`${base}/join`} className={btnPk} data-track="Academy: start learning (hero)">Start learning<ArrowRight className="h-4 w-4" /></Link>}
+              {freeLesson && <Link href={`${base}/lesson/${freeLesson}`} className={btnLine} data-track="Academy: free lesson (hero)">Try a free lesson</Link>}
+            </div>
+            <ul className="mt-9 grid max-w-[480px] grid-cols-2 gap-5 sm:grid-cols-4">
+              {[
+                { Icon: BookOpen, t: `${counts.lessons} lessons` },
+                { Icon: BarChart3, t: `${counts.levels} learning levels` },
+                ...(s.ai.enabled ? [{ Icon: Bot, t: "AI coffee coach" }] : [{ Icon: Sparkles, t: `${counts.quizzes} knowledge checks` }]),
+                { Icon: Globe, t: "Learn at your pace" },
+              ].map(({ Icon, t }) => (
+                <li key={t} className="text-center sm:text-left"><Icon className={`mx-auto h-7 w-7 sm:mx-0 ${pk}`} strokeWidth={1.6} /><p className="mt-2 text-[0.8125rem] font-medium leading-snug text-[#3A3431]">{t}</p></li>
+              ))}
+            </ul>
+          </div>
+          <div className="relative">
+            {s.heroImage
+              ? <img src={s.heroImage} alt="" className="aspect-[16/11] w-full rounded-[28px] object-cover shadow-[0_40px_80px_-50px_rgba(60,30,20,.6)] lg:aspect-[4/3.2]" />
+              : <div className="grid aspect-[16/11] w-full place-items-center rounded-[28px] bg-[color-mix(in_srgb,var(--pk)_10%,white)]"><Coffee className={`h-20 w-20 ${pk}`} strokeWidth={1.2} /></div>}
+            {s.logo && <img src={s.logo} alt={s.name} className="absolute -bottom-6 -left-4 h-28 w-28 object-contain drop-shadow-[0_18px_24px_rgba(40,20,10,.35)] sm:h-36 sm:w-36" />}
+          </div>
+        </div>
+      </section>
+
+      {/* Add-on with a hands-on class */}
+      {addon && (
+        <div className={WRAP}>
+          <Link href={`/${org.slug}`} data-track="Academy: add-on banner" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-5 py-4 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)] hover:brightness-[1.02]">
+            <GraduationCap className={`h-6 w-6 shrink-0 ${pk}`} />
+            <p className="shop-serif text-[1.1875rem] font-medium">Taking a hands-on class? Add online training for {st.courseSavePct}% off.</p>
+            <p className={`text-[0.8125rem] ${muted}`}>{s.accessMonths} months for {$(s.prices.with_course)} with an eligible course.</p>
+            <span className={`ml-auto inline-flex items-center gap-1 text-[0.875rem] font-semibold ${pk}`}>Explore classes<ArrowRight className="h-4 w-4" /></span>
+          </Link>
+        </div>
+      )}
+
+      {/* Journey */}
+      <section className={`${WRAP} py-14 sm:py-20`}>
+        <p className={eyebrow}>Your coffee journey</p>
+        <h2 className={`${h2} mt-2`}>Learn it. Practise it. Pour it.</h2>
+        <div className="mt-8 grid gap-5 md:grid-cols-3">
+          {journey.map(({ Icon, title, text, cta, href }) => (
+            <Link key={title} href={href} className="shop-card flex flex-col overflow-hidden rounded-[22px] bg-white ring-1 ring-[#EDE3DB]">
+              <div className="grid h-40 place-items-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,#FFF6F1),#F6EDE6)]"><Icon className={`h-14 w-14 ${pk}`} strokeWidth={1.3} /></div>
+              <div className="flex flex-1 flex-col p-5">
+                <p className="shop-serif text-[1.375rem] font-medium">{title}</p>
+                <p className={`mt-2 flex-1 text-[0.9063rem] leading-relaxed ${muted}`}>{text}</p>
+                <span className={`mt-4 inline-flex items-center gap-1 text-[0.875rem] font-semibold ${pk}`}>{cta}<ArrowRight className="h-4 w-4" /></span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* AI coach */}
+      {s.ai.enabled && (
+        <section className="bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)] py-14 sm:py-20">
+          <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
+            <div>
+              <p className={eyebrow}>Meet Bean Coach</p>
+              <h2 className={`${h2} mt-2`}>A little guidance.<br />A better next cup.</h2>
+              <p className={`mt-4 max-w-[440px] text-[1rem] leading-relaxed ${muted}`}>Ask questions, get personalised advice and even upload a photo of your latte art for feedback from our AI coffee coach.</p>
+              <Link href={`${base}/coach`} className={`${btnPk} mt-6`}>Meet your AI coach<ArrowRight className="h-4 w-4" /></Link>
+            </div>
+            <div className="rounded-[24px] bg-white p-5 shadow-[0_30px_60px_-40px_rgba(80,40,30,.45)] ring-1 ring-[#EDE3DB] sm:p-6" aria-label="Example of the AI coach's feedback">
+              <span className="rounded-full bg-[#F4ECE6] px-3 py-1 text-[0.75rem] font-semibold text-[#5E5853]">Example AI feedback</span>
+              <div className="mt-4 flex items-start justify-end gap-3">
+                <div className="grid h-24 w-28 shrink-0 place-items-center rounded-xl bg-[linear-gradient(135deg,#C8946A,#7A4A2E)]"><Coffee className="h-10 w-10 text-white/90" strokeWidth={1.4} /></div>
+                <p className="rounded-2xl rounded-tr-sm bg-[#F4ECE6] px-4 py-3 text-[0.875rem]">Can you give me some feedback on my latte art?</p>
+              </div>
+              <div className="mt-4 flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--pk)_12%,white)]">{s.logo ? <img src={s.logo} alt="" className="h-8 w-8 object-contain" /> : <Bot className={`h-5 w-5 ${pk}`} />}</span>
+                <p className="rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-[0.875rem] leading-relaxed ring-1 ring-[#EDE3DB]">Nice pour! Your milk texture looks smooth and glossy. Try pouring a little slower at the end to get a more defined heart, and keep the cup slightly tilted for longer.</p>
+              </div>
+              <Link href={`${base}/coach`} className="mt-5 flex h-11 items-center justify-between rounded-xl px-4 text-[0.875rem] text-[#A39A93] ring-1 ring-[#EDE3DB] hover:ring-[var(--pk)]">Ask a question…<Send className={`h-4 w-4 ${pk}`} /></Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Curriculum */}
+      <section className={`${WRAP} py-14 sm:py-20`}>
+        <p className={eyebrow}>Our curriculum</p>
+        <h2 className={`${h2} mt-2`}>From your first shot to your next level.</h2>
+        <p className={`mt-3 text-[0.9375rem] ${muted}`}>{counts.modules} modules. {counts.lessons} lessons. Knowledge checks as you go.</p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {levels.map((l, i) => {
+            const Icon = LEVEL_ICONS[i % LEVEL_ICONS.length];
+            return (
+              <Link key={l.id} href={levelHref(l)} className="shop-card flex items-start gap-4 rounded-[18px] bg-white p-5 ring-1 ring-[#EDE3DB]">
+                <Icon className={`mt-0.5 h-8 w-8 shrink-0 ${pk}`} strokeWidth={1.4} />
+                <span><span className="shop-serif block text-[1.1875rem] font-medium leading-snug">{l.title}</span>{l.description && <span className={`mt-1 block text-[0.8438rem] leading-relaxed ${muted}`}>{l.description}</span>}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Roast simulator */}
+      <section className="bg-[#1B1514] py-14 text-white sm:py-20">
+        <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
+          <RoastPreview />
+          <div>
+            <p className={eyebrow}>Interactive roast simulator</p>
+            <h2 className="shop-serif mt-2 text-[2rem] font-medium leading-[1.08] sm:text-[2.625rem]">Explore roasting.<br />Without firing up a roaster.</h2>
+            <p className="mt-4 max-w-[460px] text-[1rem] leading-relaxed text-white/75">Learn how roasting works with our interactive simulator. Experiment with profiles, see how changes affect flavour, and build your understanding.</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href={`${base}/roast`} className={btnPk}>Try the roast simulator<ArrowRight className="h-4 w-4" /></Link>
+              <Link href={levelHref(find(/roast/i))} className="shop-btn inline-flex h-12 items-center rounded-full border-[1.5px] border-white/70 px-7 text-[0.9375rem] font-semibold text-white hover:bg-white/10">Learn more</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      {sell && (s.plans.yearly || s.plans.monthly) && (
+        <section className={`${WRAP} py-14 sm:py-20`} id="pricing">
+          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div>
+              <p className={eyebrow}>Pricing</p>
+              <h2 className={`${h2} mt-2`}>Great coffee knowledge.<br />On your terms.</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {s.plans.yearly && (
+                <div className="relative flex flex-col rounded-[20px] bg-white p-6 ring-1 ring-[#EDE3DB]">
+                  {st.monthsFree > 0 && <span className="absolute right-5 top-5 rounded-full bg-[var(--pk)] px-3 py-1 text-[0.6875rem] font-bold text-white">Best value</span>}
+                  <p className="font-semibold">{s.accessMonths === 12 ? "Annual" : `${s.accessMonths} months`}</p>
+                  <p className="shop-serif mt-2 text-[2rem] font-medium">{$(s.prices.yearly)}<span className={`text-[0.9375rem] ${muted}`}> / {s.accessMonths === 12 ? "year" : `${s.accessMonths} months`}</span></p>
+                  <p className={`mt-2 flex-1 text-[0.875rem] ${muted}`}>Full access to all lessons, tools{s.ai.enabled ? " and your AI coffee coach" : ""}.{st.monthsFree > 0 ? ` ${st.monthsFree} months free compared with monthly.` : ""}</p>
+                  <Link href={`${base}/join?plan=yearly`} className={`${btnPk} mt-5 w-full`}>Get {s.accessMonths === 12 ? "annual" : "full"} access<ArrowRight className="h-4 w-4" /></Link>
+                </div>
+              )}
+              {s.plans.monthly && (
+                <div className="flex flex-col rounded-[20px] bg-white p-6 ring-1 ring-[#EDE3DB]">
+                  <p className="font-semibold">Monthly</p>
+                  <p className="shop-serif mt-2 text-[2rem] font-medium">{$(s.prices.monthly)}<span className={`text-[0.9375rem] ${muted}`}> / month</span></p>
+                  <p className={`mt-2 flex-1 text-[0.875rem] ${muted}`}>Full access to all lessons, tools{s.ai.enabled ? " and your AI coffee coach" : ""}. Cancel any time.</p>
+                  <Link href={`${base}/join?plan=monthly`} className={`${btnLine} mt-5 w-full`}>Get monthly access<ArrowRight className="h-4 w-4" /></Link>
+                </div>
+              )}
+            </div>
+          </div>
+          {addon && (
+            <>
+              <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl bg-[color-mix(in_srgb,var(--pk)_8%,white)] px-6 py-5 ring-1 ring-[color-mix(in_srgb,var(--pk)_18%,white)]">
+                <GraduationCap className={`h-8 w-8 shrink-0 ${pk}`} strokeWidth={1.5} />
+                <div className="min-w-0 flex-1">
+                  <p className="shop-serif text-[1.375rem] font-medium">Hands-on training. A year of learning.</p>
+                  <p className={`text-[0.875rem] ${muted}`}>Add {s.accessMonths} months online for {$(s.prices.with_course)} — save {st.courseSavePct}% with an eligible barista class.</p>
+                </div>
+                <Link href={`/${org.slug}`} className={btnPk}>Book a class + save<ArrowRight className="h-4 w-4" /></Link>
+              </div>
+              <p className={`mt-3 text-center text-[0.75rem] ${muted}`}>Online access extra. Hands-on class priced separately.</p>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* FAQ + sign in */}
+      <section className={`${WRAP} grid gap-10 pb-16 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]`}>
+        <div>
+          <p className={eyebrow}>FAQ</p>
+          <h2 className={`${h2} mt-2`}>A few good questions.</h2>
+        </div>
+        <div className="space-y-3">
+          {faqs.map((f) => (
+            <details key={f.q} className="group rounded-2xl bg-white px-5 ring-1 ring-[#EDE3DB]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 font-medium">{f.q}<ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" /></summary>
+              <p className={`pb-4 text-[0.9375rem] leading-relaxed ${muted}`}>{f.a}</p>
+            </details>
+          ))}
+          <div className="rounded-2xl bg-white p-5 ring-1 ring-[#EDE3DB]" id="sign-in">
+            <p className="font-semibold">Already joined, or booked a class with us? Sign in</p>
+            <p className={`mb-4 mt-1 text-[0.875rem] ${muted}`}>Use the same email you joined or booked with.</p>
+            <LearnLogin slug={org.slug} />
+          </div>
+        </div>
+      </section>
+
+      {/* Closing band */}
+      <section className="relative overflow-hidden bg-[#1F3A2E] text-white">
+        <Leaf aria-hidden className="pointer-events-none absolute -left-10 -top-6 h-48 w-48 rotate-[-25deg] text-white/[0.06]" strokeWidth={0.8} />
+        <Leaf aria-hidden className="pointer-events-none absolute -bottom-10 right-10 h-56 w-56 rotate-[35deg] text-white/[0.06]" strokeWidth={0.8} />
+        <div className={`${WRAP} relative flex flex-wrap items-center justify-between gap-6 py-12`}>
+          <div className="flex items-center gap-5">
+            {s.logo && <img src={s.logo} alt="" className="hidden h-20 w-20 object-contain sm:block" />}
+            <div>
+              <h2 className="shop-serif text-[2rem] font-medium leading-tight sm:text-[2.5rem]">Your barista journey<br />starts here.</h2>
+              <p className="mt-2 text-[0.9375rem] text-white/75">Learn at your own pace, with practical skills and expert guidance.</p>
+            </div>
+          </div>
+          <Link href={sell ? `${base}/join` : freeLesson ? `${base}/lesson/${freeLesson}` : `${base}/course`} className={btnPk}>Start learning online<ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** A still picture of the roast simulator (the real one is interactive, one click away). */
+function RoastPreview() {
+  const row = (label: string, value: string, pct: number) => (
+    <div>
+      <div className="flex justify-between text-[0.6875rem] text-white/70"><span>{label}</span><span>{value}</span></div>
+      <div className="mt-1.5 h-1.5 rounded-full bg-white/15"><div className="relative h-1.5 rounded-full bg-[var(--pk)]" style={{ width: `${pct}%` }}><span className="absolute -right-1.5 -top-1 h-3.5 w-3.5 rounded-full bg-white" /></div></div>
+    </div>
+  );
+  return (
+    <div className="rounded-[20px] bg-[#231C1B] p-5 ring-1 ring-white/10" aria-hidden>
+      <p className="flex items-center gap-2 text-[0.875rem] font-semibold"><Flame className="h-4 w-4 text-[var(--pk)]" />Roast Simulator</p>
+      <div className="mt-4 grid gap-5 sm:grid-cols-[1fr_170px]">
+        <svg viewBox="0 0 300 180" className="w-full">
+          {[30, 70, 110, 150].map((y) => <line key={y} x1="28" x2="295" y1={y} y2={y} stroke="rgba(255,255,255,.08)" />)}
+          {["250", "200", "150", "100"].map((t, i) => <text key={t} x="0" y={34 + i * 40} fill="rgba(255,255,255,.5)" fontSize="10">{t}</text>)}
+          <path d="M30 60 C 45 150, 60 150, 80 120 S 150 70, 200 55 S 270 40, 295 36" fill="none" stroke="var(--pk)" strokeWidth="3" />
+          <path d="M30 150 C 70 130, 120 105, 170 92 S 260 78, 295 74" fill="none" stroke="#4EA3FF" strokeWidth="3" />
+          <text x="140" y="176" fill="rgba(255,255,255,.5)" fontSize="10">Time (min)</text>
+        </svg>
+        <div className="space-y-4 rounded-xl bg-white/5 p-4">
+          {row("Charge temp", "200 °C", 62)}
+          {row("Airflow", "60%", 60)}
+          {row("Drum speed", "7 rpm", 45)}
+          <p className="rounded-lg py-2 text-center text-[0.75rem] font-semibold ring-1 ring-white/25">Start roast</p>
+        </div>
+      </div>
+      <p className="mt-3 flex gap-4 text-[0.6875rem] text-white/60"><span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[var(--pk)]" />Bean temp</span><span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-[#4EA3FF]" />Environment</span></p>
+    </div>
+  );
+}

@@ -65,6 +65,8 @@ export function LearnSettingsForm({ initial, courses, currency }: { initial: Lea
         <div><Label htmlFor="l-name">Name</Label><Input id="l-name" value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} maxLength={80} /></div>
         <div><Label htmlFor="l-months" hint="for with-a-course and yearly">Months of access</Label><Input id="l-months" inputMode="numeric" value={String(s.accessMonths)} onChange={(e) => setS({ ...s, accessMonths: Number(e.target.value) || 12 })} /></div>
         <div className="sm:col-span-2"><Label htmlFor="l-tag">One-line description</Label><Input id="l-tag" value={s.tagline} onChange={(e) => setS({ ...s, tagline: e.target.value })} maxLength={240} /></div>
+        <div><Label htmlFor="l-hero" hint="https:// link to a photo">Sales page photo</Label><Input id="l-hero" value={s.heroImage ?? ""} onChange={(e) => setS({ ...s, heroImage: e.target.value || null })} maxLength={400} /></div>
+        <div><Label htmlFor="l-logo" hint="https:// link to a logo">Course logo</Label><Input id="l-logo" value={s.logo ?? ""} onChange={(e) => setS({ ...s, logo: e.target.value || null })} maxLength={400} /></div>
       </div>
       <div>
         <p className="mb-2 text-[0.8438rem] font-semibold text-ink">Prices</p>

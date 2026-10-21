@@ -9,6 +9,7 @@ import { todayISO } from "@/lib/format";
 import { AcademyShell, btn, btnGhost, card } from "@/components/academy/shell";
 import { Bar, Features, NotReady, PlanCards, Streak } from "@/components/academy/bits";
 import { ChallengeCard, LearnLogin } from "@/components/academy/forms";
+import { AcademySales } from "@/components/academy/sales";
 
 export const dynamic = "force-dynamic";
 
@@ -32,37 +33,12 @@ export default async function AcademyHome({ params, searchParams }: { params: Pr
   const free = freeModuleId(c);
   const firstFree = free ? courseOrder(c).lessonsOf(free)[0] : null;
 
-  // Not signed in: what it is, the plans, sign in
+  // Not signed in: the sales page
   if (!me || !state) {
+    const levels = courseOrder(c).levels.map((l) => ({ id: l.id, key: l.key, number: l.number, title: l.title, description: l.description ?? null }));
     return (
-      <AcademyShell org={org} tab="home" signedIn={false}>
-        <section className="rounded-3xl bg-[color-mix(in_srgb,var(--b)_9%,transparent)] px-5 py-8 sm:px-10 sm:py-12">
-          <p className="text-[0.8125rem] font-bold uppercase tracking-[0.14em] text-[var(--b)]">{org.name}</p>
-          <h1 className="mt-2 max-w-3xl text-[2rem] font-bold leading-tight tracking-tight text-ink sm:text-[2.75rem]">{org.learn.name}</h1>
-          <p className="mt-3 max-w-2xl text-[1.0625rem] text-ink-muted">{org.learn.tagline}</p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link href={`${base}/join`} className={btn}>See plans</Link>
-            {firstFree && <Link href={`${base}/lesson/${firstFree.id}`} className={btnGhost}><PlayCircle className="h-4 w-4" />Try a free lesson</Link>}
-          </div>
-        </section>
-        <div className="mt-8"><Features counts={counts} ai={org.learn.ai.enabled} rooms={org.learn.marketplace.enabled} /></div>
-        <h2 className="mb-3 mt-10 text-[1.375rem] font-bold tracking-tight text-ink">Plans</h2>
-        <PlanCards org={org} courseEligible={false} signedIn={false} />
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <section className={card} id="sign-in">
-            <h2 className="text-[1.125rem] font-semibold text-ink">Sign in</h2>
-            <p className="mb-4 mt-1 text-[0.9063rem] text-ink-muted">Booked a barista course with us? Sign in with the same email — you may get the course price.</p>
-            <LearnLogin slug={org.slug} />
-          </section>
-          <section className={card}>
-            <h2 className="text-[1.125rem] font-semibold text-ink">What&apos;s inside</h2>
-            <ul className="mt-3 space-y-2 text-[0.9375rem]">
-              {courseOrder(c).levels.map((l) => (
-                <li key={l.id} className="flex items-start gap-3"><BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-[var(--b)]" /><span><span className="font-semibold text-ink">{l.title}</span>{l.description ? <span className="text-ink-muted"> — {l.description}</span> : null}</span></li>
-              ))}
-            </ul>
-          </section>
-        </div>
+      <AcademyShell org={org} tab="home" signedIn={false} bare>
+        <AcademySales org={org} counts={counts} levels={levels} freeLesson={firstFree?.id ?? null} />
       </AcademyShell>
     );
   }

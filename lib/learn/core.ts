@@ -14,6 +14,9 @@ export interface LearnSettings {
   /** What learners see it called */
   name: string;
   tagline: string;
+  /** Sales page pictures: a hero photo and a logo/badge (https:// or a file shipped under /learn/) — none = text-only layout */
+  heroImage: string | null;
+  logo: string | null;
   prices: Record<Plan, number>;
   plans: Record<Plan, boolean>;
   /** Courses that offer the add-on at checkout (empty = every course) */
@@ -35,7 +38,7 @@ export interface LearnSettings {
 export const DEFAULT_PRICES: Record<Plan, number> = { monthly: 14.99, yearly: 149.9, with_course: 74.95 };
 
 export const DEFAULT_LEARN: LearnSettings = {
-  enabled: false, name: "Online Barista Course", tagline: "Keep learning after your class — lessons, quizzes, a roast simulator and an AI coach.",
+  enabled: false, name: "Online Barista Course", tagline: "Keep learning after your class — lessons, quizzes, a roast simulator and an AI coach.", heroImage: null, logo: null,
   prices: { ...DEFAULT_PRICES }, plans: { with_course: true, monthly: true, yearly: true }, addonCourseIds: [], pastStudentDays: 0, accessMonths: 12,
   ai: { enabled: true, dailyMessages: 30, dailyPhotos: 5 }, leaderboard: true,
   marketplace: { enabled: false, listingFee: 0, commissionPct: 15 }, welcomeEmail: false, renewalReminder: false,
@@ -47,6 +50,9 @@ const str = (v: unknown, d: string, max: number) => (typeof v === "string" && v.
 const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A picture address we're happy to put on the page: https://… or a file under /learn/. */
+export const imageUrl = (v: unknown) => (typeof v === "string" && /^(https:\/\/|\/learn\/)[^\s"'<>()]{1,400}$/.test(v.trim()) ? v.trim() : null);
+
 export function readLearnSettings(orgSettings: unknown): LearnSettings {
   const raw = obj(obj(orgSettings).learn);
   const p = obj(raw.prices), pl = obj(raw.plans), ai = obj(raw.ai), mk = obj(raw.marketplace);
@@ -54,6 +60,7 @@ export function readLearnSettings(orgSettings: unknown): LearnSettings {
     enabled: raw.enabled === true,
     name: str(raw.name, DEFAULT_LEARN.name, 80),
     tagline: str(raw.tagline, DEFAULT_LEARN.tagline, 240),
+    heroImage: imageUrl(raw.heroImage), logo: imageUrl(raw.logo),
     prices: { with_course: money2(p.with_course, DEFAULT_PRICES.with_course), monthly: money2(p.monthly, DEFAULT_PRICES.monthly), yearly: money2(p.yearly, DEFAULT_PRICES.yearly) },
     plans: { with_course: pl.with_course !== false, monthly: pl.monthly !== false, yearly: pl.yearly !== false },
     addonCourseIds: Array.isArray(raw.addonCourseIds) ? raw.addonCourseIds.filter((x): x is string => typeof x === "string" && UUID.test(x)).slice(0, 100) : [],

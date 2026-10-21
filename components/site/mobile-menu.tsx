@@ -2,14 +2,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, CalendarDays, ChevronDown, ChevronRight, Coffee, Flame, Gift, GraduationCap, Mail, Menu, PartyPopper, Phone, ShoppingBag, Store, Truck, X } from "lucide-react";
+import { Briefcase, CalendarDays, ChevronDown, ChevronRight, Coffee, Flame, Gift, GraduationCap, Mail, Menu, MonitorPlay, PartyPopper, Phone, ShoppingBag, Store, Truck, X } from "lucide-react";
 import type { MenuKind } from "./gift-menu";
 
 type Section = "events" | "lessons" | "jobs" | "shop" | "cafe" | "gifts";
 export interface MobileItem { key: Section; label: string; href: string; note: string; children?: { kind: MenuKind; href: string; label: string; note: string }[] }
 
 const SECTION_ICON = { events: PartyPopper, lessons: GraduationCap, jobs: Briefcase, shop: Coffee, cafe: Store, gifts: Gift };
-const CHILD_ICON = { lessons: GraduationCap, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck };
+const CHILD_ICON = { lessons: GraduationCap, academy: MonitorPlay, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck };
 
 /** Phones: a "Menu" button that opens a full-screen menu with every section, its sub-pages, and call / email buttons. */
 export function MobileMenu({ items, active, light, logo, name, home, phone, email, cta }: {
