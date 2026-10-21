@@ -37,6 +37,8 @@ const FIELD_PATHS: RegExp[] = [
   /^booking\.landing\.copy\.[a-zA-Z]{2,40}$/,
   /^booking\.intro$/,
   /^jobs\.(heroImage|employerImage)$/,
+  /^learn\.heroImage$/,
+  /^learn\.images\.(home|cafe|deeper|coach)$/,
 ];
 export const COPY_KEY = /^copy:[a-z0-9-]{1,30}\.[a-z0-9_.-]{1,80}$/;
 

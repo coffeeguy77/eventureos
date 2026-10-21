@@ -33,8 +33,8 @@ export function AcademyShell({ org, tab, signedIn, streak, bare, children }: { o
           <span className="hidden md:block" />
           <nav aria-label="Online course" className="no-scrollbar -mx-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto md:justify-center">
             <Link href={base} aria-current={tab === "home" ? "page" : undefined}
-              className="inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-full bg-[#2B2522] pl-1 pr-3.5 text-[0.8125rem] font-semibold text-white">
-              {org.learn.logo ? <img src={org.learn.logo} alt="" className="h-[22px] w-[22px] object-contain" /> : <Home className="ml-1 h-3.5 w-3.5" />}{org.learn.name}
+              className="inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-full bg-[#2B2522] px-3.5 text-[0.8125rem] font-semibold text-white">
+{org.learn.name}
             </Link>
             {tabs.filter((t) => t.show && t.key !== "home" && t.key !== "me" && (signedIn || (t.key !== "board" && t.key !== "rooms"))).map(({ key, href, label }) => (
               <Link key={key} href={href} aria-current={tab === key ? "page" : undefined}
