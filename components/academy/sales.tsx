@@ -51,13 +51,13 @@ export function AcademySales({ org, counts, levels, freeLesson, signIn }: {
         {s.heroImage && (
           <div className="relative h-[280px] sm:h-[380px] lg:absolute lg:inset-y-0 lg:right-0 lg:h-auto lg:w-[56%]">
             <img src={s.heroImage} alt="" className="h-full w-full object-cover object-[35%_center]" />
-            <div className="absolute inset-y-0 left-0 hidden w-40 bg-gradient-to-r from-[#FCFAF7] to-transparent lg:block" />
+            <div className="absolute inset-y-0 left-0 hidden w-56 bg-gradient-to-r from-[#FCFAF7] via-[#FCFAF7]/60 to-transparent lg:block" />
           </div>
         )}
         <div className="relative mx-auto w-full max-w-[1240px] px-5 sm:px-6">
-          <div className={`py-10 lg:min-h-[640px] lg:max-w-[520px] lg:py-[110px] ${s.heroImage ? "" : "lg:max-w-[720px]"}`}>
+          <div className="py-10 lg:min-h-[600px] lg:max-w-[660px] lg:py-[72px]">
             <p className={eyebrow}>{s.name}</p>
-            <h1 className="shop-serif mt-4 text-[2.75rem] font-medium leading-[1.04] tracking-[-0.02em] sm:text-[4rem]">
+            <h1 className="shop-serif mt-4 text-[2.75rem] font-medium leading-[1.04] tracking-[-0.02em] sm:text-[3.75rem] lg:whitespace-nowrap">
               Learn to be a barista.<br /><span className={pk}>From anywhere.</span>
             </h1>
             <p className={`mt-5 max-w-[430px] text-[1.125rem] leading-[1.6] text-[#2B2522]`}>Build your skills, grow your confidence and make better coffee. Learn online, at your own pace.</p>
@@ -183,10 +183,10 @@ export function AcademySales({ org, counts, levels, freeLesson, signIn }: {
       {/* Pricing */}
       {sell && (s.plans.yearly || s.plans.monthly) && (
         <section className={`${MID} py-16 sm:py-[72px]`} id="pricing">
-          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_660px]">
             <div>
               <p className={eyebrow}>Pricing</p>
-              <h2 className={`${h2} mt-2`}>Great coffee knowledge.<br />On your terms.</h2>
+              <h2 className="shop-serif mt-2 text-[2.125rem] font-medium leading-[1.1] sm:text-[2.375rem]">Great coffee knowledge.<br />On your terms.</h2>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {s.plans.yearly && (
@@ -225,10 +225,10 @@ export function AcademySales({ org, counts, levels, freeLesson, signIn }: {
       )}
 
       {/* FAQ + sign in */}
-      <section className={`${MID} grid gap-10 pb-20 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]`}>
+      <section className={`${MID} grid gap-10 pb-20 lg:grid-cols-[minmax(0,1fr)_640px]`}>
         <div>
           <p className={eyebrow}>FAQ</p>
-          <h2 className={`${h2} mt-2`}>A few good questions.</h2>
+          <h2 className="shop-serif mt-2 text-[2.125rem] font-medium leading-[1.1] sm:text-[2.375rem]">A few good questions.</h2>
         </div>
         <div className="space-y-3">
           {faqs.map((f) => (
