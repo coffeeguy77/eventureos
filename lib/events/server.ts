@@ -8,6 +8,9 @@ import { shell, officeAlertEmail } from "@/lib/bookings/emails";
 import { todayISO } from "@/lib/format";
 import { finishCart } from "@/lib/reminders/server";
 import type { PackageRules, PricedService } from "@/lib/pricing/engine";
+import { loadIngredients } from "@/lib/kitchen/store";
+import type { RecipeLine } from "@/lib/kitchen/core";
+import { nutritionPanel, publicNutrition, type NutritionIngredient, type PublicNutrition } from "@/lib/kitchen/nutrition";
 import {
   addDays, cateringGroup, cateringProblem, cateringSections, dayStatus, hireSections, isCatering, isTentative, readEvents, requestProblem, sectionsTotal, SLOTS,
   type CateringItem, type CateringOrder, type DayStatus, type EventsSettings, type HireKind, type HireRequest, type QuoteSection,
@@ -75,6 +78,20 @@ export function packageFor(kind: HireKind, s: EventsSettings, packages: { id: st
 export async function cateringMenu(db: SupabaseClient, orgId: string): Promise<CateringItem[]> {
   const { services } = await priceList(db, orgId);
   return services.filter((x) => isCatering(x.category)).map((x) => ({ id: x.id, name: x.name, description: x.description, group: cateringGroup(x.category), unit: x.unit, unit_price: x.unit_price, tax_rate: x.tax_rate }));
+}
+
+/** Finished nutrition panels for the public catering menu, keyed by menu item id. Items without a full recipe are left out. */
+export async function cateringNutrition(db: SupabaseClient, orgId: string, ids: string[]): Promise<Record<string, PublicNutrition>> {
+  if (!ids.length) return {};
+  const [ing, rec] = await Promise.all([
+    loadIngredients(db, orgId).catch(() => null),
+    db.from("catering_recipe_lines").select("id, service_id, ingredient_id, qty_per_serve, prep_note").eq("organisation_id", orgId).in("service_id", ids),
+  ]);
+  if (!ing || ing.error || !ing.labels || rec.error) return {};
+  const recipes = ((rec.data ?? []) as RecipeLine[]).map((r) => ({ ...r, qty_per_serve: Number(r.qty_per_serve) }));
+  const out: Record<string, PublicNutrition> = {};
+  for (const id of ids) { const p = publicNutrition(nutritionPanel(id, recipes, ing.rows as NutritionIngredient[])); if (p) out[id] = p; }
+  return out;
 }
 
 /* ------------------------------------------------------------------ emails */

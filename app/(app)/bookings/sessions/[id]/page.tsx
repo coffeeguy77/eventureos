@@ -52,6 +52,13 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <Card className="px-4 py-3.5"><p className="text-[0.75rem] text-ink-muted">Waitlist</p><p className="mt-1 text-[1.5rem] font-semibold text-ink">{waitlist.reduce((t, b) => t + b.seats, 0)}</p><p className="text-[0.75rem] text-ink-faint">{session.calendar_event_id ? "Busy on your calendar" : session.course.calendar_connection_id ? "Calendar blocks when full" : "No calendar set for course"}</p></Card>
       </div>
 
+      {n.full && !isPast && session.status !== "cancelled" && (
+        <div role="status" className="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900">
+          <p className="font-semibold">This class is full — close this date on any other site that sells it (e.g. ClassBento) so it isn&apos;t overbooked.</p>
+          <p className="mt-0.5">{session.calendar_event_id ? "A FULL entry is on your course calendar." : "Nothing else was blocked automatically: the course&apos;s Calendar setting is None."}</p>
+        </div>
+      )}
+
       <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
         <div className="space-y-5">
           <Card className="overflow-hidden" id="roster">

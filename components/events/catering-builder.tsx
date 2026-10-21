@@ -6,6 +6,7 @@ import type { CateringItem, CateringOrder, CateringSettings, Slot } from "@/lib/
 import { cateringProblem, deliveryCharge, menuOrder, SLOTS } from "@/lib/events/core";
 import { requestCatering, saveCart } from "@/app/hire/[org]/actions";
 import { track } from "@/components/site/tracker";
+import { NIP_ROWS, allergenStatement, fmtNutrient, kcal, type PublicNutrition } from "@/lib/kitchen/nutrition";
 
 const field = "h-[52px] w-full rounded-[14px] border border-[#E6DCD4] bg-white px-4 text-[0.9688rem] text-[#151312] outline-none transition placeholder:text-[#A39A93] focus:border-[var(--pk)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--pk)_14%,transparent)]";
 const lab = "mb-1.5 block text-[0.8125rem] font-semibold text-[#3A3431]";
@@ -22,11 +23,12 @@ type Custom = Record<Slot, string[]>;
 const emptyLines = (): Lines => ({ morning: {}, lunch: {}, afternoon: {} });
 const emptyCustom = (): Custom => ({ morning: [], lunch: [], afternoon: [] });
 
-export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, prefill }: {
-  slug: string; menu: CateringItem[]; today: string; leadDays: number; cs: CateringSettings; pickupFrom: string | null;
+export function CateringBuilder({ slug, menu, nutrition = {}, today, leadDays, cs, pickupFrom, prefill }: {
+  slug: string; menu: CateringItem[]; nutrition?: Record<string, PublicNutrition>; today: string; leadDays: number; cs: CateringSettings; pickupFrom: string | null;
   prefill: { name: string; email: string; phone: string; company: string };
 }) {
   const KEY = `eos-catering-${slug}`;
+  const [nip, setNip] = useState<CateringItem | null>(null);
   const min = cs.minQty;
   const [step, setStep] = useState<"menu" | "details">("menu");
   const [slot, setSlot] = useState<Slot>("morning");
@@ -177,6 +179,7 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
           <p className="shrink-0 text-right"><span className="block font-bold">{aud(m.unit_price)} <span className="text-[0.75rem] font-semibold text-[#8C847D]">+ GST</span></span><span className="text-[0.75rem] text-[#8C847D]">{pp ? "per person" : "each"}</span></p>
         </div>
         {m.description && <p className="mt-1.5 flex-1 text-[0.875rem] leading-relaxed text-[#5E5853]">{m.description}</p>}
+        {nutrition[m.id] && <div className="mt-2">{nutrition[m.id] && <button type="button" onClick={() => setNip(m)} data-track={`Catering nutrition: ${m.name}`} className="h-7 px-3 text-[0.75rem] inline-flex items-center rounded-full bg-[#F4ECE6] font-semibold text-[#3A3431] hover:bg-[#EADFD6]">Nutrition</button>}</div>}
         <div className="mt-4">
           {q ? (
             <>
@@ -211,6 +214,7 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
         <div className="min-w-0 flex-1">
           <p className="truncate text-[0.9688rem] font-semibold">{m.name}<span className="ml-2 text-[0.8125rem] font-semibold text-[#8C847D] sm:hidden">{aud(m.unit_price)} + GST</span></p>
           <p className="truncate text-[0.8438rem] text-[#5E5853]">{m.description || (pp ? "Per person" : "Each")}</p>
+          {nutrition[m.id] && <div className="mt-1">{nutrition[m.id] && <button type="button" onClick={() => setNip(m)} data-track={`Catering nutrition: ${m.name}`} className="h-6 px-2.5 text-[0.6875rem] inline-flex items-center rounded-full bg-[#F4ECE6] font-semibold text-[#3A3431] hover:bg-[#EADFD6]">Nutrition</button>}</div>}
           {q > 0 && q < min && <p className="text-[0.75rem] font-medium text-[#B42318]">Minimum {min}</p>}
           {q >= min && own && pp && <p className="text-[0.75rem] text-[#5E5853]">Your own amount · <button type="button" onClick={() => { markCustom(slot, m.id, false); setQty(slot, m.id, Math.max(min, people[slot]), false); }} className="font-semibold text-[var(--pk)]">match {Math.max(min, people[slot])}</button></p>}
         </div>
@@ -465,6 +469,49 @@ export function CateringBuilder({ slug, menu, today, leadDays, cs, pickupFrom, p
           </div>
         </div>
       )}
+
+      {nip && nutrition[nip.id] && <NutritionPanel item={nip} p={nutrition[nip.id]} onClose={() => setNip(null)} />}
+    </div>
+  );
+}
+
+/** The nutrition information panel for one menu item, as a pop-up. Esc, the X or the backdrop closes it. */
+function NutritionPanel({ item, p, onClose }: { item: CateringItem; p: PublicNutrition; onClose: () => void }) {
+  const close = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    close.current?.focus();
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={`Nutrition information: ${item.name}`} onClick={(e) => e.stopPropagation()}
+        className="max-h-[90vh] w-full max-w-[420px] overflow-y-auto rounded-t-[20px] bg-white p-5 text-[#151312] shadow-xl sm:rounded-[20px]">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-[1.0625rem] font-semibold leading-snug">{item.name}</p>
+          <button ref={close} type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-[#F4ECE6]"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="mt-3 border-2 border-black p-2">
+          <p className="border-b-2 border-black pb-1 text-center text-[0.9375rem] font-extrabold tracking-wide">NUTRITION INFORMATION</p>
+          <p className="mt-1 text-[0.8125rem]">Serving size: {Math.round(p.serveGrams)} g</p>
+          <table className="mt-1 w-full border-t border-black text-[0.8125rem]">
+            <thead><tr className="border-b border-black"><th /><th className="py-0.5 text-right font-semibold">Avg. quantity<br />per serving</th><th className="py-0.5 text-right font-semibold">Avg. quantity<br />per 100 g</th></tr></thead>
+            <tbody>
+              {NIP_ROWS.map(([k, label, unit]) => (
+                <tr key={k} className="border-b border-[#D9D2CC] last:border-black">
+                  <td className={`py-0.5 ${label.startsWith("–") ? "pl-3" : ""}`}>{label}</td>
+                  <td className="py-0.5 text-right tabular-nums">{fmtNutrient(k, p.perServe[k])} {unit}{k === "energy_kj" ? <span className="block text-[0.6875rem]">({kcal(p.perServe.energy_kj)} Cal)</span> : null}</td>
+                  <td className="py-0.5 text-right tabular-nums">{fmtNutrient(k, p.per100[k])} {unit}{k === "energy_kj" ? <span className="block text-[0.6875rem]">({kcal(p.per100.energy_kj)} Cal)</span> : null}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-[0.8125rem] leading-snug"><b>Ingredients:</b> {p.ingredients.join(", ")}.</p>
+        <p className="mt-2 text-[0.875rem] font-bold">{allergenStatement(p.allergens)}</p>
+        <p className="mt-2 text-[0.6875rem] leading-snug text-[#5E5853]">Values are averages calculated from the recipe{p.afcd ? " and the Australian Food Composition Database (FSANZ)" : ""}.</p>
+      </div>
     </div>
   );
 }

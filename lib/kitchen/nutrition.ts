@@ -96,5 +96,16 @@ export const kcal = (kj: number) => Math.round(kj / 4.184);
 /** "Contains: gluten, wheat, milk, egg." */
 export const allergenStatement = (list: string[]) => (list.length ? `Contains: ${list.join(", ")}.` : "No declared allergens in the recipe's ingredients.");
 
+/** What the public menu shows behind its "Nutrition" pill — only for a finished panel (every ingredient has nutrition and a weight). */
+export interface PublicNutrition { serveGrams: number; perServe: Record<Key, number>; per100: Record<Key, number>; ingredients: string[]; allergens: string[]; afcd: boolean }
+export function publicNutrition(p: Panel | null): PublicNutrition | null {
+  if (!p || p.missingNutrition.length || p.missingWeight.length || p.serveGrams <= 0) return null;
+  return { serveGrams: p.serveGrams, perServe: p.perServe, per100: p.per100, ingredients: p.ingredients.map((i) => i.name), allergens: p.allergens, afcd: p.sources.some((s) => s.startsWith("AFCD")) };
+}
+export const NIP_ROWS: [Key, string, string][] = [
+  ["energy_kj", "Energy", "kJ"], ["protein", "Protein", "g"], ["fat", "Fat, total", "g"], ["sat_fat", "– saturated", "g"],
+  ["carbs", "Carbohydrate", "g"], ["sugars", "– sugars", "g"], ["fibre", "Dietary fibre", "g"], ["sodium_mg", "Sodium", "mg"],
+];
+
 /** Ingredient list for a label, heaviest first, with each ingredient's share of the serve. */
 export const ingredientList = (p: Panel) => p.ingredients.map((i) => `${i.name} (${i.percent < 1 ? "<1" : Math.round(i.percent)}%)`).join(", ");

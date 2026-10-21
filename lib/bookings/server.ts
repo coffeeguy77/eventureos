@@ -494,6 +494,7 @@ export async function syncSessionBlock(db: SupabaseClient, org: PublicOrg, sessi
   const row = s as unknown as (SessionRow & { course: { name: string; calendar_connection_id: string | null; location: string | null } }) | null;
   if (!row) return;
   const n = (await seatsFor(db, [row])).get(row.id)!;
+  await fullAlert(db, org, row, n).catch((e) => console.error("full alert", e));
   const shouldBlock = (n.full || row.status === "closed") && row.status !== "cancelled" && !!row.course.calendar_connection_id && Date.parse(row.ends_at) > Date.now();
   const { buildContext } = await import("@/lib/integrations/sync-runner");
   const gcal = await import("@/lib/integrations/google-calendar");
@@ -519,6 +520,31 @@ export async function syncSessionBlock(db: SupabaseClient, org: PublicOrg, sessi
   } else if (!n.full) {
     await notifyWaitlist(db, org, row.id).catch((e) => console.error("waitlist notify", e));
   }
+}
+
+/**
+ * Email the office once when a session fills (and again only if it reopens and fills again), so seats can be closed on
+ * the platforms EventureOS can't reach (ClassBento etc.). Office only — never customers. Tracked in activity_logs.
+ */
+async function fullAlert(db: SupabaseClient, org: PublicOrg, row: SessionRow & { course: { name: string; calendar_connection_id: string | null } }, n: { taken: number; capacity: number; full: boolean }) {
+  if (row.status === "cancelled" || Date.parse(row.starts_at) < Date.now()) return;
+  const { data: last } = await db.from("activity_logs").select("action").eq("organisation_id", org.id).eq("entity_type", "booking_session").eq("entity_id", row.id)
+    .in("action", ["session.full", "session.reopened"]).order("created_at", { ascending: false }).limit(1);
+  const wasFull = last?.[0]?.action === "session.full";
+  if (n.full === wasFull) return;
+  const w = sessionWhen(row.starts_at, row.ends_at, org.timezone);
+  const label = `${row.course.name} — ${w.short} ${w.start}`;
+  await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: n.full ? "session.full" : "session.reopened", entity_type: "booking_session", entity_id: row.id,
+    summary: n.full ? `${label} is full (${n.taken}/${n.capacity})` : `${label} has seats again (${n.taken}/${n.capacity})` });
+  if (!n.full) return;
+  const to = org.settings.notify_email ?? org.contact_email;
+  if (!to) return;
+  const m = officeAlertEmail(brandOf(org), { heading: `Full: ${label}`, url: `${appBaseUrl()}/bookings/sessions/${row.id}`, lines: [
+    { label: "Seats", value: `${n.taken}/${n.capacity}${row.external_seats ? ` (incl. ${row.external_seats} sold elsewhere${row.external_note ? ` — ${row.external_note}` : ""})` : ""}` },
+    { label: "To do", value: "Close this date on any other site that sells it (e.g. ClassBento, Bookly) so it isn't overbooked." },
+    { label: "Calendar block", value: row.course.calendar_connection_id ? "A FULL entry has been added to the course calendar." : "Off — this course has no calendar linked, so nothing else was blocked automatically." },
+  ] });
+  await safeSend({ to, subject: m.subject, html: m.html, text: m.text, fromName: "EventureOS" });
 }
 
 /** Seats free on a session that has a waitlist → email the waitlist (at most every 6 hours per person). */
