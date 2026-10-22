@@ -1,4 +1,5 @@
 import "@fontsource/playfair-display/700.css";
+import { siteMeta } from "@/lib/site/meta";
 import { PageBg } from "@/components/site/page-bg";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -18,7 +19,8 @@ type P = { params: Promise<{ org: string }>; searchParams: Promise<Record<string
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await publicOrg((await params).org).catch(() => null);
   const title = org ? `Gift certificates — ${org.name}` : "Gift certificates";
-  return { title: { absolute: title }, description: org ? `Give a class with ${org.name}. Emailed instantly or on the day you choose.` : undefined, openGraph: { title } };
+  if (org) return siteMeta(org, `/book/${org.slug}/gift`, { title: { absolute: title }, description: `Give a class with ${org.name}. Emailed instantly or on the day you choose.`, openGraph: { title } });
+  return { title: { absolute: title }, openGraph: { title } };
 }
 
 /** "Give a class *as a gift*" → the starred words in the brand colour */

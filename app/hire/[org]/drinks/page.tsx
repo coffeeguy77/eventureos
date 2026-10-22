@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Snowflake } from "lucide-react";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }): Promise<Metadata> {
   const eo = await eventsOrg((await params).org);
   if (!eo) return { title: "Not found" };
-  return { title: `Event Drinks Menu — Coffee, Iced Lattes, Cold Brew & Chai${eo.s.city ? ` | ${eo.s.city}` : ""} | ${eo.org.name}`, description: `What our baristas serve at your event: ${eo.s.drinks.flatMap((g) => g.items.map((i) => i.name)).slice(0, 8).join(", ")}.`.slice(0, 160), alternates: { canonical: `/hire/${eo.org.slug}/drinks` } };
+  return siteMeta(eo.org, `/hire/${eo.org.slug}/drinks`, { title: `Event Drinks Menu — Coffee, Iced Lattes, Cold Brew & Chai${eo.s.city ? ` | ${eo.s.city}` : ""} | ${eo.org.name}`, description: `What our baristas serve at your event: ${eo.s.drinks.flatMap((g) => g.items.map((i) => i.name)).slice(0, 8).join(", ")}.`.slice(0, 160), });
 }
 
 export default async function DrinksPage({ params }: { params: Promise<{ org: string }> }) {

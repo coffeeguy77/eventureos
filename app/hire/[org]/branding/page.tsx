@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Eye, Gift, Megaphone, PenTool, Printer, Truck } from "lucide-react";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }): Promise<Metadata> {
   const eo = await eventsOrg((await params).org);
   if (!eo) return { title: "Not found" };
-  return { title: `Branded Coffee Cart & Logo Cup Stickers${eo.s.city ? ` ${eo.s.city}` : ""} | ${eo.org.name}`, description: "Wrap the coffee cart in your signage and put your logo on every cup — sponsor the coffee and everyone remembers who shouted it.", alternates: { canonical: `/hire/${eo.org.slug}/branding` } };
+  return siteMeta(eo.org, `/hire/${eo.org.slug}/branding`, { title: `Branded Coffee Cart & Logo Cup Stickers${eo.s.city ? ` ${eo.s.city}` : ""} | ${eo.org.name}`, description: "Wrap the coffee cart in your signage and put your logo on every cup — sponsor the coffee and everyone remembers who shouted it.", });
 }
 
 const money = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;

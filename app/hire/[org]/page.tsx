@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, CalendarCheck, CalendarDays, CircleCheck, Coffee, FileText, Leaf, Mail, Settings, ShoppingCart, Star, Tag, Truck, Users, UtensilsCrossed, type LucideIcon } from "lucide-react";
@@ -16,11 +17,10 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
   const eo = await eventsOrg((await params).org);
   if (!eo) return { title: "Not found" };
   const city = eo.s.city ? ` ${eo.s.city}` : "";
-  return {
+  return siteMeta(eo.org, `/hire/${eo.org.slug}`, {
     title: `Coffee Cart, Coffee Van & Event Catering${city} | ${eo.org.name}`,
     description: `${eo.s.intro}`.slice(0, 160),
-    alternates: { canonical: `/hire/${eo.org.slug}` },
-  };
+  });
 }
 
 /** "for your *next event.*" → the starred words in the brand pink */

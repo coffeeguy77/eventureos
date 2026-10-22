@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import type { Metadata } from "next";
 import { Award, BookOpen, CheckCircle2, Lock, PlayCircle } from "lucide-react";
 import { createServiceClient } from "@/lib/integrations/runtime";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }): Promise<Metadata> {
   const org = await learnOrg((await params).org).catch(() => null);
-  return org ? { title: { absolute: `${org.learn.name} — ${org.name}` }, description: org.learn.tagline } : { title: "Online course" };
+  return org ? siteMeta(org, `/academy/${org.slug}`, { title: { absolute: `${org.learn.name} — ${org.name}` }, description: org.learn.tagline }) : { title: "Online course" };
 }
 
 export default async function AcademyHome({ params, searchParams }: { params: Promise<{ org: string }>; searchParams: Promise<{ welcome?: string; signin?: string }> }) {

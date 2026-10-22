@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { createServiceClient, serviceRoleConfigured } from "@/lib/integrations/runtime";
 import { hirePageSlug, offered, readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
+import { readSite } from "@/lib/site/site";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
@@ -15,7 +16,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!serviceRoleConfigured()) return out;
   try {
     const db = createServiceClient();
-    const { data: orgs } = await db.from("organisations").select("id, slug, settings").eq("status", "active");
+    const { data: all } = await db.from("organisations").select("id, slug, settings").eq("status", "active");
+    // A business on its own domain lists its pages in its own sitemap (www.its-domain/sitemap.xml), not here
+    const orgs = (all ?? []).filter((o) => !readSite(o.settings).live);
     for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
       const cp = cafePages(readCafe(o.settings));
       const cb = `${BASE}/cafe/${o.slug}`;

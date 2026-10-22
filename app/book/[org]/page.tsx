@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CalendarDays, Clock, Gift, MapPin, Users } from "lucide-react";
@@ -26,8 +27,8 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   const title = L.title ?? `Book a class — ${org.name}`;
   const description = L.description ?? org.settings.intro ?? `See dates and book online with ${org.name}.`;
   const image = L.heroImage ?? org.logo_url;
-  return { title: { absolute: title }, description, alternates: { canonical: bookUrl(org) },
-    openGraph: { title, description, siteName: org.name, type: "website", url: bookUrl(org), ...(image ? { images: [{ url: image }] } : {}) } };
+  return siteMeta(org, `/book/${org.slug}`, { title: { absolute: title }, description,
+    openGraph: { title, description, siteName: org.name, type: "website", ...(image ? { images: [{ url: image }] } : {}) } });
 }
 
 const dur = (m: number) => (m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : m > 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`);

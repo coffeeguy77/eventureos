@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { siteMeta } from "@/lib/site/meta";
 import type { Metadata } from "next";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { activeBanners, loadProducts, shopOrg, todayIn } from "@/lib/shop/server";
@@ -12,7 +13,7 @@ type P = { params: Promise<{ org: string }>; searchParams?: Promise<Record<strin
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await shopOrg((await params).org).catch(() => null);
-  return org ? { title: { absolute: `Coffee gift cards — ${org.name}` }, description: `Give freshly roasted coffee from ${org.name}. Emailed instantly or on the day you choose, with your message on the back.` } : {};
+  return org ? siteMeta(org, `/shop/${org.slug}/gift-card`, { title: { absolute: `Coffee gift cards — ${org.name}` }, description: `Give freshly roasted coffee from ${org.name}. Emailed instantly or on the day you choose, with your message on the back.` }) : {};
 }
 
 export default async function GiftCardPage({ params, searchParams }: P) {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, Check, Cloud, Flame, GraduationCap, Package, Printer, Warehouse } from "lucide-react";
@@ -15,7 +16,7 @@ type P = { params: Promise<{ org: string }> };
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await cafeOrg((await params).org);
   if (!org || !org.cafe.club) return {};
-  return { title: { absolute: `${org.cafe.clubTitle} — ${org.name}` }, description: org.cafe.clubIntro.slice(0, 160) };
+  return siteMeta(org, `/cafe/${org.slug}/roasting-club`, { title: { absolute: `${org.cafe.clubTitle} — ${org.name}` }, description: org.cafe.clubIntro.slice(0, 160) });
 }
 
 const groupIcon = (g: string) => /pack|label|print/i.test(g) ? (/print|label/i.test(g) ? Printer : Package) : /train|espresso|barista/i.test(g) ? GraduationCap : /stor|green/i.test(g) ? Warehouse : Flame;

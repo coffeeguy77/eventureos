@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, MapPin, Sparkles, Coffee } from "lucide-react";
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   const p = ps?.find((x) => x.slug === slug);
   if (!p) return {};
   const title = `${p.name} — ${org.name}`;
-  return { title: { absolute: title }, description: p.tasting_notes ?? p.short ?? undefined, openGraph: { title, images: p.image_url ? [p.image_url] : undefined } };
+  return siteMeta(org, `/shop/${org.slug}/p/${slug}`, { title: { absolute: title }, description: p.tasting_notes ?? p.short ?? undefined, openGraph: { title, images: p.image_url ? [p.image_url] : undefined } });
 }
 
 const paras = (t: string) => t.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);

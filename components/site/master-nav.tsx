@@ -7,6 +7,7 @@ import { readShop } from "@/lib/shop/core";
 import { readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
 import { readLearnSettings } from "@/lib/learn/core";
+import { readSite } from "@/lib/site/site";
 import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
@@ -21,6 +22,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const light = tone === "light";
   const labels = readSiteNav(org.rawSettings);
   const base = org.slug;
+  const homeHref = readSite(org.rawSettings).home ? `/site/${base}` : `/${base}`;
   const items: { key: SiteSection; href: string; on: boolean }[] = [
     { key: "events", href: `/hire/${base}`, on: readEvents(org.rawSettings).enabled },
     { key: "lessons", href: org.settings.enabled ? `/${base}` : `/academy/${base}`, on: org.settings.enabled || readLearnSettings(org.rawSettings).enabled },
@@ -64,10 +66,10 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
     <>
     <div className={`relative z-50 border-b ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav>
       <div className={`${PAGE} flex min-h-[60px] flex-wrap items-center gap-x-8 gap-y-0`}>
-        <Link href={`/${base}`} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
+        <Link href={homeHref} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
           {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[1.0625rem] font-semibold">{org.name}</span>}
         </Link>
-        {shown.length > 0 && <MobileMenu items={mobile} active={active} light={light} logo={logo} name={org.name} home={`/${base}`} phone={org.contact_phone} email={org.contact_email} cta={cta} />}
+        {shown.length > 0 && <MobileMenu items={mobile} active={active} light={light} logo={logo} name={org.name} home={homeHref} phone={org.contact_phone} email={org.contact_email} cta={cta} />}
         <nav aria-label={org.name} className="hidden items-center gap-1 lg:flex lg:flex-1 lg:justify-end">
           {shown.map((i, n) => (
             <span key={i.key} className="flex shrink-0 items-center">

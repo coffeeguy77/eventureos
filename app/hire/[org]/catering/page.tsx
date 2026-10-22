@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { cateringMenu, cateringNutrition, eventsOrg } from "@/lib/events/server";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }): Promise<Metadata> {
   const eo = await eventsOrg((await params).org);
   if (!eo) return { title: "Not found" };
-  return { title: `Corporate Catering${eo.s.city ? ` ${eo.s.city}` : ""} — Breakfast, Lunch & Morning Tea | ${eo.org.name}`, description: "Build your catering order online — morning, lunch and afternoon deliveries — and see your total as you go.", alternates: { canonical: `/hire/${eo.org.slug}/catering` } };
+  return siteMeta(eo.org, `/hire/${eo.org.slug}/catering`, { title: `Corporate Catering${eo.s.city ? ` ${eo.s.city}` : ""} — Breakfast, Lunch & Morning Tea | ${eo.org.name}`, description: "Build your catering order online — morning, lunch and afternoon deliveries — and see your total as you go.", });
 }
 
 export default async function CateringPage({ params }: { params: Promise<{ org: string }> }) {

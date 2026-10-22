@@ -1,4 +1,5 @@
 import "@fontsource/playfair-display/700.css";
+import { siteMeta } from "@/lib/site/meta";
 import { PageBg } from "@/components/site/page-bg";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,7 +20,8 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }) {
   const org = await jobsOrg((await params).org);
-  return { title: org?.jobs.name ?? "Barista jobs", description: org ? `Find trained baristas, or find barista work — ${org.jobs.name}.` : undefined };
+  if (org) return siteMeta(org, `/jobs/${org.slug}`, { title: org.jobs.name, description: `Find trained baristas, or find barista work — ${org.jobs.name}.` });
+  return { title: "Barista jobs" };
 }
 
 const serif = { fontFamily: "'AU Dollar', 'Playfair Display', Georgia, serif" };

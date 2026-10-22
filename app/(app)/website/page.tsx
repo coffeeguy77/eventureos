@@ -14,6 +14,10 @@ import { RemindersForm } from "@/components/website/reminders-form";
 import { CafeForm } from "@/components/website/cafe-form";
 import { readCafe } from "@/lib/cafe/core";
 import { igFeed, igMissingEnv, igStatus } from "@/lib/cafe/instagram";
+import { SiteForm } from "@/components/website/site-form";
+import { readSite } from "@/lib/site/site";
+import { newPages } from "@/lib/site/pages";
+import { launchCheck, suggest } from "@/lib/site/seo";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Website" };
@@ -26,7 +30,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const sp = await searchParams;
-  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" ? sp.tab : "analytics";
+  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" || sp.tab === "site" ? sp.tab : "analytics";
   const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone").eq("id", org.id).single();
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
 
@@ -38,6 +42,19 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     ]);
     const menus = [...new Set(((sv ?? []) as { category: string | null }[]).filter((x) => isCatering(x.category)).map((x) => cateringGroup(x.category)))];
     body = <EventsForm initial={readEvents(settings)} packages={(pk ?? []) as { id: string; name: string }[]} slug={o?.slug as string} base={appBaseUrl()} menus={menus} />;
+  } else if (tab === "site") {
+    const site = readSite(settings);
+    const targets = newPages(settings, o?.name as string);
+    const [{ data: prods }, hitsR] = await Promise.all([
+      supabase.from("shop_products").select("slug").eq("organisation_id", org.id).eq("status", "active"),
+      supabase.from("site_url_hits").select("path, kind, target, hits, last_at").eq("organisation_id", org.id).order("last_at", { ascending: false }).limit(100),
+    ]);
+    const products = ((prods ?? []) as { slug: string | null }[]).map((x) => x.slug).filter((x): x is string => !!x);
+    const allTargets = [...targets, ...products.map((x) => ({ path: `/shop/p/${x}`, title: x.replace(/-/g, " "), group: "Shop products" }))];
+    body = <SiteForm slug={o?.slug as string} base={appBaseUrl()}
+      initial={{ home: site.home, domain: site.domain, live: site.live, oldSite: site.oldSite, fallback: site.fallback, pages: site.pages.map(({ index: _i, ...p }) => p), rules: site.rules.map(({ from, to, status, note }) => ({ from, to, status, note })), discovered: site.discovered.length }}
+      pages={allTargets} suggestions={suggest(site, site.discovered, allTargets, { products })} checks={launchCheck(site, site.discovered, allTargets).checks}
+      hits={(hitsR.data ?? []) as { path: string; kind: string; target: string | null; hits: number; last_at: string }[]} hitsReady={!hitsR.error} />;
   } else if (tab === "cafe") {
     const [st, feed] = await Promise.all([igStatus(org.id), igFeed(org.id)]);
     const missing = igMissingEnv();
@@ -153,7 +170,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader eyebrow="Marketing" title="Website" subtitle="How people use your public pages, your events and café pages, and the come-back-and-finish reminders." />
-      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "reminders", label: "Reminders" }]} /></div>
+      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "site", label: "Pages, domain & SEO" }, { key: "reminders", label: "Reminders" }]} /></div>
       {body}
     </>
   );

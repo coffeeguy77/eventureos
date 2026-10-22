@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -12,7 +13,7 @@ type P = { params: Promise<{ org: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await shopOrg((await params).org).catch(() => null);
-  return org ? { title: { absolute: `Grind guide — ${org.name}` }, description: "Which grind suits your coffee maker, and how to fine-tune it finer or coarser." } : {};
+  return org ? siteMeta(org, `/shop/${org.slug}/grind`, { title: { absolute: `Grind guide — ${org.name}` }, description: "Which grind suits your coffee maker, and how to fine-tune it finer or coarser." }) : {};
 }
 
 /** Little "grounds" drawing: more, smaller dots for finer grinds. */

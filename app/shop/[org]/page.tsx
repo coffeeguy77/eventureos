@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { ContactForm } from "@/components/events/contact-form";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await shopOrg((await params).org).catch(() => null);
   if (!org) return {};
   const title = `${org.shop.title.replace(/\s*\|\s*/g, " ").replace(/\.$/, "")} — ${org.name}`;
-  return { title: { absolute: title }, description: org.shop.tagline, openGraph: { title, description: org.shop.tagline, images: org.shop.heroImage ? [org.shop.heroImage] : undefined } };
+  return siteMeta(org, `/shop/${org.slug}`, { title: { absolute: title }, description: org.shop.tagline, openGraph: { title, description: org.shop.tagline, images: org.shop.heroImage ? [org.shop.heroImage] : undefined } });
 }
 
 /*

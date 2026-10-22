@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { siteMeta } from "@/lib/site/meta";
 import type { Metadata } from "next";
 import { Clock, MapPin, Users } from "lucide-react";
 import { catalogue, certificatesOffered, publicOrg } from "@/lib/bookings/server";
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   if (!c) return { title: { absolute: `Book — ${org.name}` } };
   const title = `${c.name} — ${org.name}`;
   const description = c.summary ?? `Book ${c.name} online with ${org.name}. ${money(c.price, org.currency)} per person.`;
-  return { title: { absolute: title }, description, openGraph: { title, description, siteName: org.name, ...(c.image_url ? { images: [{ url: c.image_url }] } : org.logo_url ? { images: [{ url: org.logo_url }] } : {}) } };
+  return siteMeta(org, `/book/${org.slug}/${course}`, { title: { absolute: title }, description, openGraph: { title, description, siteName: org.name, ...(c.image_url ? { images: [{ url: c.image_url }] } : org.logo_url ? { images: [{ url: org.logo_url }] } : {}) } });
 }
 
 const dur = (m: number) => (m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : m > 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`);

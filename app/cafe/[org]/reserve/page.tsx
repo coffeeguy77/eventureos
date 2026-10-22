@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CalendarDays, Check } from "lucide-react";
@@ -13,7 +14,7 @@ type P = { params: Promise<{ org: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await cafeOrg((await params).org);
-  return org ? { title: { absolute: `Reserve a table — ${org.name}` }, description: `Book a table at ${org.name}. Choose your day, time and party size — we'll confirm by text or a quick call.` } : {};
+  return org ? siteMeta(org, `/cafe/${org.slug}/reserve`, { title: { absolute: `Reserve a table — ${org.name}` }, description: `Book a table at ${org.name}. Choose your day, time and party size — we'll confirm by text or a quick call.` }) : {};
 }
 
 export default async function ReservePage({ params }: P) {

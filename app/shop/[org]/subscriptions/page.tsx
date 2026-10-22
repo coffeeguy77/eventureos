@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, Bean, CalendarDays, Check, Gift, Heart, Mail, PackageOpen, Repeat, SlidersHorizontal, Truck, Wallet } from "lucide-react";
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   if (!org) return {};
   const title = `Coffee subscriptions — ${org.name}`;
   const description = `Freshly roasted coffee on your schedule${org.shop.subDiscount ? `, ${org.shop.subDiscount}% off every bag` : ""}. Pause, skip, swap or split between home and work any time.`;
-  return { title: { absolute: title }, description, openGraph: { title, description, images: org.shop.subsImage ? [org.shop.subsImage] : undefined } };
+  return siteMeta(org, `/shop/${org.slug}/subscriptions`, { title: { absolute: title }, description, openGraph: { title, description, images: org.shop.subsImage ? [org.shop.subsImage] : undefined } });
 }
 
 const list = (xs: (string | number)[]) => xs.join(", ").replace(/, ([^,]+)$/, " or $1");

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { ArrowRight, Check, ChevronDown } from "lucide-react";
@@ -26,11 +27,10 @@ export async function generateMetadata({ params }: { params: Promise<{ org: stri
   const x = await load(p.org, p.page);
   if (!x) return { title: "Not found" };
   const t = titleFor(x.kind, x.s);
-  return {
+  return siteMeta(x.org, `/hire/${x.org.slug}/${x.canonical}`, {
     title: `${t} | ${x.org.name}`,
     description: `${t} — ${x.s.blurbs[x.kind]} Check your date and get a quote online.`.slice(0, 160),
-    alternates: { canonical: `/hire/${x.org.slug}/${x.canonical}` },
-  };
+  });
 }
 
 export default async function HireKindPage({ params }: { params: Promise<{ org: string; page: string }> }) {

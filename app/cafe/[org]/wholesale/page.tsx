@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowRight, Check } from "lucide-react";
@@ -16,7 +17,7 @@ type P = { params: Promise<{ org: string }> };
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await cafeOrg((await params).org);
   if (!org || !org.cafe.wholesale) return {};
-  return { title: { absolute: `${org.cafe.wholesaleTitle} — ${org.name}` }, description: org.cafe.wholesaleIntro.slice(0, 160) };
+  return siteMeta(org, `/cafe/${org.slug}/wholesale`, { title: { absolute: `${org.cafe.wholesaleTitle} — ${org.name}` }, description: org.cafe.wholesaleIntro.slice(0, 160) });
 }
 
 export default async function WholesalePage({ params }: P) {

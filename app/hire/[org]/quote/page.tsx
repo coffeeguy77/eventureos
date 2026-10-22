@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/integrations/runtime";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ org: string }> }): Promise<Metadata> {
   const eo = await eventsOrg((await params).org);
   if (!eo) return { title: "Not found" };
-  return { title: `Get a quote — coffee cart, van & equipment hire | ${eo.org.name}`, description: `Build your event online: choose a coffee cart, coffee van or equipment only, add days, hours and baristas, and we'll email your quote.`, alternates: { canonical: `/hire/${eo.org.slug}/quote` } };
+  return siteMeta(eo.org, `/hire/${eo.org.slug}/quote`, { title: `Get a quote — coffee cart, van & equipment hire | ${eo.org.name}`, description: `Build your event online: choose a coffee cart, coffee van or equipment only, add days, hours and baristas, and we'll email your quote.`, });
 }
 
 /** Signed in to the client portal? Fill in their details. Never fails the page. */

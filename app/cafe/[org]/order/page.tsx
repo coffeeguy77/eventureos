@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { siteMeta } from "@/lib/site/meta";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CafeClosed, CafeFrame, WRAP, btn, serif } from "@/components/cafe/frame";
@@ -12,7 +13,7 @@ type P = { params: Promise<{ org: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await cafeOrg((await params).org);
-  return org ? { title: { absolute: `Order online — ${org.name}` }, description: `Order ahead from ${org.name} and pick up from the café. Pay securely online.` } : {};
+  return org ? siteMeta(org, `/cafe/${org.slug}/order`, { title: { absolute: `Order online — ${org.name}` }, description: `Order ahead from ${org.name} and pick up from the café. Pay securely online.` }) : {};
 }
 
 export default async function OrderPage({ params }: P) {
