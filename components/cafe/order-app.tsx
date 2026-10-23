@@ -53,6 +53,7 @@ export function OrderApp(p: Props) {
   const [drawer, setDrawer] = useState(false);
   const [q, setQ] = useState("");
   const [activeSec, setActiveSec] = useState(p.menu[0]?.category ?? "");
+  const hold = useRef(0); // while a footer/menu button is scrolling, don't let the scroll position change the highlighted section
   const [done, setDone] = useState<{ orderId: string; ticketName: string | null; when: string; amount: number; receiptUrl: string | null } | null>(null);
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export function OrderApp(p: Props) {
 
   useEffect(() => {
     if (step !== "menu" || !("IntersectionObserver" in window)) return;
-    const io = new IntersectionObserver((es) => { const v = es.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (v) setActiveSec((v.target as HTMLElement).dataset.cat ?? ""); }, { rootMargin: "-130px 0px -60% 0px" });
+    const io = new IntersectionObserver((es) => { const v = es.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (v && Date.now() > hold.current) setActiveSec((v.target as HTMLElement).dataset.cat ?? ""); }, { rootMargin: "-130px 0px -60% 0px" });
     document.querySelectorAll("[data-cat]").forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [sections, step]);
@@ -143,7 +144,7 @@ export function OrderApp(p: Props) {
   );
 
   const footer = p.footer ?? [];
-  const jump = (cat: string) => { setActiveSec(cat); document.getElementById(slugId(cat))?.scrollIntoView({ behavior: "smooth" }); };
+  const jump = (cat: string) => { hold.current = Date.now() + 1200; setActiveSec(cat); document.getElementById(slugId(cat))?.scrollIntoView({ behavior: "smooth" }); };
   const search = (
     <label className="relative block w-full sm:w-72 sm:shrink-0">
       <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8C847D]" />
@@ -254,6 +255,7 @@ const dockIcon = (label: string, cats: string[]) => {
 
 /** The app's footer buttons. Pressing one again steps to its next section (e.g. All Day: Breakfast → Lunch → Breakfast). */
 function FooterDock({ slots, active, onGo }: { slots: FooterSlot[]; active: string; onGo: (cat: string) => void }) {
+  const last = useRef<{ slot: number; idx: number }>({ slot: -1, idx: 0 });
   return (
     <nav aria-label="Menu" className="pointer-events-auto w-full border-t border-[#EEE6DF] bg-white/95 backdrop-blur lg:w-auto lg:rounded-full lg:border lg:px-2 lg:shadow-[0_24px_50px_-28px_rgba(60,30,20,.55)]">
       <div className="mx-auto flex max-w-[640px] justify-around lg:max-w-none lg:gap-1">
@@ -261,11 +263,15 @@ function FooterDock({ slots, active, onGo }: { slots: FooterSlot[]; active: stri
           const at = s.cats.indexOf(active);
           const on = at >= 0;
           const Icon = dockIcon(s.label, s.cats);
-          const next = on ? s.cats[(at + 1) % s.cats.length] : s.cats[0];
           return (
             <button key={`${s.label}-${i}`} type="button" aria-current={on ? "true" : undefined}
               title={s.cats.length > 1 ? `${s.label}: ${s.cats.join(", ")}` : s.label}
-              onClick={() => onGo(on ? next : s.cats[0])}
+              onClick={() => {
+                // Same button again → its next section; a different button → its first section (as in the app)
+                const idx = last.current.slot === i && on ? (Math.max(0, at) + 1) % s.cats.length : 0;
+                last.current = { slot: i, idx };
+                onGo(s.cats[idx]);
+              }}
               className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 pb-2 pt-2 text-[0.6875rem] font-semibold transition lg:min-w-[84px] lg:flex-none lg:rounded-full lg:px-3 ${on ? "text-[var(--pk)]" : "text-[#5E5853] hover:text-[#151312]"}`}>
               {s.svg
                 ? <span aria-hidden className="block h-[26px] w-[26px] [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: s.svg }} />
@@ -583,9 +589,12 @@ function ItemSheet({ item: start, showImage, onClose, onAdd, kitchenNote }: { it
   useEffect(() => { const v = item.variations.find((x) => !x.soldOut) ?? item.variations[0]; setVariationId(v?.id ?? ""); setSel(defaultSelection(item)); setTried(false); }, [item]);
   const line = sub ? buildLine({ ...item, category: start.category }, variationId, sel, qty, note) : null;
   const unmet = sub ? unmetGroups(item, sel) : [];
+  const [more, setMore] = useState(false);
+  const long = (item.description ?? "").length > 220;
   const info = (item.description || kitchenNote) ? (
     <>
-      {item.description && <p className="whitespace-pre-line text-[0.9375rem] leading-relaxed text-[#5E5853]">{item.description}</p>}
+      {item.description && <p className={`whitespace-pre-line text-[0.9375rem] leading-relaxed text-[#5E5853] ${long && !more ? "max-lg:line-clamp-4" : ""}`}>{item.description}</p>}
+      {long && <button type="button" onClick={() => setMore(!more)} className="mt-1 text-[0.875rem] font-semibold text-[var(--pk)] lg:hidden">{more ? "Less" : "Read more"}</button>}
       {kitchenNote && <p className="mt-3 rounded-xl bg-[#F4ECE6] px-3 py-2 text-[0.8438rem] text-[#3A3431]">The kitchen has closed for today — choose a pick-up time when it&apos;s open at checkout.</p>}
     </>
   ) : null;
@@ -648,7 +657,7 @@ function ComboSheet({ combo, showImage, onClose, onAdd }: { combo: MenuItem; sho
           return (
             <li key={g.id} className="flex items-center gap-3 rounded-[14px] bg-white px-3 py-2.5 ring-1 ring-[#EDE3DB]">
               <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[0.8125rem] font-bold ${pk ? "bg-[var(--pk)] text-white" : "bg-[#F4ECE6] text-[#5E5853]"}`}>{pk ? <Check className="h-4 w-4" /> : gi + 1}</span>
-              <span className="min-w-0 flex-1"><span className="block text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-[#8C847D]">{g.label}</span><span className="block truncate font-semibold">{pk ? pk.option.name : "Not chosen yet"}</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-[#8C847D]">{g.options.length === 1 ? "Included" : g.label}</span><span className="block truncate font-semibold">{pk ? pk.option.name : "Not chosen yet"}</span></span>
               {pk && <span className="shrink-0 text-[0.875rem] tabular-nums text-[#5E5853]">{money(comboPickPrice(pk.option, pk.variationId, pk.selected))}</span>}
             </li>
           );
@@ -667,7 +676,7 @@ function ComboSheet({ combo, showImage, onClose, onAdd }: { combo: MenuItem; sho
           <section key={g.id} className="border-t border-[#EFE6DF] pt-5 first:border-0 first:pt-0">
             <div className="mb-3 flex items-center gap-3">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#151312] text-[0.875rem] font-bold text-white">{gi + 1}</span>
-              <p className="text-[1.0625rem] font-semibold leading-snug">{only ? `${g.label}: ${g.options[0].name}` : g.label}</p>
+              <p className="text-[1.0625rem] font-semibold leading-snug">{only ? g.options[0].name : g.label}</p>
               {!only && <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[0.75rem] font-semibold ${tried && !pk ? "bg-[#FDECEA] text-[#B42318]" : "bg-[#F4ECE6] text-[#5E5853]"}`}>Choose 1</span>}
             </div>
             {!only && (
