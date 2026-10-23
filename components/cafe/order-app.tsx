@@ -230,7 +230,7 @@ export function OrderApp(p: Props) {
 function Price({ i }: { i: MenuItem }) {
   const multi = i.isGroup || i.variations.length > 1;
   if (i.soldOut) return <span className="text-[#A39A93]">Sold out</span>;
-  return <>{multi ? <span className="font-normal text-[#8C847D]">from</span> : null}{money(fromPrice(i))}</>;
+  return <>{multi ? <span className="font-normal text-[#8C847D]">from</span> : null}{multi ? " " : null}{money(fromPrice(i))}</>;
 }
 
 function ItemCard({ i, onOpen }: { i: MenuItem; onOpen: () => void }) {
