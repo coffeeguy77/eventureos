@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { CafeClosed, CafeFrame, WRAP, btn, serif } from "@/components/cafe/frame";
 import { OpenBadge } from "@/components/cafe/bits";
 import { OrderApp } from "@/components/cafe/order-app";
-import { cafePages, nowIn } from "@/lib/cafe/core";
+import { cafePages, nowIn, webBanners } from "@/lib/cafe/core";
 import { appSnapshot, cafeOrg } from "@/lib/cafe/server";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +64,9 @@ export default async function OrderPage({ params }: P) {
         maxDays={Math.max(1, Math.min(14, cfg.scheduling?.maxDaysAhead ?? 7))}
         business={org.name}
         phone={org.contact_phone}
+        banners={webBanners(cfg.hero, cfg.smartSlides, loc?.id ?? null)}
+        bannerRatio={cfg.heroRatio}
+        bannerInterval={cfg.heroInterval}
       />
     </CafeFrame>
   );

@@ -71,8 +71,25 @@ export async function igStatus(orgId: string) {
   return data as { status: string; account_label: string | null; last_error: string | null; settings: Record<string, unknown> } | null;
 }
 
+/**
+ * A feed kept by another of the business's systems (e.g. LeadPages: /api/ig-media?slug=…, which holds the Instagram login
+ * and refreshes it). Read-only and public; cached for 10 minutes.
+ */
+export async function igFeedFromUrl(url: string): Promise<{ posts: IgPost[]; username: string | null }> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000), next: { revalidate: 600 }, headers: { accept: "application/json" } });
+    if (!r.ok) return { posts: [], username: null };
+    const d = (await r.json()) as { username?: string; media?: { id?: string; image?: string; link?: string; permalink?: string; caption?: string; type?: string; timestamp?: string }[] };
+    const posts = (Array.isArray(d.media) ? d.media : []).map((m) => ({
+      id: String(m.id ?? ""), image: String(m.image ?? ""), permalink: String(m.link ?? m.permalink ?? ""), caption: String(m.caption ?? "").slice(0, 220), video: m.type === "VIDEO", at: String(m.timestamp ?? ""),
+    })).filter((p) => p.id && /^https:\/\//.test(p.image) && /^https:\/\/(www\.)?instagram\.com\//.test(p.permalink)).slice(0, 12);
+    return { posts, username: typeof d.username === "string" ? d.username.slice(0, 60) : null };
+  } catch { return { posts: [], username: null }; }
+}
+
 /** The latest posts (cached for an hour). Never throws — an empty list shows the "Follow us" panel instead. */
-export async function igFeed(orgId: string): Promise<{ posts: IgPost[]; username: string | null }> {
+export async function igFeed(orgId: string, feedUrl?: string): Promise<{ posts: IgPost[]; username: string | null }> {
+  if (feedUrl) { const f = await igFeedFromUrl(feedUrl); if (f.posts.length) return f; }
   if (!serviceRoleConfigured()) return { posts: [], username: null };
   try {
     const db = createServiceClient();

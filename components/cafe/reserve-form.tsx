@@ -13,7 +13,8 @@ export function ReserveForm({ slug, dates, weekly, closures, now, phone }: { slu
   const [f, setF] = useState({ name: "", phone: "", email: "", notes: "", seating: "", answer: "", company: "" });
   const [party, setParty] = useState(2);
   const [date, setDate] = useState(dates[0] ?? "");
-  const slots = useMemo(() => (date ? slotsFor(date, weekly, closures, now, 30, 30) : []), [date, weekly, closures, now]);
+  // Bookings every half hour (the app takes any time; fewer, clearer choices)
+  const slots = useMemo(() => (date ? slotsFor(date, weekly, closures, now, 30, 30).filter((x) => /:(00|30)$/.test(x.value)) : []), [date, weekly, closures, now]);
   const [time, setTime] = useState("");
   useEffect(() => { if (!slots.some((s) => s.value === time)) setTime(slots[0]?.value ?? ""); }, [slots, time]);
   const [cap, setCap] = useState<{ token: string; question: string } | null>(null);
@@ -55,9 +56,24 @@ export function ReserveForm({ slug, dates, weekly, closures, now, phone }: { slu
           </div>
           {!dates.length && <p className="text-[0.9375rem] text-[#5E5853]">No times are open for booking right now{phone ? ` — call us on ${phone}` : ""}.</p>}
         </div>
+        {slots.length > 0 && (
+          <div>
+            <span className={lbl}>Time</span>
+            <div className="space-y-2">
+              {([["Morning", (m: number) => m < 720], ["Afternoon", (m: number) => m >= 720 && m < 1020], ["Evening", (m: number) => m >= 1020]] as const).map(([part, inPart]) => {
+                const list = slots.filter((x) => inPart(Number(x.value.slice(0, 2)) * 60 + Number(x.value.slice(3, 5))));
+                return list.length ? (
+                  <div key={part} className="flex flex-wrap items-center gap-1.5">
+                    <span className="w-[76px] shrink-0 text-[0.75rem] font-semibold uppercase tracking-wide text-[#8C847D]">{part}</span>
+                    {list.map((x) => <button key={x.value} type="button" onClick={() => setTime(x.value)} aria-pressed={time === x.value} className={`h-9 rounded-full px-3 text-[0.8438rem] font-medium tabular-nums ring-1 ${time === x.value ? "bg-[#151312] text-white ring-[#151312]" : "bg-white ring-[#E6DCD4] hover:ring-[#151312]"}`}>{x.label}</button>)}
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div><label className={lbl} htmlFor="rs-time">Time</label><select id="rs-time" value={time} onChange={(e) => setTime(e.target.value)} className={field}>{slots.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
-          <div><span className={lbl}>Guests</span>
+          <div className="sm:col-span-2"><span className={lbl}>Guests</span>
             <div className="flex h-[52px] items-center justify-between rounded-[14px] border border-[#E6DCD4] bg-white px-2">
               <button type="button" aria-label="Fewer guests" onClick={() => setParty(Math.max(1, party - 1))} className="grid h-9 w-9 place-items-center rounded-full hover:bg-[#F4ECE6]"><Minus className="h-4 w-4" /></button>
               <span className="font-semibold tabular-nums">{party} {party === 1 ? "guest" : "guests"}</span>

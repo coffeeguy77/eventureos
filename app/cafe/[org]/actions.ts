@@ -16,7 +16,7 @@ async function site(slug: string, need: "order" | "reserve" | "any") {
 }
 
 export interface OrderRequest {
-  lines: { variationId: string; quantity: number; modifierIds: string[]; note?: string; presetId?: string; custom?: boolean }[];
+  lines: { variationId: string; quantity: number; modifierIds: string[]; note?: string; presetId?: string; custom?: boolean; comboId?: string; comboInstanceId?: string; comboGroupId?: string }[];
   name: string; phone: string; note: string;
   /** null = as soon as possible; otherwise the café's local date and time */
   when: { date: string; time: string } | null;
@@ -35,6 +35,9 @@ export async function startCafeOrder(slug: string, o: OrderRequest): Promise<R<{
       variationId: String(l.variationId), quantity: Math.max(1, Math.min(50, Math.round(Number(l.quantity)) || 1)),
       modifierIds: (Array.isArray(l.modifierIds) ? l.modifierIds : []).map(String).filter((m) => ID.test(m)).slice(0, 30),
       note: str(l.note, 200) || undefined, presetId: typeof l.presetId === "string" && ID.test(l.presetId) ? l.presetId : undefined, custom: l.custom === true ? true : undefined,
+      // Combo lines: the app re-checks the combo and works out the discount itself (never sent from here)
+      ...(typeof l.comboId === "string" && ID.test(l.comboId) && typeof l.comboInstanceId === "string" && ID.test(l.comboInstanceId) && typeof l.comboGroupId === "string" && ID.test(l.comboGroupId)
+        ? { comboId: l.comboId, comboInstanceId: l.comboInstanceId, comboGroupId: l.comboGroupId } : {}),
     }));
 
     const cfg = await appConfig(org.cafe.appUrl);

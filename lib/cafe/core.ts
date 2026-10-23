@@ -28,6 +28,10 @@ export interface CafeSettings {
   kitchenTitle: string; kitchenText: string; kitchenImage: string | null;
   /** Instagram handle without the @ (the feed shows once Instagram is connected in the office) */
   instagram: string;
+  /** Or: a ready-made Instagram feed to show (e.g. the one LeadPages keeps for this business) — https link returning { media: [...] } */
+  igFeedUrl: string;
+  /** Up to 8 menu items chosen for "From the menu" on the café page (app item ids); none chosen = the first items with photos */
+  featured: string[];
   /** Roasting Club page */
   clubTitle: string; clubIntro: string; clubImage: string | null;
   clubTiers: ClubTier[];
@@ -52,7 +56,7 @@ export const DEFAULT_CAFE: CafeSettings = {
   kitchenTitle: "From our kitchen",
   kitchenText: "Breakfast and lunch made in our own kitchen — order ahead for pick-up, or grab a table.",
   kitchenImage: null,
-  instagram: "",
+  instagram: "", igFeedUrl: "", featured: [],
   clubTitle: "The Roasting Club",
   clubIntro: "A members' roastery: use our commercial roasters, sample roasters, packing and label printing to roast and sell your own coffee — with people around who'll help.",
   clubImage: null,
@@ -113,6 +117,8 @@ export function readCafe(orgSettings: unknown): CafeSettings {
     coffeeTitle: t("coffeeTitle", 90), coffeeText: t("coffeeText", 600), coffeeImage: img(raw.coffeeImage),
     kitchenTitle: t("kitchenTitle", 90), kitchenText: t("kitchenText", 600), kitchenImage: img(raw.kitchenImage),
     instagram: cleanHandle(raw.instagram),
+    igFeedUrl: /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}\/[^\s"'<>]{0,300}$/i.test(str(raw.igFeedUrl, 400)) ? str(raw.igFeedUrl, 400) : "",
+    featured: [...new Set(arr(raw.featured).map((x) => str(x, 120)).filter((x) => /^[A-Za-z0-9:_#-]{1,120}$/.test(x)))].slice(0, 8),
     clubTitle: t("clubTitle", 90), clubIntro: t("clubIntro", 600), clubImage: img(raw.clubImage),
     clubTiers: arr(raw.clubTiers).slice(0, 6).map((x, i) => {
       const o = obj(x);
@@ -259,19 +265,61 @@ export interface MenuItem {
   id: string; name: string; description?: string; image?: string | null; soldOut?: boolean; category?: string | null;
   variations: MenuVariation[]; modifierGroups?: MenuGroup[]; lockedModifierIds?: string[]; lockedModifierNames?: string[];
   defaults?: Record<string, string[]>; isPreset?: boolean; custom?: boolean; isGroup?: boolean; subProducts?: MenuItem[]; fromPrice?: number; isCombo?: boolean;
+  /** Combo builder (the app's "combos"): pick one option per group; the app takes the discount off at checkout */
+  comboId?: string; comboGroups?: ComboGroup[]; comboDiscountValue?: number;
 }
-export interface MenuSection { category: string; items: MenuItem[] }
+export interface ComboOption { id: string; name: string; image?: string | null; variations: MenuVariation[]; modifierGroups?: MenuGroup[]; lockedMods?: MenuModifier[]; defaults?: Record<string, string[]> }
+export interface ComboGroup { id: string; label: string; options: ComboOption[] }
+/** A banner at the top of a menu section (set in the app's Menu Builder) */
+export interface SectionBanner { title: string; image: string | null; itemId: string | null; hideText: boolean }
+export interface MenuSection {
+  category: string; items: MenuItem[];
+  /** The app's "show images" switch for this section — off means a slim list with no photos */
+  showImages?: boolean;
+  banner?: SectionBanner | null;
+}
 
-const isCombo = (it: MenuItem) => !!it.isCombo || it.variations?.some((v) => /^combo-price-/.test(v.id));
+export const isCombo = (it: MenuItem) => !!it.isCombo || it.variations?.some((v) => /^combo-price-/.test(v.id));
+const httpsImg = (v: unknown) => (typeof v === "string" && /^https:\/\/[^\s"'<>()]+$/.test(v) && v.length < 800 ? v : null);
 
-/** Keep what can be ordered from a web page: drop combos (built in the app only) and empty sections. */
+/** Keep what can be ordered from a web page: combos with every group filled, items with a price, no POS-only sections. */
 export function webMenu(raw: unknown): MenuSection[] {
-  const cats = arr(obj(raw).categories) as MenuSection[];
-  const ok = (it: MenuItem): boolean => !!it && typeof it.name === "string" && !isCombo(it)
-    && (it.isGroup ? arr(it.subProducts).some((s) => ok(s as MenuItem)) : arr(it.variations).some((v) => typeof (v as MenuVariation).price === "number"));
+  const cats = arr(obj(raw).categories) as (MenuSection & { posOnly?: boolean; eventOnly?: boolean })[];
+  const comboOk = (it: MenuItem) => !!it.comboId && arr(it.comboGroups).length > 0 && arr(it.comboGroups).every((g) => arr((g as ComboGroup).options).length > 0);
+  const ok = (it: MenuItem): boolean => !!it && typeof it.name === "string"
+    && (isCombo(it) ? comboOk(it) : it.isGroup ? arr(it.subProducts).some((s) => ok(s as MenuItem)) : arr(it.variations).some((v) => typeof (v as MenuVariation).price === "number"));
   const seen = new Set<string>();
-  return cats.map((c) => ({ category: str(c.category, 80) || "Menu", items: arr(c.items).filter((i) => ok(i as MenuItem)) as MenuItem[] }))
-    .filter((c) => c.items.length && !seen.has(c.category.toLowerCase()) && !!seen.add(c.category.toLowerCase()));
+  return cats.filter((c) => !c.posOnly && !c.eventOnly).map((c) => {
+    const b = obj(c.banner);
+    const banner = c.banner && (httpsImg(b.image) || str(b.title, 120)) ? { title: str(b.title, 120), image: httpsImg(b.image), itemId: str(b.itemId, 120) || null, hideText: b.hideText === true } : null;
+    return { category: str(c.category, 80) || "Menu", items: arr(c.items).filter((i) => ok(i as MenuItem)) as MenuItem[], showImages: c.showImages !== false, banner };
+  }).filter((c) => c.items.length && !seen.has(c.category.toLowerCase()) && !!seen.add(c.category.toLowerCase()));
+}
+
+/** A slide in the app's banner carousel (its "hero"), as the website shows it. */
+export interface Banner { id: string; image: string | null; title: string; subtitle: string; cta: string; textColor: string; background: string | null; fit: "cover" | "contain"; link: { type: "item" | "category" | "url" | "none"; value: string } }
+
+/** The app's banners that are on now and shown at this store (links the website can't follow become plain banners). */
+export function webBanners(rawHero: unknown, smartSlides: unknown, locationId: string | null): Banner[] {
+  const here = (x: Record<string, unknown>) => !Array.isArray(x.locations) || x.locations.length === 0 || (!!locationId && (x.locations as unknown[]).includes(locationId));
+  const color = (v: unknown) => (typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v) ? v : "#ffffff");
+  // Only plain colours and simple gradients as a background (never arbitrary CSS)
+  const bgOk = (v: unknown) => (typeof v === "string" && /^(#[0-9a-f]{3,8}|(linear|radial)-gradient\([#\w\s,.%-]+(\([\d\s,.%]+\)[#\w\s,.%-]*)*\))$/i.test(v.trim()) ? v.trim() : null);
+  const out: Banner[] = [];
+  for (const x of [...arr(smartSlides), ...arr(rawHero)].map(obj)) {
+    if (x.enabled === false || !here(x)) continue;
+    const bgImg = typeof x.bg === "string" ? (x.bg.match(/url\((['"]?)(.*?)\1\)/) ?? [])[2] : undefined;
+    const image = httpsImg(x.image) ?? httpsImg(bgImg);
+    const l = obj(x.link);
+    const t = String(l.type ?? "");
+    const link = t === "item" || t === "category" ? { type: t, value: str(l.value, 120) } as const
+      : t === "url" && str(l.value, 400) ? { type: "url" as const, value: /^https?:\/\//i.test(str(l.value, 400)) ? str(l.value, 400) : `https://${str(l.value, 400)}` }
+      : { type: "none" as const, value: "" };
+    const b: Banner = { id: str(x.id, 60) || `b${out.length}`, image, title: str(x.title, 140), subtitle: str(x.subtitle, 240), cta: str(x.cta, 40), textColor: color(x.textColor),
+      background: image ? null : bgOk(x.bg), fit: typeof x.bg === "string" && /contain/.test(x.bg) ? "contain" : "cover", link };
+    if (b.image || b.title || b.background) out.push(b);
+  }
+  return out.slice(0, 12);
 }
 
 export function fromPrice(it: MenuItem): number {
@@ -285,6 +333,8 @@ export interface CafeLine {
   key: string; itemId: string; name: string; image: string | null; category: string | null;
   variationId: string; variationName: string; modifierIds: string[]; modifierNames: string[];
   unitPrice: number; quantity: number; note: string; presetId?: string; custom?: boolean;
+  /** Part of a combo: every line of one combo shares the instance id; the discount comes off once per combo */
+  comboId?: string; comboInstanceId?: string; comboGroupId?: string; comboName?: string; comboDiscount?: number;
 }
 
 /** Required groups not satisfied by a selection. */
@@ -326,7 +376,37 @@ export function defaultSelection(item: MenuItem): Record<string, string[]> {
   return out;
 }
 
-export const cartSubtotal = (lines: CafeLine[]) => lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+/** Combo discounts in the cart (shown before paying — the app re-checks and applies them). */
+export function comboDiscounts(lines: CafeLine[]) {
+  const seen = new Map<string, { name: string; cents: number }>();
+  for (const l of lines) if (l.comboInstanceId && !seen.has(l.comboInstanceId)) seen.set(l.comboInstanceId, { name: l.comboName ?? "Combo", cents: Math.max(0, l.comboDiscount ?? 0) * l.quantity });
+  return [...seen.values()].filter((d) => d.cents > 0);
+}
+export const cartSubtotal = (lines: CafeLine[]) => lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0) - comboDiscounts(lines).reduce((s, d) => s + d.cents, 0);
+
+/** The cart lines for one combo: one line per group, all sharing an instance id. */
+export function comboLines(combo: MenuItem, picks: { group: ComboGroup; option: ComboOption; variationId: string; selected: Record<string, string[]> }[], quantity: number, instanceId: string): CafeLine[] {
+  const subtotal = picks.reduce((s, p) => s + comboPickPrice(p.option, p.variationId, p.selected), 0);
+  const discount = Math.min(subtotal, Math.max(0, combo.comboDiscountValue ?? 0));
+  const q = Math.max(1, Math.min(50, Math.round(quantity) || 1));
+  return picks.map((p) => {
+    const v = p.option.variations.find((x) => x.id === p.variationId) ?? p.option.variations[0];
+    const ids = (p.option.lockedMods ?? []).map((m) => m.id), names = (p.option.lockedMods ?? []).map((m) => m.name);
+    for (const g of p.option.modifierGroups ?? []) for (const m of g.modifiers) if ((p.selected[g.id] ?? []).includes(m.id)) { ids.push(m.id); names.push(m.name); }
+    return {
+      key: [instanceId, p.option.id, v?.id, [...ids].sort().join(",")].join("|"), itemId: p.option.id, name: p.option.name, image: p.option.image ?? null, category: combo.name,
+      variationId: v?.id ?? "", variationName: p.option.variations.length > 1 ? v?.name ?? "" : "", modifierIds: ids, modifierNames: names,
+      unitPrice: comboPickPrice(p.option, p.variationId, p.selected), quantity: q, note: `Part of: ${combo.name}`,
+      comboId: combo.comboId, comboInstanceId: instanceId, comboGroupId: p.group.id, comboName: combo.name, comboDiscount: discount,
+    };
+  });
+}
+export function comboPickPrice(o: ComboOption, variationId: string, selected: Record<string, string[]>) {
+  const v = o.variations.find((x) => x.id === variationId) ?? o.variations[0];
+  let p = (v?.price ?? 0) + (o.lockedMods ?? []).reduce((s, m) => s + (m.price || 0), 0);
+  for (const g of o.modifierGroups ?? []) for (const m of g.modifiers) if ((selected[g.id] ?? []).includes(m.id)) p += m.price || 0;
+  return p;
+}
 
 /** The app's surcharge settings (percentages), as /api/config returns them. */
 export interface Surcharges { holiday?: { activeToday?: boolean; percent?: number; label?: string; locations?: string[] }; weekend?: { activeToday?: boolean; percent?: number; label?: string; locations?: string[] }; card?: { enabled?: boolean; percent?: number; label?: string; locations?: string[] } }

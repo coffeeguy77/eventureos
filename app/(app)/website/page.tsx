@@ -14,6 +14,7 @@ import { RemindersForm } from "@/components/website/reminders-form";
 import { CafeForm } from "@/components/website/cafe-form";
 import { readCafe } from "@/lib/cafe/core";
 import { igFeed, igMissingEnv, igStatus } from "@/lib/cafe/instagram";
+import { appSnapshot } from "@/lib/cafe/server";
 import { SiteForm } from "@/components/website/site-form";
 import { readSite } from "@/lib/site/site";
 import { newPages } from "@/lib/site/pages";
@@ -56,9 +57,11 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
       pages={allTargets} suggestions={suggest(site, site.discovered, allTargets, { products })} checks={launchCheck(site, site.discovered, allTargets).checks}
       hits={(hitsR.data ?? []) as { path: string; kind: string; target: string | null; hits: number; last_at: string }[]} hitsReady={!hitsR.error} />;
   } else if (tab === "cafe") {
-    const [st, feed] = await Promise.all([igStatus(org.id), igFeed(org.id)]);
+    const cafe = readCafe(settings);
+    const [st, feed, snap] = await Promise.all([igStatus(org.id), igFeed(org.id, cafe.igFeedUrl || undefined), cafe.appUrl ? appSnapshot(cafe.appUrl, true) : Promise.resolve(null)]);
+    const cafeMenu = (snap?.menu ?? []).map((s) => ({ section: s.category, items: s.items.filter((i) => !i.isCombo).map((i) => ({ id: i.id, name: i.name, image: i.image ?? null })) }));
     const missing = igMissingEnv();
-    body = <CafeForm initial={readCafe(settings)} slug={o?.slug as string} base={appBaseUrl()} orgId={org.id}
+    body = <CafeForm initial={cafe} menu={cafeMenu} slug={o?.slug as string} base={appBaseUrl()} orgId={org.id}
       ig={{ configured: !missing.length, missing, connected: st?.status === "connected", account: st?.account_label ?? null, error: st?.last_error ?? null, posts: feed.posts.length,
         flash: sp.ig_error ? String(sp.ig_error).slice(0, 300) : sp.ig_connected ? "Instagram connected." : null, flashOk: !sp.ig_error }} />;
   } else if (tab === "reminders") {

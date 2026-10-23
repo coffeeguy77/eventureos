@@ -53,8 +53,10 @@ function FaqEditor({ value, onChange }: { value: Faq[]; onChange: (v: Faq[]) => 
   );
 }
 
-export function CafeForm({ initial, slug, base, orgId, ig }: {
+export function CafeForm({ initial, slug, base, orgId, ig, menu = [] }: {
   initial: CafeSettings; slug: string; base: string; orgId: string;
+  /** The live menu from the app, for choosing the café page's 8 items */
+  menu?: { section: string; items: { id: string; name: string; image: string | null }[] }[];
   ig: { configured: boolean; missing: string[]; connected: boolean; account: string | null; error: string | null; flash: string | null; flashOk: boolean; posts: number };
 }) {
   const [v, setV] = useState<CafeSettings>(initial);
@@ -133,6 +135,7 @@ export function CafeForm({ initial, slug, base, orgId, ig }: {
           </div>
           <div className="space-y-3">
             <div><Label htmlFor="cf-ig" hint="Without the @">Instagram account</Label><Input id="cf-ig" value={v.instagram} placeholder="yourcafe" onChange={(e) => set("instagram", e.target.value)} /></div>
+            <div><Label htmlFor="cf-igf" hint="optional — a feed you already have, e.g. from LeadPages">Instagram feed link</Label><Input id="cf-igf" value={v.igFeedUrl} placeholder="https://leadpages.com.au/api/ig-media?slug=yourcafe" onChange={(e) => set("igFeedUrl", e.target.value)} /></div>
             <div className="rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line">
               <p className="flex items-center gap-2 text-[0.875rem] font-medium text-ink"><Instagram className="h-4 w-4" />Instagram feed</p>
               {ig.flash && <p className={`mt-1.5 text-[0.8125rem] font-medium ${ig.flashOk ? "text-emerald-700" : "text-rose-700"}`}>{ig.flash}</p>}
@@ -154,6 +157,53 @@ export function CafeForm({ initial, slug, base, orgId, ig }: {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card className="space-y-3 p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold text-ink">“From the menu” on the café page</h2>
+          <p className="text-[0.8125rem] text-ink-muted">{v.featured.length}/8 chosen{v.featured.length ? "" : " — showing the first items with photos"}</p>
+        </div>
+        {v.featured.length > 0 && (
+          <ol className="flex flex-wrap gap-2">
+            {v.featured.map((id, i) => {
+              const it = menu.flatMap((s) => s.items).find((x) => x.id === id);
+              return (
+                <li key={id} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 py-1 pl-3 pr-1 text-[0.8125rem]">
+                  {i + 1}. {it?.name ?? "Not on the menu now"}
+                  <button type="button" aria-label="Earlier" onClick={() => set("featured", move(v.featured, i, -1))} className="grid h-6 w-6 place-items-center rounded-full hover:bg-white"><ArrowUp className="h-3 w-3 -rotate-90" /></button>
+                  <button type="button" aria-label="Remove" onClick={() => set("featured", v.featured.filter((x) => x !== id))} className="grid h-6 w-6 place-items-center rounded-full text-rose-600 hover:bg-white"><Trash2 className="h-3 w-3" /></button>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        {menu.length ? (
+          <details className="rounded-lg ring-1 ring-inset ring-line">
+            <summary className="cursor-pointer px-3 py-2 text-[0.875rem] font-medium text-ink">Choose items from your menu</summary>
+            <div className="max-h-[380px] space-y-3 overflow-y-auto px-3 pb-3">
+              {menu.map((sec) => (
+                <div key={sec.section}>
+                  <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{sec.section}</p>
+                  <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {sec.items.map((it) => {
+                      const on = v.featured.includes(it.id);
+                      return (
+                        <label key={it.id} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-[0.8125rem] ${on ? "bg-brand-50" : "hover:bg-zinc-50"}`}>
+                          <input type="checkbox" className="h-4 w-4 accent-brand-500" checked={on} disabled={!on && v.featured.length >= 8}
+                            onChange={(e) => set("featured", e.target.checked ? [...v.featured, it.id].slice(0, 8) : v.featured.filter((x) => x !== it.id))} />
+                          {it.image ? <img src={it.image} alt="" className="h-7 w-7 rounded object-cover" /> : <span className="h-7 w-7 rounded bg-zinc-100" />}
+                          <span className="truncate">{it.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : <p className="text-[0.8125rem] text-ink-muted">Your menu didn&apos;t load from the ordering app — check the app address above, then reload.</p>}
+        <p className="text-[0.75rem] text-ink-muted">Items without a photo show as a neat card with an icon. Save at the bottom of the page.</p>
       </Card>
 
       <Card className="space-y-4 p-5">

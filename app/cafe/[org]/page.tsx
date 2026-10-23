@@ -5,12 +5,13 @@ import type { Metadata } from "next";
 import { ArrowRight, CalendarDays, Clock, Coffee, Flame, MapPin, ShoppingBag, Truck, UtensilsCrossed } from "lucide-react";
 import { CafeClosed, CafeFrame, WRAP, btn, btnOutline, eyebrow, hand, serif } from "@/components/cafe/frame";
 import { ContactForm } from "@/components/events/contact-form";
-import { cafePages, fromPrice, hoursRows, money, nowIn, type MenuItem } from "@/lib/cafe/core";
+import { cafePages, fromPrice, hoursRows, money, nowIn, openDates, type MenuItem } from "@/lib/cafe/core";
 import { appSnapshot, cafeOrg } from "@/lib/cafe/server";
 import { igFeed } from "@/lib/cafe/instagram";
 import { readShop } from "@/lib/shop/core";
 import { readSiteNav } from "@/lib/site-nav";
 import { OpenBadge } from "@/components/cafe/bits";
+import { ReserveForm } from "@/components/cafe/reserve-form";
 
 import { ed, edImg } from "@/lib/site/copy";
 
@@ -30,7 +31,7 @@ export default async function CafePage({ params }: P) {
   const pages = cafePages(c);
   if (!pages.home) return <CafeFrame org={org} active="home"><CafeClosed name={org.name} what="Our café page" /></CafeFrame>;
 
-  const [snap, ig] = await Promise.all([c.appUrl ? appSnapshot(c.appUrl, true) : Promise.resolve({ cfg: null, loc: null, menu: null }), igFeed(org.id)]);
+  const [snap, ig] = await Promise.all([c.appUrl ? appSnapshot(c.appUrl, true) : Promise.resolve({ cfg: null, loc: null, menu: null }), igFeed(org.id, c.igFeedUrl || undefined)]);
   const cfg = snap.cfg;
   const h = cfg?.hours ?? null;
   const tz = h?.timezone || org.timezone;
@@ -39,7 +40,11 @@ export default async function CafePage({ params }: P) {
   const base = `/cafe/${org.slug}`;
   const orderHref = pages.order ? `${base}/order` : pages.appOrder ? c.appUrl : null;
   const hero = c.heroImage ?? cfg?.storePhoto ?? null;
-  const picks = (snap.menu ?? []).flatMap((s) => s.items.map((i) => ({ ...i, section: s.category }))).filter((i) => i.image && !i.soldOut).slice(0, 8) as (MenuItem & { section: string })[];
+  // "From the menu": the 8 items chosen in Website → Café pages (in that order), else the first items with photos
+  const allItems = (snap.menu ?? []).flatMap((s) => s.items.map((i) => ({ ...i, section: s.category }))) as (MenuItem & { section: string })[];
+  const picks = (c.featured.length
+    ? c.featured.map((id) => allItems.find((i) => i.id === id)).filter((i): i is MenuItem & { section: string } => !!i && !i.soldOut)
+    : allItems.filter((i) => i.image && !i.soldOut)).slice(0, 8);
   const kitchenCats = new Set((h?.kitchen?.categories ?? []).map((x) => x.toLowerCase()));
   const kitchenPic = c.kitchenImage ?? (snap.menu ?? []).filter((s) => kitchenCats.has(s.category.toLowerCase())).flatMap((s) => s.items).find((i) => i.image)?.image ?? null;
   const shop = readShop(org.rawSettings).enabled;
@@ -56,7 +61,7 @@ export default async function CafePage({ params }: P) {
           <p {...ed("cafe.heroText")} className="mt-5 max-w-xl text-[1.125rem] leading-relaxed text-[#5E5853]">{c.heroText}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             {orderHref && <Link href={orderHref} className={btn} data-track="Café: order online"><ShoppingBag className="h-5 w-5" />Order online</Link>}
-            {pages.reserve && <Link href={`${base}/reserve`} className={btnOutline} data-track="Café: reserve"><CalendarDays className="h-5 w-5" />Reserve a table</Link>}
+            {pages.reserve && <Link href={cfg?.reservations ? "#book" : `${base}/reserve`} className={btnOutline} data-track="Café: reserve"><CalendarDays className="h-5 w-5" />Reserve a table</Link>}
           </div>
           {org.address && <p className="mt-7 flex items-start gap-2 text-[0.9375rem] text-[#5E5853]"><MapPin className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[var(--pk)]" />{org.address}</p>}
         </div>
@@ -78,7 +83,7 @@ export default async function CafePage({ params }: P) {
       <section className={`${WRAP} grid gap-4 pb-14 sm:grid-cols-2 lg:grid-cols-4`}>
         {[
           orderHref ? { href: orderHref, I: ShoppingBag, t: "Order ahead", d: "Skip the queue — pay online and pick up." } : null,
-          pages.reserve ? { href: `${base}/reserve`, I: CalendarDays, t: "Book a table", d: "Breakfast, lunch or a catch-up — we'll save you a spot." } : null,
+          pages.reserve ? { href: cfg?.reservations ? "#book" : `${base}/reserve`, I: CalendarDays, t: "Book a table", d: "Breakfast, lunch or a catch-up — we'll save you a spot." } : null,
           pages.club ? { href: `${base}/roasting-club`, I: Flame, t: c.clubTitle, d: "Roast your own coffee on our equipment." } : null,
           pages.wholesale ? { href: `${base}/wholesale`, I: Truck, t: "Wholesale", d: "Our coffee in your café, office or restaurant." } : null,
           shop ? { href: `/shop/${org.slug}`, I: Coffee, t: labels.shop, d: "Freshly roasted beans, delivered." } : null,
@@ -128,7 +133,9 @@ export default async function CafePage({ params }: P) {
             <div className="no-scrollbar -mx-5 mt-4 flex snap-x gap-4 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-4">
               {picks.map((i) => (
                 <Link key={i.id} href={orderHref ?? "#"} className="shop-card w-[72vw] shrink-0 snap-start overflow-hidden rounded-[22px] bg-white ring-1 ring-[#EDE3DB] sm:w-auto">
-                  <span className="block aspect-[4/3] overflow-hidden bg-[#F4ECE6]"><img src={i.image!} alt="" loading="lazy" className="shop-zoom h-full w-full object-cover" /></span>
+                  {i.image
+                    ? <span className="block aspect-[4/3] overflow-hidden bg-[#F4ECE6]"><img src={i.image} alt="" loading="lazy" className="shop-zoom h-full w-full object-cover" /></span>
+                    : <span className="grid aspect-[4/3] place-items-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,#FFF6F1),#F4ECE6)]">{/coffee|latte|espresso|tea|chai|drink|shake|smoothie/i.test(`${i.section} ${i.name}`) ? <Coffee className="h-10 w-10 text-[var(--pk)]" strokeWidth={1.4} /> : <UtensilsCrossed className="h-10 w-10 text-[var(--pk)]" strokeWidth={1.4} />}</span>}
                   <span className="block p-4">
                     <span className="block text-[0.75rem] font-medium uppercase tracking-wide text-[#8C847D]">{i.section}</span>
                     <span className="mt-0.5 block font-semibold leading-snug">{i.name}</span>
@@ -140,6 +147,22 @@ export default async function CafePage({ params }: P) {
           </div>
         )}
       </section>
+
+      {/* Book a table — right here, sent to the app's bookings */}
+      {pages.reserve && cfg?.reservations && (
+        <section data-section="reserve" id="book" className="scroll-mt-24 bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)]">
+          <div className={`${WRAP} grid gap-10 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-16`}>
+            <div>
+              <p className={`${hand} text-[1.75rem] leading-none text-[var(--pk)]`}>We&apos;ll save you a spot</p>
+              <h2 className={`${serif} mt-2 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`}>Book a table</h2>
+              <p className="mt-4 max-w-md text-[1.0625rem] leading-relaxed text-[#5E5853]">Breakfast, lunch or a catch-up — pick a time and we&apos;ll have your table ready. We&apos;ll confirm by text or a quick call.</p>
+              {(c.kitchenImage ?? kitchenPic ?? hero) && <img src={(c.kitchenImage ?? kitchenPic ?? hero)!} alt="" loading="lazy" className="mt-8 hidden aspect-[4/3] w-full rounded-[28px] object-cover lg:block" />}
+              {org.contact_phone && <p className="mt-6 text-[0.9375rem] text-[#5E5853]">Bigger group or a function? Call <a className="font-semibold text-[#151312]" href={`tel:${org.contact_phone.replace(/[^\d+]/g, "")}`}>{org.contact_phone}</a>.</p>}
+            </div>
+            <ReserveForm slug={org.slug} dates={openDates(h?.weekly, h?.closures ?? [], today, 30, 30, 30)} weekly={h?.weekly ?? null} closures={h?.closures ?? []} now={today} phone={org.contact_phone} />
+          </div>
+        </section>
+      )}
 
       {/* Instagram */}
       {(ig.posts.length > 0 || igUrl) && (
