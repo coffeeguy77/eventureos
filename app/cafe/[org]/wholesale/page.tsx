@@ -55,7 +55,7 @@ export default async function WholesalePage({ params }: P) {
     (classes || learn.enabled) && { key: "j1", I: GraduationCap, title: "Learn the craft", text: `Start behind the machine. Our hands-on barista classes${learn.enabled ? ` and the ${learn.name}` : ""} take you from your first shot to pouring with confidence.`, href: classes ? `/${base}` : `/academy/${base}`, cta: "Barista classes" },
     { key: "j2", I: Coffee, title: "Find your coffee", text: "Come to the roastery, taste through our coffees with the people who roast them, and choose the one that suits your menu and your customers.", href: "#rates", cta: "Ask for a tasting" },
     { key: "j3", I: Users, title: "Train your team", text: "Bring your baristas in before you open. We'll train them on our two-group espresso machines so day one feels like day one hundred.", href: null, cta: null },
-    { key: "j4", I: Store, title: "Open your doors", text: `Fresh coffee, roasted here and delivered every ${day}. Order online in a minute, and talk to the roasters whenever you need a hand.`, href: ws.ordering ? "#order" : "#rates", cta: ws.ordering ? "How ordering works" : null },
+    { key: "j4", I: Store, title: "Open your doors", text: ws.ordering ? `Fresh coffee, roasted here and delivered every ${day}. Order online in a minute, and talk to the roasters whenever you need a hand.` : `Fresh coffee, roasted here and delivered every ${day} — and the roasters are only a call away whenever you need a hand.`, href: ws.ordering ? "#order" : "#rates", cta: ws.ordering ? "How ordering works" : null },
     pages.club && { key: "j5", I: Flame, title: "Make it your own", text: "Ready for your own blend and your own label? Roast it yourself in our Roasting Club, with the roasters and label printing on site.", href: `/cafe/${base}/roasting-club`, cta: c.clubTitle },
   ].filter(Boolean) as { key: string; I: typeof Coffee; title: string; text: string; href: string | null; cta: string | null }[];
 
@@ -199,7 +199,7 @@ export default async function WholesalePage({ params }: P) {
             <h2 {...k("rates.title")} className={`${serif} mt-3 text-[clamp(2rem,3.6vw,3rem)] font-semibold leading-tight`}>{T("rates.title", "Get our wholesale rates")}</h2>
             <p {...k("rates.text")} className="mt-4 whitespace-pre-line text-[1.0625rem] leading-relaxed text-[#5E5853]">{T("rates.text", "Tell us a little about your business and we'll come back with our rates, the coffees we'd suggest, and a time for a tasting.")}</p>
             <ul className="mt-6 space-y-2.5 text-[0.9688rem]">
-              {[["rates.b1", "Rates set for your volume"], ["rates.b2", "A tasting with the roasters"], ["rates.b3", `Delivery every ${day}`]].map(([key, d]) => (
+              {[["rates.b1", "Our wholesale price list"], ["rates.b2", "A tasting with the roasters"], ["rates.b3", `Delivery every ${day}`]].map(([key, d]) => (
                 <li key={key} className="flex items-start gap-2.5"><Check className="mt-0.5 h-5 w-5 shrink-0 text-[var(--pk)]" /><span {...k(key)}>{T(key, d)}</span></li>
               ))}
             </ul>
