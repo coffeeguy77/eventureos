@@ -277,6 +277,8 @@ export interface MenuSection {
   /** The app's "show images" switch for this section — off means a slim list with no photos */
   showImages?: boolean;
   banner?: SectionBanner | null;
+  /** The app's "Footer" switch for this section (its own icon in the footer, unless it's grouped into one) */
+  footerNav?: boolean;
 }
 
 export const isCombo = (it: MenuItem) => !!it.isCombo || it.variations?.some((v) => /^combo-price-/.test(v.id));
@@ -292,8 +294,37 @@ export function webMenu(raw: unknown): MenuSection[] {
   return cats.filter((c) => !c.posOnly && !c.eventOnly).map((c) => {
     const b = obj(c.banner);
     const banner = c.banner && (httpsImg(b.image) || str(b.title, 120)) ? { title: str(b.title, 120), image: httpsImg(b.image), itemId: str(b.itemId, 120) || null, hideText: b.hideText === true } : null;
-    return { category: str(c.category, 80) || "Menu", items: arr(c.items).filter((i) => ok(i as MenuItem)) as MenuItem[], showImages: c.showImages !== false, banner };
+    return { category: str(c.category, 80) || "Menu", items: arr(c.items).filter((i) => ok(i as MenuItem)) as MenuItem[], showImages: c.showImages !== false, banner, footerNav: (c as { footerNav?: unknown }).footerNav === true };
   }).filter((c) => c.items.length && !seen.has(c.category.toLowerCase()) && !!seen.add(c.category.toLowerCase()));
+}
+
+/** A footer icon from the app: one button that steps through its sections (e.g. "All Day" → Breakfast, then Lunch). */
+export interface FooterSlot { label: string; svg: string | null; cats: string[] }
+
+const SVG_TAGS = new Set(["svg", "g", "path", "circle", "ellipse", "rect", "line", "polyline", "polygon"]);
+/** The app's icon SVG, only if it is plain shapes (no scripts, styles, links or embedded content). */
+export function safeSvg(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  if (t.length > 6000 || !/^<svg[\s>]/i.test(t) || !/<\/svg>$/i.test(t)) return null;
+  if (/on[a-z]+\s*=|javascript:|href|url\(|<!|<\?|&/i.test(t)) return null;
+  for (const m of t.matchAll(/<\/?\s*([a-zA-Z][\w:-]*)/g)) if (!SVG_TAGS.has(m[1].toLowerCase())) return null;
+  return t;
+}
+
+/** The app's footer buttons, matched to the sections on the web menu (in the app's order); footer-on sections not in a group get their own. */
+export function webFooter(raw: unknown, menu: MenuSection[]): FooterSlot[] {
+  const byName = new Map(menu.map((s) => [s.category.toLowerCase(), s.category]));
+  const grouped = new Set<string>();
+  const out: FooterSlot[] = [];
+  for (const x of arr(raw).map(obj)) {
+    const cats = [...new Set(arr(x.categories).map((c) => byName.get(String(c).toLowerCase())).filter((c): c is string => !!c))];
+    if (!cats.length) continue;
+    cats.forEach((c) => grouped.add(c.toLowerCase()));
+    out.push({ label: str(x.label, 30) || cats[0], svg: safeSvg(x.iconSvg), cats });
+  }
+  for (const s of menu) if (s.footerNav && !grouped.has(s.category.toLowerCase())) out.push({ label: s.category, svg: null, cats: [s.category] });
+  return out.slice(0, 8);
 }
 
 /** A slide in the app's banner carousel (its "hero"), as the website shows it. */

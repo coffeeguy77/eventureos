@@ -56,7 +56,7 @@ export interface AppConfig {
   storePhoto: string | null; logoUrl: string | null; bio: string | null;
   scheduling: { timezone?: string; maxDaysAhead?: number } | null;
   /** Banner carousel (raw — read with webBanners) */
-  hero: unknown; smartSlides: unknown; heroRatio: string | null; heroInterval: number;
+  hero: unknown; smartSlides: unknown; footer: unknown; heroRatio: string | null; heroInterval: number;
 }
 
 const httpsOrNull = (v: unknown) => (typeof v === "string" && /^https:\/\//.test(v) ? v : null);
@@ -71,7 +71,7 @@ export async function appConfig(appUrl: string): Promise<AppConfig> {
     surcharges: (c.surcharges as Surcharges) ?? null, hours: (c.hours as AppHours) ?? null, reservations: c.reservations === true,
     storePhoto: httpsOrNull(c.storePhoto), logoUrl: httpsOrNull(c.logoUrl), bio: typeof c.bio === "string" ? c.bio.slice(0, 600) : null,
     scheduling: (c.scheduling as AppConfig["scheduling"]) ?? null,
-    hero: c.hero ?? null, smartSlides: (c.smartCampaigns as { heroSlides?: unknown } | null)?.heroSlides ?? null,
+    hero: c.hero ?? null, footer: c.footer ?? null, smartSlides: (c.smartCampaigns as { heroSlides?: unknown } | null)?.heroSlides ?? null,
     heroRatio: typeof c.heroRatio === "string" && /^\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?$/.test(c.heroRatio) ? c.heroRatio : null,
     heroInterval: Math.max(2, Math.min(15, Number(c.heroInterval) || 5)),
   };

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildLine, cafePages, cleanAppUrl, cleanHandle, hoursRows, openDates, readCafe, slotsFor, surchargeRows, toggleOption, unmetGroups, webMenu, zonedIso, type MenuItem } from "./core";
+import { buildLine, cafePages, cleanAppUrl, cleanHandle, hoursRows, openDates, readCafe, slotsFor, surchargeRows, toggleOption, unmetGroups, webMenu, webFooter, safeSvg, zonedIso, type MenuItem } from "./core";
 
 test("readCafe: defaults, clean values, prices hidden until set", () => {
   const d = readCafe({});
@@ -90,4 +90,27 @@ test("surcharge estimate: weekend then card on top", () => {
   const rows = surchargeRows(1000, { weekend: { activeToday: true, percent: 10 }, card: { enabled: true, percent: 1.5 } }, null);
   assert.deepEqual(rows.map((r) => r.cents), [100, 17]);
   assert.equal(surchargeRows(1000, { weekend: { activeToday: true, percent: 10, locations: ["other"] } }, "main").length, 0);
+});
+
+test("webFooter: app footer groups matched to web sections, footer-on leftovers get their own button", () => {
+  const menu = [
+    { category: "Breakfast", items: [], footerNav: true }, { category: "Lunch", items: [], footerNav: true },
+    { category: "Coffee", items: [], footerNav: true }, { category: "Cakes", items: [], footerNav: true }, { category: "Combos", items: [], footerNav: false },
+  ];
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor"><path d="M1 1h2"/></g></svg>';
+  const f = webFooter([
+    { label: "All Day", categories: ["Breakfast", "LUNCH"], iconSvg: svg },
+    { label: "Specials", categories: ["Specials", "Combos"], iconSvg: '<svg><script>x</script></svg>' },
+    { label: "Ghost", categories: ["Nope"] },
+  ], menu);
+  assert.deepEqual(f.map((s) => [s.label, s.cats]), [["All Day", ["Breakfast", "Lunch"]], ["Specials", ["Combos"]], ["Coffee", ["Coffee"]], ["Cakes", ["Cakes"]]]);
+  assert.equal(f[0].svg, svg);
+  assert.equal(f[1].svg, null);
+});
+
+test("safeSvg: only plain shapes", () => {
+  assert.equal(safeSvg('<svg onload="x()"><path d="M0"/></svg>'), null);
+  assert.equal(safeSvg('<svg><image href="https://x"/></svg>'), null);
+  assert.equal(safeSvg('<svg><style>*{}</style></svg>'), null);
+  assert.ok(safeSvg('<svg viewBox="0 0 2 2"><circle cx="1" cy="1" r="1"/></svg>'));
 });

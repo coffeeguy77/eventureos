@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChefHat, ChevronLeft, ChevronRight, Clock, Loader2, Lock, Minus, Plus, Search, ShoppingBag, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Bean, CakeSlice, Check, ChefHat, Coffee, CupSoda, UtensilsCrossed, ChevronLeft, ChevronRight, Clock, Loader2, Lock, Minus, Plus, Search, ShoppingBag, Sparkles, Trash2, X } from "lucide-react";
 import { cafeOrderStatus, cancelCafeOrder, payCafeOrder, startCafeOrder } from "@/app/cafe/[org]/actions";
 import {
   buildLine, cartSubtotal, comboDiscounts, comboLines, comboPickPrice, dateLabel, defaultSelection, fromPrice, isCombo, money, openDates, periodsFor, dowOf, slotsFor, surchargeRows, toggleOption, unmetGroups,
-  type Banner, type CafeLine, type Closure, type ComboGroup, type ComboOption, type MenuGroup, type MenuItem, type MenuSection, type Surcharges, type Weekly,
+  type Banner, type CafeLine, type FooterSlot, type Closure, type ComboGroup, type ComboOption, type MenuGroup, type MenuItem, type MenuSection, type Surcharges, type Weekly,
 } from "@/lib/cafe/core";
 
 type Square = { payments: (appId: string, locationId: string) => Payments };
@@ -33,6 +33,7 @@ interface Props {
   slug: string; menu: MenuSection[]; square: { applicationId: string; locationId: string; environment: string; currency: string };
   locationId: string | null; hours: Hours; surcharges: Surcharges | null; tz: string; now: { date: string; minutes: number }; maxDays: number; business: string; phone: string | null;
   banners?: Banner[]; bannerRatio?: string | null; bannerInterval?: number;
+  footer?: FooterSlot[]; pickup?: string;
 }
 
 const field = "h-[50px] w-full rounded-[14px] border border-[#E6DCD4] bg-white px-4 text-[0.9688rem] text-[#151312] outline-none transition placeholder:text-[#A39A93] focus:border-[var(--pk)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--pk)_14%,transparent)]";
@@ -141,34 +142,42 @@ export function OrderApp(p: Props) {
       onCheckout={() => { setDrawer(false); setStep("checkout"); window.scrollTo({ top: 0 }); }} />
   );
 
+  const footer = p.footer ?? [];
+  const jump = (cat: string) => { setActiveSec(cat); document.getElementById(slugId(cat))?.scrollIntoView({ behavior: "smooth" }); };
+  const search = (
+    <label className="relative block w-full sm:w-72 sm:shrink-0">
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8C847D]" />
+      <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the menu" aria-label="Search the menu" className="h-11 w-full rounded-full border border-[#E6DCD4] bg-white pl-10 pr-4 text-[0.9375rem] outline-none focus:border-[var(--pk)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--pk)_14%,transparent)]" />
+    </label>
+  );
+
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-5 pb-28 sm:px-8 lg:px-10 lg:pb-16">
-      {!p.hours.open && (
-        <p className="mt-4 flex items-start gap-2 rounded-2xl bg-[#FFF6EC] px-4 py-3 text-[0.9375rem] text-[#7A4A12] ring-1 ring-[#F6DFC3]">
-          <Clock className="mt-0.5 h-[18px] w-[18px] shrink-0" />
-          {p.hours.paused ? "Online ordering is paused right now." : `We're closed right now${p.hours.nextOpen ? ` — we open ${p.hours.nextOpen}` : ""}. You can still order ahead for a pick-up time.`}
-        </p>
-      )}
-      {kitchenClosedNow && <p className="mt-3 flex items-center gap-2 rounded-2xl bg-[#F4ECE6] px-4 py-3 text-[0.9375rem] text-[#3A3431]"><ChefHat className="h-[18px] w-[18px]" />The kitchen has closed for today — drinks are still available.</p>}
+    <div className={`mx-auto w-full max-w-[1360px] px-5 sm:px-8 lg:px-10 ${footer.length ? "pb-44 lg:pb-32" : "pb-28 lg:pb-16"}`}>
+      {/* One slim row: what this page is, whether we're open, and the search */}
+      <div className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:gap-4">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="shop-serif shrink-0 text-[1.75rem] font-semibold leading-tight">Order online</h1>
+          {!p.hours.open ? (
+            <p className="flex min-w-0 items-center gap-2 rounded-full bg-[#FFF6EC] px-3.5 py-1.5 text-[0.875rem] text-[#7A4A12] ring-1 ring-[#F6DFC3]">
+              <Clock className="h-4 w-4 shrink-0" />
+              <span>{p.hours.paused ? "Online ordering is paused right now." : <>Closed{p.hours.nextOpen ? ` · opens ${p.hours.nextOpen}` : ""} — <span className="font-semibold">order ahead for pick-up</span></>}</span>
+            </p>
+          ) : (
+            <p className="flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-[0.875rem] font-semibold text-emerald-800 ring-1 ring-emerald-200"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Open now{p.pickup ? ` · pick up from ${p.pickup}` : ""}</p>
+          )}
+          {kitchenClosedNow && <p className="flex items-center gap-2 rounded-full bg-[#F4ECE6] px-3.5 py-1.5 text-[0.875rem] text-[#3A3431]"><ChefHat className="h-4 w-4" />Kitchen closed for today — drinks still available</p>}
+        </div>
+        {search}
+      </div>
 
       {!!p.banners?.length && <Banners banners={p.banners} ratio={p.bannerRatio ?? "3 / 2"} interval={p.bannerInterval ?? 5} onClick={follow} />}
 
-      <div id="menu-top" className="sticky top-[58px] z-30 -mx-5 mt-4 scroll-mt-[60px] border-b border-[#EEE6DF] bg-[#FCFAF7]/95 px-5 py-3 backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
-        <div className="flex items-center gap-3">
-          <label className="relative hidden shrink-0 sm:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8C847D]" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the menu" aria-label="Search the menu" className="h-10 w-56 rounded-full border border-[#E6DCD4] bg-white pl-9 pr-3 text-[0.9063rem] outline-none focus:border-[var(--pk)]" />
-          </label>
-          <nav className="no-scrollbar flex flex-1 gap-1.5 overflow-x-auto" aria-label="Menu sections">
-            {sections.map((s) => (
-              <a key={s.category} href={`#${slugId(s.category)}`} className={`shrink-0 rounded-full px-3.5 py-1.5 text-[0.875rem] font-medium transition ${activeSec === s.category ? "bg-[#151312] text-white" : "bg-white text-[#3A3431] ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"}`}>{s.category}</a>
-            ))}
-          </nav>
-        </div>
-        <label className="relative mt-2 block sm:hidden">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8C847D]" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the menu" aria-label="Search the menu" className="h-10 w-full rounded-full border border-[#E6DCD4] bg-white pl-9 pr-3 text-[0.9375rem] outline-none focus:border-[var(--pk)]" />
-        </label>
+      <div id="menu-top" className="sticky top-[58px] z-30 -mx-5 mt-4 scroll-mt-[60px] border-b border-[#EEE6DF] bg-[#FCFAF7]/95 px-5 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
+        <nav className="no-scrollbar flex gap-1.5 overflow-x-auto lg:flex-wrap lg:overflow-visible" aria-label="Menu sections">
+          {sections.map((s) => (
+            <a key={s.category} href={`#${slugId(s.category)}`} className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.875rem] font-medium transition ${activeSec === s.category ? "bg-[#151312] text-white" : "bg-white text-[#3A3431] ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"}`}>{s.category}</a>
+          ))}
+        </nav>
       </div>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -176,7 +185,7 @@ export function OrderApp(p: Props) {
           {sections.map((s) => {
             const pics = s.showImages !== false;
             return (
-              <section key={s.category} id={slugId(s.category)} data-cat={s.category} className="scroll-mt-[140px]">
+              <section key={s.category} id={slugId(s.category)} data-cat={s.category} className="scroll-mt-[130px]">
                 <h2 className="shop-serif text-[1.75rem] font-semibold">{s.category}</h2>
                 {isKitchen(s.category) && kitchenClosedNow && <p className="mt-1 text-[0.875rem] text-[#8C847D]">Kitchen closed today — order ahead for another day.</p>}
                 {s.banner && (
@@ -200,14 +209,20 @@ export function OrderApp(p: Props) {
           })}
           {!sections.length && <p className="py-10 text-center text-[#5E5853]">Nothing on the menu matches “{q}”.</p>}
         </div>
-        <aside className="hidden lg:block"><div className="sticky top-[150px]">{cartPanel}</div></aside>
+        <aside className="hidden lg:block"><div className="sticky top-[130px]">{cartPanel}</div></aside>
       </div>
 
-      {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#EEE6DF] bg-white/95 p-3 backdrop-blur lg:hidden">
-          <button type="button" onClick={() => setDrawer(true)} className="shop-btn flex h-[54px] w-full items-center justify-between rounded-full bg-[var(--pk)] px-6 font-semibold text-white">
-            <span className="flex items-center gap-2"><ShoppingBag className="h-5 w-5" />View order · {count}</span><span>{money(subtotal)}</span>
-          </button>
+      {(footer.length > 0 || count > 0) && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex flex-col items-center gap-2 lg:bottom-4">
+          {count > 0 && (
+            <div className="pointer-events-auto w-full px-3 lg:hidden">
+              <button type="button" onClick={() => setDrawer(true)} className="shop-btn flex h-[52px] w-full items-center justify-between rounded-full bg-[var(--pk)] px-6 font-semibold text-white shadow-[0_16px_30px_-16px_var(--pk)]">
+                <span className="flex items-center gap-2"><ShoppingBag className="h-5 w-5" />View order · {count}</span><span>{money(subtotal)}</span>
+              </button>
+            </div>
+          )}
+          {footer.length > 0 && !q && <FooterDock slots={footer} active={activeSec} onGo={jump} />}
+          {count > 0 && !footer.length && <div className="h-3 lg:hidden" />}
         </div>
       )}
       {drawer && (
@@ -222,6 +237,46 @@ export function OrderApp(p: Props) {
         ? <ComboSheet combo={open.item} showImage={open.showImage} onClose={() => setOpen(null)} onAdd={addLines} />
         : <ItemSheet item={open.item} showImage={open.showImage} onClose={() => setOpen(null)} onAdd={(l) => addLines([l])} kitchenNote={isKitchen(open.item.category ?? null) && kitchenClosedNow} />)}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ footer icons */
+
+const dockIcon = (label: string, cats: string[]) => {
+  const s = `${label} ${cats.join(" ")}`.toLowerCase();
+  if (/coffee bag|bean/.test(s)) return Bean;
+  if (/coffee|tea|hot/.test(s)) return Coffee;
+  if (/cold|shake|smooth|ice|juice/.test(s)) return CupSoda;
+  if (/cake|pastr|sweet/.test(s)) return CakeSlice;
+  if (/special|combo/.test(s)) return Sparkles;
+  return UtensilsCrossed;
+};
+
+/** The app's footer buttons. Pressing one again steps to its next section (e.g. All Day: Breakfast → Lunch → Breakfast). */
+function FooterDock({ slots, active, onGo }: { slots: FooterSlot[]; active: string; onGo: (cat: string) => void }) {
+  return (
+    <nav aria-label="Menu" className="pointer-events-auto w-full border-t border-[#EEE6DF] bg-white/95 backdrop-blur lg:w-auto lg:rounded-full lg:border lg:px-2 lg:shadow-[0_24px_50px_-28px_rgba(60,30,20,.55)]">
+      <div className="mx-auto flex max-w-[640px] justify-around lg:max-w-none lg:gap-1">
+        {slots.map((s, i) => {
+          const at = s.cats.indexOf(active);
+          const on = at >= 0;
+          const Icon = dockIcon(s.label, s.cats);
+          const next = on ? s.cats[(at + 1) % s.cats.length] : s.cats[0];
+          return (
+            <button key={`${s.label}-${i}`} type="button" aria-current={on ? "true" : undefined}
+              title={s.cats.length > 1 ? `${s.label}: ${s.cats.join(", ")}` : s.label}
+              onClick={() => onGo(on ? next : s.cats[0])}
+              className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1.5 pb-2 pt-2 text-[0.6875rem] font-semibold transition lg:min-w-[84px] lg:flex-none lg:rounded-full lg:px-3 ${on ? "text-[var(--pk)]" : "text-[#5E5853] hover:text-[#151312]"}`}>
+              {s.svg
+                ? <span aria-hidden className="block h-[26px] w-[26px] [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: s.svg }} />
+                : <Icon aria-hidden className="h-[26px] w-[26px]" strokeWidth={1.8} />}
+              <span className="max-w-full truncate">{s.label}</span>
+              {s.cats.length > 1 && <span aria-hidden className="flex gap-0.5">{s.cats.map((c) => <span key={c} className={`h-1 w-1 rounded-full ${c === active ? "bg-[var(--pk)]" : "bg-[#D9CEC6]"}`} />)}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -386,36 +441,76 @@ function cartGroups(lines: CafeLine[]) {
 
 /* ------------------------------------------------------------------ item & combo panels */
 
-/** Options as tap-to-choose chips — on a computer the groups sit side by side so there's little scrolling. */
+/**
+ * How many options sit on one line: as many as fit (by the longest name), then spread evenly over the lines
+ * (7 options → 4 + 3, 5 → 3 + 2, never 4 + 1).
+ */
+function balanced(names: string[], phone: boolean) {
+  const n = names.length;
+  if (!n) return 1;
+  const longest = Math.max(...names.map((x) => x.length));
+  const fit = phone ? (longest <= 9 ? 3 : longest <= 18 ? 2 : 1) : (longest <= 11 ? 4 : longest <= 18 ? 3 : 2);
+  const per = Math.min(fit, n);
+  return Math.ceil(n / Math.ceil(n / per));
+}
+
+/** A row (or evenly split rows) of equal-width choices. */
+function ChoiceGrid({ names, children }: { names: string[]; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2 [grid-template-columns:repeat(var(--m),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--d),minmax(0,1fr))]"
+      style={{ ["--m" as string]: balanced(names, true), ["--d" as string]: balanced(names, false) } as React.CSSProperties}>
+      {children}
+    </div>
+  );
+}
+
+function Choice({ on, onClick, name, extra, disabled, image }: { on: boolean; onClick: () => void; name: string; extra?: string | null; disabled?: boolean; image?: string | null }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={on}
+      className={`relative flex min-h-[52px] items-center justify-center gap-2.5 rounded-[14px] px-3 py-2 text-center ring-1 transition disabled:opacity-40 ${image ? "justify-start text-left" : ""} ${on ? "bg-[#151312] text-white ring-[#151312]" : "bg-white text-[#26211E] ring-[#E6DCD4] hover:ring-[#151312]"}`}>
+      {image && <img src={image} alt="" className="h-10 w-10 shrink-0 rounded-[10px] object-cover" />}
+      <span className="min-w-0">
+        <span className="block text-[0.9063rem] font-medium leading-tight">{name}</span>
+        {extra && <span className={`mt-0.5 block text-[0.75rem] ${on ? "text-white/75" : "text-[#8C847D]"}`}>{extra}</span>}
+      </span>
+      {on && <Check className="absolute right-1.5 top-1.5 h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
+/** One question: the question on its own line, the choices underneath. */
+function Question({ title, tag, bad, children }: { title: string; tag?: string; bad?: boolean; children: React.ReactNode }) {
+  return (
+    <fieldset className="border-t border-[#EFE6DF] pt-5 first:border-0 first:pt-0">
+      <legend className="sr-only">{title}</legend>
+      <div className="mb-2.5 flex items-baseline justify-between gap-3">
+        <p className="text-[0.9688rem] font-semibold leading-snug">{title}</p>
+        {tag && <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[0.75rem] font-semibold ${bad ? "bg-[#FDECEA] text-[#B42318]" : tag === "Optional" ? "text-[#8C847D]" : "bg-[#F4ECE6] text-[#5E5853]"}`}>{tag}</span>}
+      </div>
+      <div className={bad ? "rounded-[16px] p-1.5 ring-1 ring-[#F3B4AE]" : ""}>{children}</div>
+    </fieldset>
+  );
+}
+
 function Groups({ groups, sel, setSel, tried }: { groups: MenuGroup[]; sel: Record<string, string[]>; setSel: (s: Record<string, string[]>) => void; tried: boolean }) {
   return (
-    <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+    <>
       {groups.filter((g) => g.modifiers.length).map((g) => {
         const cur = sel[g.id] ?? [];
         const need = g.min ?? 0;
-        const bad = tried && cur.length < need;
         const single = g.selectionType === "SINGLE" || g.max === 1;
-        const wide = g.modifiers.length > 6;
         return (
-          <fieldset key={g.id} className={wide ? "md:col-span-2" : ""}>
-            <legend className="flex w-full items-baseline justify-between gap-3 text-[0.875rem] font-semibold">
-              <span>{g.name}</span>
-              <span className={`text-[0.75rem] font-medium ${bad ? "text-[#B42318]" : "text-[#8C847D]"}`}>{need > 0 ? (single ? "Required" : `Choose at least ${need}`) : (g.max ?? -1) > 1 ? `Up to ${g.max}` : "Optional"}</span>
-            </legend>
-            <div className={`mt-2 flex flex-wrap gap-2 rounded-2xl ${bad ? "p-1.5 ring-1 ring-[#F3B4AE]" : ""}`}>
-              {g.modifiers.map((m) => {
-                const on = cur.includes(m.id);
-                return (
-                  <button key={m.id} type="button" onClick={() => setSel({ ...sel, [g.id]: toggleOption(g, cur, m.id) })} aria-pressed={on} className={pill(on)}>
-                    {on && <Check className="h-3.5 w-3.5" />}{m.name}{m.price > 0 && <span className={on ? "text-white/75" : "text-[#8C847D]"}>+{money(m.price)}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+          <Question key={g.id} title={g.name} bad={tried && cur.length < need}
+            tag={need > 0 ? (single ? "Required" : `Choose at least ${need}`) : (g.max ?? -1) > 1 ? `Up to ${g.max}` : "Optional"}>
+            <ChoiceGrid names={g.modifiers.map((m) => m.name)}>
+              {g.modifiers.map((m) => (
+                <Choice key={m.id} on={cur.includes(m.id)} onClick={() => setSel({ ...sel, [g.id]: toggleOption(g, cur, m.id) })} name={m.name} extra={m.price > 0 ? `+${money(m.price)}` : null} />
+              ))}
+            </ChoiceGrid>
+          </Question>
         );
       })}
-    </div>
+    </>
   );
 }
 
@@ -427,29 +522,37 @@ function useSheetKeys(onClose: () => void) {
   }, [onClose]);
 }
 
-/** Bottom sheet on a phone; on a computer a wide panel — photo on the left (when the menu shows photos), choices on the right. */
-function Sheet({ title, image, onClose, back, children, footer }: { title: string; image: string | null; onClose: () => void; back?: () => void; children: React.ReactNode; footer: React.ReactNode }) {
+/**
+ * Bottom sheet on a phone. On a computer, with a photo: the whole photo (never cropped, at most half the panel) with the
+ * name and description under it on the left, and the choices on the right. Without a photo: one tidy column.
+ */
+function Sheet({ title, image, info, onClose, back, children, footer, heading }: { title: string; image: string | null; info?: React.ReactNode; onClose: () => void; back?: () => void; children: React.ReactNode; footer: React.ReactNode; heading?: string }) {
   useSheetKeys(onClose);
+  const two = !!image;
+  const close = <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white shadow ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"><X className="h-5 w-5" /></button>;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center sm:p-6" onClick={onClose}>
       <div role="dialog" aria-modal aria-label={title} onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[28px] bg-[#FCFAF7] sm:rounded-[28px] ${image ? "sm:max-w-[640px] lg:max-w-[1080px] lg:flex-row" : "sm:max-w-[640px] lg:max-w-[880px]"}`}>
-        {image && (
-          <div className="relative shrink-0 lg:w-[42%]">
-            <img src={image} alt="" className="aspect-[16/9] max-h-[28vh] w-full object-cover lg:aspect-auto lg:h-full lg:max-h-none" />
+        className={`relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[28px] bg-[#FCFAF7] sm:rounded-[28px] ${two ? "sm:max-w-[680px] lg:h-[min(860px,90vh)] lg:max-w-[1180px]" : "sm:max-w-[680px]"}`}>
+        <div className={`absolute right-4 top-4 z-10 ${two ? "lg:hidden" : ""}`}>{close}</div>
+        <div className={`min-h-0 flex-1 overflow-y-auto ${two ? "lg:flex lg:overflow-hidden" : ""}`}>
+          <div className={`px-5 pt-5 sm:px-7 sm:pt-7 ${two ? "lg:w-[46%] lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-[#EEE6DF] lg:pb-8" : ""}`}>
+            {image && (
+              <div className="grid place-items-center overflow-hidden rounded-[22px] bg-[#F4ECE6]">
+                <img src={image} alt="" className="max-h-[30vh] w-auto max-w-full object-contain lg:max-h-[50vh]" />
+              </div>
+            )}
+            {back && <button type="button" onClick={back} className="mt-4 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[#3A3431] hover:text-black"><ArrowLeft className="h-4 w-4" />Back</button>}
+            <h3 className={`shop-serif text-[1.75rem] font-semibold leading-tight ${image || back ? "mt-4" : "pr-12"}`}>{title}</h3>
+            {info && <div className="mt-2">{info}</div>}
           </div>
-        )}
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className={`flex items-start justify-between gap-3 px-5 pt-4 sm:px-7 sm:pt-6 ${image ? "" : ""}`}>
-            <div className="min-w-0">
-              {back && <button type="button" onClick={back} className="mb-2 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[#3A3431] hover:text-black"><ArrowLeft className="h-4 w-4" />Back</button>}
-              <h3 className="shop-serif text-[1.75rem] font-semibold leading-tight">{title}</h3>
-            </div>
-            <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white shadow ring-1 ring-[#EDE3DB]"><X className="h-5 w-5" /></button>
+          <div className={two ? "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col" : ""}>
+            {two && <div className="hidden items-center justify-between gap-3 border-b border-[#EEE6DF] px-7 py-4 lg:flex"><p className="text-[0.8125rem] font-semibold uppercase tracking-[0.08em] text-[#8C847D]">{heading ?? "Your choices"}</p>{close}</div>}
+            <div className={`space-y-5 px-5 pb-6 pt-5 sm:px-7 ${two ? "lg:flex-1 lg:overflow-y-auto lg:pt-6" : ""}`}>{children}</div>
+            {two && <div className="hidden lg:block">{footer}</div>}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5 pt-2 sm:px-7">{children}</div>
-          {footer}
         </div>
+        <div className={two ? "lg:hidden" : ""}>{footer}</div>
       </div>
     </div>
   );
@@ -480,58 +583,51 @@ function ItemSheet({ item: start, showImage, onClose, onAdd, kitchenNote }: { it
   useEffect(() => { const v = item.variations.find((x) => !x.soldOut) ?? item.variations[0]; setVariationId(v?.id ?? ""); setSel(defaultSelection(item)); setTried(false); }, [item]);
   const line = sub ? buildLine({ ...item, category: start.category }, variationId, sel, qty, note) : null;
   const unmet = sub ? unmetGroups(item, sel) : [];
-
-  return (
-    <Sheet title={item.name} image={showImage ? item.image ?? start.image ?? null : null} onClose={onClose} back={sub && start.isGroup ? () => setSub(null) : undefined}
-      footer={sub && line ? <AddBar qty={qty} setQty={setQty} label={unmet.length && tried ? `Choose ${unmet[0].name.toLowerCase()}` : `Add · ${money(line.unitPrice * line.quantity)}`} onAdd={() => { if (unmet.length) { setTried(true); return; } onAdd(line); }} /> : null}>
+  const info = (item.description || kitchenNote) ? (
+    <>
       {item.description && <p className="whitespace-pre-line text-[0.9375rem] leading-relaxed text-[#5E5853]">{item.description}</p>}
       {kitchenNote && <p className="mt-3 rounded-xl bg-[#F4ECE6] px-3 py-2 text-[0.8438rem] text-[#3A3431]">The kitchen has closed for today — choose a pick-up time when it&apos;s open at checkout.</p>}
+    </>
+  ) : null;
 
+  return (
+    <Sheet title={item.name} image={showImage ? item.image ?? start.image ?? null : null} info={info} onClose={onClose} back={sub && start.isGroup ? () => setSub(null) : undefined} heading={sub ? "Make it yours" : "Choose one"}
+      footer={sub && line ? <AddBar qty={qty} setQty={setQty} label={unmet.length && tried ? `Choose ${unmet[0].name.toLowerCase()}` : `Add · ${money(line.unitPrice * line.quantity)}`} onAdd={() => { if (unmet.length) { setTried(true); return; } onAdd(line); }} /> : null}>
       {!sub && (
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {(start.subProducts ?? []).map((s) => (
-            <button key={s.id} type="button" disabled={s.soldOut} onClick={() => setSub(s)} className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left ring-1 ring-[#EDE3DB] hover:ring-[var(--pk)] disabled:opacity-50">
-              {showImage && s.image && <img src={s.image} alt="" className="h-14 w-14 rounded-xl object-cover" />}
-              <span className="flex-1 font-semibold">{s.name}</span>
-              <span className="text-[0.9063rem]">{s.soldOut ? "Sold out" : money(fromPrice(s))}</span>
-            </button>
-          ))}
-        </div>
+        <Question title="Choose one">
+          <ChoiceGrid names={(start.subProducts ?? []).map((x) => x.name)}>
+            {(start.subProducts ?? []).map((x) => <Choice key={x.id} on={false} disabled={x.soldOut} onClick={() => setSub(x)} name={x.name} extra={x.soldOut ? "Sold out" : money(fromPrice(x))} image={showImage ? x.image : null} />)}
+          </ChoiceGrid>
+        </Question>
       )}
-
       {sub && item.variations.length > 1 && (
-        <fieldset className="mt-4">
-          <legend className="text-[0.875rem] font-semibold">Size</legend>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {item.variations.map((v) => (
-              <button key={v.id} type="button" disabled={v.soldOut} onClick={() => setVariationId(v.id)} aria-pressed={variationId === v.id} className={pill(variationId === v.id)}>
-                {v.name || "Regular"} · {money(v.price ?? 0)}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <Question title="Size" tag="Required">
+          <ChoiceGrid names={item.variations.map((v) => v.name || "Regular")}>
+            {item.variations.map((v) => <Choice key={v.id} on={variationId === v.id} disabled={v.soldOut} onClick={() => setVariationId(v.id)} name={v.name || "Regular"} extra={money(v.price ?? 0)} />)}
+          </ChoiceGrid>
+        </Question>
       )}
-      {sub && <div className="mt-5"><Groups groups={item.modifierGroups ?? []} sel={sel} setSel={setSel} tried={tried} /></div>}
+      {sub && <Groups groups={item.modifierGroups ?? []} sel={sel} setSel={setSel} tried={tried} />}
       {sub && (
-        <label className="mt-5 block">
-          <span className="text-[0.875rem] font-semibold">Note for the kitchen <span className="font-normal text-[#8C847D]">(optional)</span></span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="e.g. extra hot, no onion" className={`${field} mt-2`} />
-        </label>
+        <fieldset className="border-t border-[#EFE6DF] pt-5 first:border-0 first:pt-0">
+          <label className="block">
+            <span className="text-[0.9688rem] font-semibold">Note for the kitchen <span className="font-normal text-[#8C847D]">(optional)</span></span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="e.g. extra hot, no onion" className={`${field} mt-2.5`} />
+          </label>
+        </fieldset>
       )}
     </Sheet>
   );
 }
 
-/** A combo: choose one option per group (with its own size and extras); the discount comes off once at checkout. */
+/** A combo: choose one option per step (with its own size and extras); the discount comes off once at checkout. */
 function ComboSheet({ combo, showImage, onClose, onAdd }: { combo: MenuItem; showImage: boolean; onClose: () => void; onAdd: (l: CafeLine[]) => void }) {
   const groups = combo.comboGroups ?? [];
   type Pick = { option: ComboOption; variationId: string; selected: Record<string, string[]> };
-  const [picks, setPicks] = useState<Record<string, Pick>>(() => Object.fromEntries(groups.filter((g) => g.options.length === 1).map((g) => {
-    const o = g.options[0]; return [g.id, { option: o, variationId: (o.variations.find((v) => !v.soldOut) ?? o.variations[0])?.id ?? "", selected: Object.fromEntries(Object.entries(o.defaults ?? {}).map(([k, v]) => [k, [...v]])) }];
-  })));
+  const pickOf = (o: ComboOption): Pick => ({ option: o, variationId: (o.variations.find((v) => !v.soldOut) ?? o.variations[0])?.id ?? "", selected: Object.fromEntries(Object.entries(o.defaults ?? {}).map(([k, v]) => [k, [...v]])) });
+  const [picks, setPicks] = useState<Record<string, Pick>>(() => Object.fromEntries(groups.filter((g) => g.options.length === 1).map((g) => [g.id, pickOf(g.options[0])])));
   const [qty, setQty] = useState(1);
   const [tried, setTried] = useState(false);
-  const choose = (g: ComboGroup, o: ComboOption) => setPicks({ ...picks, [g.id]: { option: o, variationId: (o.variations.find((v) => !v.soldOut) ?? o.variations[0])?.id ?? "", selected: Object.fromEntries(Object.entries(o.defaults ?? {}).map(([k, v]) => [k, [...v]])) } });
   const subtotal = groups.reduce((s, g) => s + (picks[g.id] ? comboPickPrice(picks[g.id].option, picks[g.id].variationId, picks[g.id].selected) : 0), 0);
   const discount = Math.min(subtotal, combo.comboDiscountValue ?? 0);
   const missing = groups.filter((g) => !picks[g.id]);
@@ -541,47 +637,62 @@ function ComboSheet({ combo, showImage, onClose, onAdd }: { combo: MenuItem; sho
     if (!ready) { setTried(true); return; }
     onAdd(comboLines(combo, groups.map((g) => ({ group: g, ...picks[g.id] })), qty, newInstance()));
   };
-  return (
-    <Sheet title={combo.name} image={showImage ? combo.image ?? null : null} onClose={onClose}
-      footer={<AddBar qty={qty} setQty={setQty} onAdd={add}
-        label={!ready && tried ? (missing[0] ? `Choose: ${missing[0].label.toLowerCase()}` : `Finish: ${unmet[0].label.toLowerCase()}`) : missing.length ? `Choose ${missing.length} more` : `Add combo · ${money((subtotal - discount) * qty)}`} />}>
+  const optPrice = (o: ComboOption) => Math.min(...o.variations.filter((v) => !v.soldOut).map((v) => v.price ?? 0)) + (o.lockedMods ?? []).reduce((s, m) => s + (m.price || 0), 0);
+  const info = (
+    <>
       {combo.description && <p className="whitespace-pre-line text-[0.9375rem] leading-relaxed text-[#5E5853]">{combo.description}</p>}
-      {discount > 0 && <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[0.8438rem] font-semibold text-emerald-800"><Sparkles className="h-4 w-4" />You save {money(discount)} with this combo</p>}
-      <div className="mt-5 space-y-6">
+      {discount > 0 && <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[0.8438rem] font-semibold text-emerald-800 ring-1 ring-emerald-200"><Sparkles className="h-4 w-4" />You save {money(discount)} with this combo</p>}
+      <ol className="mt-5 space-y-2">
         {groups.map((g, gi) => {
           const pk = picks[g.id];
           return (
-            <section key={g.id} className={tried && (!pk || unmet.includes(g)) ? "rounded-2xl p-2 ring-1 ring-[#F3B4AE]" : ""}>
-              <p className="text-[0.9375rem] font-semibold">{gi + 1}. {g.label}</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {g.options.map((o) => {
-                  const on = pk?.option.id === o.id;
-                  const p = Math.min(...o.variations.filter((v) => !v.soldOut).map((v) => v.price ?? 0)) + (o.lockedMods ?? []).reduce((s, m) => s + (m.price || 0), 0);
-                  return (
-                    <button key={o.id} type="button" onClick={() => choose(g, o)} aria-pressed={on}
-                      className={`flex items-center gap-3 rounded-2xl bg-white p-2.5 text-left ring-1 transition ${on ? "ring-2 ring-[var(--pk)]" : "ring-[#EDE3DB] hover:ring-[#151312]"}`}>
-                      {showImage && o.image && <img src={o.image} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />}
-                      <span className="min-w-0 flex-1"><span className="block font-semibold leading-snug">{o.name}</span><span className="text-[0.8125rem] text-[#5E5853]">{money(p)}</span></span>
-                      {on && <Check className="h-5 w-5 shrink-0 text-[var(--pk)]" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {pk && (pk.option.variations.length > 1 || (pk.option.modifierGroups ?? []).some((mg) => mg.modifiers.length) || (pk.option.lockedMods ?? []).length > 0) && (
-                <div className="mt-3 rounded-2xl bg-white p-4 ring-1 ring-[#EDE3DB]">
-                  {(pk.option.lockedMods ?? []).length > 0 && <p className="mb-3 text-[0.8125rem] text-[#5E5853]">Included: {(pk.option.lockedMods ?? []).map((m) => m.name).join(", ")}</p>}
-                  {pk.option.variations.length > 1 && (
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      {pk.option.variations.map((v) => <button key={v.id} type="button" disabled={v.soldOut} onClick={() => setPicks({ ...picks, [g.id]: { ...pk, variationId: v.id } })} aria-pressed={pk.variationId === v.id} className={pill(pk.variationId === v.id)}>{v.name || "Regular"} · {money(v.price ?? 0)}</button>)}
-                    </div>
-                  )}
-                  <Groups groups={pk.option.modifierGroups ?? []} sel={pk.selected} setSel={(s) => setPicks({ ...picks, [g.id]: { ...pk, selected: s } })} tried={tried} />
-                </div>
-              )}
-            </section>
+            <li key={g.id} className="flex items-center gap-3 rounded-[14px] bg-white px-3 py-2.5 ring-1 ring-[#EDE3DB]">
+              <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[0.8125rem] font-bold ${pk ? "bg-[var(--pk)] text-white" : "bg-[#F4ECE6] text-[#5E5853]"}`}>{pk ? <Check className="h-4 w-4" /> : gi + 1}</span>
+              <span className="min-w-0 flex-1"><span className="block text-[0.75rem] font-semibold uppercase tracking-[0.06em] text-[#8C847D]">{g.label}</span><span className="block truncate font-semibold">{pk ? pk.option.name : "Not chosen yet"}</span></span>
+              {pk && <span className="shrink-0 text-[0.875rem] tabular-nums text-[#5E5853]">{money(comboPickPrice(pk.option, pk.variationId, pk.selected))}</span>}
+            </li>
           );
         })}
-      </div>
+      </ol>
+    </>
+  );
+  return (
+    <Sheet title={combo.name} image={showImage ? combo.image ?? null : null} info={info} onClose={onClose} heading="Build your combo"
+      footer={<AddBar qty={qty} setQty={setQty} onAdd={add}
+        label={!ready && tried ? (missing[0] ? `Choose: ${missing[0].label.toLowerCase()}` : `Finish: ${unmet[0].label.toLowerCase()}`) : missing.length ? `Choose ${missing.length} more` : `Add combo · ${money((subtotal - discount) * qty)}`} />}>
+      {groups.map((g, gi) => {
+        const pk = picks[g.id];
+        const only = g.options.length === 1;
+        return (
+          <section key={g.id} className="border-t border-[#EFE6DF] pt-5 first:border-0 first:pt-0">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#151312] text-[0.875rem] font-bold text-white">{gi + 1}</span>
+              <p className="text-[1.0625rem] font-semibold leading-snug">{only ? `${g.label}: ${g.options[0].name}` : g.label}</p>
+              {!only && <span className={`ml-auto shrink-0 rounded-full px-2.5 py-0.5 text-[0.75rem] font-semibold ${tried && !pk ? "bg-[#FDECEA] text-[#B42318]" : "bg-[#F4ECE6] text-[#5E5853]"}`}>Choose 1</span>}
+            </div>
+            {!only && (
+              <div className={tried && !pk ? "rounded-[16px] p-1.5 ring-1 ring-[#F3B4AE]" : ""}>
+                <ChoiceGrid names={g.options.map((o) => o.name)}>
+                  {g.options.map((o) => <Choice key={o.id} on={pk?.option.id === o.id} onClick={() => setPicks({ ...picks, [g.id]: pickOf(o) })} name={o.name} extra={money(optPrice(o))} image={showImage ? o.image : null} />)}
+                </ChoiceGrid>
+              </div>
+            )}
+            {pk && (pk.option.variations.length > 1 || (pk.option.modifierGroups ?? []).some((mg) => mg.modifiers.length) || (pk.option.lockedMods ?? []).length > 0) && (
+              <div className={`space-y-5 ${only ? "" : "mt-5"} border-l-2 border-[color-mix(in_srgb,var(--pk)_30%,transparent)] pl-4 sm:pl-5`}>
+                {(pk.option.lockedMods ?? []).length > 0 && <p className="text-[0.875rem] text-[#5E5853]">Included: {(pk.option.lockedMods ?? []).map((m) => m.name).join(", ")}</p>}
+                {pk.option.variations.length > 1 && (
+                  <Question title="Size" tag="Required">
+                    <ChoiceGrid names={pk.option.variations.map((v) => v.name || "Regular")}>
+                      {pk.option.variations.map((v) => <Choice key={v.id} on={pk.variationId === v.id} disabled={v.soldOut} onClick={() => setPicks({ ...picks, [g.id]: { ...pk, variationId: v.id } })} name={v.name || "Regular"} extra={money(v.price ?? 0)} />)}
+                    </ChoiceGrid>
+                  </Question>
+                )}
+                <Groups groups={pk.option.modifierGroups ?? []} sel={pk.selected} setSel={(sx) => setPicks({ ...picks, [g.id]: { ...pk, selected: sx } })} tried={tried} />
+              </div>
+            )}
+          </section>
+        );
+      })}
     </Sheet>
   );
 }
