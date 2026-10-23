@@ -149,3 +149,35 @@ export async function reserveCafeTable(slug: string, r: TableRequest): Promise<R
     return fail(e, "We couldn't send your booking — please try again or give us a call.");
   }
 }
+
+/**
+ * "Already a wholesale customer? Order now": email the customer their private ordering link.
+ * The answer is the same whether or not the email is on file (nobody can find out who buys from the business),
+ * and a customer gets at most one link every 15 minutes.
+ */
+export async function wholesaleOrderLink(slug: string, emailRaw: string, website: string): Promise<R<{ sent: true }>> {
+  if (website) return { ok: true, sent: true }; // honeypot
+  const email = String(emailRaw ?? "").trim().toLowerCase().slice(0, 254);
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email)) return { ok: false, error: "Add the email address we have for your business." };
+  const { createServiceClient } = await import("@/lib/integrations/runtime");
+  const { readWholesale } = await import("@/lib/wholesale/settings");
+  const { emailOrderingLink } = await import("@/lib/wholesale/orders");
+  const db = createServiceClient();
+  const { data: org } = await db.from("organisations").select("id, settings").eq("slug", slug).eq("status", "active").maybeSingle();
+  if (!org) return { ok: false, error: "This isn't available." };
+  if (!readWholesale(org.settings).ordering) return { ok: false, error: "Online ordering isn't open yet — please order the usual way for now." };
+  const { data: rows } = await db.from("wholesale_customers").select("id, email, billing_email").eq("organisation_id", org.id).eq("active", true)
+    .or(`email.ilike.${email},billing_email.ilike.${email}`).limit(5);
+  const hit = (rows ?? []).find((c) => [c.email, c.billing_email].some((x) => String(x ?? "").trim().toLowerCase() === email));
+  if (hit) {
+    const since = new Date(Date.now() - 15 * 60e3).toISOString();
+    const { count } = await db.from("activity_logs").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("action", "wholesale.link_requested").eq("entity_id", hit.id).gte("created_at", since);
+    if (!count) {
+      try {
+        await emailOrderingLink(db, hit.id as string);
+        await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Website", action: "wholesale.link_requested", entity_type: "wholesale_customer", entity_id: hit.id });
+      } catch (e) { console.error("[wholesale] link request", e instanceof Error ? e.message : e); }
+    }
+  }
+  return { ok: true, sent: true };
+}

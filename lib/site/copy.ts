@@ -38,7 +38,7 @@ const FIELD_PATHS: RegExp[] = [
   /^booking\.intro$/,
   /^jobs\.(heroImage|employerImage)$/,
   /^learn\.heroImage$/,
-  /^site\.images\.(hero|about|classes|hire|academy|cafe|shop|jobs)$/,
+  /^site\.images\.(hero|about|classes|hire|academy|cafe|shop|jobs|wsStory|wsJourney|wsOrder)$/,
   /^site\.pages\.\d{1,2}\.(title|eyebrow|intro|body|heroImage)$/,
   /^learn\.images\.(home|cafe|deeper|coach)$/,
 ];
