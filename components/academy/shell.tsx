@@ -1,14 +1,11 @@
 import Link from "next/link";
+import { PublicFooter } from "@/components/site/public-footer";
 import { BookOpen, Flame, Home, MapPin, MessageCircle, Thermometer, Trophy, UserRound } from "lucide-react";
 import type { LearnOrg } from "@/lib/learn/server";
 import { brandStyle, PAGE } from "@/components/book/shell";
 import { MasterNav } from "@/components/site/master-nav";
 import { SHOP_CSS } from "@/components/shop/frame";
 import { cn } from "@/lib/cn";
-import { readShop } from "@/lib/shop/core";
-import { readEvents } from "@/lib/events/core";
-import { readJobSettings } from "@/lib/jobs/core";
-import { cafePages, readCafe } from "@/lib/cafe/core";
 
 export type AcademyTab = "home" | "course" | "roast" | "coach" | "board" | "rooms" | "me" | "join";
 
@@ -56,52 +53,10 @@ export function AcademyShell({ org, tab, signedIn, streak, bare, children }: { o
         </div>
       </div>
       {bare ? <main>{children}</main> : <main className={`${PAGE} py-6 sm:py-8`}>{children}</main>}
-      <AcademyFooter org={org} />
+      <PublicFooter org={org} />
     </div>
   );
 }
 
-/** The footer from the design: the business, the course's pages, the rest of the site, contact details. */
-function AcademyFooter({ org }: { org: LearnOrg }) {
-  const base = `/academy/${org.slug}`, slug = org.slug;
-  const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
-  const learn = [
-    { href: base, label: org.learn.name }, { href: `${base}/course`, label: "Lessons" }, { href: `${base}/roast`, label: "Roast simulator" },
-    ...(org.learn.ai.enabled ? [{ href: `${base}/coach`, label: "AI coach" }] : []),
-  ];
-  const explore = [
-    readShop(org.rawSettings).enabled ? { href: `/shop/${slug}`, label: "Buy coffee" } : null,
-    cafePages(readCafe(org.rawSettings)).home ? { href: `/cafe/${slug}`, label: "Our café" } : null,
-    readEvents(org.rawSettings).enabled ? { href: `/hire/${slug}`, label: "Events" } : null,
-    readJobSettings(org.rawSettings, org.name).enabled ? { href: `/jobs/${slug}`, label: "Job board" } : null,
-    org.settings.enabled && org.stripeReady ? { href: `/book/${slug}/gift`, label: "Gift certificates" } : null,
-  ].filter((x): x is { href: string; label: string } => !!x);
-  const head = "text-[0.8125rem] font-semibold text-[#151312]";
-  const link = "block py-1 text-[0.8125rem] text-[#5E5853] hover:text-[#151312]";
-  return (
-    <footer className="border-t border-[#EEE6DF] bg-[#FCFAF7]">
-      <div className="mx-auto grid max-w-[1200px] gap-8 px-6 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
-        <div>
-          {logo ? <img src={logo} alt={org.name} className="h-8 max-w-[170px] object-contain" /> : <p className="font-semibold">{org.name}</p>}
-          <p className="mt-3 max-w-[260px] text-[0.8125rem] leading-relaxed text-[#5E5853]">{org.learn.tagline}</p>
-        </div>
-        <div><p className={head}>Learn</p><div className="mt-2">{learn.map((l) => <Link key={l.href} href={l.href} className={link}>{l.label}</Link>)}</div></div>
-        {explore.length > 0 && <div><p className={head}>Explore</p><div className="mt-2">{explore.map((l) => <Link key={l.href} href={l.href} className={link}>{l.label}</Link>)}</div></div>}
-        <div>
-          <p className={head}>Contact</p>
-          <div className="mt-2 text-[0.8125rem] text-[#5E5853]">
-            {org.contact_phone && <a href={`tel:${org.contact_phone.replace(/\s+/g, "")}`} className={link}>{org.contact_phone}</a>}
-            {org.contact_email && <a href={`mailto:${org.contact_email}`} className={link}>{org.contact_email}</a>}
-            {org.address && <p className="py-1">{org.address}</p>}
-          </div>
-        </div>
-      </div>
-      <div className="mx-auto flex max-w-[1200px] flex-wrap justify-between gap-2 border-t border-[#EEE6DF] px-6 py-5 text-[0.75rem] text-[#8C847D]">
-        <p>© {new Date().getFullYear()} {org.name}. {org.learn.name}.</p>
-        {org.contact_email && <a href={`mailto:${org.contact_email}`} className="hover:text-[#151312]">Contact</a>}
-      </div>
-    </footer>
-  );
-}
 
 export { card, btn, btnGhost, field } from "./ui";

@@ -43,6 +43,14 @@ export function PageEditor({ slug }: { slug: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [foot, setFoot] = useState<{ key: string; tone: "dark" | "light" } | null>(null);
+
+  // The page's footer (dark or light, saved for this page only)
+  useEffect(() => {
+    if (!editing) return;
+    const el = document.querySelector<HTMLElement>("[data-footer-key]");
+    setFoot(el?.dataset.footerKey ? { key: el.dataset.footerKey, tone: el.dataset.footerTone === "light" ? "light" : "dark" } : null);
+  }, [editing]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !/auth-token/.test(document.cookie)) return;
@@ -133,6 +141,21 @@ export function PageEditor({ slug }: { slug: string }) {
     setTimeout(() => setMsg(null), 5000);
   };
 
+  const setFooterTone = async (tone: "dark" | "light") => {
+    if (!foot || foot.tone === tone || busy) return;
+    const path = `site.footerTone.${foot.key}`;
+    setFoot({ ...foot, tone });
+    // Other changes waiting? Save it with them. Otherwise save now so the footer changes straight away.
+    if (Object.keys(changes).length) { setChanges((c) => ({ ...c, [path]: tone })); return; }
+    setBusy("Saving…"); setMsg(null);
+    const r = await savePageEdits(slug, [{ path, value: tone }]).catch(() => ({ ok: false as const, error: "Couldn't reach the server — try again." }));
+    setBusy(null);
+    if (!r.ok) { setFoot({ ...foot }); setMsg({ ok: false, text: r.error }); return; }
+    setMsg({ ok: true, text: `Footer on this page is now ${tone}.` });
+    router.refresh();
+    setTimeout(() => setMsg(null), 4000);
+  };
+
   if (!orgId) return null;
   const n = Object.keys(changes).length;
   const isCopy = target?.path.startsWith("copy:");
@@ -150,6 +173,15 @@ export function PageEditor({ slug }: { slug: string }) {
             <span className="inline-flex items-center gap-2 text-[0.9375rem] font-semibold"><Pencil className="h-4 w-4 text-[#ff6aa6]" />Editing this page</span>
             <span className="text-[0.8438rem] text-white/65">Click any outlined words or photo to change it.</span>
             <span className="flex-1" />
+            {foot && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1 text-[0.8125rem]" role="group" aria-label="Footer on this page">
+                <span className="px-2 text-white/65">Footer</span>
+                {(["dark", "light"] as const).map((t) => (
+                  <button key={t} type="button" onClick={() => void setFooterTone(t)} aria-pressed={foot.tone === t} disabled={!!busy}
+                    className={`h-7 rounded-full px-3 font-semibold capitalize transition disabled:opacity-60 ${foot.tone === t ? "bg-white text-[#151312]" : "text-white/80 hover:bg-white/10"}`}>{t}</button>
+                ))}
+              </span>
+            )}
             {n > 0 && <span className="rounded-full bg-white/10 px-3 py-1 text-[0.8125rem]">{n} unsaved change{n === 1 ? "" : "s"}</span>}
             <button type="button" onClick={() => { if (n) window.location.reload(); else setEditing(false); }}
               className="h-9 rounded-full px-4 text-[0.875rem] font-semibold text-white/80 ring-1 ring-white/20 hover:bg-white/10">{n ? "Discard" : "Done"}</button>

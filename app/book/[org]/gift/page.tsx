@@ -1,3 +1,4 @@
+import { PublicFooter } from "@/components/site/public-footer";
 import "@fontsource/playfair-display/700.css";
 import { siteMeta } from "@/lib/site/meta";
 import { PageBg } from "@/components/site/page-bg";
@@ -121,7 +122,7 @@ export default async function GiftPage({ params, searchParams }: P) {
           </ol>
         </div>
       </section>
-      <footer className="bg-[#FBF8F4] pb-10 text-center text-[0.75rem] text-[#8a817a]">{[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}<p className="mt-1">Secure booking by EventureOS</p></footer>
+      <PublicFooter org={org} note="Secure booking by EventureOS" />
     </div>
   );
 }

@@ -41,6 +41,7 @@ const FIELD_PATHS: RegExp[] = [
   /^site\.images\.(hero|about|classes|hire|academy|cafe|shop|jobs|wsStory|wsJourney|wsOrder|rcSoftware|rcPack|rcTrain|rcFarm|rcBrand)$/,
   /^site\.pages\.\d{1,2}\.(title|eyebrow|intro|body|heroImage)$/,
   /^learn\.images\.(home|cafe|deeper|coach)$/,
+  /^site\.footerTone\.[a-z0-9-]{1,80}$/,
 ];
 export const COPY_KEY = /^copy:[a-z0-9-]{1,30}\.[a-z0-9_.-]{1,80}$/;
 
@@ -59,6 +60,7 @@ export function applyEdits(settings: Record<string, unknown>, edits: { path: str
     if (!editablePath(e.path)) throw new Error(`That part of the page can't be edited here (${e.path}).`);
     const value = String(e.value ?? "").replace(/\r\n/g, "\n").slice(0, isImagePath(e.path) ? 500 : 4000);
     if (isImagePath(e.path) && value && !okImage(value.trim())) throw new Error("Photos must be uploaded, or be a link starting with https://");
+    if (e.path.startsWith("site.footerTone.") && value && !/^(dark|light)$/.test(value.trim())) throw new Error("The footer can be dark or light.");
     if (e.path.startsWith("copy:")) {
       const site = (out.site && typeof out.site === "object" ? out.site : (out.site = {})) as Record<string, unknown>;
       const copy = (site.copy && typeof site.copy === "object" ? site.copy : (site.copy = {})) as Record<string, unknown>;

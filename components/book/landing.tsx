@@ -1,4 +1,5 @@
 import "@fontsource-variable/fraunces";
+import { PublicFooter } from "@/components/site/public-footer";
 import { PageBg } from "@/components/site/page-bg";
 import { ContactForm } from "@/components/events/contact-form";
 import "@fontsource/caveat/600.css";
@@ -633,16 +634,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         </div>
       </section>
 
-      <footer className="bg-[#101C17] py-8 text-[0.8438rem] text-[#9fa9a3]">
-        <div className={`${PAGE} flex flex-wrap items-center justify-between gap-4`}>
-          <p>{[org.name, location, phone, org.contact_email].filter(Boolean).join(" · ")}</p>
-          <p className="flex flex-wrap gap-x-5 gap-y-1">
-            <Link href={`/book/${org.slug}/account`} className="hover:text-[#F4EDE4]">My bookings</Link>
-            {org.website && /^https?:\/\//.test(org.website) && <a href={org.website} className="hover:text-[#F4EDE4]">{org.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a>}
-            <span>Secure booking by EventureOS</span>
-          </p>
-        </div>
-      </footer>
+      <PublicFooter org={org} note="Secure booking by EventureOS" />
       <StickyBook phone={phone} />
     </div>
   );

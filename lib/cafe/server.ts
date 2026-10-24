@@ -162,3 +162,12 @@ export async function appCaptcha(appUrl: string) {
 export async function appReserve(appUrl: string, r: { name: string; phone: string; email: string; party: number; at: string; notes: string; captchaToken: string; captchaAnswer: string }) {
   return call<{ ok: boolean }>(appUrl, "/api/reserve", { method: "POST", timeout: 15000, body: JSON.stringify({ ...r, company: "" }) });
 }
+
+/** Opening hours only, for the site-wide footer on non-café pages (cached 10 minutes; null if the app can't be reached). */
+export async function cafeWeekly(appUrl: string): Promise<Weekly | null> {
+  if (!appUrl) return null;
+  try {
+    const c = await call<{ hours?: { weekly?: Weekly } }>(appUrl, "/api/config", { timeout: 3000, revalidate: 600 });
+    return c?.hours?.weekly ?? null;
+  } catch { return null; }
+}

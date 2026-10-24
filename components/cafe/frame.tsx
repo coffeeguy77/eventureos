@@ -1,6 +1,7 @@
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
+import { PublicFooter } from "@/components/site/public-footer";
 import { SiteFooter, type FooterVariant } from "@/components/site/site-footer";
 import { footerModel } from "@/lib/site/footer";
 import { brandStyle } from "@/components/book/shell";
@@ -30,9 +31,6 @@ export function cafeLinks(org: CafeOrg) {
 export function CafeFrame({ org, active, children, weekly, cta, footer }: { org: CafeOrg; active: CafeTab; children: React.ReactNode; weekly?: Weekly | null; cta?: { href: string; label: string }; /** a site-wide footer design to show instead of the café footer (being chosen) */ footer?: FooterVariant | null }) {
   const links = cafeLinks(org);
   const rows = weekly ? hoursRows(weekly) : [];
-  const social = org.settings.social;
-  const ig = org.cafe.instagram ? `https://www.instagram.com/${org.cafe.instagram}/` : social.instagram ?? null;
-  const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
       <PageBg color="#FFFBF8" />
@@ -52,35 +50,7 @@ export function CafeFrame({ org, active, children, weekly, cta, footer }: { org:
         </header>
       )}
       <main>{children}</main>
-      {footer ? <SiteFooter m={footerModel(org)} variant={footer} hours={rows} /> : <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]">
-        <div className={`${WRAP} grid gap-9 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.9fr_1.1fr_1.1fr] lg:gap-0 lg:divide-x lg:divide-[#EDE3DB]`}>
-          <div className="lg:pr-10">
-            <p className={`${serif} text-[1.625rem] font-semibold`}>{org.name}</p>
-            {org.address && <p className="mt-3 max-w-xs text-[0.875rem] leading-relaxed text-[#5E5853]">{org.address}</p>}
-            {org.address && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(org.address)}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[0.875rem] font-semibold text-[var(--pk)] hover:underline">Get directions</a>}
-          </div>
-          <div className="space-y-1.5 lg:px-8">
-            <p className="mb-2.5 text-[0.875rem] font-semibold">Café</p>
-            {links.map((n) => <Link key={n.key} href={n.href} className={link}>{n.label}</Link>)}
-          </div>
-          <div className="lg:px-8">
-            <p className="mb-2.5 text-[0.875rem] font-semibold">Opening hours</p>
-            {rows.length ? (
-              <dl className="space-y-1 text-[0.8438rem]">
-                {rows.map((r) => <div key={r.day} className="flex justify-between gap-4"><dt className="text-[#5E5853]">{r.day.slice(0, 3)}</dt><dd className={r.closed ? "text-[#A39A93]" : "text-[#151312]"}>{r.text}</dd></div>)}
-              </dl>
-            ) : <p className="text-[0.875rem] text-[#5E5853]">See our app for today&apos;s hours.</p>}
-          </div>
-          <div className="space-y-1.5 lg:pl-8">
-            <p className="mb-2.5 text-[0.875rem] font-semibold">Contact</p>
-            {org.contact_phone && <a href={`tel:${org.contact_phone.replace(/[^\d+]/g, "")}`} className={link}>{org.contact_phone}</a>}
-            {org.contact_email && <a href={`mailto:${org.contact_email}`} className={link}>{org.contact_email}</a>}
-            {ig && <a href={ig} target="_blank" rel="noopener noreferrer" className={link}>Instagram{org.cafe.instagram ? ` · @${org.cafe.instagram}` : ""}</a>}
-            {social.facebook && <a href={social.facebook} target="_blank" rel="noopener noreferrer" className={link}>Facebook</a>}
-          </div>
-        </div>
-        <p className={`${WRAP} border-t border-[#EDE3DB] py-5 text-[0.8125rem] text-[#8C847D]`}>Orders and bookings are handled by our café app · Website by EventureOS</p>
-      </footer>}
+      {footer === "b" || footer === "c" ? <SiteFooter m={footerModel(org)} variant={footer} hours={rows} /> : <PublicFooter org={org} weekly={weekly ?? null} />}
     </div>
   );
 }

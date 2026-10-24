@@ -1,4 +1,5 @@
 import "@fontsource-variable/newsreader/opsz.css";
+import { PublicFooter } from "@/components/site/public-footer";
 import { PageBg } from "@/components/site/page-bg";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
@@ -8,7 +9,6 @@ import type { Banner, ShopOrg } from "@/lib/shop/server";
 import { CartButton } from "./cart-button";
 import { MasterNav } from "@/components/site/master-nav";
 import { readSiteNav } from "@/lib/site-nav";
-import { readJobSettings } from "@/lib/jobs/core";
 
 export const serif = "shop-serif";
 export const hand = "shop-hand";
@@ -53,15 +53,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
     { href: `${base}/gift-card`, label: "Gift cards", key: "gift" },
   ];
   const labels = readSiteNav(org.rawSettings);
-  const learn = [
-    org.settings.enabled ? { href: `/${org.slug}`, label: labels.lessons } : null,
-    readJobSettings(org.rawSettings, org.name).enabled ? { href: `/jobs/${org.slug}`, label: labels.jobs } : null,
-    org.settings.enabled && org.stripeReady ? { href: `/book/${org.slug}/gift`, label: labels.gifts } : null,
-  ].filter((x): x is { href: string; label: string } => !!x);
-  const social = org.settings.social;
-  const site = org.website && /^https?:\/\//.test(org.website) ? org.website : null;
   const strip = topBanners[0];
-  const link = "block text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
   return (
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
       <PageBg color="#FFFBF8" />
@@ -98,43 +90,7 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
         </nav>
       </header>
       <main>{children}</main>
-      <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]">
-        <div className={`${WRAP} grid gap-9 py-12 sm:grid-cols-2 lg:grid-cols-[1.5fr_0.8fr_0.8fr_1.1fr_auto] lg:gap-0 lg:divide-x lg:divide-[#EDE3DB]`}>
-          <div className="lg:pr-10">
-            <p className={`${serif} text-[1.625rem] font-semibold`}>{org.name}</p>
-            {(org.shop.roastedIn || org.shop.roastNote) && (
-              <p className="mt-3 max-w-sm text-[0.875rem] leading-relaxed text-[#5E5853]">
-                {org.shop.roastedIn && <>Locally roasted in {org.shop.roastedIn}.<br /></>}{org.shop.roastNote}
-              </p>
-            )}
-          </div>
-          <div className="space-y-1.5 lg:px-8">
-            <p className="mb-2.5 text-[0.875rem] font-semibold">Shop</p>
-            {nav.map((n) => <Link key={n.key} href={n.href} className={link}>{n.label}</Link>)}
-            <Link href={`${base}/account`} className={link}>My account</Link>
-          </div>
-          {learn.length > 0 && (
-            <div className="space-y-1.5 lg:px-8">
-              <p className="mb-2.5 text-[0.875rem] font-semibold">Learn</p>
-              {learn.map((n) => <Link key={n.href} href={n.href} className={link}>{n.label}</Link>)}
-            </div>
-          )}
-          <div className="space-y-1.5 lg:px-8">
-            <p className="mb-2.5 text-[0.875rem] font-semibold">Contact</p>
-            {org.contact_phone && <a href={`tel:${org.contact_phone.replace(/[^\d+]/g, "")}`} className={link}>{org.contact_phone}</a>}
-            {org.contact_email && <a href={`mailto:${org.contact_email}`} className={link}>{org.contact_email}</a>}
-            {site && <a href={site} className={link}>{site.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a>}
-            {org.address && <p className="text-[0.875rem] leading-relaxed text-[#5E5853]">{org.address}</p>}
-          </div>
-          {(social.instagram || social.facebook) && (
-            <div className="flex gap-3 lg:pl-8">
-              {social.instagram && <a href={social.instagram} aria-label="Instagram" className="grid h-10 w-10 place-items-center rounded-full ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"><svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" /></svg></a>}
-              {social.facebook && <a href={social.facebook} aria-label="Facebook" className="grid h-10 w-10 place-items-center rounded-full ring-1 ring-[#EDE3DB] hover:bg-[#F4ECE6]"><svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor"><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v3H7v4h3v7h4v-7h3l1-4h-4V8z" /></svg></a>}
-            </div>
-          )}
-        </div>
-        <p className={`${WRAP} border-t border-[#EDE3DB] py-5 text-[0.8125rem] text-[#8C847D]`}>Secure checkout by Stripe · Shop by EventureOS</p>
-      </footer>
+      <PublicFooter org={org} note="Secure checkout by Stripe" />
     </div>
   );
 }

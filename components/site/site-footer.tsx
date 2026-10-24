@@ -65,44 +65,59 @@ function Legal({ m, tone }: { m: FooterModel; tone: "dark" | "light" }) {
 
 const WRAP = "mx-auto w-full max-w-[1360px] px-5 sm:px-8 lg:px-10";
 
-/* ------------------------------------------------------------------ A · directory */
-function Directory({ m, hours }: { m: FooterModel; hours: Hours }) {
-  const link = "block py-1 text-[0.9063rem] text-white/70 transition hover:text-white";
+/* ------------------------------------------------------------------ A · directory (dark or light) */
+export type FooterTone = "dark" | "light";
+const TONE = {
+  dark: { bg: "bg-[#141011] text-white", line: "border-white/10", head: "text-white", link: "text-white/70 hover:text-white", ghost: "text-white ring-1 ring-white/25 hover:bg-white/10" },
+  light: { bg: "border-t border-[#EDE3DB] bg-[#FFFBF8] text-[#151312]", line: "border-[#EDE3DB]", head: "text-[#151312]", link: "text-[#5E5853] hover:text-[#151312]", ghost: "bg-white text-[#151312] ring-1 ring-[#E5DAD1] hover:bg-[#F7F0EA]" },
+} as const;
+
+function Directory({ m, hours, tone = "dark" }: { m: FooterModel; hours: Hours; tone?: FooterTone }) {
+  const t = TONE[tone];
+  const link = `block py-1 text-[0.9063rem] transition ${t.link}`;
+  const cols: { key: string; title: string; links: FooterLink[]; I?: typeof Coffee }[] = [
+    ...m.groups.map((g) => ({ key: g.key, title: g.title, links: g.links, I: ICON[g.key] })),
+    ...(m.company.length ? [{ key: "company", title: m.name, links: m.company }] : []),
+  ];
+  const head = `flex items-center gap-2 text-[0.8125rem] font-semibold uppercase tracking-[0.14em] ${t.head}`;
   return (
-    <footer className="bg-[#141011] text-white" data-footer="a">
+    <footer className={t.bg} data-footer="a" data-tone={tone}>
       {m.actions.length > 0 && (
-        <div className="border-b border-white/10">
+        <div className={`border-b ${t.line}`}>
           <div className={`${WRAP} flex flex-col gap-5 py-9 lg:flex-row lg:items-center lg:justify-between`}>
             <p className={`${serif} text-[clamp(1.625rem,2.6vw,2.25rem)] font-semibold leading-tight`}>What can we pour for you?</p>
             <div className="flex flex-wrap gap-2.5">
-              {m.actions.map((a, i) => <A key={a.href} l={a} className={`shop-btn inline-flex h-[48px] items-center gap-2 rounded-full px-6 text-[0.9375rem] font-semibold ${i === 0 ? "bg-[var(--pk)] text-white" : "text-white ring-1 ring-white/25 hover:bg-white/10"}`} />)}
+              {m.actions.map((a, i) => <A key={a.href} l={a} className={`shop-btn inline-flex h-[48px] items-center gap-2 rounded-full px-6 text-[0.9375rem] font-semibold ${i === 0 ? "bg-[var(--pk)] text-white" : t.ghost}`} />)}
             </div>
           </div>
         </div>
       )}
-      <div className={`${WRAP} grid gap-x-8 gap-y-10 py-14 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.2fr)]`}>
-        {m.groups.map((g) => {
-          const I = ICON[g.key];
-          return (
-            <nav key={g.key} aria-label={g.title}>
-              <p className="mb-3 flex items-center gap-2 text-[0.8125rem] font-semibold uppercase tracking-[0.14em] text-white"><I className="h-4 w-4 text-[var(--pk)]" />{g.title}</p>
-              {g.links.map((l) => <A key={l.href} l={l} className={link} />)}
-            </nav>
-          );
-        })}
-        {m.company.length > 0 && (
-          <nav aria-label={m.name}>
-            <p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-[0.14em] text-white">{m.name}</p>
-            {m.company.map((l) => <A key={l.href} l={l} className={link} />)}
+      {/* Phone: tap a heading to open its links */}
+      <div className={`${WRAP} py-6 sm:hidden`}>
+        {cols.map((c) => (
+          <details key={c.key} className={`group border-b py-3 ${t.line}`}>
+            <summary className={`flex cursor-pointer list-none items-center justify-between ${head}`}>
+              <span className="flex items-center gap-2">{c.I && <c.I className="h-4 w-4 text-[var(--pk)]" />}{c.title}</span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+            </summary>
+            <div className="pt-2">{c.links.map((l) => <A key={l.href} l={l} className={link} />)}</div>
+          </details>
+        ))}
+      </div>
+      {/* Computer: every business as a column */}
+      <div className={`${WRAP} hidden gap-x-8 gap-y-10 py-14 sm:grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.2fr)]`}>
+        {cols.map((c) => (
+          <nav key={c.key} aria-label={c.title}>
+            <p className={`mb-3 ${head}`}>{c.I && <c.I className="h-4 w-4 text-[var(--pk)]" />}{c.title}</p>
+            {c.links.map((l) => <A key={l.href} l={l} className={link} />)}
           </nav>
-        )}
+        ))}
       </div>
-      <div className={`${WRAP} grid gap-10 border-t border-white/10 py-10 md:grid-cols-[1.3fr_1fr_auto]`}>
-        <div><p className={`${serif} mb-4 text-[1.5rem] font-semibold`}>{m.name}</p><ContactList m={m} tone="dark" /></div>
-        <div><p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-[0.14em]">Café hours</p><HoursList hours={hours} tone="dark" /></div>
-        <div><p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-[0.14em]">Follow us</p><SocialIcons m={m} tone="dark" /></div>
+      <div className={`${WRAP} grid gap-10 border-t py-10 md:grid-cols-[1.3fr_1fr_auto] ${t.line}`}>
+        <div><p className={`${serif} mb-4 text-[1.5rem] font-semibold`}>{m.name}</p><ContactList m={m} tone={tone} /></div>
+        {hours.length > 0 && <div><p className={`mb-3 ${head}`}>Café hours</p><HoursList hours={hours} tone={tone} /></div>}
+        {m.social.length > 0 && <div><p className={`mb-3 ${head}`}>Follow us</p><SocialIcons m={m} tone={tone} /></div>}
       </div>
-      <div className={WRAP}><Legal m={m} tone="dark" /></div>
+      <div className={WRAP}><Legal m={m} tone={tone} /></div>
     </footer>
   );
 }
@@ -199,9 +214,9 @@ function Compact({ m, hours }: { m: FooterModel; hours: Hours }) {
   );
 }
 
-export function SiteFooter({ m, variant, hours = [] }: { m: FooterModel; variant: FooterVariant; hours?: Hours }) {
+export function SiteFooter({ m, variant = "a", tone = "dark", hours = [] }: { m: FooterModel; variant?: FooterVariant; tone?: FooterTone; hours?: Hours }) {
   if (variant === "b") return <Businesses m={m} hours={hours} />;
   if (variant === "c") return <Compact m={m} hours={hours} />;
-  return <Directory m={m} hours={hours} />;
+  return <Directory m={m} hours={hours} tone={tone} />;
 }
 

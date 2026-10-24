@@ -48,12 +48,15 @@ export function footerModel(org: PublicOrg): FooterModel {
   if (shop.enabled) groups.push({ key: "coffee", title: labels.shop || "Coffee", blurb: "Freshly roasted coffee, delivered.", links: [
     { label: "Shop coffee", href: `/shop/${base}` },
     { label: "Subscriptions", href: `/shop/${base}/subscriptions` },
+    { label: "My account", href: `/shop/${base}/account` },
     ...(gifts ? [{ label: "Coffee gift cards", href: `/shop/${base}/gift-card` }] : []),
   ] });
   if (classes || learn.enabled) groups.push({ key: "learn", title: labels.lessons || "Barista lessons", blurb: "Hands-on classes and learning online.", links: [
     ...(classes ? [{ label: "Hands-on classes", href: `/${base}` }] : []),
-    ...(learn.enabled ? [{ label: learn.name, href: `/academy/${base}` }] : []),
+    ...(learn.enabled ? [{ label: learn.name, href: `/academy/${base}` }, { label: "Online lessons", href: `/academy/${base}/course` }, { label: "Roast simulator", href: `/academy/${base}/roast` }] : []),
+    ...(learn.enabled && learn.ai.enabled ? [{ label: "AI coach", href: `/academy/${base}/coach` }] : []),
     ...(classes && gifts ? [{ label: "Class gift certificates", href: `/book/${base}/gift` }] : []),
+    ...(classes ? [{ label: "My bookings", href: `/book/${base}/account` }] : []),
   ] });
   if (cp.club) groups.push({ key: "roast", title: cafe.clubTitle || "Roasting club", blurb: "A shared roastery for your own coffee.", links: [
     { label: "Roast with us", href: `/cafe/${base}/roasting-club` },
@@ -64,6 +67,7 @@ export function footerModel(org: PublicOrg): FooterModel {
     { label: "Coffee cart hire", href: `/hire/${base}` },
     { label: "Catering", href: `/hire/${base}/catering` },
     { label: "Get a quote", href: `/hire/${base}/quote` },
+    { label: "Client sign-in", href: `/p/${base}` },
   ] });
   if (cp.wholesale) groups.push({ key: "wholesale", title: "Wholesale", blurb: "Coffee for cafés, offices and restaurants.", links: [
     { label: "Wholesale coffee", href: `/cafe/${base}/wholesale` },

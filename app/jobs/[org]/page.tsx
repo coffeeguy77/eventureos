@@ -1,3 +1,4 @@
+import { PublicFooter } from "@/components/site/public-footer";
 import "@fontsource/playfair-display/700.css";
 import { siteMeta } from "@/lib/site/meta";
 import { PageBg } from "@/components/site/page-bg";
@@ -163,11 +164,7 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
         </div>
       </section>
 
-      <footer className="pb-10 text-center text-[0.75rem] text-white/45">
-        <p>{org.jobs.name} · {[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}</p>
-        <p className="mt-1">Phone numbers and emails stay private unless the barista chooses to share them.</p>
-        <p className="mt-1">Powered by EventureOS</p>
-      </footer>
+      <PublicFooter org={org} note="Phone numbers and emails stay private unless the barista chooses to share them." />
     </div>
   );
 }

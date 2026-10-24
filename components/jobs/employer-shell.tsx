@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicFooter } from "@/components/site/public-footer";
 import { PageBg } from "@/components/site/page-bg";
 import { ChevronDown, LogOut } from "lucide-react";
 import type { JobsOrg } from "@/lib/jobs/server";
@@ -70,11 +71,7 @@ export function EmployerShell({ org, children, me, active, unread = 0, legacy = 
       <main className={`${PAGE} relative z-10 py-8 sm:py-10`}>
         {legacy ? <div className="rounded-3xl bg-canvas p-5 text-ink shadow-2xl sm:p-7">{children}</div> : children}
       </main>
-      <footer className="relative z-10 pb-10 pt-4 text-center text-[0.75rem] text-white/50">
-        <p>{org.jobs.name} · {[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}</p>
-        <p className="mt-1">Phone numbers and emails stay private unless the barista chooses to share them.</p>
-        <p className="mt-1">Locations © <a href="https://www.openstreetmap.org/copyright" className="underline">OpenStreetMap</a> contributors · Powered by EventureOS</p>
-      </footer>
+      <div className="relative z-10"><PublicFooter org={org} note={<>Phone numbers and emails stay private unless the barista chooses to share them.<br />Locations © <a href="https://www.openstreetmap.org/copyright" className="underline">OpenStreetMap</a> contributors</>} /></div>
     </div>
   );
 }

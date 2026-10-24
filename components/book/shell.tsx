@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicFooter } from "@/components/site/public-footer";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { EmbedBridge } from "./embed-bridge";
 import { MasterNav } from "@/components/site/master-nav";
@@ -31,10 +32,7 @@ export function BookShell({ org, embed, children, back, wide, bare, section = "l
         {children}
       </main>
       {!embed && (
-        <footer className="pb-10 pt-4 text-center text-[0.75rem] text-ink-faint">
-          {[org.contact_phone, org.contact_email].filter(Boolean).join(" · ")}
-          <p className="mt-1">Secure booking by EventureOS</p>
-        </footer>
+        <PublicFooter org={org} note="Secure booking by EventureOS" />
       )}
     </div>
   );
