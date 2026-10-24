@@ -20,13 +20,13 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   return siteMeta(org, `/cafe/${org.slug}/roasting-club`, { title: { absolute: `${org.cafe.clubTitle} — shared coffee roastery in Mitchell, Canberra | ${org.name}` }, description: org.cafe.clubIntro.slice(0, 160) });
 }
 
-/* Roast Culture palette — warm ivory, burgundy, sage and terracotta */
-const BURG = "#6B1D2E";
-const rcBtn = "shop-btn inline-flex h-[56px] items-center justify-center gap-2.5 rounded-full bg-[#6B1D2E] px-8 text-[1rem] font-semibold text-white shadow-[0_16px_30px_-18px_#6B1D2E] hover:bg-[#561525]";
-const rcOutline = "shop-btn inline-flex h-[56px] items-center justify-center gap-2 rounded-full border-[1.5px] border-[#1F1A17] px-8 text-[1rem] font-semibold text-[#1F1A17] hover:bg-white";
-const kicker = "text-[0.8125rem] font-semibold uppercase tracking-[0.18em] text-[#6B1D2E]";
+/* Roast Culture palette — matches the roast profiler screen: deep navy, cyan, magenta, yellow, purple */
+const SCREEN = "linear-gradient(150deg, #1C1446 0%, #241258 45%, #0D1330 100%)";
+const rcBtn = "shop-btn inline-flex h-[56px] items-center justify-center gap-2.5 rounded-full bg-[#27D9E8] px-8 text-[1rem] font-semibold text-[#0D1330] shadow-[0_0_34px_-8px_#27D9E8] hover:bg-[#62E6F0]";
+const rcOutline = "shop-btn inline-flex h-[56px] items-center justify-center gap-2 rounded-full border-[1.5px] border-white/40 px-8 text-[1rem] font-semibold text-white hover:bg-white/10";
+const kicker = "text-[0.8125rem] font-semibold uppercase tracking-[0.18em] text-[#27D9E8]";
 const h2 = `${serif} text-[clamp(2rem,3.8vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.01em]`;
-const card = "rounded-[24px] bg-white p-6 ring-1 ring-[#E8DFD3]";
+const card = "rounded-[24px] bg-white/[0.04] p-6 ring-1 ring-white/10";
 const aud = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
 
 export default async function RoastCulturePage({ params }: P) {
@@ -54,35 +54,35 @@ export default async function RoastCulturePage({ params }: P) {
 
   return (
     <CafeFrame org={org} active="club" weekly={weekly} cta={{ href: "#join", label: "Join" }}>
-      <div className="bg-[#F8F3EA] text-[#1F1A17]">
+      <div className="bg-[#0B1029] text-[#E7ECFF]">
         {/* 1 · Hero */}
         <section data-section="hero" className={`${WRAP} grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 lg:py-20`}>
           <div>
             <p className={kicker} {...k("hero.kicker")}>{T("hero.kicker", `${c.clubTitle} · by ${org.name} · Mitchell, Canberra`)}</p>
             <h1 className={`${serif} mt-4 text-[clamp(2.75rem,6vw,5rem)] font-semibold leading-[0.98] tracking-[-0.02em]`} {...k("hero.title")}>{T("hero.title", "Your coffee. Your brand. Our roastery.")}</h1>
-            <p {...ed("cafe.clubIntro")} className="mt-6 max-w-xl text-[1.1875rem] leading-relaxed text-[#4A423D]">{c.clubIntro}</p>
+            <p {...ed("cafe.clubIntro")} className="mt-6 max-w-xl text-[1.1875rem] leading-relaxed text-[#B4BEDF]">{c.clubIntro}</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="#join" className={rcBtn} data-track="Roast Culture: join (hero)">Join The Roast Society<ArrowRight className="h-5 w-5" /></Link>
               <Link href="#calculator" className={rcOutline} data-track="Roast Culture: calculator (hero)">What could your coffee earn?</Link>
             </div>
-            <ul className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-[#E3D8C9] pt-6">
-              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>50 g–45 kg</p><p className="mt-1.5 text-[0.8125rem] text-[#6A615B]">five roasters</p></li>
-              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>{aud(from)}/hr</p><p className="mt-1.5 text-[0.8125rem] text-[#6A615B]">roaster hire from</p></li>
-              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>24/7</p><p className="mt-1.5 text-[0.8125rem] text-[#6A615B]">entry for inducted members</p></li>
+            <ul className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-white/10 pt-6">
+              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>50 g–45 kg</p><p className="mt-1.5 text-[0.8125rem] text-[#8F9AC0]">five roasters</p></li>
+              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>{aud(from)}/hr</p><p className="mt-1.5 text-[0.8125rem] text-[#8F9AC0]">roaster hire from</p></li>
+              <li><p className={`${serif} text-[1.75rem] font-semibold leading-none`}>24/7</p><p className="mt-1.5 text-[0.8125rem] text-[#8F9AC0]">entry for inducted members</p></li>
             </ul>
           </div>
           {c.clubImage && <img {...edImg("cafe.clubImage")} src={c.clubImage} alt="Roasting at the roastery in Mitchell" className="aspect-[4/5] w-full rounded-[32px] object-cover shadow-[0_40px_80px_-50px_rgba(60,20,25,.6)] lg:aspect-[5/6]" />}
         </section>
 
         {/* 2 · Membership */}
-        <section id="membership" data-section="membership" className="scroll-mt-24 bg-white">
+        <section id="membership" data-section="membership" className="scroll-mt-24 bg-[#0F1638]">
           <div className={`${WRAP} grid gap-10 py-16 sm:py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:gap-16`}>
             <div>
               <p className={kicker} {...k("member.kicker")}>{T("member.kicker", "The Roast Society")}</p>
               <h2 className={`${h2} mt-3`} {...k("member.title")}>{T("member.title", "Create your coffee. Grow your brand.")}</h2>
-              <p className="mt-5 max-w-xl whitespace-pre-line text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("member.text")}>{T("member.text", "Membership opens the roastery to you: professional roasters from sample size to production scale, the space to pack and brand your coffee, and people around you who roast every day. Learn, test, develop your profiles and build something of your own — at your pace.")}</p>
+              <p className="mt-5 max-w-xl whitespace-pre-line text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("member.text")}>{T("member.text", "Membership opens the roastery to you: professional roasters from sample size to production scale, the space to pack and brand your coffee, and people around you who roast every day. Learn, test, develop your profiles and build something of your own — at your pace.")}</p>
             </div>
-            <div className="rounded-[28px] p-7 text-white sm:p-9" style={{ background: `linear-gradient(160deg, ${BURG}, #4A1220)` }}>
+            <div className="rounded-[28px] p-7 text-white sm:p-9" style={{ background: SCREEN }}>
               <p className="text-[0.8125rem] font-semibold uppercase tracking-[0.16em] text-white/70">The Roast Society</p>
               <p className="mt-3"><span className={`${serif} text-[3.5rem] font-semibold leading-none`}>{aud(cfg.membershipMonthly)}</span> <span className="text-white/70">per month</span></p>
               <ul className="mt-6 space-y-3 text-[0.9688rem]">
@@ -91,10 +91,10 @@ export default async function RoastCulturePage({ params }: P) {
                   ["m2", "24/7 digital entry once you're inducted"],
                   ["m3", "Hot desks and 1 Gbps internet, subject to availability"],
                   ["m4", "Arrange packing, printing, storage and training when you need them"],
-                ].map(([key, d]) => <li key={key} className="flex items-start gap-2.5"><Check className="mt-0.5 h-5 w-5 shrink-0 text-[#D9B26A]" /><span {...k(key)}>{T(key, d)}</span></li>)}
+                ].map(([key, d]) => <li key={key} className="flex items-start gap-2.5"><Check className="mt-0.5 h-5 w-5 shrink-0 text-[#27D9E8]" /><span {...k(key)}>{T(key, d)}</span></li>)}
               </ul>
               <p className="mt-6 border-t border-white/15 pt-4 text-[0.8438rem] text-white/70" {...k("member.note")}>{T("member.note", "Membership and roaster hire are separate charges. Extra services and materials are priced separately or quoted.")}</p>
-              <Link href="#join" className="shop-btn mt-6 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-white font-semibold text-[#6B1D2E] hover:bg-[#F8F3EA]" data-track="Roast Culture: join (membership)">Join or book a visit<ArrowRight className="h-5 w-5" /></Link>
+              <Link href="#join" className="shop-btn mt-6 inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-full bg-[#27D9E8] font-semibold text-[#0D1330] shadow-[0_0_30px_-8px_#27D9E8] hover:bg-[#62E6F0]" data-track="Roast Culture: join (membership)">Join or book a visit<ArrowRight className="h-5 w-5" /></Link>
             </div>
           </div>
         </section>
@@ -110,49 +110,49 @@ export default async function RoastCulturePage({ params }: P) {
               { key: "p3", I: Tag, title: "Create your brand", text: "Pack on the Action Pak and Dolzan machines, print your own labels and stickers, and store your stock on our racking — the practical side of turning a roast into a product.", links: [["Packing & printing", "#packing"], ["Plan your costs", "#calculator"]] },
             ].map((p) => (
               <div key={p.key} className={`${card} flex flex-col`}>
-                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#F3E6E2] text-[#6B1D2E]"><p.I className="h-6 w-6" /></span>
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#27D9E8]/15 text-[#27D9E8]"><p.I className="h-6 w-6" /></span>
                 <h3 className={`${serif} mt-5 text-[1.75rem] font-semibold`} {...k(`${p.key}.title`)}>{T(`${p.key}.title`, p.title)}</h3>
-                <p className="mt-2 flex-1 leading-relaxed text-[#4A423D]" {...k(`${p.key}.text`)}>{T(`${p.key}.text`, p.text)}</p>
-                <p className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-[0.9063rem] font-semibold text-[#6B1D2E]">{p.links.map(([l, h]) => <Link key={h + l} href={h} className="inline-flex items-center gap-1 hover:underline">{l}<ArrowRight className="h-4 w-4" /></Link>)}</p>
+                <p className="mt-2 flex-1 leading-relaxed text-[#B4BEDF]" {...k(`${p.key}.text`)}>{T(`${p.key}.text`, p.text)}</p>
+                <p className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-[0.9063rem] font-semibold text-[#27D9E8]">{p.links.map(([l, h]) => <Link key={h + l} href={h} className="inline-flex items-center gap-1 hover:underline">{l}<ArrowRight className="h-4 w-4" /></Link>)}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* 4 · Equipment & hire pricing */}
-        <section id="equipment" data-section="equipment" className="scroll-mt-24 bg-white">
+        <section id="equipment" data-section="equipment" className="scroll-mt-24 bg-[#0F1638]">
           <div className={`${WRAP} py-16 sm:py-24`}>
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end">
               <div>
                 <p className={kicker} {...k("eq.kicker")}>{T("eq.kicker", "Roasters & hire")}</p>
                 <h2 className={`${h2} mt-3`} {...k("eq.title")}>{T("eq.title", "From a 50 g sample to a 45 kg production run")}</h2>
               </div>
-              <p className="text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("eq.text")}>{T("eq.text", "Hire is booked in a two-hour minimum or an eight-hour day. The day is 50% off eight standard hourly charges — the same price as four hours — subject to availability.")}</p>
+              <p className="text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("eq.text")}>{T("eq.text", "Hire is booked in a two-hour minimum or an eight-hour day. The day is 50% off eight standard hourly charges — the same price as four hours — subject to availability.")}</p>
             </div>
-            <div className="mt-10 overflow-x-auto rounded-[24px] ring-1 ring-[#E8DFD3]">
+            <div className="mt-10 overflow-x-auto rounded-[24px] ring-1 ring-white/10">
               <table className="w-full min-w-[620px] text-left">
-                <thead className="bg-[#F8F3EA] text-[0.8125rem] uppercase tracking-wide text-[#6A615B]">
+                <thead className="bg-white/[0.05] text-[0.8125rem] uppercase tracking-wide text-[#8F9AC0]">
                   <tr><th className="px-5 py-3.5 font-semibold">Roaster</th><th className="px-5 py-3.5 text-right font-semibold">Hourly</th><th className="px-5 py-3.5 text-right font-semibold">Two-hour minimum</th><th className="px-5 py-3.5 text-right font-semibold">Eight-hour day</th></tr>
                 </thead>
                 <tbody>
                   {cfg.machines.map((m) => {
                     const p = packagePrices(m.hourly);
                     return (
-                      <tr key={m.id} className="border-t border-[#EFE7DC]">
-                        <td className="px-5 py-4"><span className="font-semibold">{m.name}</span>{m.giesen && <span className="ml-2 rounded-full bg-[#EEF3EC] px-2 py-0.5 text-[0.75rem] font-semibold text-[#4F6B4C]">Profile software</span>}</td>
+                      <tr key={m.id} className="border-t border-white/10">
+                        <td className="px-5 py-4"><span className="font-semibold">{m.name}</span>{m.giesen && <span className="ml-2 rounded-full bg-[#27D9E8]/15 px-2 py-0.5 text-[0.75rem] font-semibold text-[#27D9E8]">Profile software</span>}</td>
                         <td className="px-5 py-4 text-right tabular-nums">{aud(p.hourly)}</td>
                         <td className="px-5 py-4 text-right tabular-nums">{aud(p.twoHour)}</td>
-                        <td className="px-5 py-4 text-right font-semibold tabular-nums text-[#6B1D2E]">{aud(p.day)}</td>
+                        <td className="px-5 py-4 text-right font-semibold tabular-nums text-[#27D9E8]">{aud(p.day)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            <div className="mt-6 grid gap-4 text-[0.9375rem] text-[#4A423D] md:grid-cols-3">
-              <p className="flex items-start gap-2.5"><Clock className="mt-0.5 h-5 w-5 shrink-0 text-[#6B1D2E]" /><span {...k("eq.n1")}>{T("eq.n1", "Warm-up and final cleaning don't use your paid roasting time — but please arrive early enough to preheat.")}</span></p>
-              <p className="flex items-start gap-2.5"><Coffee className="mt-0.5 h-5 w-5 shrink-0 text-[#6B1D2E]" /><span {...k("eq.n2")}>{T("eq.n2", "Prices are in Australian dollars and include GST. Membership is separate.")}</span></p>
-              <p className="flex items-start gap-2.5"><Package className="mt-0.5 h-5 w-5 shrink-0 text-[#6B1D2E]" /><span {...k("eq.n3")}>{T("eq.n3", "Green coffee, packaging, printing, storage and training are priced separately or quoted.")}</span></p>
+            <div className="mt-6 grid gap-4 text-[0.9375rem] text-[#B4BEDF] md:grid-cols-3">
+              <p className="flex items-start gap-2.5"><Clock className="mt-0.5 h-5 w-5 shrink-0 text-[#27D9E8]" /><span {...k("eq.n1")}>{T("eq.n1", "Warm-up and final cleaning don't use your paid roasting time — but please arrive early enough to preheat.")}</span></p>
+              <p className="flex items-start gap-2.5"><Coffee className="mt-0.5 h-5 w-5 shrink-0 text-[#27D9E8]" /><span {...k("eq.n2")}>{T("eq.n2", "Prices are in Australian dollars and include GST. Membership is separate.")}</span></p>
+              <p className="flex items-start gap-2.5"><Package className="mt-0.5 h-5 w-5 shrink-0 text-[#27D9E8]" /><span {...k("eq.n3")}>{T("eq.n3", "Green coffee, packaging, printing, storage and training are priced separately or quoted.")}</span></p>
             </div>
           </div>
         </section>
@@ -163,17 +163,17 @@ export default async function RoastCulturePage({ params }: P) {
             <div className="max-w-3xl">
               <p className={kicker} {...k("calc.kicker")}>{T("calc.kicker", "Profitability calculator")}</p>
               <h2 className={`${h2} mt-3`} {...k("calc.title")}>{T("calc.title", "What could your coffee earn?")}</h2>
-              <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("calc.text")}>{T("calc.text", "Model your production, see your costs and explore the potential of your own coffee brand.")}</p>
+              <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("calc.text")}>{T("calc.text", "Model your production, see your costs and explore the potential of your own coffee brand.")}</p>
             </div>
             <div className="mt-10"><RoastCalculator machines={cfg.machines} membershipMonthly={cfg.membershipMonthly} /></div>
           </div>
         </section>
 
         {/* 6 · Giesen software */}
-        <section id="software" data-section="software" className="scroll-mt-24 bg-[#1F1A17] text-white">
+        <section id="software" data-section="software" className="scroll-mt-24 bg-[#070B1F] text-white">
           <div className={`${WRAP} grid gap-10 py-16 sm:py-24 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16`}>
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#D9B26A] px-3.5 py-1 text-[0.8125rem] font-semibold text-[#1F1A17]"><Monitor className="h-4 w-4" /><span {...k("soft.badge")}>{T("soft.badge", "Giesen profile software included")}</span></span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#27D9E8] px-3.5 py-1 text-[0.8125rem] font-semibold text-[#0D1330]"><Monitor className="h-4 w-4" /><span {...k("soft.badge")}>{T("soft.badge", "Giesen profile software included")}</span></span>
               <h2 className={`${h2} mt-5`} {...k("soft.title")}>{T("soft.title", "Develop it. Save it. Roast it again.")}</h2>
               <p className="mt-5 text-[1.0625rem] leading-relaxed text-white/75" {...k("soft.text")}>{T("soft.text", "Record your roasts, work alongside saved reference profiles and use automated playback or custom triggers on supported equipment. Develop a repeatable process around your coffee, with the operator in control.")}</p>
               {pic("rcSoftware", "/media/beanculture/giesen-profiler.webp") && <img {...edImg("site.images.rcSoftware")} src={pic("rcSoftware", "/media/beanculture/giesen-profiler.webp")!} alt="Giesen profile software showing a live roast curve" className="mt-8 aspect-[3/2] w-full rounded-[24px] object-cover ring-1 ring-white/10" />}
@@ -193,7 +193,7 @@ export default async function RoastCulturePage({ params }: P) {
                 ["s6", "Control, machine by machine", "The actions available depend on each Giesen's installed setup and software configuration."],
               ].map(([key, title, d]) => (
                 <div key={key} className="rounded-[20px] bg-white/[0.06] p-5 ring-1 ring-white/10">
-                  <p className="flex items-start gap-2 font-semibold"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#D9B26A]" /><span {...k(`${key}.t`)}>{T(`${key}.t`, title)}</span></p>
+                  <p className="flex items-start gap-2 font-semibold"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#27D9E8]" /><span {...k(`${key}.t`)}>{T(`${key}.t`, title)}</span></p>
                   <p className="mt-1.5 text-[0.9375rem] leading-relaxed text-white/70" {...k(`${key}.d`)}>{T(`${key}.d`, d)}</p>
                 </div>
               ))}
@@ -208,7 +208,7 @@ export default async function RoastCulturePage({ params }: P) {
           <div>
             <p className={kicker} {...k("pack.kicker")}>{T("pack.kicker", "Packing, printing & storage")}</p>
             <h2 className={`${h2} mt-3`} {...k("pack.title")}>{T("pack.title", "From roast to a product on the shelf")}</h2>
-            <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("pack.text")}>{T("pack.text", "Clean your coffee, pack it properly and put your own brand on it — all in one place.")}</p>
+            <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("pack.text")}>{T("pack.text", "Clean your coffee, pack it properly and put your own brand on it — all in one place.")}</p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {[
                 [Layers, "pk1", "De-stoners", "Take stones and debris out before packing."],
@@ -219,34 +219,34 @@ export default async function RoastCulturePage({ params }: P) {
               ].map(([I, key, title, d]) => {
                 const Icon = I as typeof Layers;
                 return (
-                  <li key={key as string} className="flex gap-3 rounded-[18px] bg-white p-4 ring-1 ring-[#E8DFD3]">
-                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[#C46B42]" />
-                    <span><span className="block font-semibold" {...k(`${key}.t`)}>{T(`${key}.t`, title as string)}</span><span className="text-[0.9063rem] text-[#6A615B]" {...k(`${key}.d`)}>{T(`${key}.d`, d as string)}</span></span>
+                  <li key={key as string} className="flex gap-3 rounded-[18px] bg-white/[0.04] p-4 ring-1 ring-white/10">
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[#FF2D8F]" />
+                    <span><span className="block font-semibold" {...k(`${key}.t`)}>{T(`${key}.t`, title as string)}</span><span className="text-[0.9063rem] text-[#8F9AC0]" {...k(`${key}.d`)}>{T(`${key}.d`, d as string)}</span></span>
                   </li>
                 );
               })}
             </ul>
-            <p className="mt-5 text-[0.875rem] text-[#6A615B]" {...k("pack.fine")}>{T("pack.fine", "Packing, printing, materials and storage are arranged and priced separately — they aren't unlimited or included in membership.")}</p>
+            <p className="mt-5 text-[0.875rem] text-[#8F9AC0]" {...k("pack.fine")}>{T("pack.fine", "Packing, printing, materials and storage are arranged and priced separately — they aren't unlimited or included in membership.")}</p>
           </div>
         </section>
 
         {/* 8 · Training, hot desks, farm */}
-        <section id="training" data-section="training" className="scroll-mt-24 bg-white">
+        <section id="training" data-section="training" className="scroll-mt-24 bg-[#0F1638]">
           <div className={`${WRAP} py-16 sm:py-24`}>
             <p className={kicker} {...k("train.kicker")}>{T("train.kicker", "Train, work & learn")}</p>
             <h2 className={`${h2} mt-3 max-w-3xl`} {...k("train.title")}>{T("train.title", "More than a roaster")}</h2>
-            <p className="mt-4 max-w-3xl text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("train.text")}>{T("train.text", "Between roasts there's room to work too: hot desks with a 1 Gbps internet connection for planning, answering orders and building your brand, subject to availability.")}</p>
+            <p className="mt-4 max-w-3xl text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("train.text")}>{T("train.text", "Between roasts there's room to work too: hot desks with a 1 Gbps internet connection for planning, answering orders and building your brand, subject to availability.")}</p>
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {[
                 { key: "tr1", I: GraduationCap, img: pic("rcTrain", "/media/academy/bean-culture/cafe.jpg"), imgKey: "rcTrain", title: "Training room", text: "Three Café Racer espresso machines for dialling in your coffee, training baristas and testing how your roast performs in the cup." },
                 { key: "tr4", I: Printer, img: pic("rcBrand", null), imgKey: "rcBrand", title: "Branding & packaging", text: "Design it, print it, pack it: full-colour labels and stickers on the HP Latex and Graphtec cutter, short label runs on the Epson printers, and bags filled on the Action Pak and Dolzan." },
                 { key: "tr3", I: Sprout, img: pic("rcFarm", "/media/beanculture/hydroponic-farm.jpg"), imgKey: "rcFarm", title: "Hydroponic coffee farm", text: "See coffee growing from plant to cherry — a hands-on way to understand where every bean begins." },
               ].map((x) => (
-                <div key={x.key} className="overflow-hidden rounded-[24px] bg-[#F8F3EA] ring-1 ring-[#E8DFD3]">
-                  {x.img && x.imgKey ? <img {...edImg(`site.images.${x.imgKey}`)} src={x.img} alt="" className="aspect-[16/10] w-full object-cover" /> : <div {...(x.imgKey ? edImg(`site.images.${x.imgKey}`) : {})} className="grid aspect-[16/10] w-full place-items-center bg-[#EFE5D6] text-[#7F9C7B]"><x.I className="h-12 w-12" strokeWidth={1.4} /></div>}
+                <div key={x.key} className="overflow-hidden rounded-[24px] bg-white/[0.04] ring-1 ring-white/10">
+                  {x.img && x.imgKey ? <img {...edImg(`site.images.${x.imgKey}`)} src={x.img} alt="" className="aspect-[16/10] w-full object-cover" /> : <div {...(x.imgKey ? edImg(`site.images.${x.imgKey}`) : {})} className="grid aspect-[16/10] w-full place-items-center bg-white/[0.06] text-[#22E0B0]"><x.I className="h-12 w-12" strokeWidth={1.4} /></div>}
                   <div className="p-6">
                     <h3 className={`${serif} text-[1.5rem] font-semibold`} {...k(`${x.key}.title`)}>{T(`${x.key}.title`, x.title)}</h3>
-                    <p className="mt-2 leading-relaxed text-[#4A423D]" {...k(`${x.key}.text`)}>{T(`${x.key}.text`, x.text)}</p>
+                    <p className="mt-2 leading-relaxed text-[#B4BEDF]" {...k(`${x.key}.text`)}>{T(`${x.key}.text`, x.text)}</p>
                   </div>
                 </div>
               ))}
@@ -260,10 +260,10 @@ export default async function RoastCulturePage({ params }: P) {
             <div>
               <p className={kicker} {...k("acc.kicker")}>{T("acc.kicker", "Access & bookings")}</p>
               <h2 className={`${h2} mt-3`} {...k("acc.title")}>{T("acc.title", "How a roasting day works")}</h2>
-              <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("acc.text")}>{T("acc.text", "Inducted members have 24/7 digital entry. 24/7 access doesn't mean 24/7 staffing — outside our staffed hours you're preheating, roasting and cleaning on your own.")}</p>
-              <div className="mt-6 rounded-[20px] bg-white p-5 ring-1 ring-[#E8DFD3]">
-                <p className="flex items-center gap-2 font-semibold"><Clock className="h-5 w-5 text-[#6B1D2E]" /><span {...k("acc.staffTitle")}>{T("acc.staffTitle", "Staffed preheating")}</span></p>
-                <p className="mt-1.5 text-[0.9375rem] text-[#4A423D]" {...k("acc.staff")}>{T("acc.staff", `During business hours (${cfg.staffHours}) our team can arrange preheating around your booked start time. Outside those hours, let yourself in with digital entry and preheat the roaster yourself.`)}</p>
+              <p className="mt-4 text-[1.0625rem] leading-relaxed text-[#B4BEDF]" {...k("acc.text")}>{T("acc.text", "Inducted members have 24/7 digital entry. 24/7 access doesn't mean 24/7 staffing — outside our staffed hours you're preheating, roasting and cleaning on your own.")}</p>
+              <div className="mt-6 rounded-[20px] bg-white/[0.04] p-5 ring-1 ring-white/10">
+                <p className="flex items-center gap-2 font-semibold"><Clock className="h-5 w-5 text-[#27D9E8]" /><span {...k("acc.staffTitle")}>{T("acc.staffTitle", "Staffed preheating")}</span></p>
+                <p className="mt-1.5 text-[0.9375rem] text-[#B4BEDF]" {...k("acc.staff")}>{T("acc.staff", `During business hours (${cfg.staffHours}) our team can arrange preheating around your booked start time. Outside those hours, let yourself in with digital entry and preheat the roaster yourself.`)}</p>
               </div>
             </div>
             <ol className="space-y-3">
@@ -274,25 +274,25 @@ export default async function RoastCulturePage({ params }: P) {
                 ["a4", "Roast", "Your paid time is for roasting. Use your saved profiles on the Giesens, and keep an eye on every batch."],
                 ["a5", "Clean down and hand over", "Do your own setup and cleanup and leave the roaster ready for the next person. Please don't leave machines preheated for long periods."],
               ].map(([key, title, d], i) => (
-                <li key={key} className="flex gap-4 rounded-[20px] bg-white p-5 ring-1 ring-[#E8DFD3]">
-                  <span className={`${serif} grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#6B1D2E] text-[1.125rem] font-semibold text-white`}>{i + 1}</span>
-                  <span><span className="block text-[1.0625rem] font-semibold" {...k(`${key}.t`)}>{T(`${key}.t`, title)}</span><span className="mt-1 block text-[0.9375rem] leading-relaxed text-[#4A423D]" {...k(`${key}.d`)}>{T(`${key}.d`, d)}</span></span>
+                <li key={key} className="flex gap-4 rounded-[20px] bg-white/[0.04] p-5 ring-1 ring-white/10">
+                  <span className={`${serif} grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#27D9E8] text-[1.125rem] font-semibold text-[#0D1330] shadow-[0_0_18px_-4px_#27D9E8]`}>{i + 1}</span>
+                  <span><span className="block text-[1.0625rem] font-semibold" {...k(`${key}.t`)}>{T(`${key}.t`, title)}</span><span className="mt-1 block text-[0.9375rem] leading-relaxed text-[#B4BEDF]" {...k(`${key}.d`)}>{T(`${key}.d`, d)}</span></span>
                 </li>
               ))}
-              <li className="px-1 text-[0.875rem] text-[#6A615B]" {...k("acc.book")}>{T("acc.book", "Bookings are arranged with our team for now — send us a message below and we'll confirm a time with you.")}</li>
+              <li className="px-1 text-[0.875rem] text-[#8F9AC0]" {...k("acc.book")}>{T("acc.book", "Bookings are arranged with our team for now — send us a message below and we'll confirm a time with you.")}</li>
             </ol>
           </div>
         </section>
 
         {/* Everything here, at a glance */}
-        <section data-section="facilities" className="bg-white">
+        <section data-section="facilities" className="bg-[#0F1638]">
           <div className={`${WRAP} py-14`}>
             <p className={kicker} {...k("fac.kicker")}>{T("fac.kicker", "Everything under one roof")}</p>
             <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {facilities.map((f) => (
                 <div key={f.title}>
-                  <p className="flex items-center gap-2 font-semibold"><f.I className="h-5 w-5 text-[#7F9C7B]" />{f.title}</p>
-                  <ul className="mt-2 space-y-1 text-[0.9375rem] text-[#4A423D]">{f.items.map((x) => <li key={x}>{x}</li>)}</ul>
+                  <p className="flex items-center gap-2 font-semibold"><f.I className="h-5 w-5 text-[#22E0B0]" />{f.title}</p>
+                  <ul className="mt-2 space-y-1 text-[0.9375rem] text-[#B4BEDF]">{f.items.map((x) => <li key={x}>{x}</li>)}</ul>
                 </div>
               ))}
             </div>
@@ -303,11 +303,11 @@ export default async function RoastCulturePage({ params }: P) {
         {c.clubFaq.length > 0 && (
           <section data-section="faq" className={`${WRAP} py-16 sm:py-20`}>
             <h2 className={h2} {...k("faq.title")}>{T("faq.title", "Questions")}</h2>
-            <div className="mt-8 divide-y divide-[#E8DFD3] rounded-[24px] bg-white px-6 ring-1 ring-[#E8DFD3]">
+            <div className="mt-8 divide-y divide-white/10 rounded-[24px] bg-white/[0.04] px-6 ring-1 ring-white/10">
               {c.clubFaq.map((f) => (
                 <details key={f.q} className="group py-5">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[1.0625rem] font-semibold">{f.q}<span className="text-[1.5rem] leading-none text-[#6B1D2E] transition group-open:rotate-45">+</span></summary>
-                  <p className="mt-3 whitespace-pre-line leading-relaxed text-[#4A423D]">{f.a}</p>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[1.0625rem] font-semibold">{f.q}<span className="text-[1.5rem] leading-none text-[#27D9E8] transition group-open:rotate-45">+</span></summary>
+                  <p className="mt-3 whitespace-pre-line leading-relaxed text-[#B4BEDF]">{f.a}</p>
                 </details>
               ))}
             </div>
@@ -315,7 +315,7 @@ export default async function RoastCulturePage({ params }: P) {
         )}
 
         {/* 11 · Closing */}
-        <section id="join" data-section="contact" className="scroll-mt-24" style={{ background: `linear-gradient(160deg, ${BURG}, #4A1220)` }}>
+        <section id="join" data-section="contact" className="scroll-mt-24" style={{ background: SCREEN }}>
           <div className={`${WRAP} grid gap-10 py-16 text-white sm:py-24 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-16`}>
             <div>
               <h2 className={`${h2}`} {...k("close.title")}>{T("close.title", "Your coffee journey starts here.")}</h2>
@@ -323,7 +323,7 @@ export default async function RoastCulturePage({ params }: P) {
               <p className="mt-6 max-w-md leading-relaxed text-white/70" {...k("close.more")}>{T("close.more", "Tell us what you'd like to roast — a first sample, a new coffee brand or production for your café — and we'll show you around the roastery.")}</p>
               {org.contact_phone && <p className="mt-6 text-white/80">Or call us on <a href={`tel:${org.contact_phone.replace(/\s+/g, "")}`} className="font-semibold text-white underline-offset-4 hover:underline">{org.contact_phone}</a></p>}
             </div>
-            <div className="text-[#1F1A17]" style={{ ["--pk" as string]: BURG } as React.CSSProperties}><ContactForm slug={org.slug} section="club" heading="Join or book a visit" showEvent={false} messageHint="What you'd like to roast, which roaster and roughly how much — and whether you'd like to join The Roast Society or visit first" /></div>
+            <div className="text-[#1F1A17]" style={{ ["--pk" as string]: "#FF2D8F" } as React.CSSProperties}><ContactForm slug={org.slug} section="club" heading="Join or book a visit" showEvent={false} messageHint="What you'd like to roast, which roaster and roughly how much — and whether you'd like to join The Roast Society or visit first" /></div>
           </div>
         </section>
       </div>

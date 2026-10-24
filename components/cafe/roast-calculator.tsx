@@ -5,8 +5,8 @@ import { ChevronDown, Download, Info, Printer } from "lucide-react";
 import { DEFAULT_INPUT, DRINKS, machineComparison, packageResult, pointAt, toCsv, type CalcInput, type PackageResult, type Point } from "@/lib/roast/calc";
 import type { Machine } from "@/lib/roast/config";
 
-/* Roast Culture palette: ivory, burgundy, sage and terracotta */
-const C = { burg: "#6B1D2E", burgDeep: "#4A1220", ivory: "#F8F3EA", sage: "#7F9C7B", terra: "#C46B42", gold: "#D9B26A", ink: "#1F1A17", muted: "#6A615B", line: "#E8DFD3" };
+/* Roast Culture palette — matches the roast profiler screen: deep navy, cyan, magenta, yellow */
+const C = { burg: "#161D4A", burgDeep: "#0D1330", ivory: "#151C40", sage: "#22E0B0", terra: "#FF2D8F", gold: "#27D9E8", ink: "#E7ECFF", muted: "#8F9AC0", line: "rgba(255,255,255,0.1)" };
 
 const aud = (n: number | null, cents = true) => (n === null || !Number.isFinite(n) ? "—" : new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 }).format(n));
 const kg = (n: number) => (n > 0 && n < 1 ? `${Math.round(n * 1000).toLocaleString("en-AU")} g` : `${(Math.round(n * 10) / 10).toLocaleString("en-AU")} kg`);
@@ -28,7 +28,7 @@ function Slider({ label, value, onChange, min, max, step, unit, hint, format }: 
         <span className="flex items-baseline gap-1">
           <input type="number" inputMode="decimal" aria-label={`${label} (exact)`} value={Number.isFinite(value) ? value : 0} min={min} step={step}
             onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-            className="w-[5.5rem] rounded-md bg-white/10 px-2 py-0.5 text-right text-[0.9375rem] font-semibold tabular-nums text-white outline-none ring-1 ring-white/15 focus:ring-[#D9B26A]" />
+            className="w-[5.5rem] rounded-md bg-white/10 px-2 py-0.5 text-right text-[0.9375rem] font-semibold tabular-nums text-white outline-none ring-1 ring-white/15 focus:ring-[#27D9E8]" />
           {unit && <span className="text-[0.8125rem] text-white/60">{unit}</span>}
         </span>
       </div>
@@ -43,7 +43,7 @@ function Toggle<T extends string>({ value, options, onChange, label }: { value: 
     <div role="group" aria-label={label} className="flex gap-1 rounded-[10px] bg-white/10 p-1">
       {options.map((o) => (
         <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}
-          className={`flex-1 rounded-[7px] px-2 py-2 text-[0.8125rem] font-semibold transition ${value === o.id ? "bg-[#D9B26A] text-[#1F1A17]" : "text-white/80 hover:text-white"}`}>{o.label}</button>
+          className={`flex-1 rounded-[7px] px-2 py-2 text-[0.8125rem] font-semibold transition ${value === o.id ? "bg-[#27D9E8] text-[#0D1330]" : "text-white/80 hover:text-white"}`}>{o.label}</button>
       ))}
     </div>
   );
@@ -52,7 +52,7 @@ function Toggle<T extends string>({ value, options, onChange, label }: { value: 
 function Check({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
   return (
     <label className="mb-3 flex cursor-pointer items-start gap-2.5 text-[0.8438rem] text-white/85">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#D9B26A]" />
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#27D9E8]" />
       <span>{label}{hint && <span className="block text-[0.75rem] text-white/50">{hint}</span>}</span>
     </label>
   );
@@ -430,23 +430,23 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
   return (
     <div id="roast-calc" className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
       <style>{`
-        .rc-range{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:rgba(255,255,255,.18);outline:none}
-        .rc-range::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:${C.gold};border:3px solid ${C.burgDeep};box-shadow:0 0 0 1px ${C.gold};cursor:pointer}
+        .rc-range{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:linear-gradient(90deg,rgba(39,217,232,.55),rgba(157,123,255,.35));outline:none}
+        .rc-range::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:${C.gold};border:3px solid ${C.burgDeep};box-shadow:0 0 10px ${C.gold};cursor:pointer}
         .rc-range::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:${C.gold};border:3px solid ${C.burgDeep};cursor:pointer}
-        .rc-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px rgba(217,178,106,.45)}
+        .rc-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px rgba(39,217,232,.45)}
         @media print { body * { visibility: hidden !important } #roast-calc, #roast-calc * { visibility: visible !important } #roast-calc { position: absolute; inset: 0 auto auto 0; width: 100%; } .rc-noprint { display: none !important } #roast-calc .rc-panel { background: #fff !important; color: #000 !important } }
       `}</style>
 
       {/* Controls — the instrument */}
-      <div className="rc-panel relative overflow-hidden rounded-[22px] p-6 text-white shadow-[0_24px_60px_-30px_rgba(74,18,32,.7)]" style={{ background: `linear-gradient(160deg, ${C.burg}, ${C.burgDeep})` }}>
-        <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full border border-[#D9B26A]/25" />
+      <div className="rc-panel relative overflow-hidden rounded-[22px] p-6 text-white shadow-[0_24px_60px_-30px_rgba(13,19,48,.9)]" style={{ background: "linear-gradient(160deg, #1B2358, #0D1330 60%, #1C1446)" }}>
+        <span aria-hidden className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full border border-[#27D9E8]/25" />
         <p className="text-[0.75rem] font-semibold uppercase tracking-[0.14em] text-white/75">Your production</p>
 
         <div className="mt-4" role="radiogroup" aria-label="Roaster">
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {machines.map((m) => (
               <button key={m.id} type="button" role="radio" aria-checked={m.id === machineId} onClick={() => chooseMachine(m)}
-                className={`rounded-[10px] px-2.5 py-2 text-left text-[0.75rem] font-semibold leading-tight ring-1 transition ${m.id === machineId ? "bg-[#D9B26A] text-[#1F1A17] ring-[#D9B26A]" : "bg-white/5 text-white/85 ring-white/15 hover:ring-white/40"}`}>
+                className={`rounded-[10px] px-2.5 py-2 text-left text-[0.75rem] font-semibold leading-tight ring-1 transition ${m.id === machineId ? "bg-[#27D9E8] text-[#0D1330] ring-[#27D9E8]" : "bg-white/5 text-white/85 ring-white/15 hover:ring-white/40"}`}>
                 {m.short}<span className="block font-normal opacity-75">${m.hourly}/hr</span>
               </button>
             ))}
@@ -474,7 +474,7 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
                 </div>
                 <div className="mb-4">
                   <p className="mb-1.5 text-[0.8438rem] text-white/80">Selling price scenario <span className="text-white/50">· per kg, editable</span></p>
-                  <div className="flex gap-1.5">{[35, 40, 45].map((v) => <button key={v} type="button" aria-pressed={pricePerKg === v} onClick={() => setKgPrice(v)} className={`flex-1 rounded-[8px] py-1.5 text-[0.8125rem] font-semibold ring-1 ${pricePerKg === v ? "bg-[#D9B26A] text-[#1F1A17] ring-[#D9B26A]" : "ring-white/20 text-white/85"}`}>${v}/kg</button>)}</div>
+                  <div className="flex gap-1.5">{[35, 40, 45].map((v) => <button key={v} type="button" aria-pressed={pricePerKg === v} onClick={() => setKgPrice(v)} className={`flex-1 rounded-[8px] py-1.5 text-[0.8125rem] font-semibold ring-1 ${pricePerKg === v ? "bg-[#27D9E8] text-[#0D1330] ring-[#27D9E8]" : "ring-white/20 text-white/85"}`}>${v}/kg</button>)}</div>
                 </div>
                 <Slider label="Selling price per bag" value={input.bags.price} onChange={(v) => setBags({ price: v })} min={1} max={120} step={0.5} unit="$" />
                 <Check label="Include bag & label cost" checked={input.bags.packaging} onChange={(v) => setBags({ packaging: v })} />
@@ -529,37 +529,37 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
 
       {/* Results */}
       <div className="min-w-0 space-y-5">
-        <div className="rounded-[22px] bg-white p-5 ring-1 ring-[#E8DFD3] sm:p-6">
+        <div className="rounded-[22px] bg-[#111836] p-5 text-[#E7ECFF] ring-1 ring-white/10 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div role="group" aria-label="Session" className="flex gap-1 rounded-full bg-[#F1EADF] p-1">
+            <div role="group" aria-label="Session" className="flex gap-1 rounded-full bg-white/10 p-1">
               {([["two", `Two hours · ${aud(results[0].hire, false)}`], ["day", `Eight-hour day · ${aud(results[1].hire, false)}`]] as const).map(([k, l]) => (
-                <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)} className={`rounded-full px-3.5 py-1.5 text-[0.8125rem] font-semibold ${view === k ? "bg-[#6B1D2E] text-white" : "text-[#3A3431]"}`}>{l}</button>
+                <button key={k} type="button" aria-pressed={view === k} onClick={() => setView(k)} className={`rounded-full px-3.5 py-1.5 text-[0.8125rem] font-semibold ${view === k ? "bg-[#27D9E8] text-[#0D1330]" : "text-[#C9D2F0]"}`}>{l}</button>
               ))}
             </div>
             <div className="rc-noprint flex gap-2">
-              <button type="button" onClick={downloadCsv} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold ring-1 ring-[#E8DFD3] hover:bg-[#F8F3EA]"><Download className="h-4 w-4" />CSV</button>
-              <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold ring-1 ring-[#E8DFD3] hover:bg-[#F8F3EA]"><Printer className="h-4 w-4" />Print</button>
+              <button type="button" onClick={downloadCsv} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold ring-1 ring-white/10 hover:bg-white/[0.05]"><Download className="h-4 w-4" />CSV</button>
+              <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.8125rem] font-semibold ring-1 ring-white/10 hover:bg-white/[0.05]"><Printer className="h-4 w-4" />Print</button>
             </div>
           </div>
 
           <div className="mt-5 grid gap-5 sm:grid-cols-[1.2fr_1fr]">
             <div>
-              <p className="text-[0.8125rem] text-[#6A615B]">Roasted coffee from the {view === "two" ? "two-hour hire" : `eight-hour day${input.breakMin ? " (with break)" : ""}`}</p>
-              <p className="shop-serif mt-1 text-[clamp(2.5rem,6vw,3.5rem)] font-semibold leading-none tabular-nums" style={{ color: C.burg }}>{kg(r.roastedKg)}</p>
-              <p className="mt-2 text-[0.875rem] text-[#3A3431]">{r.batches} complete batch{r.batches === 1 ? "" : "es"} · {kg(r.greenKg)} green · {r.units.full.toLocaleString("en-AU")} {r.units.label}{r.units.leftoverKg > 0.0005 ? ` + ${kg(r.units.leftoverKg)} left over` : ""}</p>
+              <p className="text-[0.8125rem] text-[#8F9AC0]">Roasted coffee from the {view === "two" ? "two-hour hire" : `eight-hour day${input.breakMin ? " (with break)" : ""}`}</p>
+              <p className="shop-serif mt-1 text-[clamp(2.5rem,6vw,3.5rem)] font-semibold leading-none tabular-nums" style={{ color: "#27D9E8", textShadow: "0 0 24px rgba(39,217,232,.45)" }}>{kg(r.roastedKg)}</p>
+              <p className="mt-2 text-[0.875rem] text-[#C9D2F0]">{r.batches} complete batch{r.batches === 1 ? "" : "es"} · {kg(r.greenKg)} green · {r.units.full.toLocaleString("en-AU")} {r.units.label}{r.units.leftoverKg > 0.0005 ? ` + ${kg(r.units.leftoverKg)} left over` : ""}</p>
             </div>
             <dl className="grid grid-cols-2 gap-3 text-[0.8125rem]">
-              <div className="rounded-2xl bg-[#F8F3EA] p-3"><dt className="text-[#6A615B]">Cost per kg</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.costPerKg)}</dd></div>
-              <div className="rounded-2xl bg-[#F8F3EA] p-3"><dt className="text-[#6A615B]">Hire per kg</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.hirePerKg)}</dd></div>
-              <div className="rounded-2xl bg-[#F8F3EA] p-3"><dt className="text-[#6A615B]">Potential revenue</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.revenue, false)}</dd></div>
-              <div className="rounded-2xl bg-[#F8F3EA] p-3"><dt className="text-[#6A615B]">Contribution</dt><dd className={`mt-0.5 text-[1.125rem] font-semibold tabular-nums ${r.contribution < 0 ? "text-[#A33B2B]" : "text-[#3F6B3A]"}`}>{aud(r.contribution, false)}</dd></div>
+              <div className="rounded-2xl bg-white/[0.05] p-3"><dt className="text-[#8F9AC0]">Cost per kg</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.costPerKg)}</dd></div>
+              <div className="rounded-2xl bg-white/[0.05] p-3"><dt className="text-[#8F9AC0]">Hire per kg</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.hirePerKg)}</dd></div>
+              <div className="rounded-2xl bg-white/[0.05] p-3"><dt className="text-[#8F9AC0]">Potential revenue</dt><dd className="mt-0.5 text-[1.125rem] font-semibold tabular-nums">{aud(r.revenue, false)}</dd></div>
+              <div className="rounded-2xl bg-white/[0.05] p-3"><dt className="text-[#8F9AC0]">Contribution</dt><dd className={`mt-0.5 text-[1.125rem] font-semibold tabular-nums ${r.contribution < 0 ? "text-[#FF6B6B]" : "text-[#F7D31E]"}`}>{aud(r.contribution, false)}</dd></div>
             </dl>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[#E8DFD3] pt-4 text-[0.8125rem] sm:grid-cols-4">
-            <div><dt className="text-[#6A615B]">Contribution / kg</dt><dd className="font-semibold tabular-nums">{aud(r.contributionPerKg)}</dd></div>
-            <div><dt className="text-[#6A615B]">Contribution margin</dt><dd className="font-semibold tabular-nums">{pct(r.marginPct)}</dd></div>
-            <div><dt className="text-[#6A615B]">Markup on cost</dt><dd className="font-semibold tabular-nums">{pct(r.markupPct)}</dd></div>
-            <div><dt className="text-[#6A615B]">Break-even price</dt><dd className="font-semibold tabular-nums">{aud(r.breakEvenPrice)}<span className="font-normal text-[#6A615B]"> /{input.channel === "bags" ? "bag" : "drink"}</span></dd></div>
+          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 text-[0.8125rem] sm:grid-cols-4">
+            <div><dt className="text-[#8F9AC0]">Contribution / kg</dt><dd className="font-semibold tabular-nums">{aud(r.contributionPerKg)}</dd></div>
+            <div><dt className="text-[#8F9AC0]">Contribution margin</dt><dd className="font-semibold tabular-nums">{pct(r.marginPct)}</dd></div>
+            <div><dt className="text-[#8F9AC0]">Markup on cost</dt><dd className="font-semibold tabular-nums">{pct(r.markupPct)}</dd></div>
+            <div><dt className="text-[#8F9AC0]">Break-even price</dt><dd className="font-semibold tabular-nums">{aud(r.breakEvenPrice)}<span className="font-normal text-[#8F9AC0]"> /{input.channel === "bags" ? "bag" : "drink"}</span></dd></div>
           </dl>
         </div>
 
@@ -579,10 +579,10 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
           {graph === "machines" && <Machines input={input} machines={machines} />}
         </div>
 
-        <div className="rounded-[22px] bg-[#F8F3EA] p-5 text-[0.8125rem] leading-relaxed text-[#3A3431] ring-1 ring-[#E8DFD3]">
-          <p className="flex items-center gap-2 font-semibold"><Info className="h-4 w-4" style={{ color: C.burg }} />What this plan doesn&apos;t include</p>
+        <div className="rounded-[22px] bg-white/[0.05] p-5 text-[0.8125rem] leading-relaxed text-[#C9D2F0] ring-1 ring-white/10">
+          <p className="flex items-center gap-2 font-semibold"><Info className="h-4 w-4" style={{ color: "#27D9E8" }} />What this plan doesn&apos;t include</p>
           <ul className="mt-2 list-disc space-y-0.5 pl-5">{r.excluded.map((x) => <li key={x}>{x}</li>)}</ul>
-          <p className="mt-3 text-[#6A615B]">
+          <p className="mt-3 text-[#8F9AC0]">
             A planning tool, not a quote or a promise of output. The example — 30 kg batches on the 45 kg Giesen with about 12-minute roasts and a 3-minute turnaround — reflects efficient, experienced operation; every coffee and roaster behaves differently.
             Potential revenue is what the finished coffee could bring in if it sells as set{input.channel === "drinks" ? " — drinks are sold later, not during the roasting session" : ""}. {input.tax.mode === "cash" ? "Prices are shown as paid, including GST where it applies — this is not net profit." : "GST is removed only from the lines you marked."}
           </p>
