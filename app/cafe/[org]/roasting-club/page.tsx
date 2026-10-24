@@ -12,7 +12,7 @@ import { packagePrices, readRoast } from "@/lib/roast/config";
 import { copyOf, ed, edImg, okImage } from "@/lib/site/copy";
 
 export const dynamic = "force-dynamic";
-type P = { params: Promise<{ org: string }> };
+type P = { params: Promise<{ org: string }>; searchParams?: Promise<{ footer?: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await cafeOrg((await params).org);
@@ -29,7 +29,9 @@ const h2 = `${serif} text-[clamp(2rem,3.8vw,3.25rem)] font-semibold leading-[1.0
 const card = "rounded-[24px] bg-white/[0.04] p-6 ring-1 ring-white/10";
 const aud = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
 
-export default async function RoastCulturePage({ params }: P) {
+export default async function RoastCulturePage({ params, searchParams }: P) {
+  const fv = (await searchParams)?.footer;
+  const footer = fv === "a" || fv === "b" || fv === "c" ? fv : null;
   const org = await cafeOrg((await params).org);
   if (!org) notFound();
   const c = org.cafe;
@@ -53,7 +55,7 @@ export default async function RoastCulturePage({ params }: P) {
   ];
 
   return (
-    <CafeFrame org={org} active="club" weekly={weekly} cta={{ href: "#join", label: "Join" }}>
+    <CafeFrame org={org} active="club" weekly={weekly} cta={{ href: "#join", label: "Join" }} footer={footer}>
       <div className="bg-[#0B1029] text-[#E7ECFF]">
         {/* 1 · Hero */}
         <section data-section="hero" className={`${WRAP} grid items-center gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-16 lg:py-20`}>

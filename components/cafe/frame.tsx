@@ -1,6 +1,8 @@
 import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
+import { SiteFooter, type FooterVariant } from "@/components/site/site-footer";
+import { footerModel } from "@/lib/site/footer";
 import { brandStyle } from "@/components/book/shell";
 import { MasterNav } from "@/components/site/master-nav";
 import { PageBg } from "@/components/site/page-bg";
@@ -25,7 +27,7 @@ export function cafeLinks(org: CafeOrg) {
 }
 
 /** The frame around every café page: site menu, café sub-menu, footer with hours and contact. Light and warm, like the shop. */
-export function CafeFrame({ org, active, children, weekly, cta }: { org: CafeOrg; active: CafeTab; children: React.ReactNode; weekly?: Weekly | null; cta?: { href: string; label: string } }) {
+export function CafeFrame({ org, active, children, weekly, cta, footer }: { org: CafeOrg; active: CafeTab; children: React.ReactNode; weekly?: Weekly | null; cta?: { href: string; label: string }; /** a site-wide footer design to show instead of the café footer (being chosen) */ footer?: FooterVariant | null }) {
   const links = cafeLinks(org);
   const rows = weekly ? hoursRows(weekly) : [];
   const social = org.settings.social;
@@ -50,7 +52,7 @@ export function CafeFrame({ org, active, children, weekly, cta }: { org: CafeOrg
         </header>
       )}
       <main>{children}</main>
-      <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]">
+      {footer ? <SiteFooter m={footerModel(org)} variant={footer} hours={rows} /> : <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]">
         <div className={`${WRAP} grid gap-9 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_0.9fr_1.1fr_1.1fr] lg:gap-0 lg:divide-x lg:divide-[#EDE3DB]`}>
           <div className="lg:pr-10">
             <p className={`${serif} text-[1.625rem] font-semibold`}>{org.name}</p>
@@ -78,7 +80,7 @@ export function CafeFrame({ org, active, children, weekly, cta }: { org: CafeOrg
           </div>
         </div>
         <p className={`${WRAP} border-t border-[#EDE3DB] py-5 text-[0.8125rem] text-[#8C847D]`}>Orders and bookings are handled by our café app · Website by EventureOS</p>
-      </footer>
+      </footer>}
     </div>
   );
 }
