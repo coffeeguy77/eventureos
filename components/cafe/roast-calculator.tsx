@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ChevronDown, Download, Info, Printer } from "lucide-react";
 import { DEFAULT_INPUT, DRINKS, machineComparison, packageResult, pointAt, toCsv, type CalcInput, type PackageResult, type Point } from "@/lib/roast/calc";
 import type { Machine } from "@/lib/roast/config";
@@ -69,7 +69,23 @@ function Fold({ title, children, open = false }: { title: string; children: Reac
 
 /* ------------------------------------------------------------------ graphs */
 
-const W = 640, H = 260, PAD = { l: 52, r: 16, t: 14, b: 30 };
+// Chart size in SVG units: wide on a computer, closer to real pixels on a phone so the labels stay readable
+let W = 640, H = 260;
+const PAD = { l: 52, r: 16, t: 14, b: 30 };
+function useChartSize() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => { const q = window.matchMedia("(max-width: 640px)"); const f = () => setNarrow(q.matches); f(); q.addEventListener("change", f); return () => q.removeEventListener("change", f); }, []);
+  W = narrow ? 380 : 640; H = narrow ? 250 : 260;
+  return narrow;
+}
+/** Round tick marks (0, 250, 500…) covering lo..hi */
+function ticksFor(lo: number, hi: number) {
+  const step = nice(Math.max(1e-9, hi - lo) / 4);
+  const a = Math.floor(lo / step + 1e-9) * step;
+  const out: number[] = [];
+  for (let v = a; v <= hi + step * 0.999 && out.length < 9; v += step) out.push(Math.round(v * 1e6) / 1e6);
+  return { ticks: out, lo: out[0], hi: out[out.length - 1] };
+}
 
 /** Touch and drag (or hover) along the session; tap pins it; arrow keys step between finished slots. */
 function useScrub(r: PackageResult) {
@@ -111,12 +127,11 @@ const nice = (v: number) => { if (v <= 0) return 1; const p = 10 ** Math.floor(M
 const stepPath = (pts: Point[], val: (p: Point) => number, total: number, lo: number, hi: number) =>
   pts.map((p, k) => (k === 0 ? `M${sx(p.t, total)},${sy(val(p), lo, hi)}` : `H${sx(p.t, total)}V${sy(val(p), lo, hi)}`)).join("");
 
-function Axes({ total, lo, hi, fmt }: { total: number; lo: number; hi: number; fmt: (v: number) => string }) {
-  const ticks = 4;
+function Axes({ total, lo, hi, ticks, fmt }: { total: number; lo: number; hi: number; ticks: number[]; fmt: (v: number) => string }) {
   const hours = Array.from({ length: total / 60 + 1 }, (_, i) => i);
   return (
     <g aria-hidden>
-      {Array.from({ length: ticks + 1 }, (_, i) => lo + ((hi - lo) * i) / ticks).map((v) => (
+      {ticks.map((v) => (
         <g key={v}><line x1={PAD.l} x2={W - PAD.r} y1={sy(v, lo, hi)} y2={sy(v, lo, hi)} stroke={C.line} strokeDasharray={v === 0 ? undefined : "3 4"} />
           <text x={PAD.l - 8} y={sy(v, lo, hi) + 4} textAnchor="end" fontSize="11" fill={C.muted}>{fmt(v)}</text></g>
       ))}
@@ -161,10 +176,12 @@ function Detail({ r, p, channel, showMoney }: { r: PackageResult; p: Point | nul
 
 function Timeline({ r, channel }: { r: PackageResult; channel: CalcInput["channel"] }) {
   const [mode, setMode] = useState<"kg" | "batches">("kg");
+  useChartSize();
   const { svg, minute, pinned, handlers, clear } = useScrub(r);
   const total = r.hours * 60;
   const val = (p: Point) => (mode === "kg" ? p.roastedKg : p.batches);
-  const hi = nice(Math.max(1e-9, val(r.points[r.points.length - 1])) * 1.05);
+  const tk = ticksFor(0, Math.max(1e-9, val(r.points[r.points.length - 1])) * 1.02);
+  const hi = tk.hi;
   const p = minute === null ? null : pointAt(r, minute);
   return (
     <div>
@@ -176,7 +193,7 @@ function Timeline({ r, channel }: { r: PackageResult; channel: CalcInput["channe
       </div>
       <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="w-full touch-pan-y select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#6B1D2E]" tabIndex={0} role="img"
         aria-label={`Production timeline for the ${r.label}: ${r.batches} complete batches, ${kg(r.roastedKg)} roasted. Use the arrow keys to step between finished batches.`} {...handlers}>
-        <Axes total={total} lo={0} hi={hi} fmt={(v) => (mode === "kg" ? (hi < 2 ? `${Math.round(v * 1000)}g` : `${Math.round(v)}`) : `${Math.round(v)}`)} />
+        <Axes total={total} lo={0} hi={hi} ticks={tk.ticks} fmt={(v) => (mode === "kg" ? (hi < 2 ? `${Math.round(v * 1000)}g` : `${Math.round(v).toLocaleString("en-AU")}`) : `${Math.round(v)}`)} />
         <BreakBand r={r} />
         <path d={`${stepPath(r.points, val, total, 0, hi)}V${sy(0, 0, hi)}H${sx(0, total)}Z`} fill={C.sage} opacity={0.18} />
         <path d={stepPath(r.points, val, total, 0, hi)} fill="none" stroke={C.burg} strokeWidth={2.25} />
@@ -191,12 +208,14 @@ function Timeline({ r, channel }: { r: PackageResult; channel: CalcInput["channe
 
 function MoneyChart({ r, channel }: { r: PackageResult; channel: CalcInput["channel"] }) {
   const [showC, setShowC] = useState(true);
+  useChartSize();
   const { svg, minute, handlers } = useScrub(r);
   const total = r.hours * 60;
   const vals = r.points.flatMap((q) => [q.cost, q.sales, showC ? q.contribution : 0]);
-  const hi = nice(Math.max(...vals, 1) * 1.05), lo = Math.min(0, ...vals) < 0 ? -nice(-Math.min(...vals) * 1.05) : 0;
+  const tk = ticksFor(Math.min(0, ...vals), Math.max(...vals, 1) * 1.02);
+  const hi = tk.hi, lo = tk.lo;
   const p = minute === null ? null : pointAt(r, minute);
-  const short = (v: number) => (Math.abs(v) >= 1000 ? `$${Math.round(v / 100) / 10}k` : `$${Math.round(v)}`);
+  const short = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v) >= 1000 ? `${Math.round(Math.abs(v) / 100) / 10}k` : Math.round(Math.abs(v))}`;
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem] font-semibold">
@@ -206,7 +225,7 @@ function MoneyChart({ r, channel }: { r: PackageResult; channel: CalcInput["chan
       </div>
       <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="w-full touch-pan-y select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#6B1D2E]" tabIndex={0} role="img"
         aria-label={`Costs and potential earnings for the ${r.label}: the whole ${aud(r.hire, false)} hire is committed from the start; potential sales value reaches ${aud(r.revenue, false)}.`} {...handlers}>
-        <Axes total={total} lo={lo} hi={hi} fmt={short} />
+        <Axes total={total} lo={lo} hi={hi} ticks={tk.ticks} fmt={short} />
         <BreakBand r={r} />
         <path d={stepPath(r.points, (q) => q.cost, total, lo, hi)} fill="none" stroke={C.terra} strokeWidth={2.25} />
         <path d={stepPath(r.points, (q) => q.sales, total, lo, hi)} fill="none" stroke={C.sage} strokeWidth={2.25} />
