@@ -39,6 +39,8 @@ export interface CafeSettings {
   clubPerks: InfoCard[];
   software: InfoCard[];
   clubFaq: Faq[];
+  /** Roast Culture prices: membership per month, each roaster's hourly hire (GST-inclusive), when staff can preheat */
+  roast: { membershipMonthly: number; rates: Record<string, number>; staffHours: string };
   /** Wholesale page */
   wholesaleTitle: string; wholesaleIntro: string; wholesaleImage: string | null;
   wholesalePoints: InfoCard[];
@@ -46,6 +48,7 @@ export interface CafeSettings {
 }
 
 export const DEFAULT_CAFE: CafeSettings = {
+  roast: { membershipMonthly: 99, rates: {}, staffHours: "9 am–3 pm" },
   enabled: false, appUrl: "", ordering: false, reservations: false, club: false, wholesale: false,
   heroTitle: "Our roastery café",
   heroText: "Coffee roasted metres from the counter, a kitchen cooking from scratch, and a table waiting for you.",
@@ -132,6 +135,15 @@ export function readCafe(orgSettings: unknown): CafeSettings {
     clubPerks: cards(raw.clubPerks),
     software: cards(raw.software, 8),
     clubFaq: faqs(raw.clubFaq),
+    roast: (() => {
+      const r = obj(raw.roast), rates = obj(r.rates);
+      const ok = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) < 100000 ? Math.round(Number(v) * 100) / 100 : null);
+      return {
+        membershipMonthly: ok(r.membershipMonthly) ?? 99,
+        rates: Object.fromEntries(Object.entries(rates).filter(([k]) => /^[a-z0-9]{2,12}$/.test(k)).map(([k, v]) => [k, ok(v)]).filter(([, v]) => v !== null)) as Record<string, number>,
+        staffHours: str(r.staffHours, 60) || "9 am–3 pm",
+      };
+    })(),
     wholesaleTitle: t("wholesaleTitle", 90), wholesaleIntro: t("wholesaleIntro", 600), wholesaleImage: img(raw.wholesaleImage),
     wholesalePoints: cards(raw.wholesalePoints),
     wholesaleFaq: faqs(raw.wholesaleFaq),

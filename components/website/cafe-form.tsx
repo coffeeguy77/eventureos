@@ -7,6 +7,7 @@ import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { PhotoUpload } from "@/components/bookings/course-tools";
 import { TIER_UNITS, type CafeSettings, type ClubTier, type Equipment, type Faq, type InfoCard, type TierUnit } from "@/lib/cafe/core";
 import { disconnectInstagram, saveCafeSettings, testCafeApp } from "@/app/(app)/website/actions";
+import { MACHINES, packagePrices } from "@/lib/roast/config";
 
 type ImgKey = "heroImage" | "coffeeImage" | "kitchenImage" | "clubImage" | "wholesaleImage";
 const move = <T,>(list: T[], i: number, d: number) => { const j = i + d; if (j < 0 || j >= list.length) return list; const n = [...list]; [n[i], n[j]] = [n[j], n[i]]; return n; };
@@ -214,6 +215,24 @@ export function CafeForm({ initial, slug, base, orgId, ig, menu = [] }: {
             <div><Label htmlFor="cf-cli">Intro</Label><Textarea id="cf-cli" rows={3} value={v.clubIntro} onChange={(e) => set("clubIntro", e.target.value)} /></div>
           </div>
           <div>{img("clubImage", "Banner photo")}</div>
+        </div>
+
+        <div className="rounded-xl bg-zinc-50 p-4 ring-1 ring-line">
+          <p className="text-[0.875rem] font-semibold text-ink">Membership &amp; roaster hire prices</p>
+          <p className="text-[0.8125rem] text-ink-muted">GST-inclusive, as advertised. The two-hour minimum is 2 × the hourly rate; the eight-hour day is half price (4 × the hourly rate). The page and the calculator use these.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div><Label htmlFor="rc-mem">Membership ($/month)</Label><Input id="rc-mem" type="number" min={0} step="1" value={v.roast.membershipMonthly} onChange={(e) => set("roast", { ...v.roast, membershipMonthly: Number(e.target.value) || 0 })} /></div>
+            <div><Label htmlFor="rc-staff">Staff preheating hours</Label><Input id="rc-staff" value={v.roast.staffHours} onChange={(e) => set("roast", { ...v.roast, staffHours: e.target.value })} placeholder="9 am–3 pm" /></div>
+            {MACHINES.map((m) => {
+              const hourly = v.roast.rates[m.id] ?? m.hourly;
+              const p = packagePrices(hourly);
+              return (
+                <div key={m.id}><Label htmlFor={`rc-${m.id}`}>{m.name} ($/hour)</Label>
+                  <Input id={`rc-${m.id}`} type="number" min={0} step="1" value={hourly} onChange={(e) => set("roast", { ...v.roast, rates: { ...v.roast.rates, [m.id]: Number(e.target.value) || 0 } })} />
+                  <p className="mt-1 text-[0.75rem] text-ink-muted">2 hours ${p.twoHour} · day ${p.day}</p></div>
+              );
+            })}
+          </div>
         </div>
 
         <div>

@@ -19,7 +19,7 @@ export function cafeLinks(org: CafeOrg) {
     { key: "home" as const, href: base, label: "Café", on: p.home },
     { key: "order" as const, href: p.order ? `${base}/order` : org.cafe.appUrl, label: "Order online", on: p.order || p.appOrder },
     { key: "reserve" as const, href: `${base}/reserve`, label: "Reserve a table", on: p.reserve },
-    { key: "club" as const, href: `${base}/roasting-club`, label: "Roasting Club", on: p.club },
+    { key: "club" as const, href: `${base}/roasting-club`, label: org.cafe.clubTitle || "Roasting Club", on: p.club },
     { key: "wholesale" as const, href: `${base}/wholesale`, label: "Wholesale", on: p.wholesale },
   ].filter((l) => l.on);
 }

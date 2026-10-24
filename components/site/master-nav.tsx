@@ -54,7 +54,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
     cp.home ? { kind: "cafe" as const, href: `/cafe/${base}`, label: "Our café", note: "Coffee, kitchen & hours" } : null,
     cp.order ? { kind: "order" as const, href: `/cafe/${base}/order`, label: "Order online", note: "Pick up from the café" } : cp.appOrder ? { kind: "order" as const, href: cafe.appUrl, label: "Order online", note: "Order in our app" } : null,
     cp.reserve ? { kind: "table" as const, href: `/cafe/${base}/reserve`, label: "Reserve a table", note: "Book ahead" } : null,
-    cp.club ? { kind: "club" as const, href: `/cafe/${base}/roasting-club`, label: "Roasting Club", note: "Roast on our equipment" } : null,
+    cp.club ? { kind: "club" as const, href: `/cafe/${base}/roasting-club`, label: cafe.clubTitle || "Roasting Club", note: "Shared roasting space" } : null,
     cp.wholesale ? { kind: "wholesale" as const, href: `/cafe/${base}/wholesale`, label: "Wholesale", note: "Coffee for your business" } : null,
   ].filter((x): x is NonNullable<typeof x> => !!x);
   items.find((i) => i.key === "cafe")!.on = cp.home;
