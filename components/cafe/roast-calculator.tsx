@@ -67,17 +67,22 @@ function Fold({ title, children, open = false }: { title: string; children: Reac
   );
 }
 
-/* ------------------------------------------------------------------ graphs */
+/* ------------------------------------------------------------------ graphs — styled like a roast profiler screen */
+
+/** Profiler palette: deep navy screen, neon traces */
+const G = { bg: "#0D1330", bg2: "#1C1446", grid: "rgba(255,255,255,0.08)", axis: "rgba(214,224,255,0.55)", text: "#E7ECFF", dim: "rgba(214,224,255,0.62)",
+  cyan: "#27D9E8", blue: "#3AA8FF", pink: "#FF2D8F", yellow: "#F7D31E", purple: "#9D7BFF", orange: "#FF8A3D", teal: "#22E0B0" };
 
 // Chart size in SVG units: wide on a computer, closer to real pixels on a phone so the labels stay readable
-let W = 640, H = 260;
-const PAD = { l: 52, r: 16, t: 14, b: 30 };
+let W = 640, H = 270;
+const PAD = { l: 52, r: 16, t: 18, b: 30 };
 function useChartSize() {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => { const q = window.matchMedia("(max-width: 640px)"); const f = () => setNarrow(q.matches); f(); q.addEventListener("change", f); return () => q.removeEventListener("change", f); }, []);
-  W = narrow ? 380 : 640; H = narrow ? 250 : 260;
+  W = narrow ? 380 : 640; H = narrow ? 260 : 270;
   return narrow;
 }
+const nice = (v: number) => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
 /** Round tick marks (0, 250, 500…) covering lo..hi */
 function ticksFor(lo: number, hi: number) {
   const step = nice(Math.max(1e-9, hi - lo) / 4);
@@ -123,19 +128,55 @@ function useScrub(r: PackageResult) {
 
 const sx = (t: number, total: number) => PAD.l + (t / total) * (W - PAD.l - PAD.r);
 const sy = (v: number, lo: number, hi: number) => PAD.t + (1 - (v - lo) / (hi - lo || 1)) * (H - PAD.t - PAD.b);
-const nice = (v: number) => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
-const stepPath = (pts: Point[], val: (p: Point) => number, total: number, lo: number, hi: number) =>
-  pts.map((p, k) => (k === 0 ? `M${sx(p.t, total)},${sy(val(p), lo, hi)}` : `H${sx(p.t, total)}V${sy(val(p), lo, hi)}`)).join("");
+
+/**
+ * A smooth line through the finished slots (monotone cubic — it never overshoots, so a total never appears to dip).
+ * The readout below always reports completed batches only.
+ */
+function smoothPath(pts: Point[], val: (p: Point) => number, total: number, lo: number, hi: number) {
+  const xy: [number, number][] = [];
+  for (const p of pts) { const x = sx(p.t, total), y = sy(val(p), lo, hi); if (xy.length && Math.abs(xy[xy.length - 1][0] - x) < 0.01) xy[xy.length - 1] = [x, y]; else xy.push([x, y]); }
+  if (xy.length < 2) return xy.length ? `M${xy[0][0]},${xy[0][1]}` : "";
+  const n = xy.length, m: number[] = [], t: number[] = [];
+  for (let i = 0; i < n - 1; i++) m.push((xy[i + 1][1] - xy[i][1]) / (xy[i + 1][0] - xy[i][0]));
+  t[0] = m[0]; t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) t[i] = m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${xy[0][0]},${xy[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const dx = (xy[i + 1][0] - xy[i][0]) / 3;
+    d += `C${xy[i][0] + dx},${xy[i][1] + t[i] * dx} ${xy[i + 1][0] - dx},${xy[i + 1][1] - t[i + 1] * dx} ${xy[i + 1][0]},${xy[i + 1][1]}`;
+  }
+  return d;
+}
+
+function Defs() {
+  return (
+    <defs>
+      <linearGradient id="rcScreen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={G.bg} /><stop offset="1" stopColor={G.bg2} /></linearGradient>
+      {([["rcCyan", G.cyan], ["rcPink", G.pink], ["rcYellow", G.yellow]] as const).map(([id, c]) => (
+        <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={c} stopOpacity="0.38" /><stop offset="1" stopColor={c} stopOpacity="0.02" /></linearGradient>
+      ))}
+      <filter id="rcGlow" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+    </defs>
+  );
+}
 
 function Axes({ total, lo, hi, ticks, fmt }: { total: number; lo: number; hi: number; ticks: number[]; fmt: (v: number) => string }) {
   const hours = Array.from({ length: total / 60 + 1 }, (_, i) => i);
   return (
     <g aria-hidden>
+      <rect x="0" y="0" width={W} height={H} rx="14" fill="url(#rcScreen)" />
+      {hours.map((h) => <line key={`v${h}`} x1={sx(h * 60, total)} x2={sx(h * 60, total)} y1={PAD.t} y2={H - PAD.b} stroke={G.grid} />)}
       {ticks.map((v) => (
-        <g key={v}><line x1={PAD.l} x2={W - PAD.r} y1={sy(v, lo, hi)} y2={sy(v, lo, hi)} stroke={C.line} strokeDasharray={v === 0 ? undefined : "3 4"} />
-          <text x={PAD.l - 8} y={sy(v, lo, hi) + 4} textAnchor="end" fontSize="11" fill={C.muted}>{fmt(v)}</text></g>
+        <g key={v}><line x1={PAD.l} x2={W - PAD.r} y1={sy(v, lo, hi)} y2={sy(v, lo, hi)} stroke={v === 0 && lo < 0 ? "rgba(255,255,255,0.3)" : G.grid} />
+          <text x={PAD.l - 8} y={sy(v, lo, hi) + 4} textAnchor="end" fontSize="11" fontWeight="600" fill={G.axis}>{fmt(v)}</text></g>
       ))}
-      {hours.map((h) => <text key={h} x={sx(h * 60, total)} y={H - 10} textAnchor="middle" fontSize="11" fill={C.muted}>{h}h</text>)}
+      {hours.map((h) => <text key={h} x={sx(h * 60, total)} y={H - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill={G.axis}>{h}h</text>)}
     </g>
   );
 }
@@ -145,34 +186,45 @@ function BreakBand({ r }: { r: PackageResult }) {
   const total = r.hours * 60, usable = total - r.breakMin, start = usable / 2;
   return (
     <g aria-hidden>
-      <rect x={sx(start, total)} y={PAD.t} width={sx(start + r.breakMin, total) - sx(start, total)} height={H - PAD.t - PAD.b} fill={C.gold} opacity={0.16} />
-      <text x={sx(start + r.breakMin / 2, total)} y={PAD.t + 12} textAnchor="middle" fontSize="10" fill={C.muted}>break</text>
+      <rect x={sx(start, total)} y={PAD.t} width={sx(start + r.breakMin, total) - sx(start, total)} height={H - PAD.t - PAD.b} fill={G.purple} opacity={0.2} />
+      <text x={sx(start + r.breakMin / 2, total)} y={PAD.t + 13} textAnchor="middle" fontSize="10" fontWeight="700" fill={G.purple}>BREAK</text>
     </g>
   );
 }
 
-function Guide({ minute, total }: { minute: number | null; total: number }) {
+/** The scrub line with a profiler-style tag, e.g. "4h 02m · 408 kg" */
+function Guide({ minute, total, tag }: { minute: number | null; total: number; tag: string }) {
   if (minute === null) return null;
-  return <line x1={sx(minute, total)} x2={sx(minute, total)} y1={PAD.t} y2={H - PAD.b} stroke={C.ink} strokeWidth={1.25} strokeDasharray="4 3" aria-hidden />;
+  const x = sx(minute, total), w = Math.max(70, tag.length * 6.6 + 16), left = x + w + 8 > W - PAD.r ? x - w - 6 : x + 6;
+  return (
+    <g aria-hidden>
+      <line x1={x} x2={x} y1={PAD.t} y2={H - PAD.b} stroke="#FFFFFF" strokeOpacity={0.85} strokeWidth={1.2} strokeDasharray="4 3" />
+      <rect x={left} y={PAD.t + 4} width={w} height={20} rx={6} fill={G.pink} opacity={0.92} />
+      <text x={left + w / 2} y={PAD.t + 18} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{tag}</text>
+    </g>
+  );
 }
 
 function Detail({ r, p, channel, showMoney }: { r: PackageResult; p: Point | null; channel: CalcInput["channel"]; showMoney: boolean }) {
   const q = p ?? r.points[r.points.length - 1];
+  const cell = (label: string, value: React.ReactNode, color?: string) => <div><dt style={{ color: G.dim }}>{label}</dt><dd className="font-semibold tabular-nums" style={{ color: color ?? G.text }}>{value}</dd></div>;
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-[#F8F3EA] p-4 text-[0.8438rem] sm:grid-cols-3" aria-live="polite">
-      <div><dt className="text-[#6A615B]">{p ? "At" : "End of session"}</dt><dd className="font-semibold tabular-nums">{hm(q.t)}</dd></div>
-      <div><dt className="text-[#6A615B]">Completed batches</dt><dd className="font-semibold tabular-nums">{q.batches}</dd></div>
-      <div><dt className="text-[#6A615B]">Green processed</dt><dd className="font-semibold tabular-nums">{kg(q.greenKg)}</dd></div>
-      <div><dt className="text-[#6A615B]">Roasted</dt><dd className="font-semibold tabular-nums">{kg(q.roastedKg)}</dd></div>
-      <div><dt className="text-[#6A615B]">Committed cost</dt><dd className="font-semibold tabular-nums">{aud(q.cost)}</dd></div>
-      <div><dt className="text-[#6A615B]">Cost per roasted kg</dt><dd className="font-semibold tabular-nums">{q.roastedKg > 0 ? aud(q.cost / q.roastedKg) : "—"}</dd></div>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl p-4 text-[0.8438rem] ring-1 ring-white/10 sm:grid-cols-3" style={{ background: "rgba(255,255,255,0.05)" }} aria-live="polite">
+      {cell(p ? "At" : "End of session", hm(q.t))}
+      {cell("Completed batches", q.batches)}
+      {cell("Green processed", kg(q.greenKg))}
+      {cell("Roasted", kg(q.roastedKg), G.cyan)}
+      {cell("Committed cost", aud(q.cost), G.pink)}
+      {cell("Cost per roasted kg", q.roastedKg > 0 ? aud(q.cost / q.roastedKg) : "—")}
       {showMoney && <>
-        <div><dt className="text-[#6A615B]">Potential sales ({channel === "bags" ? "bags" : "drinks"})</dt><dd className="font-semibold tabular-nums">{aud(q.sales)}</dd></div>
-        <div><dt className="text-[#6A615B]">Potential contribution</dt><dd className={`font-semibold tabular-nums ${q.contribution < 0 ? "text-[#A33B2B]" : "text-[#3F6B3A]"}`}>{aud(q.contribution)}</dd></div>
+        {cell(`Potential sales (${channel === "bags" ? "bags" : "drinks"})`, aud(q.sales), G.cyan)}
+        {cell("Potential contribution", aud(q.contribution), q.contribution < 0 ? "#FF6B6B" : G.yellow)}
       </>}
     </dl>
   );
 }
+
+const svgClass = "w-full touch-pan-y select-none rounded-[14px] outline-none focus-visible:ring-2 focus-visible:ring-[#27D9E8]";
 
 function Timeline({ r, channel }: { r: PackageResult; channel: CalcInput["channel"] }) {
   const [mode, setMode] = useState<"kg" | "batches">("kg");
@@ -183,25 +235,28 @@ function Timeline({ r, channel }: { r: PackageResult; channel: CalcInput["channe
   const tk = ticksFor(0, Math.max(1e-9, val(r.points[r.points.length - 1])) * 1.02);
   const hi = tk.hi;
   const p = minute === null ? null : pointAt(r, minute);
+  const line = smoothPath(r.points, val, total, 0, hi);
+  const slots = r.points.filter((q, k) => k > 0 && q.batches > r.points[k - 1].batches);
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-[0.8125rem] text-[#6A615B]">Cumulative {mode === "kg" ? "roasted coffee" : "completed batches"} through the session</p>
-        <div className="flex gap-1 rounded-full bg-[#F1EADF] p-1 text-[0.75rem] font-semibold">
-          {(["kg", "batches"] as const).map((m) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`rounded-full px-3 py-1 ${mode === m ? "bg-white shadow-sm" : "text-[#6A615B]"}`}>{m === "kg" ? "Kilograms" : "Batches"}</button>)}
+        <p className="text-[0.8125rem]" style={{ color: G.dim }}>Roasted {mode === "kg" ? "coffee" : "batches"} through the session</p>
+        <div className="flex gap-1 rounded-full bg-white/10 p-1 text-[0.75rem] font-semibold">
+          {(["kg", "batches"] as const).map((m) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`rounded-full px-3 py-1 ${mode === m ? "bg-[#27D9E8] text-[#0D1330]" : "text-white/70"}`}>{m === "kg" ? "Kilograms" : "Batches"}</button>)}
         </div>
       </div>
-      <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="w-full touch-pan-y select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#6B1D2E]" tabIndex={0} role="img"
+      <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className={svgClass} tabIndex={0} role="img"
         aria-label={`Production timeline for the ${r.label}: ${r.batches} complete batches, ${kg(r.roastedKg)} roasted. Use the arrow keys to step between finished batches.`} {...handlers}>
+        <Defs />
         <Axes total={total} lo={0} hi={hi} ticks={tk.ticks} fmt={(v) => (mode === "kg" ? (hi < 2 ? `${Math.round(v * 1000)}g` : `${Math.round(v).toLocaleString("en-AU")}`) : `${Math.round(v)}`)} />
         <BreakBand r={r} />
-        <path d={`${stepPath(r.points, val, total, 0, hi)}V${sy(0, 0, hi)}H${sx(0, total)}Z`} fill={C.sage} opacity={0.18} />
-        <path d={stepPath(r.points, val, total, 0, hi)} fill="none" stroke={C.burg} strokeWidth={2.25} />
-        {r.points.filter((q, k) => k > 0 && q.batches > r.points[k - 1].batches).map((q) => <circle key={q.batches} cx={sx(q.t, total)} cy={sy(val(q), 0, hi)} r={r.batches > 60 ? 1.8 : 3.2} fill={C.burg} />)}
-        <Guide minute={minute} total={total} />
+        {line && <path d={`${line}L${sx(total, total)},${sy(0, 0, hi)}L${sx(0, total)},${sy(0, 0, hi)}Z`} fill="url(#rcCyan)" />}
+        <path d={line} fill="none" stroke={G.cyan} strokeWidth={2.6} filter="url(#rcGlow)" strokeLinecap="round" />
+        {slots.length <= 80 && slots.map((q) => <circle key={q.batches} cx={sx(q.t, total)} cy={sy(val(q), 0, hi)} r={2.2} fill={G.yellow} />)}
+        <Guide minute={minute} total={total} tag={p ? `${hm(p.t)} · ${mode === "kg" ? kg(p.roastedKg) : `${p.batches} batches`}` : ""} />
       </svg>
       <div className="mt-3"><Detail r={r} p={p} channel={channel} showMoney /></div>
-      <p className="mt-2 text-[0.75rem] text-[#6A615B]">{pinned ? <button type="button" onClick={clear} className="underline">Unpin</button> : "Hover, or touch and drag along the graph. Tap to pin."} Output is counted when each roast and changeover slot finishes — never part of a batch.</p>
+      <p className="mt-2 text-[0.75rem]" style={{ color: G.dim }}>{pinned ? <button type="button" onClick={clear} className="underline">Unpin</button> : "Hover, or touch and drag along the graph. Tap to pin."} Yellow dots mark each finished roast; the figures count completed batches only.</p>
     </div>
   );
 }
@@ -216,58 +271,64 @@ function MoneyChart({ r, channel }: { r: PackageResult; channel: CalcInput["chan
   const hi = tk.hi, lo = tk.lo;
   const p = minute === null ? null : pointAt(r, minute);
   const short = (v: number) => `${v < 0 ? "−" : ""}$${Math.abs(v) >= 1000 ? `${Math.round(Math.abs(v) / 100) / 10}k` : Math.round(Math.abs(v))}`;
+  const base = sy(Math.max(lo, 0), lo, hi);
+  const fill = (d: string) => (d ? `${d}L${sx(total, total)},${base}L${sx(0, total)},${base}Z` : "");
+  const sales = smoothPath(r.points, (q) => q.sales, total, lo, hi), cost = smoothPath(r.points, (q) => q.cost, total, lo, hi), contrib = smoothPath(r.points, (q) => q.contribution, total, lo, hi);
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem] font-semibold">
-        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4" style={{ background: C.terra }} />Committed cost</span>
-        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4" style={{ background: C.sage }} />Potential sales value</span>
-        <label className="flex items-center gap-1.5"><input type="checkbox" checked={showC} onChange={(e) => setShowC(e.target.checked)} className="accent-[#6B1D2E]" /><span className="h-0.5 w-4" style={{ background: C.burg }} />Potential contribution</label>
+      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem] font-semibold" style={{ color: G.text }}>
+        <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded" style={{ background: G.pink }} />Committed cost</span>
+        <span className="flex items-center gap-1.5"><span className="h-[3px] w-5 rounded" style={{ background: G.cyan }} />Potential sales value</span>
+        <label className="flex items-center gap-1.5"><input type="checkbox" checked={showC} onChange={(e) => setShowC(e.target.checked)} className="accent-[#F7D31E]" /><span className="h-[3px] w-5 rounded" style={{ background: G.yellow }} />Potential contribution</label>
       </div>
-      <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className="w-full touch-pan-y select-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[#6B1D2E]" tabIndex={0} role="img"
+      <svg ref={svg} viewBox={`0 0 ${W} ${H}`} className={svgClass} tabIndex={0} role="img"
         aria-label={`Costs and potential earnings for the ${r.label}: the whole ${aud(r.hire, false)} hire is committed from the start; potential sales value reaches ${aud(r.revenue, false)}.`} {...handlers}>
+        <Defs />
         <Axes total={total} lo={lo} hi={hi} ticks={tk.ticks} fmt={short} />
         <BreakBand r={r} />
-        <path d={stepPath(r.points, (q) => q.cost, total, lo, hi)} fill="none" stroke={C.terra} strokeWidth={2.25} />
-        <path d={stepPath(r.points, (q) => q.sales, total, lo, hi)} fill="none" stroke={C.sage} strokeWidth={2.25} />
-        {showC && <path d={stepPath(r.points, (q) => q.contribution, total, lo, hi)} fill="none" stroke={C.burg} strokeWidth={2} strokeDasharray="5 3" />}
-        <Guide minute={minute} total={total} />
+        <path d={fill(sales)} fill="url(#rcCyan)" />
+        {showC && <path d={fill(contrib)} fill="url(#rcYellow)" />}
+        <path d={sales} fill="none" stroke={G.cyan} strokeWidth={2.6} filter="url(#rcGlow)" strokeLinecap="round" />
+        <path d={cost} fill="none" stroke={G.pink} strokeWidth={2.6} filter="url(#rcGlow)" strokeLinecap="round" />
+        {showC && <path d={contrib} fill="none" stroke={G.yellow} strokeWidth={2.4} filter="url(#rcGlow)" strokeLinecap="round" />}
+        <Guide minute={minute} total={total} tag={p ? `${hm(p.t)} · ${short(p.contribution)}` : ""} />
       </svg>
       <div className="mt-3"><Detail r={r} p={p} channel={channel} showMoney /></div>
-      <p className="mt-2 text-[0.75rem] text-[#6A615B]">The whole booked hire is owed from the first minute. Sales are <strong>potential</strong> — the value of the finished coffee if it sells as set below, not money made during the session.</p>
+      <p className="mt-2 text-[0.75rem]" style={{ color: G.dim }}>The whole booked hire is owed from the first minute. Sales are <strong className="text-white">potential</strong> — the value of the finished coffee if it sells as set, not money made during the session.</p>
     </div>
   );
 }
 
 function Mix({ r }: { r: PackageResult }) {
   const parts = [
-    { k: "green", label: "Green coffee", v: r.costs.green, c: C.sage },
-    { k: "hire", label: "Roaster hire", v: r.costs.hire, c: C.burg },
-    { k: "packaging", label: "Packaging", v: r.costs.packaging, c: C.gold },
-    { k: "milk", label: "Milk", v: r.costs.milk, c: "#A8BFA4" },
-    { k: "cups", label: "Cups & lids", v: r.costs.cups, c: "#E0A27F" },
-    { k: "extras", label: "Other costs you added", v: r.costs.extras, c: C.terra },
+    { k: "green", label: "Green coffee", v: r.costs.green, c: G.teal },
+    { k: "hire", label: "Roaster hire", v: r.costs.hire, c: G.pink },
+    { k: "packaging", label: "Packaging", v: r.costs.packaging, c: G.yellow },
+    { k: "milk", label: "Milk", v: r.costs.milk, c: G.blue },
+    { k: "cups", label: "Cups & lids", v: r.costs.cups, c: G.purple },
+    { k: "extras", label: "Other costs you added", v: r.costs.extras, c: G.orange },
   ].filter((x) => x.v > 0);
   const [on, setOn] = useState<string | null>(null);
   const tot = r.costs.total;
   return (
-    <div>
-      <p className="mb-3 text-[0.8125rem] text-[#6A615B]">What each roasted kilogram costs you — tap or hover a part.</p>
-      <div className="flex h-14 w-full overflow-hidden rounded-xl ring-1 ring-[#E8DFD3]" role="list" aria-label="Cost composition">
+    <div style={{ color: G.text }}>
+      <p className="mb-3 text-[0.8125rem]" style={{ color: G.dim }}>What each roasted kilogram costs you — tap or hover a part.</p>
+      <div className="flex h-14 w-full overflow-hidden rounded-xl ring-1 ring-white/10" role="list" aria-label="Cost composition">
         {parts.map((x) => (
           <button key={x.k} type="button" role="listitem" onMouseEnter={() => setOn(x.k)} onFocus={() => setOn(x.k)} onClick={() => setOn(x.k)}
             aria-label={`${x.label}: ${aud(r.roastedKg > 0 ? x.v / r.roastedKg : null)} per kg, ${pct((x.v / tot) * 100)} of the total`}
-            style={{ width: `${(x.v / tot) * 100}%`, background: x.c, opacity: on && on !== x.k ? 0.45 : 1 }} className="h-full transition-opacity" />
+            style={{ width: `${(x.v / tot) * 100}%`, background: x.c, opacity: on && on !== x.k ? 0.35 : 0.95, boxShadow: `0 0 18px ${x.c}55` }} className="h-full transition-opacity" />
         ))}
       </div>
       <ul className="mt-4 grid gap-2 sm:grid-cols-2">
         {parts.map((x) => (
-          <li key={x.k} onMouseEnter={() => setOn(x.k)} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-[0.875rem] ${on === x.k ? "bg-[#F8F3EA]" : ""}`}>
+          <li key={x.k} onMouseEnter={() => setOn(x.k)} className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-[0.875rem] ${on === x.k ? "bg-white/10" : ""}`}>
             <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-sm" style={{ background: x.c }} />{x.label}</span>
             <span className="tabular-nums"><strong>{aud(r.roastedKg > 0 ? x.v / r.roastedKg : null)}</strong>/kg · {pct((x.v / tot) * 100)}</span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 flex justify-between border-t border-[#E8DFD3] pt-3 text-[0.9375rem] font-semibold"><span>Total modelled cost</span><span className="tabular-nums">{aud(r.costPerKg)}/kg</span></p>
+      <p className="mt-3 flex justify-between border-t border-white/10 pt-3 text-[0.9375rem] font-semibold"><span>Total modelled cost</span><span className="tabular-nums" style={{ color: G.pink }}>{aud(r.costPerKg)}/kg</span></p>
     </div>
   );
 }
@@ -275,22 +336,22 @@ function Mix({ r }: { r: PackageResult }) {
 function Sessions({ rs }: { rs: PackageResult[] }) {
   const maxCost = Math.max(...rs.map((r) => r.costPerKg ?? 0), 1);
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" style={{ color: G.text }}>
       <table className="w-full min-w-[520px] text-left text-[0.875rem]">
-        <thead><tr className="text-[0.75rem] uppercase tracking-wide text-[#6A615B]"><th className="pb-2 font-semibold">Session</th><th className="pb-2 font-semibold">Roasted</th><th className="pb-2 font-semibold">Hire/kg</th><th className="pb-2 font-semibold">Cost/kg</th><th className="pb-2 font-semibold">Contribution/kg</th></tr></thead>
+        <thead><tr className="text-[0.75rem] uppercase tracking-wide" style={{ color: G.dim }}><th className="pb-2 font-semibold">Session</th><th className="pb-2 font-semibold">Roasted</th><th className="pb-2 font-semibold">Hire/kg</th><th className="pb-2 font-semibold">Cost/kg</th><th className="pb-2 font-semibold">Contribution/kg</th></tr></thead>
         <tbody>
           {rs.map((r) => (
-            <tr key={r.key} className="border-t border-[#E8DFD3] align-middle">
-              <td className="py-3 pr-3 font-semibold">{r.label}<span className="block text-[0.75rem] font-normal text-[#6A615B]">{r.batches} batches · {aud(r.hire, false)} hire</span></td>
-              <td className="py-3 pr-3 tabular-nums">{kg(r.roastedKg)}</td>
+            <tr key={r.key} className="border-t border-white/10 align-middle">
+              <td className="py-3 pr-3 font-semibold">{r.label}<span className="block text-[0.75rem] font-normal" style={{ color: G.dim }}>{r.batches} batches · {aud(r.hire, false)} hire</span></td>
+              <td className="py-3 pr-3 tabular-nums" style={{ color: G.cyan }}>{kg(r.roastedKg)}</td>
               <td className="py-3 pr-3 tabular-nums">{aud(r.hirePerKg)}</td>
-              <td className="py-3 pr-3"><span className="flex items-center gap-2 tabular-nums">{aud(r.costPerKg)}<span className="hidden h-2 rounded-full sm:block" style={{ width: `${((r.costPerKg ?? 0) / maxCost) * 70}px`, background: C.terra }} /></span></td>
-              <td className={`py-3 tabular-nums font-semibold ${(r.contributionPerKg ?? 0) < 0 ? "text-[#A33B2B]" : "text-[#3F6B3A]"}`}>{aud(r.contributionPerKg)}</td>
+              <td className="py-3 pr-3"><span className="flex items-center gap-2 tabular-nums">{aud(r.costPerKg)}<span className="hidden h-2 rounded-full sm:block" style={{ width: `${((r.costPerKg ?? 0) / maxCost) * 70}px`, background: G.pink, boxShadow: `0 0 10px ${G.pink}` }} /></span></td>
+              <td className="py-3 tabular-nums font-semibold" style={{ color: (r.contributionPerKg ?? 0) < 0 ? "#FF6B6B" : G.yellow }}>{aud(r.contributionPerKg)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="mt-3 text-[0.75rem] text-[#6A615B]">The eight-hour day costs the same as four standard hours — and full days depend on availability when you book.</p>
+      <p className="mt-3 text-[0.75rem]" style={{ color: G.dim }}>The eight-hour day costs the same as four standard hours — and full days depend on availability when you book.</p>
     </div>
   );
 }
@@ -298,16 +359,33 @@ function Sessions({ rs }: { rs: PackageResult[] }) {
 function Machines({ input, machines }: { input: CalcInput; machines: Machine[] }) {
   const rows = machineComparison(input, machines);
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" style={{ color: G.text }}>
       <table className="w-full min-w-[560px] text-left text-[0.875rem]">
-        <thead><tr className="text-[0.75rem] uppercase tracking-wide text-[#6A615B]"><th className="pb-2 font-semibold">Roaster</th><th className="pb-2 font-semibold">Batch (assumed)</th><th className="pb-2 font-semibold">Day output</th><th className="pb-2 font-semibold">Day hire</th><th className="pb-2 font-semibold">Hire/kg</th><th className="pb-2 font-semibold">Cost/kg</th></tr></thead>
+        <thead><tr className="text-[0.75rem] uppercase tracking-wide" style={{ color: G.dim }}><th className="pb-2 font-semibold">Roaster</th><th className="pb-2 font-semibold">Batch (assumed)</th><th className="pb-2 font-semibold">Day output</th><th className="pb-2 font-semibold">Day hire</th><th className="pb-2 font-semibold">Hire/kg</th><th className="pb-2 font-semibold">Cost/kg</th></tr></thead>
         <tbody>
           {rows.map(({ id, name, batchKg, r }) => (
-            <tr key={id} className="border-t border-[#E8DFD3]"><td className="py-2.5 pr-3 font-semibold">{name}</td><td className="py-2.5 pr-3 tabular-nums">{kg(batchKg)}</td><td className="py-2.5 pr-3 tabular-nums">{kg(r.roastedKg)}</td><td className="py-2.5 pr-3 tabular-nums">{aud(r.hire, false)}</td><td className="py-2.5 pr-3 tabular-nums">{aud(r.hirePerKg)}</td><td className="py-2.5 tabular-nums">{aud(r.costPerKg)}</td></tr>
+            <tr key={id} className="border-t border-white/10"><td className="py-2.5 pr-3 font-semibold">{name}</td><td className="py-2.5 pr-3 tabular-nums">{kg(batchKg)}</td><td className="py-2.5 pr-3 tabular-nums" style={{ color: G.cyan }}>{kg(r.roastedKg)}</td><td className="py-2.5 pr-3 tabular-nums">{aud(r.hire, false)}</td><td className="py-2.5 pr-3 tabular-nums">{aud(r.hirePerKg)}</td><td className="py-2.5 tabular-nums" style={{ color: G.pink }}>{aud(r.costPerKg)}</td></tr>
           ))}
         </tbody>
       </table>
-      <p className="mt-3 text-[0.75rem] text-[#6A615B]">Every machine here uses your roast time ({input.roastMin} min), turnaround ({input.turnMin} min) and productivity ({input.productivity}%), with its own starting batch. Real cycle times differ by machine and coffee — change them above to model yours.</p>
+      <p className="mt-3 text-[0.75rem]" style={{ color: G.dim }}>Every machine here uses your roast time ({input.roastMin} min), turnaround ({input.turnMin} min) and productivity ({input.productivity}%), with its own starting batch. Real cycle times differ by machine and coffee — change them to model yours.</p>
+    </div>
+  );
+}
+
+/** Profiler-style dials across the top of the screen */
+function Gauge({ label, value, sub, frac, color }: { label: string; value: string; sub?: string; frac: number; color: string }) {
+  const f = Math.max(0, Math.min(1, Number.isFinite(frac) ? frac : 0));
+  const r = 34, c = Math.PI * r * 1.5; // 270° arc
+  return (
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 90 80" className="h-[84px] w-[96px]" aria-hidden>
+        <circle cx="45" cy="44" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="7" strokeDasharray={`${c} 999`} strokeLinecap="round" transform="rotate(135 45 44)" />
+        <circle cx="45" cy="44" r={r} fill="none" stroke={color} strokeWidth="7" strokeDasharray={`${c * f} 999`} strokeLinecap="round" transform="rotate(135 45 44)" style={{ filter: `drop-shadow(0 0 5px ${color})` }} />
+        <text x="45" y="46" textAnchor="middle" fontSize="13" fontWeight="700" fill={color}>{value}</text>
+        {sub && <text x="45" y="61" textAnchor="middle" fontSize="8.5" fill={G.dim}>{sub}</text>}
+      </svg>
+      <p className="-mt-1 text-[0.75rem] font-semibold" style={{ color: G.text }}>{label}</p>
     </div>
   );
 }
@@ -330,7 +408,7 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
   const machine = machines.find((m) => m.id === machineId)!;
 
   const chooseMachine = (m: Machine) => { setMachineId(m.id); set({ hourly: m.hourly, batchKg: m.batchKg }); };
-  const chooseDrink = (s: "small" | "large") => { setDrinkSize(s); const d = DRINKS[s]; setDrinks({ doseG: d.doseG, drinksPerDose: d.drinksPerDose, price: d.price, drinksPerBottle: d.drinksPerBottle }); };
+  const chooseDrink = (s: "small" | "large") => { setDrinkSize(s); const d = DRINKS[s]; setDrinks({ doseG: d.doseG, drinksPerDose: d.drinksPerDose, price: d.price, milkMl: d.milkMl }); };
   // Bags are priced per kg in scenarios; the bag price follows the bag size
   const setKgPrice = (v: number) => { setPricePerKg(v); setBags({ price: Math.round(v * input.bags.bagKg * 100) / 100 }); };
   const setBagKg = (b: number) => setBags({ bagKg: b, price: Math.round(pricePerKg * b * 100) / 100 });
@@ -414,10 +492,10 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
                 <Slider label="Drinks you expect to sell" value={input.drinks.sellPct} onChange={(v) => setDrinks({ sellPct: v })} min={0} max={100} step={1} unit="%" />
                 <Check label="Include milk" checked={input.drinks.milk} onChange={(v) => setDrinks({ milk: v })} />
                 {input.drinks.milk && <>
-                  <Slider label="Milk per 2 L bottle" value={input.drinks.milkBottle} onChange={(v) => setDrinks({ milkBottle: v })} min={1} max={8} step={0.05} unit="$" />
-                  <Slider label="Drinks per bottle" value={input.drinks.drinksPerBottle} onChange={(v) => setDrinks({ drinksPerBottle: v })} min={2} max={30} step={0.5} hint={drinkSize === "large" ? "assumption — set yours" : undefined} />
+                  <Slider label="Milk bottle price" value={input.drinks.milkBottle} onChange={(v) => setDrinks({ milkBottle: v })} min={1} max={8} step={0.05} unit="$" hint={`${(input.drinks.bottleMl / 1000).toLocaleString("en-AU")} L bottle`} />
+                  <Slider label="Milk per drink" value={input.drinks.milkMl} onChange={(v) => setDrinks({ milkMl: v })} min={50} max={500} step={10} unit="ml" hint={`${input.drinks.milkMl > 0 ? Math.round((input.drinks.bottleMl / input.drinks.milkMl) * 10) / 10 : 0} drinks a bottle · ${aud(input.drinks.bottleMl > 0 ? input.drinks.milkBottle * input.drinks.milkMl / input.drinks.bottleMl : 0)} each`} />
                 </>}
-                <Slider label="Cup & lid" value={input.drinks.cupLid} onChange={(v) => setDrinks({ cupLid: v })} min={0} max={0.5} step={0.005} unit="$" hint="$50–$60 per 1,000" />
+                <Slider label="Cups & lids per 1,000" value={input.drinks.cupsPer1000} onChange={(v) => setDrinks({ cupsPer1000: v })} min={0} max={100} step={1} unit="$" hint={`= $${(input.drinks.cupsPer1000 / 1000).toFixed(3)} per cup`} />
               </>
             )}
           </div>
@@ -485,9 +563,14 @@ export function RoastCalculator({ machines, membershipMonthly }: { machines: Mac
           </dl>
         </div>
 
-        <div className="rounded-[22px] bg-white p-5 ring-1 ring-[#E8DFD3] sm:p-6">
+        <div className="rc-screen rounded-[22px] p-5 shadow-[0_30px_70px_-40px_rgba(13,19,48,.9)] sm:p-6" style={{ background: `linear-gradient(150deg, ${G.bg}, ${G.bg2})` }}>
+          <div className="mb-4 grid grid-cols-3 gap-2 border-b border-white/10 pb-4" aria-label="Session dials">
+            <Gauge label="Roasted" value={kg(r.roastedKg)} sub={`${r.batches} batches`} frac={(() => { const cyc = input.roastMin + input.turnMin; const max = cyc > 0 ? Math.floor((r.hours * 60) / cyc) : 0; return max ? r.batches / max : 0; })()} color={G.cyan} />
+            <Gauge label="Cost per kg" value={aud(r.costPerKg, false)} sub={`of ${aud((input.channel === "bags" ? (input.bags.bagKg > 0 ? input.bags.price / input.bags.bagKg : 0) : (r.roastedKg > 0 ? r.revenue / r.roastedKg : 0)), false)}/kg sales`} frac={(r.costPerKg ?? 0) / Math.max(1e-9, input.channel === "bags" ? (input.bags.bagKg > 0 ? input.bags.price / input.bags.bagKg : 1) : (r.roastedKg > 0 ? r.revenue / r.roastedKg : 1))} color={G.pink} />
+            <Gauge label="Margin" value={pct(r.marginPct)} sub="contribution" frac={(r.marginPct ?? 0) / 100} color={G.yellow} />
+          </div>
           <div role="tablist" aria-label="Graphs" className="rc-noprint no-scrollbar -mx-1 mb-4 flex gap-1 overflow-x-auto px-1">
-            {graphs.map((g) => <button key={g.id} type="button" role="tab" aria-selected={graph === g.id} onClick={() => setGraph(g.id)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-[0.8125rem] font-semibold ${graph === g.id ? "bg-[#1F1A17] text-white" : "bg-[#F1EADF] text-[#3A3431]"}`}>{g.label}</button>)}
+            {graphs.map((g) => <button key={g.id} type="button" role="tab" aria-selected={graph === g.id} onClick={() => setGraph(g.id)} className={`shrink-0 rounded-full px-3.5 py-1.5 text-[0.8125rem] font-semibold ${graph === g.id ? "bg-[#27D9E8] text-[#0D1330]" : "bg-white/10 text-white/80 hover:text-white"}`}>{g.label}</button>)}
           </div>
           {graph === "timeline" && <Timeline key={`t-${view}`} r={r} channel={input.channel} />}
           {graph === "money" && <MoneyChart key={`m-${view}`} r={r} channel={input.channel} />}

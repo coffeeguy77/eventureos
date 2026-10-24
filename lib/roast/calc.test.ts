@@ -104,12 +104,13 @@ test("drinks: 100 small or 50 large drinks per roasted kg before wastage, milk b
   const r = packageResult(one, "two");
   assert.equal(r2(r.roastedKg), 2);
   assert.equal(r.units.full, 200); assert.equal(r2(r.revenue), 1000);
-  assert.equal(r2(r.costs.milk), r2(200 * 3.3 / 13));
-  assert.equal(r2(3.3 / 13), 0.25);
-  assert.equal(r2(r.costs.cups), 11);
+  assert.equal(r2(r.costs.milk), r2(200 * 3.3 * 150 / 2000), "150 ml of a $3.30 2 L bottle per small drink");
+  assert.equal(r2(r.costs.milk / 200), 0.25);
+  assert.equal(r2(r.costs.cups), 11, "$55 per 1,000 cups and lids");
   assert.equal(r.costs.packaging, 0, "retail bags are off for coffee used in drinks");
   const large = packageResult({ ...one, drinks: { ...DEFAULT_INPUT.drinks, ...DRINKS.large } }, "two");
   assert.equal(large.units.full, 100); assert.equal(r2(large.revenue), 600);
+  assert.equal(r2(large.costs.milk), r2(100 * 3.3 * 300 / 2000), "300 ml per 12 oz");
   const waste = packageResult({ ...one, drinks: { ...small, dialInPct: 5 } }, "two");
   assert.equal(waste.units.full, Math.floor(Math.floor((1.9 * 1000) / 20 + 1e-9) * 2));
 });

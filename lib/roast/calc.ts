@@ -31,7 +31,13 @@ export interface CalcInput {
   lossPct: number; greenPerKg: number;
   channel: Channel;
   bags: { packaging: boolean; bagKg: number; costPerBag: number; price: number; sellPct: number; wastePct: number };
-  drinks: { doseG: number; drinksPerDose: number; price: number; dialInPct: number; sellPct: number; milkBottle: number; drinksPerBottle: number; milk: boolean; cupLid: number; packaging: boolean };
+  drinks: {
+    doseG: number; drinksPerDose: number; price: number; dialInPct: number; sellPct: number;
+    /** milk: price of a bottle, its size and the milk in each drink (ml) — cost per drink = price × ml ÷ bottle ml */
+    milk: boolean; milkBottle: number; bottleMl: number; milkMl: number;
+    /** cups and lids, priced per 1,000 */
+    cupsPer1000: number; packaging: boolean;
+  };
   extras: {
     enabled: boolean;
     labourPerHour: number; labourHours: number; setupCost: number;
@@ -46,16 +52,16 @@ export const DEFAULT_INPUT: CalcInput = {
   hourly: 400, batchKg: 30, roastMin: 12, turnMin: 3, productivity: 100, breakMin: 0, lossPct: 15, greenPerKg: 15,
   channel: "bags",
   bags: { packaging: true, bagKg: 1, costPerBag: 1, price: 40, sellPct: 100, wastePct: 0 },
-  drinks: { doseG: 20, drinksPerDose: 2, price: 5, dialInPct: 0, sellPct: 100, milkBottle: 3.3, drinksPerBottle: 13, milk: true, cupLid: 0.055, packaging: false },
+  drinks: { doseG: 20, drinksPerDose: 2, price: 5, dialInPct: 0, sellPct: 100, milk: true, milkBottle: 3.3, bottleMl: 2000, milkMl: 150, cupsPer1000: 55, packaging: false },
   extras: { enabled: false, labourPerHour: 0, labourHours: 0, setupCost: 0, consumablesPerKg: 0, freightPerKg: 0, overheadPerSession: 0, membershipMonthly: 99, monthlyKg: 0 },
   // Starting GST settings — the business confirms them with their accountant
   tax: { mode: "cash", gst: { hire: true, green: false, packaging: true, extras: true, milk: false, cups: true, sales: false } },
 };
 
-/** The two drink examples (before wastage). The large drink's milk yield is an assumption to set. */
+/** The two drink examples (before wastage): 150 ml of milk in a 6 oz, 300 ml in a 12 oz. */
 export const DRINKS = {
-  small: { label: "6 oz", doseG: 20, drinksPerDose: 2, price: 5, drinksPerBottle: 13 },
-  large: { label: "12 oz", doseG: 20, drinksPerDose: 1, price: 6, drinksPerBottle: 6.5 },
+  small: { label: "6 oz", doseG: 20, drinksPerDose: 2, price: 5, milkMl: 150 },
+  large: { label: "12 oz", doseG: 20, drinksPerDose: 1, price: 6, milkMl: 300 },
 } as const;
 
 export interface Point {
@@ -90,7 +96,7 @@ function clean(i: CalcInput): CalcInput {
     hourly: num(i.hourly, 0, 100000), batchKg: num(i.batchKg, 0, 1000), roastMin: num(i.roastMin, 0, 600), turnMin: num(i.turnMin, 0, 600),
     productivity: num(i.productivity, 0, 100), breakMin: num(i.breakMin, 0, 480), lossPct: num(i.lossPct, 0, 100), greenPerKg: num(i.greenPerKg, 0, 10000),
     bags: { ...i.bags, bagKg: num(i.bags.bagKg, 0, 1000), costPerBag: num(i.bags.costPerBag, 0, 10000), price: num(i.bags.price, 0, 100000), sellPct: num(i.bags.sellPct, 0, 100), wastePct: num(i.bags.wastePct, 0, 100) },
-    drinks: { ...i.drinks, doseG: num(i.drinks.doseG, 0, 1000), drinksPerDose: num(i.drinks.drinksPerDose, 0, 10), price: num(i.drinks.price, 0, 1000), dialInPct: num(i.drinks.dialInPct, 0, 100), sellPct: num(i.drinks.sellPct, 0, 100), milkBottle: num(i.drinks.milkBottle, 0, 1000), drinksPerBottle: num(i.drinks.drinksPerBottle, 0, 1000), cupLid: num(i.drinks.cupLid, 0, 100) },
+    drinks: { ...i.drinks, doseG: num(i.drinks.doseG, 0, 1000), drinksPerDose: num(i.drinks.drinksPerDose, 0, 10), price: num(i.drinks.price, 0, 1000), dialInPct: num(i.drinks.dialInPct, 0, 100), sellPct: num(i.drinks.sellPct, 0, 100), milkBottle: num(i.drinks.milkBottle, 0, 1000), bottleMl: num(i.drinks.bottleMl, 0, 100000), milkMl: num(i.drinks.milkMl, 0, 5000), cupsPer1000: num(i.drinks.cupsPer1000, 0, 100000) },
     extras: { ...i.extras, labourPerHour: num(i.extras.labourPerHour, 0, 10000), labourHours: num(i.extras.labourHours, 0, 24), setupCost: num(i.extras.setupCost, 0, 100000), consumablesPerKg: num(i.extras.consumablesPerKg, 0, 10000), freightPerKg: num(i.extras.freightPerKg, 0, 10000), overheadPerSession: num(i.extras.overheadPerSession, 0, 100000), membershipMonthly: num(i.extras.membershipMonthly, 0, 100000), monthlyKg: num(i.extras.monthlyKg, 0, 1e7) },
   };
 }
@@ -115,7 +121,7 @@ function sellable(i: CalcInput, roastedKg: number) {
   const sold = Math.floor(full * d.sellPct / 100 + EPS);
   const bags = d.packaging && i.bags.bagKg > 0 ? Math.floor(roastedKg / i.bags.bagKg + EPS) : 0;
   return { full, leftoverKg, label: "drinks", sold, packUnits: bags, packCost: i.bags.costPerBag,
-    milk: d.milk && d.drinksPerBottle > 0 ? sold * d.milkBottle / d.drinksPerBottle : 0, cups: sold * d.cupLid };
+    milk: d.milk && d.bottleMl > 0 ? (sold * d.milkBottle * d.milkMl) / d.bottleMl : 0, cups: (sold * d.cupsPer1000) / 1000 };
 }
 
 function costsFor(i: CalcInput, greenKg: number, roastedKg: number, hire: number) {

@@ -176,7 +176,7 @@ export default async function RoastCulturePage({ params }: P) {
               <span className="inline-flex items-center gap-2 rounded-full bg-[#D9B26A] px-3.5 py-1 text-[0.8125rem] font-semibold text-[#1F1A17]"><Monitor className="h-4 w-4" /><span {...k("soft.badge")}>{T("soft.badge", "Giesen profile software included")}</span></span>
               <h2 className={`${h2} mt-5`} {...k("soft.title")}>{T("soft.title", "Develop it. Save it. Roast it again.")}</h2>
               <p className="mt-5 text-[1.0625rem] leading-relaxed text-white/75" {...k("soft.text")}>{T("soft.text", "Record your roasts, work alongside saved reference profiles and use automated playback or custom triggers on supported equipment. Develop a repeatable process around your coffee, with the operator in control.")}</p>
-              {pic("rcSoftware", null) && <img {...edImg("site.images.rcSoftware")} src={pic("rcSoftware", null)!} alt="" className="mt-8 aspect-[4/3] w-full rounded-[24px] object-cover" />}
+              {pic("rcSoftware", "/media/beanculture/giesen-profiler.webp") && <img {...edImg("site.images.rcSoftware")} src={pic("rcSoftware", "/media/beanculture/giesen-profiler.webp")!} alt="Giesen profile software showing a live roast curve" className="mt-8 aspect-[3/2] w-full rounded-[24px] object-cover ring-1 ring-white/10" />}
               <p className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[0.875rem] text-white/60">
                 {[["About Giesen Profiler", "https://giesen.com/profiler"], ["Using a saved profile", "https://giesen.com/support/use-a-saved-roast-profile-in-giesen-profiler-2"], ["Using triggers", "https://giesen.com/support/how-to-use-triggers-in-giesen-profiler-2"]].map(([l, h]) => (
                   <a key={h} href={h} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-white hover:underline">{l}<ExternalLink className="h-3.5 w-3.5" /></a>
@@ -235,14 +235,15 @@ export default async function RoastCulturePage({ params }: P) {
           <div className={`${WRAP} py-16 sm:py-24`}>
             <p className={kicker} {...k("train.kicker")}>{T("train.kicker", "Train, work & learn")}</p>
             <h2 className={`${h2} mt-3 max-w-3xl`} {...k("train.title")}>{T("train.title", "More than a roaster")}</h2>
+            <p className="mt-4 max-w-3xl text-[1.0625rem] leading-relaxed text-[#4A423D]" {...k("train.text")}>{T("train.text", "Between roasts there's room to work too: hot desks with a 1 Gbps internet connection for planning, answering orders and building your brand, subject to availability.")}</p>
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {[
                 { key: "tr1", I: GraduationCap, img: pic("rcTrain", "/media/academy/bean-culture/cafe.jpg"), imgKey: "rcTrain", title: "Training room", text: "Three Café Racer espresso machines for dialling in your coffee, training baristas and testing how your roast performs in the cup." },
-                { key: "tr2", I: Wifi, img: null, imgKey: null, title: "Hot desks", text: "Somewhere to plan, answer orders and build your brand between roasts, with a 1 Gbps internet connection. Subject to availability." },
-                { key: "tr3", I: Sprout, img: pic("rcFarm", null), imgKey: "rcFarm", title: "Hydroponic coffee farm", text: "See coffee growing from plant to cherry — a hands-on way to understand where every bean begins." },
+                { key: "tr4", I: Printer, img: pic("rcBrand", null), imgKey: "rcBrand", title: "Branding & packaging", text: "Design it, print it, pack it: full-colour labels and stickers on the HP Latex and Graphtec cutter, short label runs on the Epson printers, and bags filled on the Action Pak and Dolzan." },
+                { key: "tr3", I: Sprout, img: pic("rcFarm", "/media/beanculture/hydroponic-farm.jpg"), imgKey: "rcFarm", title: "Hydroponic coffee farm", text: "See coffee growing from plant to cherry — a hands-on way to understand where every bean begins." },
               ].map((x) => (
                 <div key={x.key} className="overflow-hidden rounded-[24px] bg-[#F8F3EA] ring-1 ring-[#E8DFD3]">
-                  {x.img && x.imgKey ? <img {...edImg(`site.images.${x.imgKey}`)} src={x.img} alt="" className="aspect-[16/10] w-full object-cover" /> : <div className="grid aspect-[16/10] w-full place-items-center bg-[#EFE5D6] text-[#7F9C7B]"><x.I className="h-12 w-12" strokeWidth={1.4} /></div>}
+                  {x.img && x.imgKey ? <img {...edImg(`site.images.${x.imgKey}`)} src={x.img} alt="" className="aspect-[16/10] w-full object-cover" /> : <div {...(x.imgKey ? edImg(`site.images.${x.imgKey}`) : {})} className="grid aspect-[16/10] w-full place-items-center bg-[#EFE5D6] text-[#7F9C7B]"><x.I className="h-12 w-12" strokeWidth={1.4} /></div>}
                   <div className="p-6">
                     <h3 className={`${serif} text-[1.5rem] font-semibold`} {...k(`${x.key}.title`)}>{T(`${x.key}.title`, x.title)}</h3>
                     <p className="mt-2 leading-relaxed text-[#4A423D]" {...k(`${x.key}.text`)}>{T(`${x.key}.text`, x.text)}</p>
