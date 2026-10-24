@@ -13,7 +13,7 @@ export default async function GiftsPage({ searchParams }: { searchParams: Promis
   const q = ((await searchParams).q ?? "").trim().slice(0, 60);
   const { supabase, org } = await requireOrg();
   let query = supabase.from("booking_gifts").select("id, code, amount, balance, status, purchaser_name, purchaser_email, recipient_name, recipient_email, send_on, sent_at, expires_on, source, created_at, view_token, course:booking_courses(name)")
-    .eq("organisation_id", org.id).neq("status", "pending").order("created_at", { ascending: false }).limit(300);
+    .eq("organisation_id", org.id).eq("is_test", false).neq("status", "pending").order("created_at", { ascending: false }).limit(300);
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = query.or(`code.ilike.${like},purchaser_name.ilike.${like},recipient_name.ilike.${like},purchaser_email.ilike.${like}`); }
   const [{ data, error }, { data: courses }] = await Promise.all([query, supabase.from("booking_courses").select("id, name, price").eq("organisation_id", org.id).eq("active", true).order("position")]);
   if (error) return <Card className="p-6 text-[0.875rem] text-ink-muted">Run the 0049 database update (bookings) in Supabase first.</Card>;

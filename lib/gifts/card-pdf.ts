@@ -1,4 +1,4 @@
-import { PDFDocument, clip, endPath, popGraphicsState, pushGraphicsState, rectangle, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { PDFDocument, clip, degrees, endPath, popGraphicsState, pushGraphicsState, rectangle, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 
 /**
@@ -99,7 +99,7 @@ function cover(page: PDFPage, img: PDFImage, x: number, y: number, w: number, h:
   page.pushOperators(popGraphicsState());
 }
 
-export async function giftCardPdf(o: { art: Uint8Array | null; backArt?: Uint8Array | null; back: GiftPdfBack; fonts: GiftPdfFonts; title: string; instructions?: boolean }) {
+export async function giftCardPdf(o: { art: Uint8Array | null; backArt?: Uint8Array | null; back: GiftPdfBack; fonts: GiftPdfFonts; title: string; instructions?: boolean; /** a test-mode certificate: stamped "TEST — NOT VALID" */ test?: boolean }) {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(o.title);
@@ -188,6 +188,15 @@ export async function giftCardPdf(o: { art: Uint8Array | null; backArt?: Uint8Ar
     while (size > 1.6 * q && lines.length * size * 1.45 > room) { size -= 0.25; lines = wrap(f.italic, b.message.trim(), size, width); }
     let my = messageTop - size;
     for (const l of lines) { if (my < messageBottom) break; back.drawText(l, { x: left, y: my, size, font: f.italic, color: BODY }); my -= size * 1.45; }
+  }
+  if (o.test) {
+    // Test mode: a stamp across both sides so it can never be passed off as real
+    const stamp = "TEST — NOT VALID", size = 26 * MM;
+    const w = f.semi.widthOfTextAtSize(stamp, size);
+    const a = (30 * Math.PI) / 180;
+    for (const pg of [front, back]) {
+      pg.drawText(stamp, { x: PAGE_W / 2 - (w / 2) * Math.cos(a) + (size / 3) * Math.sin(a), y: PAGE_H / 2 - (w / 2) * Math.sin(a) - (size / 3) * Math.cos(a), size, font: f.semi, color: rgb(0.86, 0.11, 0.18), opacity: 0.55, rotate: degrees(30) });
+    }
   }
   return doc.save();
 }

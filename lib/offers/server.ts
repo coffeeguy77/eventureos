@@ -2,6 +2,18 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { normOffer, offerDiscount, offerLive, offerProblem, toOffer, type Offer, type OfferPlace } from "./core";
+import { TEST_CODE, TEST_LABEL, isTestCode, readTesting } from "@/lib/testing/core";
+
+/** The id the test code carries — never stored as a real code (coupon_id), never counted as a use. */
+export const TEST_OFFER_ID = "test";
+const testOffer = (): Offer => ({ id: TEST_OFFER_ID, code: TEST_CODE, description: TEST_LABEL, headline: TEST_LABEL, kind: "percent", value: 100, works_on: ["shop", "classes", "gifts"], course_ids: [],
+  min_spend: null, max_uses: null, per_customer: null, first_order_only: false, uses: 0, starts_on: null, ends_on: null, active: true, ribbon: false });
+
+/** Is the test code switched on for this business? (Settings → Testing) */
+export async function testingOn(db: SupabaseClient, orgId: string) {
+  const { data } = await db.from("organisations").select("settings").eq("id", orgId).maybeSingle();
+  return readTesting(data?.settings).enabled;
+}
 
 const todayIn = (tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
 
@@ -26,10 +38,15 @@ async function history(db: SupabaseClient, orgId: string, email: string | null, 
   return { uses: (b.count ?? 0) + (g.count ?? 0), orders: (bAll.count ?? 0) + (gAll.count ?? 0) };
 }
 
-export type OfferQuote = { ok: true; offer: Offer; discount: number } | { ok: false; error: string };
+export type OfferQuote = { ok: true; offer: Offer; discount: number; test?: boolean } | { ok: false; error: string };
 
 /** Check a code for a class booking or a gift certificate and work out the discount. */
 export async function quoteOffer(db: SupabaseClient, org: { id: string; timezone: string }, x: { code: string; place: Exclude<OfferPlace, "shop">; courseId: string | null; subtotal: number; email?: string | null }): Promise<OfferQuote> {
+  // The test code: everything free, everything it makes is marked as a test (Settings → Testing clears it)
+  if (isTestCode(x.code)) {
+    if (!(await testingOn(db, org.id))) return { ok: false, error: "That code isn't valid." };
+    return { ok: true, offer: testOffer(), discount: Math.max(0, Math.round(x.subtotal * 100) / 100), test: true };
+  }
   const offer = await findOffer(db, org.id, x.code);
   const h = offer ? await history(db, org.id, x.email?.trim().toLowerCase() || null, offer.id) : { uses: 0, orders: 0 };
   const problem = offerProblem(offer, { today: todayIn(org.timezone), place: x.place, courseId: x.courseId, subtotal: x.subtotal, customerUses: h.uses, customerOrders: h.orders });
@@ -41,7 +58,7 @@ export async function quoteOffer(db: SupabaseClient, org: { id: string; timezone
 
 /** One more use of a code (after payment). Falls back to a plain update before the database update is run. */
 export async function offerUsed(db: SupabaseClient, offerId: string | null | undefined) {
-  if (!offerId) return;
+  if (!offerId || offerId === TEST_OFFER_ID) return;
   const { error } = await db.rpc("offer_used", { p_coupon: offerId });
   if (error) {
     const { data } = await db.from("shop_coupons").select("uses").eq("id", offerId).maybeSingle();

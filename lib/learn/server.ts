@@ -77,10 +77,12 @@ const ACCESS_COLS = "id, plan, status, starts_at, ends_at, renews, price, curren
 
 export interface LearnerState {
   learner: LearnerRow; access: Access[]; live: Access | null;
+  /** the owner testing (everything open, no limits) */
+  god: boolean;
   done: Map<string, string>; passedModules: Set<string>; badges: Set<string>; challengesDone: number; challengeToday: boolean;
 }
 
-export async function learnerState(db: SupabaseClient, org: LearnOrg, studentId: string): Promise<LearnerState> {
+export async function learnerState(db: SupabaseClient, org: LearnOrg, studentId: string, opts: { god?: boolean } = {}): Promise<LearnerState> {
   await db.from("learn_learners").upsert({ organisation_id: org.id, student_id: studentId }, { onConflict: "organisation_id,student_id", ignoreDuplicates: true });
   const today = todayISO(org.timezone);
   const [ln, ac, pr, qa, bd, ch, chToday] = await Promise.all([
@@ -97,8 +99,10 @@ export async function learnerState(db: SupabaseClient, org: LearnOrg, studentId:
   // A streak that missed yesterday shows as broken (it restarts on the next activity)
   if (learner.last_active_on && learner.last_active_on < todayMinus(today, 1)) learner.streak_days = 0;
   const access = (ac.data ?? []) as Access[];
+  const god = !!opts.god;
+  const godPass: Access = { id: "test", plan: "comp", status: "active", starts_at: null, ends_at: null, renews: false, price: 0, currency: org.currency, booking_id: null, card_label: null, last_error: null, cancelled_at: null, created_at: new Date().toISOString() };
   return {
-    learner, access, live: liveAccess(access),
+    learner, access, live: god ? liveAccess(access) ?? godPass : liveAccess(access), god,
     done: new Map(((pr.data ?? []) as { lesson_id: string; completed_at: string }[]).map((r) => [r.lesson_id, r.completed_at])),
     passedModules: new Set(((qa.data ?? []) as { module_id: string }[]).map((r) => r.module_id)),
     badges: new Set(((bd.data ?? []) as { badge_key: string }[]).map((r) => r.badge_key)),
@@ -121,7 +125,7 @@ export async function completeLesson(org: LearnOrg, me: Student, lessonId: strin
   const lesson = await loadLesson(db, org.id, lessonId);
   if (!lesson || !lesson.published) throw new Error("That lesson isn't available.");
   const c = await loadCurriculum(db, org.id);
-  const state = await learnerState(db, org, me.id);
+  const state = await learnerState(db, org, me.id, { god: me.god });
   if (!canOpenLesson(c, state, lesson.module_id)) throw new Error("This lesson is part of the full course.");
   const correct = !lesson.quiz || answer === lesson.quiz.correct_index;
   if (!correct) return { xp: 0, badges: [], correct: false };
@@ -172,7 +176,7 @@ export async function submitMastery(org: LearnOrg, me: Student, moduleId: string
   const c = await loadCurriculum(db, org.id);
   const mod = c.modules.find((m) => m.id === moduleId);
   if (!mod) throw new Error("That module isn't available.");
-  const state = await learnerState(db, org, me.id);
+  const state = await learnerState(db, org, me.id, { god: me.god });
   if (!canOpenLesson(c, state, mod.id)) throw new Error("This quiz is part of the full course.");
   const qs = masteryQuestions(c.lessons.filter((l) => l.module_id === mod.id));
   if (!qs.length) throw new Error("This module has no quiz.");
@@ -191,7 +195,7 @@ export async function doChallenge(org: LearnOrg, me: Student, challengeId: strin
   const { data: list } = await db.from("learn_challenges").select("id, title, xp_reward").eq("organisation_id", org.id).eq("active", true).order("position");
   const ch = challengeFor((list ?? []) as { id: string; title: string; xp_reward: number }[], today);
   if (!ch || ch.id !== challengeId) throw new Error("That's not today's challenge — refresh the page.");
-  const state = await learnerState(db, org, me.id);
+  const state = await learnerState(db, org, me.id, { god: me.god });
   if (!state.live) throw new Error("Daily challenges are part of the full course.");
   const { error } = await db.from("learn_challenge_done").insert({ organisation_id: org.id, student_id: me.id, challenge_id: ch.id, done_on: today, note: note.trim().slice(0, 1000) || null });
   if (error) { if (/duplicate|unique/i.test(error.message)) return { xp: 0, badges: [], message: "Already done today — come back tomorrow." }; throw new Error(error.message); }
@@ -203,7 +207,7 @@ export async function doChallenge(org: LearnOrg, me: Student, challengeId: strin
 /** Save a simulator roast. The score is worked out again here from the curve (the same engine as the browser). */
 export async function saveRoast(org: LearnOrg, me: Student, r: { name: string; history: { time: number; bt: number; ror: number }[]; firstCrack: number | null; drop: number | null }): Promise<Outcome & { score: number }> {
   const db = createServiceClient();
-  const state = await learnerState(db, org, me.id);
+  const state = await learnerState(db, org, me.id, { god: me.god });
   if (!state.live) throw new Error("Saving roasts is part of the full course.");
   const history = (Array.isArray(r.history) ? r.history : []).slice(0, 3600).map((p) => ({ time: Math.round(Number(p.time)), bt: Math.round(Number(p.bt) * 10) / 10, ror: Math.round(Number(p.ror) * 10) / 10 }))
     .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.bt) && Number.isFinite(p.ror));
@@ -230,7 +234,8 @@ export async function recordArtScore(org: LearnOrg, studentId: string, overall: 
 }
 
 /** Count an AI use for today; false when the daily limit is reached. */
-export async function useAi(org: LearnOrg, studentId: string, kind: "messages" | "photos") {
+export async function useAi(org: LearnOrg, studentId: string, kind: "messages" | "photos", god = false) {
+  if (god) return true;
   const db = createServiceClient();
   const day = todayISO(org.timezone);
   const limit = kind === "messages" ? org.learn.ai.dailyMessages : org.learn.ai.dailyPhotos;

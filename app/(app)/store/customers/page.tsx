@@ -11,12 +11,12 @@ const PAID = ["paid", "roasting", "packed", "shipped", "completed"];
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const q = ((await searchParams).q ?? "").trim().slice(0, 60);
   const { supabase, org } = await requireOrg();
-  let query = supabase.from("shop_customers").select("id, name, email, phone, source, student_id, created_at").eq("organisation_id", org.id).order("created_at", { ascending: false }).limit(500);
+  let query = supabase.from("shop_customers").select("id, name, email, phone, source, student_id, created_at").eq("organisation_id", org.id).eq("is_test", false).order("created_at", { ascending: false }).limit(500);
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = query.or(`name.ilike.${like},email.ilike.${like}`); }
   const { data: custs } = await query;
   const ids = (custs ?? []).map((c) => c.id as string);
   const [{ data: orders }, { data: subs }] = await Promise.all([
-    ids.length ? supabase.from("shop_orders").select("customer_id, total, status").in("customer_id", ids).in("status", PAID) : Promise.resolve({ data: [] as { customer_id: string; total: number; status: string }[] }),
+    ids.length ? supabase.from("shop_orders").select("customer_id, total, status").in("customer_id", ids).eq("is_test", false).in("status", PAID) : Promise.resolve({ data: [] as { customer_id: string; total: number; status: string }[] }),
     ids.length ? supabase.from("shop_subscriptions").select("customer_id, status").in("customer_id", ids).in("status", ["active", "paused", "payment_failed"]) : Promise.resolve({ data: [] as { customer_id: string; status: string }[] }),
   ]);
   const spent = new Map<string, { n: number; t: number }>();

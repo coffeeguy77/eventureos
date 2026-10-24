@@ -17,7 +17,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   const { supabase, org } = await requireOrg();
   const q = (sp.q ?? "").trim().slice(0, 80);
   const page = Math.max(0, parseInt(sp.page ?? "0", 10) || 0);
-  let query = supabase.from("booking_students").select("id, name, email, phone, marketing_ok, source, created_at", { count: "exact" }).eq("organisation_id", org.id).order("name").range(page * 100, page * 100 + 99);
+  let query = supabase.from("booking_students").select("id, name, email, phone, marketing_ok, source, created_at", { count: "exact" }).eq("organisation_id", org.id).eq("is_test", false).order("name").range(page * 100, page * 100 + 99);
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = query.or(`name.ilike.${like},email.ilike.${like},phone.ilike.${like}`); }
   const { data, count, error } = await query;
   if (error) return <Card className="p-6 text-[0.875rem] text-ink-muted">Run the 0049 database update (bookings) in Supabase first.</Card>;

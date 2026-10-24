@@ -10,6 +10,7 @@ import { analysePhoto, coachReply, MEDIA_TYPES, type ChatTurn, type MediaType, t
 import { aiConfigured } from "@/lib/ai/claude";
 import type { Plan } from "@/lib/learn/core";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { academyStudent } from "@/lib/learn/god";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 const msg = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong — please try again.");
@@ -17,7 +18,7 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : "Something went wr
 async function signedIn(slug: string) {
   const org = await learnOrg(slug);
   if (!org) throw new Error("Not found.");
-  const me = await currentStudent(org);
+  const me = await academyStudent(org);
   if (!me) throw new Error("Please sign in again.");
   return { org, me };
 }
@@ -90,9 +91,9 @@ async function coachGate(slug: string, kind: "messages" | "photos") {
   const { org, me } = await signedIn(slug);
   if (!org.learn.ai.enabled) throw new Error("The AI coach is switched off.");
   if (!aiConfigured()) throw new Error("The AI coach isn't set up yet.");
-  const s = await learnerState(createServiceClient(), org, me.id);
+  const s = await learnerState(createServiceClient(), org, me.id, { god: me.god });
   if (!s.live) throw new Error("The AI coach is part of the full course.");
-  if (!(await useAi(org, me.id, kind))) throw new Error(kind === "photos" ? "That's today's photo limit — try again tomorrow." : "That's today's limit for the coach — try again tomorrow.");
+  if (!(await useAi(org, me.id, kind, me.god))) throw new Error(kind === "photos" ? "That's today's photo limit — try again tomorrow." : "That's today's limit for the coach — try again tomorrow.");
   return { org, me, style: s.learner.coach_style };
 }
 

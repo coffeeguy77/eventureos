@@ -27,7 +27,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const [sRes, cRes, recent] = await Promise.all([
     sq,
     supabase.from("booking_courses").select("id", { count: "exact", head: true }).eq("organisation_id", org.id),
-    supabase.from("bookings").select("id, session_id, seats, status, hold_expires_at, total, amount_paid, payment_method, source, contact_name, reference, created_at").eq("organisation_id", org.id).in("source", ["website", "wordpress", "office"]).order("created_at", { ascending: false }).limit(8),
+    supabase.from("bookings").select("id, session_id, seats, status, hold_expires_at, total, amount_paid, payment_method, source, contact_name, reference, created_at").eq("organisation_id", org.id).eq("is_test", false).in("source", ["website", "wordpress", "office"]).order("created_at", { ascending: false }).limit(8),
   ]);
   if (sRes.error) {
     return (
@@ -42,7 +42,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   }
   const sessions = (sRes.data ?? []) as unknown as S[];
   const ids = sessions.map((s) => s.id);
-  const { data: bRows } = ids.length ? await supabase.from("bookings").select("id, session_id, seats, status, hold_expires_at, total, amount_paid, payment_method, source, contact_name, reference, created_at").in("session_id", ids).neq("status", "cancelled") : { data: [] };
+  const { data: bRows } = ids.length ? await supabase.from("bookings").select("id, session_id, seats, status, hold_expires_at, total, amount_paid, payment_method, source, contact_name, reference, created_at").in("session_id", ids).eq("is_test", false).neq("status", "cancelled") : { data: [] };
   const bookings = (bRows ?? []) as B[];
   const by = new Map<string, B[]>();
   for (const b of bookings) by.set(b.session_id, [...(by.get(b.session_id) ?? []), b]);

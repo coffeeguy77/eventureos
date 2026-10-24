@@ -22,7 +22,7 @@ export async function quoteAction(i: QuoteInput): Promise<R<{ priced: Priced; co
     if (!org) return { ok: false, error: "Not found" };
     const lines = (Array.isArray(i.lines) ? i.lines : []).slice(0, 40).filter((l) => isUuid(l.variantId));
     const r = await quoteCart(org, { ...i, lines });
-    return { ok: true, data: { priced: r.priced, couponError: r.couponError, couponLabel: r.coupon ? r.coupon.description || r.coupon.code : null } };
+    return { ok: true, data: { priced: r.priced, couponError: r.couponError, couponLabel: r.test ? "Test checkout — nothing to pay" : r.coupon ? r.coupon.description || r.coupon.code : null } };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 

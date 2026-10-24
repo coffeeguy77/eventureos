@@ -7,6 +7,8 @@ import { loadStripe } from "@/lib/payments/service";
 import { createCheckout, getCheckoutSession, toCents, type CheckoutSession } from "@/lib/payments/stripe";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { money } from "@/lib/format";
+import { isTest, markTest, testIds } from "@/lib/testing/server";
+import { testSubject } from "@/lib/testing/core";
 import {
   agencyLineDescription, bookedSeats, cleanEmail, cleanPhone, giftCode, googleCalendarLink, hoursUntil, normCode, readSettings, seatCount, sessionWhen, splitGst,
   type BookingSettings, type CourseRow, type SessionRow,
@@ -104,7 +106,7 @@ export async function certificatesOffered(orgId: string, db = createServiceClien
 
 /* ------------------------------------------------------------------ students */
 
-export async function ensureStudent(db: SupabaseClient, orgId: string, p: { name: string; email: string | null; phone: string | null; marketing?: boolean; source?: string }) {
+export async function ensureStudent(db: SupabaseClient, orgId: string, p: { name: string; email: string | null; phone: string | null; marketing?: boolean; source?: string; /** made by a test checkout */ test?: boolean }) {
   const name = p.name.trim().slice(0, 160) || "Guest";
   if (p.email) {
     const { data: found } = await db.from("booking_students").select("id, phone, marketing_ok").eq("organisation_id", orgId).ilike("email", p.email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
@@ -116,7 +118,7 @@ export async function ensureStudent(db: SupabaseClient, orgId: string, p: { name
       return found.id as string;
     }
   }
-  const { data, error } = await db.from("booking_students").insert({ organisation_id: orgId, name, email: p.email, phone: p.phone, marketing_ok: !!p.marketing, source: p.source ?? null }).select("id").single();
+  const { data, error } = await db.from("booking_students").insert({ organisation_id: orgId, name, email: p.email, phone: p.phone, marketing_ok: p.test ? false : !!p.marketing, source: p.source ?? null, ...(p.test ? { is_test: true } : {}) }).select("id").single();
   if (error) {
     // Two bookings at once for the same new email: use the one that won
     if (p.email && /duplicate|unique/i.test(error.message)) {
@@ -204,17 +206,26 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
   // Offer code: money off the seats (not for agency bookings, which are invoiced at the agency price)
   const basePrice = priceEach;
   let promo: { id: string | null; code: string; discount: number } | null = null;
+  let test = false;
   if (input.promoCode?.trim() && !agency) {
     const { quoteOffer } = await import("@/lib/offers/server");
     const { discountedEach } = await import("@/lib/offers/core");
     const q = await quoteOffer(db, org, { code: input.promoCode, place: "classes", courseId: course.id, subtotal: Math.round(priceEach * seats * 100) / 100, email });
     if (!q.ok) return { ok: false, error: q.error };
     priceEach = discountedEach(priceEach, seats, q.discount);
-    promo = { id: q.offer.id, code: q.offer.code, discount: Math.round((basePrice - priceEach) * seats * 100) / 100 };
+    promo = { id: q.test ? null : q.offer.id, code: q.offer.code, discount: Math.round((basePrice - priceEach) * seats * 100) / 100 };
+    test = !!q.test;
+  }
+  // A test gift certificate makes this a test booking; a real one can't be mixed with the test code
+  if (input.giftCode?.trim() && !agency) {
+    const { data: gc } = await db.from("booking_gifts").select("id").eq("organisation_id", org.id).eq("code", input.giftCode.trim().toUpperCase()).maybeSingle();
+    const giftIsTest = gc ? await isTest(db, "booking_gifts", gc.id as string) : false;
+    if (giftIsTest) test = true;
+    else if (gc && test) return { ok: false, error: "The test code can't be used with a real gift certificate." };
   }
   // Bring a friend: each person saves when 2+ book together. Doesn't stack with an offer code — the bigger saving wins.
   const fe = !agency && !input.waitlist ? friendEach(basePrice, seats, org.settings.friend) : null;
-  if (fe !== null && fe < priceEach) {
+  if (fe !== null && fe < priceEach && !test) {
     priceEach = fe;
     promo = { id: null, code: FRIEND_CODE, discount: Math.round((basePrice - fe) * seats * 100) / 100 };
   }
@@ -225,7 +236,7 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     const { data: same } = await db.from("booking_students").select("id").eq("organisation_id", org.id).eq("phone", phone).ilike("name", name.replace(/[%_\\]/g, "\\$&")).limit(1).maybeSingle();
     studentId = (same?.id as string) ?? null;
   }
-  studentId ??= await ensureStudent(db, org.id, { name, email, phone, marketing: input.marketing, source: input.source ?? "website" });
+  studentId ??= await ensureStudent(db, org.id, { name, email, phone, marketing: input.marketing, source: input.source ?? "website", test });
   const holdMinutes = org.settings.hold_minutes;
   const payload = {
     student_id: studentId, contact_name: name, contact_email: email, contact_phone: phone,
@@ -247,6 +258,10 @@ export async function startBooking(input: StartBookingInput): Promise<StartResul
     return { ok: false, error: msg, soldOut: /sold out|seats? left/i.test(msg) };
   }
   const bookingId = id as string;
+  if (test) {
+    try { await markTest(db, "bookings", bookingId); }
+    catch (e) { await db.from("bookings").update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancel_reason: "Test mode not set up", hold_expires_at: null }).eq("id", bookingId); return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  }
   if (promo) {
     // Remember the code on the booking (needs the offers database update; the discount is already in the price)
     const { error: pErr } = await db.from("bookings").update({ coupon_id: promo.id, coupon_code: promo.code, discount: promo.discount }).eq("id", bookingId);
@@ -392,6 +407,8 @@ export async function finalizeBooking(db: SupabaseClient, bookingId: string) {
   const org = await orgById(db, b.organisation_id);
   const brand = brandOf(org);
   const notes: string[] = [];
+  // Test bookings: the customer emails go (marked TEST) so they can be checked; nothing goes to the office
+  const test = await isTest(db, "bookings", b.id);
 
   if (b.status === "confirmed" && b.agency_id && !b.invoice_id) {
     try { const inv = await createAgencyInvoice(db, org, b); if (inv) notes.push(`draft invoice ${inv}`); }
@@ -402,10 +419,10 @@ export async function finalizeBooking(db: SupabaseClient, bookingId: string) {
     const bits = emailBits(org, b);
     if (b.contact_email) {
       const mail = b.status === "waitlist" ? waitlistEmail(brand, { ...bits.input, manageUrl: bookUrl(org) }) : confirmationEmail(brand, bits.input);
-      const sent = await safeSend({ to: b.contact_email, subject: mail.subject, html: mail.html, text: mail.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name });
+      const sent = await safeSend({ to: b.contact_email, subject: testSubject(mail.subject, test), html: mail.html, text: mail.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name });
       if (!sent) notes.push("confirmation email not sent");
     }
-    const to = org.settings.notify_email ?? org.contact_email;
+    const to = test ? null : org.settings.notify_email ?? org.contact_email;
     if (to) {
       const alert = officeAlertEmail(brand, {
         heading: `${b.status === "waitlist" ? "Waitlist" : "New booking"}: ${b.course.name} — ${bits.w.short} ${bits.w.start}`,
@@ -420,10 +437,10 @@ export async function finalizeBooking(db: SupabaseClient, bookingId: string) {
       await safeSend({ to, subject: alert.subject, html: alert.html, text: alert.text, fromName: "EventureOS" });
     }
     await db.from("bookings").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", b.id);
-    await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: b.status === "waitlist" ? "booking.waitlisted" : "booking.confirmed",
+    if (!test) await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: b.status === "waitlist" ? "booking.waitlisted" : "booking.confirmed",
       entity_type: "booking", entity_id: b.id, summary: `${b.reference} ${b.status === "waitlist" ? "joined the waitlist for" : "booked"} ${b.course.name} (${bits.w.short}) — ${b.contact_name}, ${b.seats} seat${b.seats === 1 ? "" : "s"}${notes.length ? ` · ${notes.join("; ")}` : ""}` });
   }
-  if (b.agency_id && ["confirmed", "waitlist"].includes(b.status)) {
+  if (b.agency_id && !test && ["confirmed", "waitlist"].includes(b.status)) {
     try { const { notifyCaseManager } = await import("./agents"); await notifyCaseManager(db, b.id); } catch (e) { console.error("case manager email", e); }
   }
   await syncSessionBlock(db, org, b.session_id).catch((e) => console.error("session block", e));
@@ -682,11 +699,13 @@ export async function startGiftPurchase(input: GiftInput): Promise<StartResult> 
   const sendOn = input.sendOn && /^\d{4}-\d{2}-\d{2}$/.test(input.sendOn) && input.sendOn > today ? input.sendOn : null;
   // Offer code: money off what they pay — the certificate keeps its full value
   let promo: { id: string; code: string; discount: number } | null = null;
+  let giftTest = false;
   if (input.promoCode?.trim()) {
     const { quoteOffer } = await import("@/lib/offers/server");
     const q = await quoteOffer(db, org, { code: input.promoCode, place: "gifts", courseId: course?.id ?? null, subtotal: amount, email: purchaserEmail });
     if (!q.ok) return { ok: false, error: q.error };
     promo = { id: q.offer.id, code: q.offer.code, discount: q.discount };
+    giftTest = !!q.test;
   }
   const due = Math.max(0, Math.round((amount - (promo?.discount ?? 0)) * 100) / 100);
   const cfg = org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
@@ -698,8 +717,9 @@ export async function startGiftPurchase(input: GiftInput): Promise<StartResult> 
     organisation_id: org.id, course_id: course?.id ?? null, amount, balance: amount, status: "pending",
     purchaser_name: purchaserName, purchaser_email: purchaserEmail, recipient_name: input.recipientName?.trim().slice(0, 160) || null, recipient_email: recipientEmail,
     message: input.message?.trim().slice(0, 1000) || null, send_on: sendOn, source: "stripe",
+    ...(giftTest ? { is_test: true } : {}),
   };
-  const withPromo = promo ? { coupon_id: promo.id, coupon_code: promo.code, discount: promo.discount } : {};
+  const withPromo = promo ? { coupon_id: giftTest ? null : promo.id, coupon_code: promo.code, discount: promo.discount } : {};
   for (let i = 0; i < 4 && !gift; i++) {
     let { data, error } = await db.from("booking_gifts").insert({ ...row, ...withPromo, code: newGiftCode() }).select("id, code, view_token").single();
     // Before the offers database update the code columns don't exist yet: keep the sale going without them
@@ -710,7 +730,7 @@ export async function startGiftPurchase(input: GiftInput): Promise<StartResult> 
   if (!gift) return { ok: false, error: "Couldn't create the certificate — please try again." };
   if (due <= 0) {
     // Fully covered by the offer: nothing to pay, so it's ready now
-    await activateGiftNow(db, org, gift.id, promo?.id ?? null, "offer");
+    await activateGiftNow(db, org, gift.id, giftTest ? null : promo?.id ?? null, giftTest ? "test" : "offer");
     return { ok: true, redirect: bookUrl(org, `/gift/${gift.view_token}?paid=1`) };
   }
   try {
@@ -769,7 +789,7 @@ async function activateGiftNow(db: SupabaseClient, org: PublicOrg, giftId: strin
   if (!g) return;
   if (offerId) { const { offerUsed } = await import("@/lib/offers/server"); await offerUsed(db, offerId).catch(() => undefined); }
   await deliverGift(db, org, giftId, true).catch((e) => console.error("deliver gift", e));
-  await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: "gift.sold", entity_type: "booking_gift", entity_id: giftId,
+  if (why !== "test") await db.from("activity_logs").insert({ organisation_id: org.id, actor_type: "system", actor_label: "Bookings", action: "gift.sold", entity_type: "booking_gift", entity_id: giftId,
     summary: `Gift certificate ${g.code} issued online with nothing to pay (${why})` });
 }
 
@@ -785,20 +805,21 @@ export async function deliverGift(db: SupabaseClient, org: PublicOrg, giftId: st
   const toRecipient = !!g.recipient_email && !g.sent_at && (!g.send_on || g.send_on <= today);
   // The printable certificate (front + back) goes with the email; if it can't be made, the email still goes with its link
   let attachments: { filename: string; content: string }[] | undefined;
+  const test = await isTest(db, "booking_gifts", g.id);
   if ((toPurchaser && g.purchaser_email) || toRecipient) {
     try {
       const { giftPdf } = await import("./gift-pdf");
-      const pdf = await giftPdf(org, g);
+      const pdf = await giftPdf(org, g, { test });
       if (pdf) attachments = [{ filename: pdf.file, content: Buffer.from(pdf.bytes).toString("base64") }];
     } catch (e) { console.error("gift pdf attach", e); }
   }
   if (toPurchaser && g.purchaser_email) {
     const m = giftEmail(brand, { ...common, to: "purchaser" });
-    await safeSend({ to: g.purchaser_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments });
+    await safeSend({ to: g.purchaser_email, subject: testSubject(m.subject, test), html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments });
   }
   if (toRecipient && g.recipient_email) {
     const m = giftEmail(brand, { ...common, to: "recipient" });
-    if (await safeSend({ to: g.recipient_email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments })) {
+    if (await safeSend({ to: g.recipient_email, subject: testSubject(m.subject, test), html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, attachments })) {
       await db.from("booking_gifts").update({ sent_at: new Date().toISOString() }).eq("id", g.id);
     }
   }
@@ -824,11 +845,12 @@ export async function runBookingJobs(db: SupabaseClient) {
   // Reminders: confirmed bookings for sessions in the next 14 days
   const { data: soon } = await db.from("bookings").select(FULL_INNER).eq("status", "confirmed").is("reminder_sent_at", null).in("source", ["website", "wordpress", "office"])
     .gt("session.starts_at", new Date(now).toISOString()).lt("session.starts_at", new Date(now + 14 * 86400e3).toISOString()).not("contact_email", "is", null).limit(200);
+  const soonTests = await testIds(db, "bookings", ((soon ?? []) as unknown as { id: string }[]).map((x) => x.id));
   for (const b of ((soon ?? []) as unknown as FullBooking[]).filter((x) => x.session)) {
     const org = await getOrg(b.organisation_id);
     if (!org.settings.reminder_hours || hoursUntil(b.session.starts_at, now) > org.settings.reminder_hours) continue;
     const m = reminderEmail(brandOf(org), emailBits(org, b).input);
-    if (await safeSend({ to: b.contact_email!, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
+    if (await safeSend({ to: b.contact_email!, subject: testSubject(m.subject, soonTests.has(b.id)), html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
       await db.from("bookings").update({ reminder_sent_at: new Date().toISOString() }).eq("id", b.id);
       out.reminders++;
     }
@@ -848,6 +870,7 @@ export async function runBookingJobs(db: SupabaseClient) {
   // Thank-you: 2+ hours after the session ended, within 3 days (not imported history)
   const { data: done } = await db.from("bookings").select(FULL_INNER).in("status", ["confirmed", "attended"]).is("followup_sent_at", null).in("source", ["website", "wordpress", "office"])
     .lt("session.ends_at", new Date(now - 2 * 3600e3).toISOString()).gt("session.ends_at", new Date(now - 3 * 86400e3).toISOString()).not("contact_email", "is", null).limit(200);
+  const doneTests = await testIds(db, "bookings", ((done ?? []) as unknown as { id: string }[]).map((x) => x.id));
   for (const b of ((done ?? []) as unknown as FullBooking[]).filter((x) => x.session)) {
     const org = await getOrg(b.organisation_id);
     if (!org.settings.followup) { await db.from("bookings").update({ followup_sent_at: new Date().toISOString() }).eq("id", b.id); continue; }
@@ -855,7 +878,7 @@ export async function runBookingJobs(db: SupabaseClient) {
     const m = thankYouEmail(brandOf(org), { firstName: b.contact_name.split(/\s+/)[0], course: b.course.name, reviewUrl: org.settings.review_url, bookUrl: bookUrl(org),
       giftUrl: b.course.gift_enabled ? bookUrl(org, "/gift") : null, social: org.settings.social,
       certificateUrl: cert ? bookUrl(org, `/certificate/${cert.verify_token}`) : null, accountUrl: cert ? bookUrl(org, "/account") : null });
-    if (await safeSend({ to: b.contact_email!, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
+    if (await safeSend({ to: b.contact_email!, subject: testSubject(m.subject, doneTests.has(b.id)), html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name })) {
       await db.from("bookings").update({ followup_sent_at: new Date().toISOString() }).eq("id", b.id);
       out.thanks++;
     }

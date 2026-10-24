@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { Building2, CalendarRange, Code2, Palette, PenLine, PlugZap, Tags, Users, Zap } from "lucide-react";
+import { Building2, CalendarRange, Code2, FlaskConical, Palette, PenLine, PlugZap, Tags, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
@@ -16,6 +16,7 @@ const ITEMS = [
   { href: "/settings/automations", label: "Automations", icon: Zap },
   { href: "/settings/website-form", label: "Website enquiry form", icon: Code2 },
   { href: "/settings/integrations", label: "Integrations", icon: PlugZap },
+  { href: "/settings/testing", label: "Testing", icon: FlaskConical },
 ];
 
 export function SettingsNav() {

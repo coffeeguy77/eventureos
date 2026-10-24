@@ -19,7 +19,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     course: { id: string; name: string; price: number; location: string | null; colour: string | null; calendar_connection_id: string | null } };
   const [{ data: rows }, { data: others }, { data: agencies }] = await Promise.all([
     supabase.from("bookings").select("id, reference, status, seats, attendees, contact_name, contact_email, contact_phone, notes, answers, total, gift_amount, amount_paid, payment_method, source, po_number, po_site, po_contact, invoice_id, checked_in_at, hold_expires_at, created_at, cancel_reason, agency:booking_agencies(name), invoice:invoices(number, status)")
-      .eq("session_id", id).order("created_at"),
+      .eq("session_id", id).eq("is_test", false).order("created_at"),
     supabase.from("booking_sessions").select("id, starts_at, ends_at, capacity, external_seats, status, course:booking_courses(name)").eq("organisation_id", org.id).gt("starts_at", new Date().toISOString()).neq("id", id).neq("status", "cancelled").order("starts_at").limit(60),
     supabase.from("booking_agencies").select("id, name").eq("organisation_id", org.id).eq("active", true).order("name"),
   ]);

@@ -1,3 +1,6 @@
+import { TestBanner } from "@/components/ui/test-banner";
+import { isTest } from "@/lib/testing/server";
+import { createServiceClient as __svc } from "@/lib/integrations/runtime";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, Loader2, Package, Truck } from "lucide-react";
@@ -36,10 +39,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const paidish = at >= 0;
   const base = `/shop/${org.slug}`;
 
+  const testOnly = await isTest(__svc(), "shop_orders", order.id as string);
   return (
     <ShopFrame org={org}>
       {paidish && sp.paid === "1" && <ClearCart slug={org.slug} />}
       <div className={`${PAGE} max-w-3xl py-10 sm:py-14`}>
+        {testOnly && <TestBanner what="This order" />}
         {order.status === "pending" ? (
           <div className="py-10 text-center">
             {sp.paid === "1" && <AutoRefresh />}

@@ -23,7 +23,7 @@ export default async function Course({ params }: { params: Promise<{ org: string
       <p className="mb-6 mt-1 text-[0.9375rem] text-ink-muted">{c.lessons.length} lessons in {c.modules.length} modules. Levels open as you earn XP{state?.live ? "" : " — the first module is free to try"}.</p>
       <div className="space-y-8">
         {levels.map((l) => {
-          const open = levelOpen(l, xp);
+          const open = (!!state?.god || levelOpen(l, xp));
           const mods = modulesOf(l.id);
           const lp = countDone(mods.flatMap((m) => lessonsOf(m.id).map((x) => x.id)), done);
           return (

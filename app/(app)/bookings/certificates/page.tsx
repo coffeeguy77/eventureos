@@ -17,7 +17,7 @@ export default async function CertificatesPage({ searchParams }: { searchParams:
   const [{ data: certs, count }, { data: courses }, { data: requests }] = await Promise.all([
     cq,
     supabase.from("booking_courses").select("id, name, duration_minutes, active").eq("organisation_id", org.id).order("position"),
-    supabase.from("booking_students").select("id, name, email, notes, certificate_requested_at").eq("organisation_id", org.id).not("certificate_requested_at", "is", null).order("certificate_requested_at"),
+    supabase.from("booking_students").select("id, name, email, notes, certificate_requested_at").eq("organisation_id", org.id).eq("is_test", false).not("certificate_requested_at", "is", null).order("certificate_requested_at"),
   ]);
   const design = tpl ? readDesign(tpl.design) : { ...DEFAULT_DESIGN, accent: org.brand_colour && /^#[0-9a-f]{6}$/i.test(org.brand_colour) ? org.brand_colour : DEFAULT_DESIGN.accent };
   const courseList = (courses ?? []) as { id: string; name: string; duration_minutes: number; active: boolean }[];

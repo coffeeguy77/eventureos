@@ -21,7 +21,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const q = (sp.q ?? "").trim().slice(0, 60);
   const { supabase, org } = await requireOrg();
   const shop = readShop(org.settings);
-  let query = supabase.from("shop_orders").select("id, number, created_at, name, email, status, kind, source, total, delivery, dispatch_on, items, address, tracking_number").eq("organisation_id", org.id).neq("status", "pending")
+  let query = supabase.from("shop_orders").select("id, number, created_at, name, email, status, kind, source, total, delivery, dispatch_on, items, address, tracking_number").eq("organisation_id", org.id).eq("is_test", false).neq("status", "pending")
     .order(tab.k === "todo" ? "dispatch_on" : "created_at", { ascending: tab.k === "todo", nullsFirst: false }).limit(400);
   if (tab.statuses.length) query = query.in("status", tab.statuses);
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = /^\d+$/.test(q) ? query.eq("number", Number(q)) : query.or(`name.ilike.${like},email.ilike.${like}`); }

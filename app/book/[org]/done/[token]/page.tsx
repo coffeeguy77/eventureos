@@ -1,3 +1,6 @@
+import { TestBanner } from "@/components/ui/test-banner";
+import { isTest } from "@/lib/testing/server";
+import { createServiceClient as __svc } from "@/lib/integrations/runtime";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarPlus, CheckCircle2, Clock, Loader2, MapPin, XCircle } from "lucide-react";
@@ -36,9 +39,11 @@ export default async function DonePage({ params, searchParams }: P) {
     if (own?.case_manager_id !== agent.cm.id) agent = null;
   }
 
+  const testOnly = await isTest(__svc(), "bookings", b.id);
   return (
     <BookShell org={org} embed={false}>
       <div className="mx-auto max-w-xl">
+        {testOnly && <TestBanner what="This booking" />}
         {confirmed ? (
           <div className="text-center">
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />

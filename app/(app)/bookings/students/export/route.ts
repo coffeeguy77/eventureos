@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const { supabase, org, role } = await requireOrg();
   if (role === "staff" || role === "customer") return new NextResponse("Not allowed", { status: 403 });
   const q = new URL(req.url).searchParams.get("q")?.trim().slice(0, 80);
-  let query = supabase.from("booking_students").select("id, name, email, phone, marketing_ok, source, created_at").eq("organisation_id", org.id).order("name").limit(20000);
+  let query = supabase.from("booking_students").select("id, name, email, phone, marketing_ok, source, created_at").eq("organisation_id", org.id).eq("is_test", false).order("name").limit(20000);
   if (q) { const like = `%${q.replace(/[%_,()]/g, " ")}%`; query = query.or(`name.ilike.${like},email.ilike.${like},phone.ilike.${like}`); }
   const { data, error } = await query;
   if (error) return new NextResponse(error.message, { status: 500 });

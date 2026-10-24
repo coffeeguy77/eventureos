@@ -19,7 +19,7 @@ export default async function ModulePage({ params }: { params: Promise<{ org: st
   const level = c.levels.find((l) => l.id === m.level_id)!;
   const base = `/academy/${org.slug}`;
   const lessons = courseOrder(c).lessonsOf(m.id);
-  const allowed = canOpenLesson(c, state, m.id) && levelOpen(level, state?.learner.xp ?? 0);
+  const allowed = canOpenLesson(c, state, m.id) && (!!state?.god || levelOpen(level, state?.learner.xp ?? 0));
   const qs = masteryQuestions(lessons);
   const done = state?.done ?? new Map();
   const mastered = state?.passedModules.has(m.id);
@@ -32,7 +32,7 @@ export default async function ModulePage({ params }: { params: Promise<{ org: st
             <h1 className="text-[1.75rem] font-bold tracking-tight text-ink">{m.title}</h1>
             {m.description && <p className="mt-1 text-[0.9375rem] text-ink-muted">{m.description}</p>}
           </div>
-          {!levelOpen(level, state?.learner.xp ?? 0) ? <div className={card}><p className="flex items-center gap-2 font-semibold text-ink"><Lock className="h-4 w-4" />This level opens at {level.min_xp} XP</p><p className="mt-1 text-[0.9063rem] text-ink-muted">Keep going with the earlier levels to unlock it.</p></div>
+          {!(!!state?.god || levelOpen(level, state?.learner.xp ?? 0)) ? <div className={card}><p className="flex items-center gap-2 font-semibold text-ink"><Lock className="h-4 w-4" />This level opens at {level.min_xp} XP</p><p className="mt-1 text-[0.9063rem] text-ink-muted">Keep going with the earlier levels to unlock it.</p></div>
             : !allowed ? <Locked org={org} what="This module" /> : (
             <ol className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
               {lessons.map((l, i) => (

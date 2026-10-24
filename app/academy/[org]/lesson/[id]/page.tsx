@@ -22,7 +22,7 @@ export default async function LessonPage({ params }: { params: Promise<{ org: st
   const m = c.modules.find((x) => x.id === meta.module_id)!;
   const level = c.levels.find((l) => l.id === m.level_id)!;
   const base = `/academy/${org.slug}`;
-  const open = canOpenLesson(c, state, m.id) && levelOpen(level, state?.learner.xp ?? 0);
+  const open = canOpenLesson(c, state, m.id) && (!!state?.god || levelOpen(level, state?.learner.xp ?? 0));
   if (!open) return <AcademyShell org={org} tab="course" signedIn={!!me} streak={state?.learner.streak_days}><Link href={`${base}/module/${m.id}`} className="mb-3 inline-flex text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {m.title}</Link><Locked org={org} what={`“${meta.title}”`} /></AcademyShell>;
   const lesson = await loadLesson(createServiceClient(), org.id, id);
   if (!lesson) notFound();

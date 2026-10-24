@@ -1,4 +1,6 @@
 import "server-only";
+import { isTestCode, testSubject } from "@/lib/testing/core";
+import { isTest } from "@/lib/testing/server";
 import { finishCart, rememberCart } from "@/lib/reminders/server";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -79,7 +81,7 @@ export async function activeBanners(db: SupabaseClient, org: ShopOrg, placements
 export interface ShopCustomer { id: string; email: string; name: string | null; phone: string | null; company: string | null; stripe_customer_id: string | null; stripe_payment_method: string | null; card_label: string | null; marketing_ok: boolean }
 export const CUSTOMER_COLS = "id, email, name, phone, company, stripe_customer_id, stripe_payment_method, card_label, marketing_ok";
 
-export async function ensureCustomer(db: SupabaseClient, orgId: string, p: { email: string; name?: string | null; phone?: string | null; marketing?: boolean; source?: string }): Promise<ShopCustomer> {
+export async function ensureCustomer(db: SupabaseClient, orgId: string, p: { email: string; name?: string | null; phone?: string | null; marketing?: boolean; source?: string; /** made by a test checkout */ test?: boolean }): Promise<ShopCustomer> {
   const email = p.email.toLowerCase();
   const { data: found } = await db.from("shop_customers").select(CUSTOMER_COLS).eq("organisation_id", orgId).ilike("email", email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
   if (found) {
@@ -93,7 +95,8 @@ export async function ensureCustomer(db: SupabaseClient, orgId: string, p: { ema
   // Link to the barista student with the same email, if there is one
   const { data: st } = await db.from("booking_students").select("id").eq("organisation_id", orgId).ilike("email", email.replace(/[%_\\]/g, "\\$&")).maybeSingle();
   const { data, error } = await db.from("shop_customers").insert({
-    organisation_id: orgId, email, name: p.name ?? null, phone: p.phone ?? null, marketing_ok: !!p.marketing, student_id: st?.id ?? null, source: p.source ?? "shop",
+    organisation_id: orgId, email, name: p.name ?? null, phone: p.phone ?? null, marketing_ok: p.test ? false : !!p.marketing, student_id: st?.id ?? null, source: p.source ?? "shop",
+    ...(p.test ? { is_test: true } : {}),
   }).select(CUSTOMER_COLS).single();
   if (error) {
     if (/duplicate|unique/i.test(error.message)) return ensureCustomer(db, orgId, p);
@@ -129,6 +132,15 @@ export async function quoteCart(org: ShopOrg, input: { lines: CartLine[]; mode: 
   const products = (await loadProducts(db, org.id)) ?? [];
   const pre = priceCart({ lines: input.lines, products, mode: input.mode, settings: org.shop, delivery: input.delivery, prepaidMonths: input.prepaidMonths, interval: input.interval });
   let coupon: Coupon | null = null, couponError: string | null = null;
+  // The test code: a one-off order with nothing to pay (Settings → Testing)
+  if (isTestCode(input.couponCode)) {
+    const { testingOn } = await import("@/lib/offers/server");
+    if (!(await testingOn(db, org.id))) couponError = "That code isn't valid.";
+    else if (input.mode !== "one_off") couponError = "The test code works on one-off orders and gift cards.";
+    const plain = priceCart({ lines: input.lines, products, mode: input.mode, settings: org.shop, delivery: input.delivery, coupon: null, couponOk: false, prepaidMonths: input.prepaidMonths, interval: input.interval });
+    const priced = couponError ? plain : { ...plain, discount: plain.subtotal, shipping: 0, total: 0, perDelivery: 0, freeShippingGap: null };
+    return { priced, coupon: null, couponError, products, test: !couponError };
+  }
   if (input.couponCode?.trim()) {
     coupon = await findCoupon(db, org.id, input.couponCode);
     const hist = input.email ? await customerHistory(db, org.id, input.email, coupon?.code ?? null) : { orders: 0, uses: 0 };
@@ -138,7 +150,7 @@ export async function quoteCart(org: ShopOrg, input: { lines: CartLine[]; mode: 
     if (!couponError && Array.isArray(works) && works.length && !works.includes("shop")) couponError = `That code is for ${works.map((w) => (w === "classes" ? "classes" : "gift certificates")).join(" and ")}, not the coffee shop.`;
   }
   const priced = priceCart({ lines: input.lines, products, mode: input.mode, settings: org.shop, delivery: input.delivery, coupon, couponOk: !!coupon && !couponError, prepaidMonths: input.prepaidMonths, interval: input.interval });
-  return { priced, coupon: coupon && !couponError ? coupon : null, couponError, products };
+  return { priced, coupon: coupon && !couponError ? coupon : null, couponError, products, test: false };
 }
 
 /* ------------------------------------------------------------------ events (coffee-cart customers adding beans) */
@@ -191,8 +203,16 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
   const address = delivery === "post" ? cleanAddress(input.address) : null;
   if (delivery === "post" && !address) return { ok: false, error: "Enter your delivery address (street, suburb, state and a 4-digit postcode)." };
 
-  const { priced, coupon, couponError, products } = await quoteCart(org, { lines: input.lines, mode, delivery, couponCode: input.couponCode, email, prepaidMonths, interval }, db);
+  const { priced, coupon, couponError, products, test: codeTest } = await quoteCart(org, { lines: input.lines, mode, delivery, couponCode: input.couponCode, email, prepaidMonths, interval }, db);
   if (couponError) return { ok: false, error: couponError };
+  // Test orders: the test code, or paying with a test gift card. A real gift card can't be mixed with the test code.
+  let test = codeTest;
+  if (input.giftCode?.trim()) {
+    const { data: gc } = await db.from("shop_gift_cards").select("id").eq("organisation_id", org.id).eq("code", input.giftCode.trim().toUpperCase()).maybeSingle();
+    const cardIsTest = gc ? await isTest(db, "shop_gift_cards", gc.id as string) : false;
+    if (cardIsTest) { if (mode !== "one_off") return { ok: false, error: "A test gift card only works on a one-off order." }; test = true; }
+    else if (gc && codeTest) return { ok: false, error: "The test code can't be used with a real gift card." };
+  }
   if (priced.problems.length) return { ok: false, error: priced.problems[0] };
   if (!priced.lines.length) return { ok: false, error: "Your cart is empty." };
   if (mode !== "one_off" && priced.lines.some((l) => l.kind === "gift_card")) return { ok: false, error: "Gift cards can't be part of a subscription." };
@@ -205,7 +225,7 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
   }
   const cfg = needsCard && org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
   if (needsCard && !cfg) return { ok: false, error: `${org.name} can't take card payments online right now.` };
-  const customer = await ensureCustomer(db, org.id, { email, name, phone, marketing: input.marketing });
+  const customer = await ensureCustomer(db, org.id, { email, name, phone, marketing: input.marketing, test });
   const today = todayIn(org.timezone);
   const firstDate = input.firstDate && /^\d{4}-\d{2}-\d{2}$/.test(input.firstDate) && input.firstDate > today ? nextDispatch(input.firstDate, org.shop) : nextDispatch(today, org.shop, org.shop.leadDays);
 
@@ -233,7 +253,7 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
   // Gift card (one-off / prepaid payments only)
   let giftTaken = 0, giftId: string | null = null;
   const payable = priced.total;
-  if (input.giftCode?.trim()) {
+  if (input.giftCode?.trim() && payable > 0) {
     if (mode === "subscription") return { ok: false, error: "Gift cards can be used on one-off orders and prepaid packages." };
     const { data, error } = await db.rpc("shop_take_gift", { p_org: org.id, p_code: input.giftCode, p_amount: payable });
     if (error) return { ok: false, error: error.message.replace(/^.*?ERROR:\s*/, "") };
@@ -251,12 +271,13 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
     items: priced.lines.map(itemJson), subtotal: priced.subtotal, discount: round2(priced.discount * priced.deliveries), shipping: round2(priced.shipping * priced.deliveries),
     gift_amount: giftTaken, total: payable, currency: org.currency, coupon_code: coupon?.code ?? null, gift_card_id: giftId,
     customer_note: input.note?.trim().slice(0, 1000) || null, dispatch_on: priced.lines.some((l) => l.kind !== "gift_card") ? firstDate : null,
+    ...(test ? { is_test: true } : {}),
   }).select("id, view_token").single();
   if (oe) { if (giftId) await db.rpc("shop_return_gift", { p_gift: giftId, p_amount: giftTaken }); return { ok: false, error: oe.message }; }
 
   // Gift cards bought in this order are created now and switched on when paid
   for (const l of priced.lines.filter((x) => x.kind === "gift_card")) {
-    for (let i = 0; i < l.qty; i++) await newGiftCard(db, org.id, { amount: l.base, orderId: order.id as string, purchaserName: name, purchaserEmail: email });
+    for (let i = 0; i < l.qty; i++) await newGiftCard(db, org.id, { amount: l.base, orderId: order.id as string, purchaserName: name, purchaserEmail: email, test });
   }
 
   if (due <= 0) {
@@ -298,12 +319,13 @@ async function saveAddress(db: SupabaseClient, orgId: string, customerId: string
 
 export const newGiftCardCode = () => giftCode((n) => randomBytes(n), "BEANS");
 
-async function newGiftCard(db: SupabaseClient, orgId: string, o: { amount: number; orderId: string | null; purchaserName: string | null; purchaserEmail: string | null; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null; status?: string; source?: string }) {
+async function newGiftCard(db: SupabaseClient, orgId: string, o: { amount: number; orderId: string | null; purchaserName: string | null; purchaserEmail: string | null; recipientName?: string | null; recipientEmail?: string | null; message?: string | null; sendOn?: string | null; status?: string; source?: string; test?: boolean }) {
   for (let i = 0; i < 4; i++) {
     const { data, error } = await db.from("shop_gift_cards").insert({
       organisation_id: orgId, code: newGiftCardCode(), amount: o.amount, balance: o.amount, status: o.status ?? "pending", order_id: o.orderId,
       purchaser_name: o.purchaserName, purchaser_email: o.purchaserEmail, recipient_name: o.recipientName ?? null, recipient_email: o.recipientEmail ?? null,
       message: o.message ?? null, send_on: o.sendOn ?? null, source: o.source ?? "shop",
+      ...(o.test ? { is_test: true } : {}),
     }).select("id, code, view_token").single();
     if (!error) return data as { id: string; code: string; view_token: string };
     if (!/duplicate|unique/i.test(error.message)) throw new Error(error.message);
@@ -331,24 +353,27 @@ export async function startGiftCardPurchase(input: GiftCardInput): Promise<Check
   const sendOn = input.sendOn && /^\d{4}-\d{2}-\d{2}$/.test(input.sendOn) && input.sendOn > today ? input.sendOn : null;
   // Offer code (one made for gift certificates): money off what they pay — the card keeps its full value
   let promo: { code: string; discount: number } | null = null;
+  let test = false;
   if (input.promoCode?.trim()) {
     const { quoteOffer } = await import("@/lib/offers/server");
     const q = await quoteOffer(db, org, { code: input.promoCode, place: "gifts", courseId: null, subtotal: amount, email });
     if (!q.ok) return { ok: false, error: q.error };
     promo = { code: q.offer.code, discount: q.discount };
+    test = !!q.test;
   }
   const due = Math.max(0, round2(amount - (promo?.discount ?? 0)));
   const cfg = org.stripeReady ? await loadStripe(db, org.id).catch(() => null) : null;
   if (!cfg && due > 0) return { ok: false, error: `${org.name} can't take card payments online right now.` };
-  const customer = await ensureCustomer(db, org.id, { email, name });
+  const customer = await ensureCustomer(db, org.id, { email, name, test });
   const number = await nextNumber(db, org.id);
   const { data: order, error } = await db.from("shop_orders").insert({
     organisation_id: org.id, number, customer_id: customer.id, status: "pending", kind: "gift_card", source: "shop", email, name, delivery: "post",
     items: [{ name: "Coffee gift card", variant: money(amount, org.currency), qty: 1, unit_price: amount, list_price: amount, line_total: amount, kind: "gift_card" }],
     subtotal: amount, discount: promo?.discount ?? 0, total: due, currency: org.currency, coupon_code: promo?.code ?? null,
+    ...(test ? { is_test: true } : {}),
   }).select("id, view_token").single();
   if (error) return { ok: false, error: error.message };
-  const card = await newGiftCard(db, org.id, { amount, orderId: order.id as string, purchaserName: name, purchaserEmail: email, recipientName: input.recipientName?.trim().slice(0, 120) || null, recipientEmail, message: input.message?.trim().slice(0, 600) || null, sendOn });
+  const card = await newGiftCard(db, org.id, { amount, orderId: order.id as string, purchaserName: name, purchaserEmail: email, recipientName: input.recipientName?.trim().slice(0, 120) || null, recipientEmail, message: input.message?.trim().slice(0, 600) || null, sendOn, test });
   if (due <= 0) {
     // Fully covered by the code: nothing to pay, so it's ready now
     await settleShopCheckout(db, org.id, order.id as string, null);
@@ -389,8 +414,9 @@ export async function settleShopCheckout(db: SupabaseClient, orgId: string, orde
   const { data: upd } = await db.from("shop_orders").update({ status: "paid", paid_at: now, stripe_session_id: s?.id ?? null, stripe_payment_intent: s?.payment_intent ?? null })
     .eq("id", orderId).eq("status", "pending").select("id");
   if (!upd?.length) return "already settled";
+  const test = await isTest(db, "shop_orders", orderId);
   await finishCart(db, orgId, o.kind === "gift_card" ? "giftcards" : "shop", o.email as string | null);
-  if (o.coupon_code) {
+  if (o.coupon_code && !isTestCode(o.coupon_code as string)) {
     const { data: c } = await db.from("shop_coupons").select("id, uses").eq("organisation_id", orgId).eq("code", o.coupon_code).maybeSingle();
     if (c) await db.from("shop_coupons").update({ uses: (c.uses as number) + 1 }).eq("id", c.id);
   }
@@ -426,8 +452,8 @@ export async function settleShopCheckout(db: SupabaseClient, orgId: string, orde
     await db.from("shop_gift_cards").update({ status: "active", expires_on: exp.toISOString().slice(0, 10) }).eq("id", c.id);
     await deliverGiftCard(db, org, c.id as string, true).catch((e) => console.error("[shop] gift card email:", e));
   }
-  await sendOrderEmails(db, org, orderId).catch((e) => console.error("[shop] order email:", e));
-  await db.from("activity_logs").insert({ organisation_id: orgId, actor_type: "system", actor_label: "Shop", action: "shop.order_paid", entity_type: "shop_order", entity_id: orderId, summary: `Shop order #${o.number} paid (${money(o.total, org.currency)})` }).then(() => null, () => null);
+  await sendOrderEmails(db, org, orderId, test).catch((e) => console.error("[shop] order email:", e));
+  if (!test) await db.from("activity_logs").insert({ organisation_id: orgId, actor_type: "system", actor_label: "Shop", action: "shop.order_paid", entity_type: "shop_order", entity_id: orderId, summary: `Shop order #${o.number} paid (${money(o.total, org.currency)})` }).then(() => null, () => null);
   return `shop order #${o.number} paid`;
 }
 
@@ -450,7 +476,7 @@ async function safeSend(org: ShopOrg, m: { to: string; subject: string; html: st
   try { await sendEmail({ ...m, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name }); } catch (e) { console.error("[shop] email:", e); }
 }
 
-async function sendOrderEmails(db: SupabaseClient, org: ShopOrg, orderId: string) {
+async function sendOrderEmails(db: SupabaseClient, org: ShopOrg, orderId: string, test = false) {
   const { data: o } = await db.from("shop_orders").select("number, email, name, items, subtotal, discount, shipping, gift_amount, total, delivery, address, dispatch_on, kind, view_token, subscription_id").eq("id", orderId).single();
   if (!o?.email || o.kind === "gift_card") return;
   const items = (o.items as { name: string; variant: string; grind_label: string | null; qty: number; line_total: number }[]) ?? [];
@@ -468,8 +494,8 @@ async function sendOrderEmails(db: SupabaseClient, org: ShopOrg, orderId: string
     ],
     buttons: [{ label: "View your order", url: shopUrl(org, `/order/${o.view_token}`) }, ...(o.subscription_id ? [{ label: "Manage subscription", url: shopUrl(org, "/account") }] : [])],
   });
-  await safeSend(org, { to: o.email as string, subject: `Order #${o.number} confirmed — ${org.name}`, html: m.html, text: m.text });
-  const office = org.settings.reply_to ?? org.contact_email;
+  await safeSend(org, { to: o.email as string, subject: testSubject(`Order #${o.number} confirmed — ${org.name}`, test), html: m.html, text: m.text });
+  const office = test ? null : org.settings.reply_to ?? org.contact_email;
   if (office) {
     const a = shopEmail(brandOf(org), { heading: `New ${o.subscription_id ? "subscription" : "order"} #${o.number}`, intro: [`${o.name ?? o.email} — ${money(o.total, org.currency)}`], rows: items.map((i) => ({ label: `${i.qty} × ${i.name} ${i.variant}`, value: i.grind_label ?? "" })), buttons: [{ label: "Open in EventureOS", url: `${appBaseUrl()}/store` }] });
     await safeSend(org, { to: office, subject: `New shop order #${o.number} — ${o.name ?? o.email}`, html: a.html, text: a.text });
@@ -479,19 +505,20 @@ async function sendOrderEmails(db: SupabaseClient, org: ShopOrg, orderId: string
 export async function deliverGiftCard(db: SupabaseClient, org: ShopOrg, cardId: string, toPurchaser: boolean) {
   const { data: g } = await db.from("shop_gift_cards").select("id, code, amount, purchaser_name, purchaser_email, recipient_name, recipient_email, message, send_on, sent_at, expires_on, view_token").eq("id", cardId).single();
   if (!g) return;
+  const test = await isTest(db, "shop_gift_cards", g.id as string);
   const view = shopUrl(org, `/gift-card/${g.view_token}`);
   const today = todayIn(org.timezone);
   const body = (to: "purchaser" | "recipient") => shopEmail(brandOf(org), {
-    heading: to === "recipient" ? `${g.purchaser_name ?? "Someone"} sent you a ${money(g.amount, org.currency)} coffee gift card` : `Your ${money(g.amount, org.currency)} coffee gift card`,
+    heading: (test ? "TEST — not valid · " : "") + (to === "recipient" ? `${g.purchaser_name ?? "Someone"} sent you a ${money(g.amount, org.currency)} coffee gift card` : `Your ${money(g.amount, org.currency)} coffee gift card`),
     intro: [to === "recipient" ? `Use it on freshly roasted coffee from ${org.name}.` : g.recipient_email && g.send_on && g.send_on > today ? `We'll email it to ${g.recipient_name ?? g.recipient_email} on ${g.send_on}.` : "Here it is — print it, forward it, or share the link.", ...(g.message ? [`“${g.message}”`] : [])],
     big: g.code as string,
     rows: [{ label: "Value", value: money(g.amount, org.currency) }, ...(g.expires_on ? [{ label: "Use by", value: g.expires_on as string }] : [])],
     buttons: [{ label: "View gift card", url: view }, { label: "Shop coffee", url: shopUrl(org) }],
   });
-  if (toPurchaser && g.purchaser_email) { const m = body("purchaser"); await safeSend(org, { to: g.purchaser_email as string, subject: `Your coffee gift card — ${org.name}`, html: m.html, text: m.text }); }
+  if (toPurchaser && g.purchaser_email) { const m = body("purchaser"); await safeSend(org, { to: g.purchaser_email as string, subject: testSubject(`Your coffee gift card — ${org.name}`, test), html: m.html, text: m.text }); }
   if (g.recipient_email && !g.sent_at && (!g.send_on || g.send_on <= today)) {
     const m = body("recipient");
-    await safeSend(org, { to: g.recipient_email as string, subject: `A coffee gift card from ${g.purchaser_name ?? org.name}`, html: m.html, text: m.text });
+    await safeSend(org, { to: g.recipient_email as string, subject: testSubject(`A coffee gift card from ${g.purchaser_name ?? org.name}`, test), html: m.html, text: m.text });
     await db.from("shop_gift_cards").update({ sent_at: new Date().toISOString() }).eq("id", g.id);
   }
 }

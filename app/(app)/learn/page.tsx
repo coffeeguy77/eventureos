@@ -197,6 +197,9 @@ export default async function LearnPage({ searchParams }: { searchParams: Promis
       const { data: st } = await supabase.from("booking_students").select("id, name, email").in("id", missingIds.slice(0, 500));
       for (const x of (st ?? []) as { id: string; name: string; email: string | null }[]) people.set(x.id, { name: x.name, email: x.email, xp: 0, streak: 0, last: null });
     }
+    // The owner's Academy test login (and any other test students) aren't real learners
+    const { data: tests } = await supabase.from("booking_students").select("id").eq("organisation_id", o.id).eq("is_test", true).limit(500);
+    for (const t of (tests ?? []) as { id: string }[]) people.delete(t.id);
     const list = [...people.entries()].map(([id, p]) => ({ id, ...p, pass: liveAccess(access.filter((a) => a.student_id === id)), lessons: count.get(id) ?? 0 }))
       .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q));
     return (

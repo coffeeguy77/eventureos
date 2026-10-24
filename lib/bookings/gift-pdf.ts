@@ -34,7 +34,7 @@ async function picture(url: string | null) {
 }
 
 /** The double-sided PDF (front artwork, back with their details). Null when the business has no certificate artwork. */
-export async function giftPdf(org: PublicOrg, g: GiftForCard) {
+export async function giftPdf(org: PublicOrg, g: GiftForCard, opts: { test?: boolean } = {}) {
   const L = org.settings.landing;
   if (!L.giftCard) return null;
   const [art, backArt, script, serifBold, serifItalic, sans, sansMedium, sansSemi] = await Promise.all([
@@ -45,7 +45,7 @@ export async function giftPdf(org: PublicOrg, g: GiftForCard) {
   if (!art) throw new Error("Couldn't load the certificate artwork");
   const back = giftBack(org, g);
   const bytes = await giftCardPdf({ art, backArt, back, fonts: { script, serifBold, serifItalic, sans, sansMedium, sansSemi },
-    title: `${org.name} gift certificate${g.recipient_name ? ` for ${g.recipient_name}` : ""}` });
+    title: `${org.name} gift certificate${g.recipient_name ? ` for ${g.recipient_name}` : ""}`, test: opts.test });
   const file = `${org.name} gift certificate${g.recipient_name ? ` - ${g.recipient_name}` : ""}`.replace(/[^\w\s.-]+/g, "").replace(/\s+/g, " ").trim().slice(0, 90) || g.code;
-  return { bytes, file: `${file}.pdf` };
+  return { bytes, file: `${opts.test ? "TEST - " : ""}${file}.pdf` };
 }

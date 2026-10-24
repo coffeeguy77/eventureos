@@ -1,3 +1,6 @@
+import { TestBanner } from "@/components/ui/test-banner";
+import { isTest } from "@/lib/testing/server";
+import { createServiceClient as __svc } from "@/lib/integrations/runtime";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -25,9 +28,11 @@ export default async function GiftCardView({ params, searchParams }: { params: P
     g = (await giftCardByToken(token))!;
   }
   const expires = g.expires_on ? new Date(`${g.expires_on}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : null;
+  const testOnly = await isTest(__svc(), "shop_gift_cards", g.id);
   return (
     <ShopFrame org={org}>
       <div className={`${PAGE} max-w-3xl py-10 sm:py-14`}>
+        {testOnly && <TestBanner what="This gift card" />}
         {g.status === "pending" ? (
           <div className="py-10 text-center">{sp.paid === "1" && <AutoRefresh />}<Loader2 className="mx-auto h-12 w-12 animate-spin text-[var(--b)]" /><h1 className="mt-3 text-[1.5rem] font-bold">{sp.paid === "1" ? "Confirming your payment…" : "Waiting for payment"}</h1></div>
         ) : (

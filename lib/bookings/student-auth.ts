@@ -81,7 +81,7 @@ export async function setSessionCookie(org: PublicOrg, session: string) {
   (await cookies()).set(cookieName(org.id), session, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 86400 });
 }
 
-export interface Student { id: string; name: string; email: string | null; phone: string | null; marketing_ok: boolean; certificate_requested_at: string | null }
+export interface Student { id: string; name: string; email: string | null; phone: string | null; marketing_ok: boolean; certificate_requested_at: string | null; /** the owner testing the Academy (everything unlocked) */ god?: boolean }
 
 /** The signed-in student on this business's pages, or null. */
 export async function currentStudent(org: PublicOrg): Promise<Student | null> {

@@ -1,3 +1,6 @@
+import { TestBanner } from "@/components/ui/test-banner";
+import { isTest } from "@/lib/testing/server";
+import { createServiceClient as __svc } from "@/lib/integrations/runtime";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, Loader2 } from "lucide-react";
@@ -25,9 +28,11 @@ export default async function GiftView({ params, searchParams }: { params: Promi
   const expires = g.expires_on ? new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(g.expires_on + "T00:00:00Z")) : null;
   const bookHref = g.course ? `/book/${org.slug}/${g.course.slug}` : `/book/${org.slug}`;
 
+  const testOnly = await isTest(__svc(), "booking_gifts", g.id);
   return (
     <BookShell org={org} embed={false} section="gifts">
       <div className={`mx-auto ${org.settings.landing.giftCard ? "max-w-3xl" : "max-w-xl"}`}>
+        {testOnly && <TestBanner what="This gift certificate" />}
         {g.status === "pending" ? (
           <div className="py-10 text-center">
             {sp.paid === "1" && <AutoRefresh />}

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ShopGiftCards() {
   const { supabase, org } = await requireOrg();
-  const { data } = await supabase.from("shop_gift_cards").select("id, code, amount, balance, status, purchaser_name, purchaser_email, recipient_name, recipient_email, send_on, sent_at, expires_on, created_at, view_token, source").eq("organisation_id", org.id).neq("status", "pending").order("created_at", { ascending: false }).limit(300);
+  const { data } = await supabase.from("shop_gift_cards").select("id, code, amount, balance, status, purchaser_name, purchaser_email, recipient_name, recipient_email, send_on, sent_at, expires_on, created_at, view_token, source").eq("organisation_id", org.id).eq("is_test", false).neq("status", "pending").order("created_at", { ascending: false }).limit(300);
   const live = (data ?? []).filter((g) => g.status === "active");
   return (
     <>

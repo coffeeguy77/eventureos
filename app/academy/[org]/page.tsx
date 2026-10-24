@@ -59,6 +59,7 @@ export default async function AcademyHome({ params, searchParams }: { params: Pr
 
   return (
     <AcademyShell org={org} tab="home" signedIn streak={state.learner.streak_days}>
+      {state?.god && <p className="mb-5 rounded-2xl bg-[#FFF4E5] px-5 py-4 text-[0.9375rem] font-medium text-[#7A4A12] ring-1 ring-[#F6DFC3]">Owner test mode — you&apos;re signed in to EventureOS, so every level and lesson is open, the coach has no daily limit and nothing needs paying. Your progress here is test data (Settings → Testing clears it). To see what a customer sees, use a private window.</p>}
       {sp.welcome && <p className="mb-5 rounded-2xl bg-emerald-50 px-5 py-4 text-[0.9375rem] font-medium text-emerald-900">Welcome to {org.learn.name}! Everything is unlocked — start with the first lesson below.</p>}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-5">
@@ -94,7 +95,7 @@ export default async function AcademyHome({ params, searchParams }: { params: Pr
               {levels.map((l) => {
                 const ids = modulesOf(l.id).flatMap((m) => lessonsOf(m.id).map((x) => x.id));
                 const p = countDone(ids, state.done);
-                const open = levelOpen(l, xp);
+                const open = (!!state?.god || levelOpen(l, xp));
                 return (
                   <Link key={l.id} href={`${base}/course#level-${l.key}`} className={`${card} block transition hover:-translate-y-0.5 ${open ? "" : "opacity-70"}`}>
                     <div className="flex items-start justify-between gap-2">

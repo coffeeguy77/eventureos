@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { giftByToken, orgById } from "@/lib/bookings/server";
 import { giftPdf } from "@/lib/bookings/gift-pdf";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { isTest } from "@/lib/testing/server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!g || (g.status !== "active" && g.status !== "redeemed")) return new NextResponse("Gift certificate not found", { status: 404 });
   try {
     const org = await orgById(db, g.organisation_id);
-    const pdf = await giftPdf(org, g);
+    const pdf = await giftPdf(org, g, { test: await isTest(db, "booking_gifts", g.id) });
     if (!pdf) return new NextResponse("This business doesn't have a printable certificate design yet.", { status: 404 });
     const download = new URL(req.url).searchParams.get("download") === "1";
     return new NextResponse(Buffer.from(pdf.bytes), { headers: { "content-type": "application/pdf", "content-disposition": `${download ? "attachment" : "inline"}; filename="${pdf.file}"`, "cache-control": "private, max-age=300" } });
