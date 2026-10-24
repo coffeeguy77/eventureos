@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Check, Loader2, Lock, Mail, MessageSquare, Printer, Send, UserRound } from "lucide-react";
 import { giftCardAction } from "@/app/shop/actions";
 import { GiftCard } from "@/components/gifts/gift-card";
+import { MessagePicker } from "@/components/gifts/message-picker";
 import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
 import { checkOfferAction } from "@/app/book/actions";
 
@@ -42,8 +43,9 @@ export function ShopGiftForm({ slug, amounts, minDate, art, tagline, business, y
           <div><label className={label} htmlFor="sg-rn">Their name</label><div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="sg-rn" className={field} value={f.recipientName} onChange={set("recipientName")} onFocus={() => setBack(true)} maxLength={120} /></div></div>
           <div><label className={label} htmlFor="sg-pn">Your name</label><div className="relative"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="sg-pn" className={field} required value={f.purchaserName} onChange={set("purchaserName")} onFocus={() => setBack(true)} maxLength={120} autoComplete="name" /></div></div>
           <div className="sm:col-span-2"><label className={label} htmlFor="sg-pe">Your email</label><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#8F8984]" /><input id="sg-pe" type="email" required className={field} value={f.purchaserEmail} onChange={set("purchaserEmail")} autoComplete="email" /></div></div>
-          <div className="sm:col-span-2"><label className={label} htmlFor="sg-m">Message for the back <span className="font-normal text-[#8a817a]">(optional)</span></label><div className="relative"><MessageSquare className="pointer-events-none absolute left-3.5 top-4 h-5 w-5 text-[#8F8984]" />
-            <textarea id="sg-m" rows={3} className={`${field} h-auto py-3`} value={f.message} onChange={set("message")} onFocus={() => setBack(true)} maxLength={200} placeholder="Enjoy your coffee! …" /></div><p className="mt-1 text-right text-[0.8125rem] text-[#8a817a]">{f.message.length}/200</p></div>
+          <div className="sm:col-span-2"><label className={label} htmlFor="sg-m">Message for the back <span className="font-normal text-[#8a817a]">(optional)</span></label>
+            <MessagePicker kind="coffee" today={minDate} value={f.message} onChange={(m) => setF((x) => ({ ...x, message: m }))} onPick={() => setBack(true)} /><div className="relative"><MessageSquare className="pointer-events-none absolute left-3.5 top-4 h-5 w-5 text-[#8F8984]" />
+            <textarea id="sg-m" rows={3} className={`${field} h-auto py-3`} value={f.message} onChange={set("message")} onFocus={() => setBack(true)} maxLength={200} placeholder="Write your own message…" /></div><p className="mt-1 text-right text-[0.8125rem] text-[#8a817a]">{f.message.length}/200</p></div>
         </div>
         <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
           <button type="button" onClick={() => setDirect(false)} className={choice(!direct)}><Printer className="h-6 w-6 shrink-0 text-[var(--b)]" /><span><span className="block font-semibold">Email to me</span><span className="block text-[0.8125rem] text-[#6b655f]">Print or forward it</span></span></button>

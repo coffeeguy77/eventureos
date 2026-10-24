@@ -6,6 +6,7 @@ import { ArrowRight, CalendarHeart, Check, Gift, Heart, Loader2, Lock, Mail, Mes
 import { startGiftAction } from "@/app/book/actions";
 import { goTop } from "./embed-bridge";
 import { GiftCard } from "@/components/gifts/gift-card";
+import { MessagePicker } from "@/components/gifts/message-picker";
 import { PromoField, type AppliedOffer } from "@/components/offers/promo-field";
 import { checkOfferAction } from "@/app/book/actions";
 
@@ -128,8 +129,9 @@ export function GiftForm({ orgSlug, currency, options, minDate, years, business,
         <div className="relative"><Mail className={icon} strokeWidth={1.7} /><input id="g-pe" type="email" inputMode="email" className={field} value={f.purchaserEmail} onChange={set("purchaserEmail")} required maxLength={254} autoComplete="email" placeholder="The certificate will be sent to this email" /></div>
         <p className="mt-2.5 text-[0.7813rem] text-[#6E6560]">The certificate comes to you (or directly to them), ready to print or forward.</p></div>
       <div className="mt-3.5"><label className={label} htmlFor="g-m">Personal message (optional)</label>
+        <MessagePicker kind="lessons" today={minDate} value={f.message} onChange={(m) => setF((x) => ({ ...x, message: m }))} onPick={showBack} />
         <div className="relative"><MessageCircle className="pointer-events-none absolute left-4 top-[15px] h-[18px] w-[18px] text-[#8C8480]" strokeWidth={1.7} />
-          <textarea id="g-m" rows={3} className={`${field} h-[84px] resize-y py-3 leading-relaxed`} value={f.message} onChange={set("message")} onFocus={showBack} maxLength={MAX_MESSAGE} placeholder="Happy Father's Day! Love, …" /></div>
+          <textarea id="g-m" rows={3} className={`${field} h-[84px] resize-y py-3 leading-relaxed`} value={f.message} onChange={set("message")} onFocus={showBack} maxLength={MAX_MESSAGE} placeholder="Write your own message…" /></div>
         <p className="mt-1 text-right text-[0.875rem] text-[#6E6560]" aria-live="polite">{f.message.length}/{MAX_MESSAGE}</p></div>
       {card && (
         <div className="mb-6 mt-1 xl:hidden">
