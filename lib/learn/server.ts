@@ -260,8 +260,8 @@ export type BuyResult = { ok: true; redirect: string } | { ok: false; error: str
 export async function courseEligible(db: SupabaseClient, org: LearnOrg, studentId: string, email: string | null): Promise<{ bookingId: string } | null> {
   const cols = "id, course_id, status, session:booking_sessions(ends_at)";
   const [a, b] = await Promise.all([
-    db.from("bookings").select(cols).eq("organisation_id", org.id).eq("student_id", studentId).in("status", ["confirmed", "attended"]),
-    email ? db.from("bookings").select(cols).eq("organisation_id", org.id).eq("contact_email", email).in("status", ["confirmed", "attended"]) : Promise.resolve({ data: [] }),
+    db.from("bookings").select(cols).eq("organisation_id", org.id).eq("student_id", studentId).eq("is_test", false).in("status", ["confirmed", "attended"]),
+    email ? db.from("bookings").select(cols).eq("organisation_id", org.id).eq("contact_email", email).eq("is_test", false).in("status", ["confirmed", "attended"]) : Promise.resolve({ data: [] }),
   ]);
   const rows = [...(a.data ?? []), ...(b.data ?? [])] as unknown as { id: string; course_id: string; session: { ends_at: string } | null }[];
   const cutoff = Date.now() - org.learn.pastStudentDays * 86400e3;

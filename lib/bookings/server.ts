@@ -69,7 +69,7 @@ export async function seatsFor(db: SupabaseClient, sessions: Pick<SessionRow, "i
   const rows: { session_id: string; seats: number; status: string; hold_expires_at: string | null }[] = [];
   for (let i = 0; i < sessions.length; i += 150) {
     const { data } = await db.from("bookings").select("session_id, seats, status, hold_expires_at")
-      .in("session_id", sessions.slice(i, i + 150).map((s) => s.id)).in("status", ["held", "confirmed", "attended", "no_show"]);
+      .in("session_id", sessions.slice(i, i + 150).map((s) => s.id)).eq("is_test", false).in("status", ["held", "confirmed", "attended", "no_show"]);
     rows.push(...((data ?? []) as typeof rows));
   }
   for (const s of sessions) out.set(s.id, seatCount(s.capacity, bookedSeats(rows.filter((r) => r.session_id === s.id)), s.external_seats));
