@@ -8,12 +8,14 @@ import { PAGE } from "@/components/book/shell";
 import { OfferRibbon } from "./offer-ribbon";
 import { SiteTracker } from "./tracker";
 import { PageEditor } from "./page-editor";
+import { currentPageMenu } from "./page-menu-server";
 import { GiftMenu } from "./gift-menu";
 import { MobileMenu, type MobileItem } from "./mobile-menu";
 
 /** One menu bar above every public section of the business's site. Built from what's switched on, arranged in Website → Menus. Also runs the anonymous analytics tracker. */
-export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg; active?: SiteSection; tone?: "dark" | "light"; /** A button at the end of the menu, e.g. "Get a quote" on the events pages */ cta?: { href: string; label: string } }) {
-  const light = tone === "light";
+export async function MasterNav({ org, active, cta }: { org: PublicOrg; active?: SiteSection; /** @deprecated the colour is set in Website → Menus and per page in the page editor */ tone?: "dark" | "light"; /** A button at the end of the menu */ cta?: { href: string; label: string } }) {
+  const pm = await currentPageMenu(org);
+  const light = pm.tone === "light";
   const base = org.slug;
   const homeHref = readSite(org.rawSettings).home ? `/site/${base}` : `/${base}`;
   const all = arrangeMenu(topMenuAuto(org), readMenus(org.rawSettings).top);
@@ -27,10 +29,10 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const shown = desktop;
   return (
     <>
-    <div className={`relative z-50 border-b ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav>
+    <div className={`relative z-50 border-b font-sans ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav data-menu-key={pm.key} data-menu-tone={pm.tone}>
       <div className={`${PAGE} flex min-h-[60px] flex-wrap items-center gap-x-8 gap-y-0`}>
         <Link href={homeHref} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
-          {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[1.0625rem] font-semibold">{org.name}</span>}
+          {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[17px] font-semibold">{org.name}</span>}
         </Link>
         {mobile.length > 0 && <MobileMenu items={mobile} active={act} light={light} logo={logo} name={org.name} home={homeHref} phone={org.contact_phone} email={org.contact_email} cta={cta} />}
         <nav aria-label={org.name} className="hidden items-center gap-1 lg:flex lg:flex-1 lg:justify-end">
@@ -39,10 +41,10 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
               {n > 0 && <span aria-hidden className={`mx-1 hidden h-4 w-px sm:block ${light ? "bg-[#E2D8D0]" : "bg-white/20"}`} />}
               {i.children.length > 1 ? (
                 <GiftMenu label={i.label} items={kids(i)} light={light} active={act === i.id} track={({ gifts: "Gift menu", lessons: "Lessons menu", cafe: "Café menu" } as Record<string, string>)[i.id] ?? `${i.label} menu`}
-                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
+                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
               ) : (
               <Link href={i.children[0]?.href ?? i.href} aria-current={act === i.id ? "page" : undefined}
-                className={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[0.8438rem] font-medium transition sm:h-[60px] sm:rounded-none sm:px-3 sm:text-[0.9375rem] ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`}>
+                className={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`}>
                 {i.label}
                 {act === i.id && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-[color-mix(in_srgb,var(--b)_70%,#ff0a6c)] max-sm:inset-x-2 max-sm:bottom-1 max-sm:h-[2px]" />}
               </Link>

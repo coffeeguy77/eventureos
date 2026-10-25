@@ -12,6 +12,7 @@ html.eos-editing [data-edit]{outline:2px dashed #ff3d8a;outline-offset:3px;borde
 html.eos-editing [data-edit]:hover{background-color:rgba(255,61,138,.08)}
 html.eos-editing [data-edit-img]{outline:3px dashed #ff3d8a;outline-offset:-3px;cursor:pointer}
 html.eos-editing [data-edit-changed]{outline-style:solid!important}
+html.eos-editing body{padding-top:var(--eos-bar,56px)}
 html.eos-editing a,html.eos-editing button:not([data-eos-ui] *):not([data-eos-ui]){cursor:inherit}
 `;
 
@@ -43,13 +44,28 @@ export function PageEditor({ slug }: { slug: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  // Push the page down under the editing bar so the menus stay visible while you change them
+  useEffect(() => {
+    const el = barRef.current;
+    if (!editing || !el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty("--eos-bar", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--eos-bar"); };
+  }, [editing]);
   const [foot, setFoot] = useState<{ key: string; tone: "dark" | "light" } | null>(null);
+  const [menu, setMenu] = useState<{ key: string; tone: "dark" | "light"; section: "bar" | "float" | "hidden" | null; floatable: boolean } | null>(null);
 
   // The page's footer (dark or light, saved for this page only)
   useEffect(() => {
     if (!editing) return;
     const el = document.querySelector<HTMLElement>("[data-footer-key]");
     setFoot(el?.dataset.footerKey ? { key: el.dataset.footerKey, tone: el.dataset.footerTone === "light" ? "light" : "dark" } : null);
+    const mn = document.querySelector<HTMLElement>("[data-master-nav]");
+    const sn = document.querySelector<HTMLElement>("[data-section-nav]");
+    const st = sn?.dataset.sectionStyle;
+    setMenu(mn?.dataset.menuKey ? { key: mn.dataset.menuKey, tone: mn.dataset.menuTone === "dark" ? "dark" : "light",
+      section: st === "bar" || st === "float" || st === "hidden" ? st : null, floatable: sn?.dataset.floatable === "1" } : null);
   }, [editing]);
 
   useEffect(() => {
@@ -156,6 +172,21 @@ export function PageEditor({ slug }: { slug: string }) {
     setTimeout(() => setMsg(null), 4000);
   };
 
+  /** Save one page-layout choice now (or with the other changes if some are waiting), then refresh the page. */
+  const saveLayout = async (path: string, value: string, done: string) => {
+    if (busy) return;
+    if (Object.keys(changes).length) { setChanges((c) => ({ ...c, [path]: value })); return; }
+    setBusy("Saving…"); setMsg(null);
+    const r = await savePageEdits(slug, [{ path, value }]).catch(() => ({ ok: false as const, error: "Couldn't reach the server — try again." }));
+    setBusy(null);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setMsg({ ok: true, text: done });
+    router.refresh();
+    setTimeout(() => setMsg(null), 4000);
+  };
+  const setMenuTone = (tone: "dark" | "light") => { if (!menu || menu.tone === tone) return; setMenu({ ...menu, tone }); void saveLayout(`site.pageMenu.${menu.key}.tone`, tone, `Menus on this page are now ${tone}.`); };
+  const setSection = (section: "bar" | "float" | "hidden") => { if (!menu || menu.section === section) return; setMenu({ ...menu, section }); void saveLayout(`site.pageMenu.${menu.key}.section`, section, section === "hidden" ? "Section menu hidden on this page." : `Section menu is now ${section === "float" ? "floating" : "a bar"} on this page.`); };
+
   if (!orgId) return null;
   const n = Object.keys(changes).length;
   const isCopy = target?.path.startsWith("copy:");
@@ -168,11 +199,29 @@ export function PageEditor({ slug }: { slug: string }) {
           <Pencil className="h-4 w-4" />Edit this page
         </button>
       ) : (
-        <div className="fixed inset-x-0 top-0 z-[95] border-b border-white/10 bg-[#151312] text-white shadow-lg">
+        <div ref={barRef} className="fixed inset-x-0 top-0 z-[95] border-b border-white/10 bg-[#151312] text-white shadow-lg">
           <div className="mx-auto flex max-w-[1360px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
             <span className="inline-flex items-center gap-2 text-[0.9375rem] font-semibold"><Pencil className="h-4 w-4 text-[#ff6aa6]" />Editing this page</span>
             <span className="text-[0.8438rem] text-white/65">Click any outlined words or photo to change it.</span>
             <span className="flex-1" />
+            {menu && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1 text-[0.8125rem]" role="group" aria-label="Menus on this page">
+                <span className="px-2 text-white/65">Menu</span>
+                {(["light", "dark"] as const).map((t) => (
+                  <button key={t} type="button" onClick={() => setMenuTone(t)} aria-pressed={menu.tone === t} disabled={!!busy}
+                    className={`h-7 rounded-full px-3 font-semibold capitalize transition disabled:opacity-60 ${menu.tone === t ? "bg-white text-[#151312]" : "text-white/80 hover:bg-white/10"}`}>{t}</button>
+                ))}
+              </span>
+            )}
+            {menu?.section && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1 text-[0.8125rem]" role="group" aria-label="Section menu on this page">
+                <span className="px-2 text-white/65">Section menu</span>
+                {([["bar", "Bar"], ...(menu.floatable ? [["float", "Floating"]] : []), ["hidden", "Hidden"]] as ["bar" | "float" | "hidden", string][]).map(([v, l]) => (
+                  <button key={v} type="button" onClick={() => setSection(v)} aria-pressed={menu.section === v} disabled={!!busy}
+                    className={`h-7 rounded-full px-3 font-semibold transition disabled:opacity-60 ${menu.section === v ? "bg-white text-[#151312]" : "text-white/80 hover:bg-white/10"}`}>{l}</button>
+                ))}
+              </span>
+            )}
             {foot && (
               <span className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1 text-[0.8125rem]" role="group" aria-label="Footer on this page">
                 <span className="px-2 text-white/65">Footer</span>

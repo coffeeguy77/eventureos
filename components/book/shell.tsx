@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PublicFooter } from "@/components/site/public-footer";
+import { LessonsNav } from "./lessons-nav";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { EmbedBridge } from "./embed-bridge";
 import { MasterNav } from "@/components/site/master-nav";
@@ -27,6 +28,7 @@ export function BookShell({ org, embed, children, back, wide, bare, section = "l
     <div data-book-root style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
       {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important;min-height:0!important;height:auto!important}"}</style></>}
       {!embed && <MasterNav org={org} active={section} />}
+      {!embed && section === "lessons" && <LessonsNav org={org} />}
       <main className={bare && !embed ? "" : embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
         {back && <Link href={back.href + q} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {back.label}</Link>}
         {children}

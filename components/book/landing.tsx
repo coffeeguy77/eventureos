@@ -1,5 +1,6 @@
 import "@fontsource-variable/fraunces";
 import { PublicFooter } from "@/components/site/public-footer";
+import { LessonsNav } from "./lessons-nav";
 import { PageBg } from "@/components/site/page-bg";
 import { ContactForm } from "@/components/events/contact-form";
 import "@fontsource/caveat/600.css";
@@ -21,7 +22,7 @@ import { readSiteNav } from "@/lib/site-nav";
 import { AgentBanner } from "./agent-banner";
 import { BookCourseButton, LandingBooking } from "./landing-booking";
 import { addonOffer } from "@/lib/learn/core";
-import { LandingNav, RevealOnScroll, ReviewWall, Stars, StickyBook } from "./landing-client";
+import { RevealOnScroll, ReviewWall, Stars, StickyBook } from "./landing-client";
 
 const dur = (m: number) => (m % 60 === 0 ? `${m / 60} hour${m === 60 ? "" : "s"}` : m > 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`);
 const clean = (n: string) => n.replace(/\s*\(\d+\s*hrs?\)\s*$/i, "");
@@ -134,7 +135,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <RevealOnScroll />
       <MasterNav org={org} active="lessons" />
-      <LandingNav logo={null} name={readSiteNav(org.rawSettings).lessons} phone={phone} links={links} />
+      <LessonsNav org={org} links={links} phone={phone} onLanding />
 
       {/* ───────── Hero ───────── */}
       <header className="relative isolate overflow-hidden bg-[#1d1915] text-[#FFFDFC]">

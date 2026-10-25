@@ -1,5 +1,6 @@
 import "@fontsource-variable/newsreader/opsz.css";
 import { PublicFooter } from "@/components/site/public-footer";
+import { SectionNav } from "@/components/site/section-nav";
 import { PageBg } from "@/components/site/page-bg";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
@@ -67,28 +68,9 @@ export function ShopFrame({ org, children, active, topBanners = [], cta }: {
           </div>
         </div>
       )}
-      <header className="sticky top-0 z-40 border-b border-[#EEE6DF] bg-[#FCFAF7]/92 backdrop-blur-md">
-        <div className={`${WRAP} flex h-[62px] items-center gap-4`}>
-          <Link href={base} className="flex min-w-0 shrink-0 items-center gap-3 md:w-[180px]">
-            <span className={`${serif} truncate text-[1.1875rem] font-semibold`}>{labels.shop}</span>
-          </Link>
-          <nav className="hidden flex-1 items-center justify-center gap-1.5 md:flex" aria-label="Shop">
-            {nav.map((n) => (
-              <Link key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined}
-                className={`rounded-full px-[18px] py-[9px] text-[0.9375rem] font-medium transition ${active === n.key ? "bg-[#111] text-white" : "text-[#26211E] hover:bg-[#F2EAE4]"}`}>{n.label}</Link>
-            ))}
-          </nav>
-          <span className="flex-1 md:hidden" />
-          <Link href={`${base}/account`} aria-label="My account" className="grid h-11 w-11 place-items-center rounded-full transition hover:bg-[#F4ECE6]"><UserRound className="h-5 w-5" /></Link>
-          <CartButton slug={org.slug} />
-          {cta && <Link href={cta.href} className="shop-btn ml-1 hidden h-[46px] items-center rounded-full bg-[var(--pk)] px-8 text-[0.9375rem] font-semibold text-white shadow-[0_10px_22px_-12px_var(--pk)] sm:inline-flex">{cta.label}</Link>}
-        </div>
-        <nav className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-2 md:hidden" aria-label="Shop sections">
-          {nav.map((n) => (
-            <Link key={n.key} href={n.href} className={`shrink-0 rounded-full px-3.5 py-1.5 text-[0.875rem] font-medium ${active === n.key ? "bg-[#151312] text-white" : "text-[#3F3A36]"}`}>{n.label}</Link>
-          ))}
-        </nav>
-      </header>
+      <SectionNav org={org} label="Shop" title={labels.shop} titleHref={base} active={active} links={nav.map((n) => ({ key: n.key, href: n.href, label: n.label }))}
+        actions={<><Link href={`${base}/account`} aria-label="My account" className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-black/5"><UserRound className="h-5 w-5" /></Link><CartButton slug={org.slug} /></>}
+        cta={cta} />
       <main>{children}</main>
       <PublicFooter org={org} note="Secure checkout by Stripe" />
     </div>

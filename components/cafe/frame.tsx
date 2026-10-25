@@ -2,6 +2,8 @@ import "@fontsource-variable/newsreader/opsz.css";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
 import { PublicFooter } from "@/components/site/public-footer";
+import { SectionNav } from "@/components/site/section-nav";
+import { readSiteNav } from "@/lib/site-nav";
 import { SiteFooter, type FooterVariant } from "@/components/site/site-footer";
 import { footerModel } from "@/lib/site/footer";
 import { brandStyle } from "@/components/book/shell";
@@ -35,19 +37,10 @@ export function CafeFrame({ org, active, children, weekly, cta, footer }: { org:
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
       <PageBg color="#FFFBF8" />
       <style>{SHOP_CSS}</style>
-      <MasterNav org={org} active="cafe" tone="light" />
+      <MasterNav org={org} active="cafe" />
       {links.length > 1 && (
-        <header className="sticky top-0 z-40 border-b border-[#EEE6DF] bg-[#FCFAF7]/92 backdrop-blur-md">
-          <div className={`${WRAP} flex h-[58px] items-center gap-3`}>
-            <nav className="no-scrollbar -mx-2 flex flex-1 items-center gap-1 overflow-x-auto px-2" aria-label="Café">
-              {links.map((n) => (
-                <Link key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined}
-                  className={`shrink-0 rounded-full px-4 py-2 text-[0.9063rem] font-medium transition ${active === n.key ? "bg-[#151312] text-white" : "text-[#26211E] hover:bg-[#F2EAE4]"}`}>{n.label}</Link>
-              ))}
-            </nav>
-            {cta && <Link href={cta.href} className="shop-btn hidden h-[42px] shrink-0 items-center rounded-full bg-[var(--pk)] px-6 text-[0.9063rem] font-semibold text-white shadow-[0_10px_22px_-12px_var(--pk)] md:inline-flex">{cta.label}</Link>}
-          </div>
-        </header>
+        <SectionNav org={org} label="Café" title={readSiteNav(org.rawSettings).cafe} titleHref={`/cafe/${org.slug}`} active={active}
+          links={links.map((n) => ({ key: n.key, href: n.href, label: n.label }))} cta={cta} />
       )}
       <main>{children}</main>
       {footer === "b" || footer === "c" ? <SiteFooter m={footerModel(org)} variant={footer} hours={rows} /> : <PublicFooter org={org} weekly={weekly ?? null} />}

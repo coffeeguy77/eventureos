@@ -1,4 +1,5 @@
 import { PublicFooter } from "@/components/site/public-footer";
+import { SectionNav } from "@/components/site/section-nav";
 import "@fontsource/playfair-display/700.css";
 import { siteMeta } from "@/lib/site/meta";
 import { PageBg } from "@/components/site/page-bg";
@@ -58,6 +59,9 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
     <div style={brandStyle(org)} className="min-h-screen bg-[#0E0B0A] text-white">
       <PageBg color="#0E0B0A" />
       <MasterNav org={org} active="jobs" />
+      <SectionNav org={org} label="Job board" title={org.jobs.name} titleHref={`/jobs/${slug}`}
+        links={me ? [{ key: "me", href: `/jobs/${slug}/me`, label: "My profile" }, { key: "work", href: `/jobs/${slug}/work`, label: "Jobs & shifts" }] : []}
+        actions={me ? null : <Link href={`/jobs/${slug}/employers`} className="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3 text-[15px] font-medium hover:bg-black/5">For employers <ArrowRight className="h-4 w-4 text-[var(--b)]" /></Link>} />
       {/* Top: photo, headline, sign-in */}
       <div className="relative isolate overflow-hidden">
         {org.jobs.heroImage
@@ -65,22 +69,6 @@ export default async function JobsHome({ params, searchParams }: { params: Promi
           : <div className="absolute inset-0 -z-20 bg-[radial-gradient(ellipse_at_60%_20%,color-mix(in_srgb,var(--b)_22%,#2a201d),#0E0B0A_70%)]" />}
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(14,11,10,0.82)_0%,rgba(14,11,10,0.35)_42%,rgba(14,11,10,0.05)_62%,rgba(14,11,10,0.45)_100%),linear-gradient(180deg,rgba(14,11,10,0.15)_0%,rgba(14,11,10,0)_55%,#0E0B0A_100%)] max-lg:bg-[rgba(14,11,10,0.72)]" />
 
-        <header className="border-b border-white/10">
-          <div className={`${PAGE} flex h-16 items-center gap-4`}>
-            <Link href={`/jobs/${slug}`} className="flex min-w-0 items-center gap-3">
-              <span className="truncate text-[1.0625rem] font-semibold">{org.jobs.name}</span>
-            </Link>
-            <span className="flex-1" />
-            {me ? (
-              <nav className="flex items-center gap-1 text-[0.9375rem]">
-                <Link href={`/jobs/${slug}/me`} className="rounded-lg px-3 py-2 text-white/85 hover:text-white">My profile</Link>
-                <Link href={`/jobs/${slug}/work`} className="rounded-lg px-3 py-2 text-white/85 hover:text-white">Jobs &amp; shifts</Link>
-              </nav>
-            ) : (
-              <Link href={`/jobs/${slug}/employers`} className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-[0.9688rem] font-medium text-white/90 hover:text-white">For employers <ArrowRight className="h-4 w-4 text-[var(--b)]" /></Link>
-            )}
-          </div>
-        </header>
 
         <div className={`${PAGE} grid gap-8 pb-8 pt-7 lg:grid-cols-[minmax(0,1fr)_390px] lg:gap-10 lg:pb-6 lg:pt-6`}>
           <div>

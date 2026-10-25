@@ -173,3 +173,13 @@ export async function resetMenus(which: "top" | "footer"): Promise<Result> {
     return which === "top" ? "Top menu is back to the automatic one." : "Footer is back to the automatic one.";
   });
 }
+
+/** The site menu's colour on every page (pages can still choose their own in the page editor). */
+export async function saveMenuTone(tone: "light" | "dark", resetPages = false): Promise<Result> {
+  return run(async () => {
+    const t = tone === "dark" ? "dark" : "light";
+    await patchSite(resetPages ? { menuTone: t, pageMenu: {} } : { menuTone: t });
+    revalidatePath("/", "layout");
+    return resetPages ? `Every page now has a ${t} menu.` : `Site menu is ${t} on every page that hasn't chosen its own.`;
+  });
+}

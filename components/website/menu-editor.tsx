@@ -7,7 +7,7 @@ import { Input, Label, Select } from "@/components/ui/form";
 import { MENU_ICON } from "@/components/site/menu-icons";
 import { MENU_ICONS, internalHref, okHref, toSaved, type MenuIcon, type MenuItem } from "@/lib/site/menus";
 import type { NewPage } from "@/lib/site/pages";
-import { resetMenus, saveMenus } from "@/app/(app)/website/actions";
+import { resetMenus, saveMenus, saveMenuTone } from "@/app/(app)/website/actions";
 
 type Which = "top" | "footer";
 const uid = () => `c-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -25,12 +25,18 @@ function move<T>(list: T[], from: number, to: number) {
  * Website → Menus. The top menu (computer and phone) and the footer, both built automatically from what's switched on.
  * Drag (or use the arrows) to reorder, click a name to rename, the eye to show/hide, and add your own links or headings.
  */
-export function MenuEditor({ slug, base, top: top0, footer: footer0, pages }: { slug: string; base: string; top: MenuItem[]; footer: MenuItem[]; pages: NewPage[] }) {
+export function MenuEditor({ slug, base, top: top0, footer: footer0, pages, tone: tone0, overrides }: { slug: string; base: string; top: MenuItem[]; footer: MenuItem[]; pages: NewPage[]; tone: "light" | "dark"; /** pages that chose their own menu colour/style */ overrides: number }) {
   const [top, setTop] = useState(top0);
   const [footer, setFooter] = useState(footer0);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
+  const [tone, setTone] = useState(tone0);
+  const pickTone = (t: "light" | "dark", all = false) => start(async () => {
+    const r = await saveMenuTone(t, all);
+    if (r.ok) setTone(t);
+    setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error });
+  });
 
   const set = (w: Which, list: MenuItem[]) => { (w === "top" ? setTop : setFooter)(list); setDirty(true); setMsg(null); };
   const save = () => start(async () => {
@@ -55,6 +61,18 @@ export function MenuEditor({ slug, base, top: top0, footer: footer0, pages }: { 
 
   return (
     <div className="space-y-5">
+      <Card>
+        <CardHeader title="Look" subtitle="The site menu and every section menu (Shop, Café, Events…) use the same font, size and spacing on every page. Choose their colour here; a page can pick its own in “Edit this page”." />
+        <div className="flex flex-wrap items-center gap-3 px-5 pb-5">
+          <span className="text-[0.875rem] font-medium text-ink">Menu colour</span>
+          <span className="inline-flex overflow-hidden rounded-full ring-1 ring-line">
+            {(["light", "dark"] as const).map((t) => (
+              <button key={t} type="button" disabled={pending} aria-pressed={tone === t} onClick={() => pickTone(t)} className={`px-4 py-1.5 text-[0.8125rem] font-semibold capitalize ${tone === t ? "bg-ink text-white" : "text-ink-muted hover:text-ink"}`}>{t}</button>
+            ))}
+          </span>
+          {overrides > 0 && <button type="button" disabled={pending} onClick={() => pickTone(tone, true)} className="text-[0.8125rem] font-semibold text-brand-600">Use this on all pages ({overrides} page{overrides === 1 ? " has" : "s have"} their own)</button>}
+        </div>
+      </Card>
       <MenuCard which="top" title="Top menu" subtitle="The menu across the top of every page, and the phone menu. Headings with two or more links open as a dropdown."
         items={top} onChange={(l) => set("top", l)} onReset={() => reset("top")} pages={pages} slug={slug} pending={pending} />
       <MenuCard which="footer" title="Footer" subtitle="The columns at the bottom of every page. Each heading is a column; its links sit underneath."

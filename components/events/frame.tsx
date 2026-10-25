@@ -1,5 +1,7 @@
 import "@fontsource-variable/newsreader/opsz.css";
 import { PublicFooter } from "@/components/site/public-footer";
+import { SectionNav } from "@/components/site/section-nav";
+import { readSiteNav } from "@/lib/site-nav";
 import { PageBg } from "@/components/site/page-bg";
 import "@fontsource/caveat/600.css";
 import Link from "next/link";
@@ -37,21 +39,9 @@ export function EventsFrame({ org, s, active, children }: { org: PublicOrg; s: E
     <div data-book-root style={brandStyle(org)} className="shop min-h-screen bg-[#FCFAF7] text-[#151312]">
       <PageBg color="#161213" />
       <style>{SHOP_CSS}</style>
-      <MasterNav org={org} active="events" tone="light" cta={{ href: `${base}/quote`, label: "Get a quote" }} />
-      <header className="sticky top-0 z-40 border-b border-[#EEE6DF] bg-[#FCFAF7]/95 backdrop-blur-md">
-        <div className={`${WRAP} flex h-[46px] items-center gap-3`}>
-          <nav className="no-scrollbar -mx-2 flex flex-1 items-center gap-1 overflow-x-auto px-2 lg:justify-center lg:gap-3" aria-label="Events">
-            {nav.map((n) => (
-              <Link key={n.key} href={n.href} aria-current={active === n.key ? "page" : undefined}
-                className={`relative shrink-0 whitespace-nowrap px-2.5 py-1.5 text-[0.875rem] transition ${active === n.key ? "font-semibold text-[#151312]" : "font-medium text-[#5E5853] hover:text-[#151312]"}`}>
-                {n.label}
-                {active === n.key && <span className="absolute inset-x-2.5 -bottom-[7px] h-[2px] rounded-full bg-[var(--pk)]" />}
-              </Link>
-            ))}
-          </nav>
-          <Link href={`${base}/quote`} data-track="Get a quote (header)" className="shop-btn inline-flex h-[34px] shrink-0 items-center rounded-full bg-[var(--pk)] px-4 text-[0.8125rem] font-semibold text-white lg:hidden">Get a quote</Link>
-        </div>
-      </header>
+      <MasterNav org={org} active="events" />
+      <SectionNav org={org} label="Events" title={readSiteNav(org.rawSettings).events} titleHref={base} active={active}
+        links={nav.map((n) => ({ key: n.key, href: n.href, label: n.label }))} cta={{ href: `${base}/quote`, label: "Get a quote", track: "Get a quote (header)" }} />
       <main>{children}</main>
       <PublicFooter org={org} note="Quotes are emailed — you'll see every price before you commit." />
     </div>

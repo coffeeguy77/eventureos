@@ -24,6 +24,7 @@ import { publicOrg } from "@/lib/bookings/server";
 import { arrangeMenu, footerMenuAuto, readMenus, topMenuAuto } from "@/lib/site/menus";
 import { footerModel } from "@/lib/site/footer";
 import { MenuEditor } from "@/components/website/menu-editor";
+import { siteMenuTone } from "@/lib/site/page-menu";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Website" };
@@ -67,7 +68,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     else {
       const saved = readMenus(settings);
       body = <MenuEditor slug={pub.slug} base={appBaseUrl()} pages={newPages(settings, o?.name as string)}
-        top={arrangeMenu(topMenuAuto(pub), saved.top)} footer={arrangeMenu(footerMenuAuto(footerModel(pub), pub.slug), saved.footer)} />;
+        top={arrangeMenu(topMenuAuto(pub), saved.top)} footer={arrangeMenu(footerMenuAuto(footerModel(pub), pub.slug), saved.footer)}
+        tone={siteMenuTone(settings)} overrides={Object.keys(((settings.site as Record<string, unknown> | undefined)?.pageMenu as Record<string, unknown> | undefined) ?? {}).length} />;
     }
   } else if (tab === "cafe") {
     const cafe = readCafe(settings);
