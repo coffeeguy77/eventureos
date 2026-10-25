@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ChevronDown, Coffee, Flame, GraduationCap, MonitorPlay, ShoppingBag, Store, Truck } from "lucide-react";
+import { Briefcase, CalendarDays, ChevronDown, Coffee, Flame, GraduationCap, MonitorPlay, ShoppingBag, Store, Truck } from "lucide-react";
 
-export type MenuKind = "lessons" | "academy" | "coffee" | "cafe" | "order" | "table" | "club" | "wholesale";
-const ICON = { lessons: GraduationCap, academy: MonitorPlay, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck };
+export type MenuKind = "lessons" | "academy" | "coffee" | "cafe" | "order" | "table" | "club" | "wholesale" | "jobs";
+const ICON = { lessons: GraduationCap, academy: MonitorPlay, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck, jobs: Briefcase };
 
 /** A dropdown in the site menu — "Gift Certificates" (barista lessons / coffee) and "Café" (order, book, club, wholesale). */
 export function GiftMenu({ label, items, light, active, itemClass, track = "Gift menu" }: {

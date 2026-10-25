@@ -9,9 +9,9 @@ test("keys pages by their address without the business name", () => {
     assert.equal(footerPageKey("/beanculture", "beanculture"), "home");
     assert.equal(footerPageKey("/site/beanculture/About_Us?x=1", "beanculture"), "site-about-us");
   });
-test("defaults to dark and reads a saved choice", () => {
-    assert.equal(footerToneFor({}, "shop"), "dark");
-    assert.equal(footerToneFor({ site: { footerTone: { shop: "light" } } }, "shop"), "light");
+test("defaults to light and reads a saved choice", () => {
+    assert.equal(footerToneFor({}, "shop"), "light");
+    assert.equal(footerToneFor({ site: { footerTone: { shop: "dark" } } }, "shop"), "dark");
   });
 test("saves only dark or light from the page editor", () => {
     assert.equal((applyEdits({}, [{ path: "site.footerTone.cafe-roasting-club", value: "light" }]) as { site: { footerTone: Record<string, string> } }).site.footerTone["cafe-roasting-club"], "light");

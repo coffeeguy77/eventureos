@@ -165,33 +165,36 @@ function BusinessCard({ g }: { g: FooterGroup }) {
   );
 }
 
-/* ------------------------------------------------------------------ C · compact */
-function Compact({ m, hours }: { m: FooterModel; hours: Hours }) {
-  const link = "block py-1 text-[0.875rem] text-[#5E5853] transition hover:text-[#151312]";
+/* ------------------------------------------------------------------ C · compact (the site-wide footer; dark or light) */
+function Compact({ m, hours, tone = "light" }: { m: FooterModel; hours: Hours; tone?: FooterTone }) {
+  const t = TONE[tone];
+  const dark = tone === "dark";
+  const link = `block py-1 text-[0.875rem] transition ${t.link}`;
+  const head = `flex items-center gap-2 text-[0.9375rem] font-semibold ${t.head}`;
   const cols: { key: string; title: string; links: FooterLink[]; I?: typeof Coffee }[] = [
     ...m.groups.map((g) => ({ key: g.key, title: g.title, links: g.links, I: ICON[g.key] })),
     ...(m.company.length ? [{ key: "company", title: m.name, links: m.company }] : []),
   ];
   return (
-    <footer className="border-t border-[#EDE3DB] bg-[#FFFBF8]" data-footer="c">
+    <footer className={t.bg} data-footer="c" data-tone={tone}>
       <div className={`${WRAP} grid gap-10 py-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)] lg:gap-14`}>
         <div>
-          <p className={`${serif} text-[1.75rem] font-semibold text-[#151312]`}>{m.name}</p>
-          <div className="mt-4"><ContactList m={m} tone="light" /></div>
+          <p className={`${serif} text-[1.75rem] font-semibold ${t.head}`}>{m.name}</p>
+          <div className="mt-4"><ContactList m={m} tone={tone} /></div>
           {hours.length > 0 && (
-            <details className="group mt-5 rounded-2xl bg-white px-4 py-3 ring-1 ring-[#EDE3DB]">
-              <summary className="flex cursor-pointer list-none items-center justify-between text-[0.875rem] font-semibold text-[#151312]"><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[var(--pk)]" />Café hours</span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary>
-              <div className="mt-3"><HoursList hours={hours} tone="light" /></div>
+            <details className={`group mt-5 rounded-2xl px-4 py-3 ring-1 ${dark ? "bg-white/5 ring-white/10" : "bg-white ring-[#EDE3DB]"}`}>
+              <summary className={`flex cursor-pointer list-none items-center justify-between text-[0.875rem] font-semibold ${t.head}`}><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-[var(--pk)]" />Café hours</span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" /></summary>
+              <div className="mt-3"><HoursList hours={hours} tone={tone} /></div>
             </details>
           )}
-          <div className="mt-5"><SocialIcons m={m} tone="light" /></div>
+          <div className="mt-5"><SocialIcons m={m} tone={tone} /></div>
         </div>
         <div>
           {/* Phone: tap a heading to open its links */}
           <div className="sm:hidden">
             {cols.map((c) => (
-              <details key={c.key} className="group border-b border-[#EDE3DB] py-3">
-                <summary className="flex cursor-pointer list-none items-center justify-between text-[0.9375rem] font-semibold text-[#151312]">
+              <details key={c.key} className={`group border-b py-3 ${t.line}`}>
+                <summary className={`cursor-pointer list-none justify-between ${head}`}>
                   <span className="flex items-center gap-2">{c.I && <c.I className="h-4 w-4 text-[var(--pk)]" />}{c.title}</span><ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
                 </summary>
                 <div className="pt-1">{c.links.map((l) => <A key={l.href} l={l} className={link} />)}</div>
@@ -202,21 +205,21 @@ function Compact({ m, hours }: { m: FooterModel; hours: Hours }) {
           <div className="hidden gap-x-6 gap-y-8 sm:grid sm:grid-cols-2 lg:grid-cols-4">
             {cols.map((c) => (
               <nav key={c.key} aria-label={c.title}>
-                <p className="mb-2 flex items-center gap-2 text-[0.9375rem] font-semibold text-[#151312]">{c.I && <c.I className="h-4 w-4 text-[var(--pk)]" />}{c.title}</p>
+                <p className={`mb-2 ${head}`}>{c.I && <c.I className="h-4 w-4 text-[var(--pk)]" />}{c.title}</p>
                 {c.links.map((l) => <A key={l.href} l={l} className={link} />)}
               </nav>
             ))}
           </div>
         </div>
       </div>
-      <div className={WRAP}><Legal m={m} tone="light" /></div>
+      <div className={WRAP}><Legal m={m} tone={tone} /></div>
     </footer>
   );
 }
 
-export function SiteFooter({ m, variant = "a", tone = "dark", hours = [] }: { m: FooterModel; variant?: FooterVariant; tone?: FooterTone; hours?: Hours }) {
+export function SiteFooter({ m, variant = "c", tone = "dark", hours = [] }: { m: FooterModel; variant?: FooterVariant; tone?: FooterTone; hours?: Hours }) {
   if (variant === "b") return <Businesses m={m} hours={hours} />;
-  if (variant === "c") return <Compact m={m} hours={hours} />;
+  if (variant === "c") return <Compact m={m} hours={hours} tone={tone} />;
   return <Directory m={m} hours={hours} tone={tone} />;
 }
 

@@ -43,11 +43,16 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   if (gifts.length === 1) giftItem.href = gifts[0].href;
   // Barista lessons: the hands-on classes and, when it's selling, the online course
   const learn = readLearnSettings(org.rawSettings);
+  const jobsOn = readJobSettings(org.rawSettings, org.name).enabled;
   const lessonLinks = [
     org.settings.enabled ? { kind: "lessons" as const, href: `/${base}`, label: "Hands-on classes", note: "Courses & upcoming dates" } : null,
     learn.enabled ? { kind: "academy" as const, href: `/academy/${base}`, label: learn.name, note: "Learn online, at your own pace" } : null,
     ...(org.settings.enabled ? extraLessons(org.rawSettings, base).map((l) => ({ kind: "club" as const, ...l })) : []),
+    jobsOn ? { kind: "jobs" as const, href: `/jobs/${base}`, label: labels.jobs, note: NOTE.jobs } : null,
   ].filter((x): x is NonNullable<typeof x> => !!x);
+  // The job board sits under Barista lessons; it only gets its own menu item when there are no lessons to sit under
+  const lessonsItem = items.find((i) => i.key === "lessons")!;
+  items.find((i) => i.key === "jobs")!.on = jobsOn && !lessonsItem.on;
   // Café: the café page, plus ordering, table bookings, roasting club and wholesale when they're on.
   const cafe = readCafe(org.rawSettings);
   const cp = cafePages(cafe);
@@ -60,6 +65,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   ].filter((x): x is NonNullable<typeof x> => !!x);
   items.find((i) => i.key === "cafe")!.on = cp.home;
   const shown = items.filter((i) => i.on);
+  if (active === "jobs" && !shown.some((i) => i.key === "jobs")) active = "lessons";
   const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
   const mobile: MobileItem[] = shown.map((i) => ({ key: i.key, label: labels[i.key], href: i.href, note: NOTE[i.key],
     children: i.key === "gifts" && gifts.length > 1 ? gifts : i.key === "lessons" && lessonLinks.length > 1 ? lessonLinks : i.key === "cafe" && cafeLinks.length > 1 ? cafeLinks : undefined }));

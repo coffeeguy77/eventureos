@@ -26,7 +26,7 @@ export async function PublicFooter({ org, weekly, note }: { org: PublicOrg; week
     <div data-footer-key={key} data-footer-tone={tone} style={brandStyle(org)} className="shop text-left">
       <style>{SHOP_CSS}</style>
       {note && <div className="mx-auto w-full max-w-[1360px] px-5 pb-6 pt-2 text-center text-[0.75rem] leading-relaxed text-[#8C847D] sm:px-8 lg:px-10">{note}</div>}
-      <SiteFooter m={footerModel(org)} tone={tone} hours={hoursRows(w)} />
+      <SiteFooter m={footerModel(org)} variant="c" tone={tone} hours={hoursRows(w)} />
     </div>
   );
 }

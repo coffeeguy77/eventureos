@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { publicOrg } from "@/lib/bookings/server";
-import { blocks, inline, readSite, type InfoPage } from "@/lib/site/site";
+import { blocks, inline, matchRule, readSite, type InfoPage } from "@/lib/site/site";
 import { ed, edImg } from "@/lib/site/copy";
 import { siteMeta } from "@/lib/site/meta";
-import { SiteFrame } from "@/components/site/site-frame";
+import { SiteFrame, internalHref } from "@/components/site/site-frame";
 import { ContactForm } from "@/components/events/contact-form";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +49,14 @@ function Body({ pg }: { pg: InfoPage }) {
 /** One of the business's own pages (About, Contact, Franchise, …): heading, photo, text, and a form when it has one. */
 export default async function InfoPageView(p: P) {
   const x = await load(p);
-  if (!x) notFound();
+  if (!x) {
+    // A page that's been replaced: follow the SEO Saver's redirect for its old address
+    const { org: slug, page } = await p.params;
+    const org = await publicOrg(slug).catch(() => null);
+    const m = org ? matchRule(readSite(org.rawSettings).rules, `/${page}`) : null;
+    if (org && m && m.status === 301) permanentRedirect(m.to.startsWith("https://") ? m.to : internalHref(org.slug, m.to));
+    notFound();
+  }
   const { org, pg } = x;
   const i = pg.index;
   const contact = pg.form === "contact";

@@ -57,6 +57,7 @@ export function footerModel(org: PublicOrg): FooterModel {
     ...(learn.enabled && learn.ai.enabled ? [{ label: "AI coach", href: `/academy/${base}/coach` }] : []),
     ...(classes && gifts ? [{ label: "Class gift certificates", href: `/book/${base}/gift` }] : []),
     ...(classes ? [{ label: "My bookings", href: `/book/${base}/account` }] : []),
+    ...(jobs.enabled ? [{ label: labels.jobs || "Job board", href: `/jobs/${base}` }] : []),
   ] });
   if (cp.club) groups.push({ key: "roast", title: cafe.clubTitle || "Roasting club", blurb: "A shared roastery for your own coffee.", links: [
     { label: "Roast with us", href: `/cafe/${base}/roasting-club` },
@@ -73,7 +74,7 @@ export function footerModel(org: PublicOrg): FooterModel {
     { label: "Wholesale coffee", href: `/cafe/${base}/wholesale` },
     { label: "Get our rates", href: `/cafe/${base}/wholesale#rates` },
   ] });
-  if (jobs.enabled) groups.push({ key: "jobs", title: labels.jobs || "Job board", blurb: "Barista jobs and staff for hire.", links: [
+  if (jobs.enabled && !(classes || learn.enabled)) groups.push({ key: "jobs", title: labels.jobs || "Job board", blurb: "Barista jobs and staff for hire.", links: [
     { label: "Find barista work", href: `/jobs/${base}` },
   ] });
 
