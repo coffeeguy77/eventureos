@@ -8,7 +8,7 @@ import { findOldAddresses, saveSeoRules, saveSiteDomain, saveSitePages } from "@
 import type { Check as LaunchCheck, Suggestion } from "@/lib/site/seo";
 import type { NewPage } from "@/lib/site/pages";
 
-type Page = { slug: string; title: string; eyebrow: string; intro: string; body: string; heroImage: string | null; metaTitle: string; metaDescription: string; form: "none" | "contact" | "franchise"; footer: boolean };
+type Page = { slug: string; title: string; eyebrow: string; intro: string; body: string; heroImage: string | null; metaTitle: string; metaDescription: string; form: "none" | "contact" | "franchise"; footer: boolean; layout?: "standard" | "franchise" };
 type Rule = { from: string; to: string; status: 301 | 410; note: string };
 type Hit = { path: string; kind: string; target: string | null; hits: number; last_at: string };
 
@@ -85,6 +85,7 @@ export function SiteForm({ slug, base, initial, pages: targets, suggestions, che
                     <div className="sm:col-span-2"><Label htmlFor={`pn${i}`}>Introduction</Label><Textarea id={`pn${i}`} rows={2} value={p.intro} maxLength={600} onChange={(e) => setPage(i, { intro: e.target.value })} /></div>
                     <div className="sm:col-span-2"><Label htmlFor={`pb${i}`} hint="blank line = new paragraph · ## heading · - list item · **bold** · [link](https://…)">Text</Label><Textarea id={`pb${i}`} rows={12} value={p.body} onChange={(e) => setPage(i, { body: e.target.value })} /></div>
                     <div><Label htmlFor={`pf${i}`}>Form on the page</Label><Select id={`pf${i}`} value={p.form} onChange={(e) => setPage(i, { form: e.target.value as Page["form"] })}><option value="none">None</option><option value="contact">Contact form</option><option value="franchise">Franchise enquiry form</option></Select></div>
+                    <div><Label htmlFor={`pl${i}`}>Page design</Label><Select id={`pl${i}`} value={p.layout ?? "standard"} onChange={(e) => setPage(i, { layout: e.target.value as Page["layout"] })}><option value="standard">Text page</option><option value="franchise">Franchise sales page (with application pipeline)</option></Select></div>
                     <div className="flex items-end"><Toggle on={p.footer} onChange={(v) => setPage(i, { footer: v })} label="Link in the footer" /></div>
                     <div><Label htmlFor={`pmt${i}`} hint="for Google (optional)">Search title</Label><Input id={`pmt${i}`} value={p.metaTitle} maxLength={120} onChange={(e) => setPage(i, { metaTitle: e.target.value })} /></div>
                     <div><Label htmlFor={`pmd${i}`} hint="for Google (optional)">Search description</Label><Input id={`pmd${i}`} value={p.metaDescription} maxLength={300} onChange={(e) => setPage(i, { metaDescription: e.target.value })} /></div>

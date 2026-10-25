@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -28,6 +28,7 @@ const MORE = [
   { href: "/learn", label: "Learn", icon: GraduationCap },
   { href: "/store", label: "Shop", icon: Coffee },
   { href: "/wholesale", label: "Wholesale", icon: Truck },
+  { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
   { href: "/offers", label: "Offers", icon: BadgePercent },
   { href: "/website", label: "Website", icon: MonitorSmartphone },
   { href: "/kitchen", label: "Kitchen", icon: ChefHat },
@@ -51,8 +52,9 @@ const CREATE = [
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + "/");
 
 /** App-style bottom tab bar for phones and tablets (hidden on desktop, where the sidebar shows). */
-export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user }: {
+export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user, flags = {} }: {
   role: OrgRole;
+  flags?: { franchise?: boolean };
   enquiries: number;
   isSuperAdmin: boolean;
   orgs: { id: string; name: string; role: string }[];
@@ -73,7 +75,7 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
   }, [open]);
 
   const tabs = role === "staff" ? [{ href: "/my-jobs", label: "My jobs", icon: Briefcase, badge: false }] : TABS.filter((t) => canOpen(role, t.href));
-  const more = MORE.filter((m) => canOpen(role, m.href));
+  const more = MORE.filter((m) => canOpen(role, m.href) && (!("flag" in m && m.flag) || !!flags[m.flag]));
   const create = role === "staff" ? [] : CREATE.filter((c) => canOpen(role, c.href));
   const moreActive = !open && more.some((m) => isActive(pathname, m.href));
   const current = orgs.find((o) => o.id === currentOrgId);

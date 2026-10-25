@@ -9,6 +9,8 @@ export interface InfoPage {
   /** position in settings.site.pages (for the page editor) */ index: number;
   slug: string; title: string; eyebrow: string; intro: string; body: string; heroImage: string | null;
   metaTitle: string; metaDescription: string; form: PageForm; footer: boolean;
+  /** "franchise" = the designed franchise page (sections, steps, FAQ, enquiry form); otherwise a plain text page */
+  layout: "standard" | "franchise";
 }
 export interface Rule { id: string; from: string; to: string; status: 301 | 410; note: string }
 export interface Found { path: string; title: string; source: string }
@@ -78,6 +80,7 @@ export function readPage(v: unknown, index = 0): InfoPage | null {
   return {
     index, slug, title, eyebrow: str(p.eyebrow, 80), intro: str(p.intro, 600), body: str(p.body, 30000), heroImage: okImage(p.heroImage),
     metaTitle: str(p.metaTitle, 120), metaDescription: str(p.metaDescription, 300), form, footer: p.footer !== false,
+    layout: p.layout === "franchise" ? "franchise" : "standard",
   };
 }
 

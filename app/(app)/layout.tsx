@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
 import { PrefsSync } from "@/components/shell/personalise";
+import { readSite } from "@/lib/site/site";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
@@ -14,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (path && !canOpen(role, path)) redirect(homeFor(role));
   const admin = await isSuperAdmin();
 
+  const flags = { franchise: readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise") };
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
   const [notif, unread, openEnquiries, dueTasks] = await Promise.all([
     supabase
@@ -42,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <PrefsSync saved={(profile as { ui_prefs?: unknown }).ui_prefs ?? null} />
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
       {/* Printing (run sheets, kitchen lists): only the page itself */}
-      <div className="print:hidden"><Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} /></div>
+      <div className="print:hidden"><Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} flags={flags} /></div>
       <div className="app-column lg:pl-[232px] print:!pl-0">
         <div className="print:hidden"><Topbar
           role={role}
@@ -58,6 +60,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         role={role}
         enquiries={openEnquiries.count ?? 0}
         isSuperAdmin={admin}
+        flags={flags}
         orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
         currentOrgId={org.id}
         user={{ name: profile.full_name ?? profile.email, email: profile.email }}

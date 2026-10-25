@@ -8,6 +8,7 @@ import { ed, edImg } from "@/lib/site/copy";
 import { siteMeta } from "@/lib/site/meta";
 import { SiteFrame, internalHref } from "@/components/site/site-frame";
 import { ContactForm } from "@/components/events/contact-form";
+import { FranchiseLanding } from "@/components/site/franchise-landing";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string; page: string }> };
@@ -58,6 +59,7 @@ export default async function InfoPageView(p: P) {
     notFound();
   }
   const { org, pg } = x;
+  if (pg.layout === "franchise") return <SiteFrame org={org}><FranchiseLanding org={org} pg={pg} /></SiteFrame>;
   const i = pg.index;
   const contact = pg.form === "contact";
   return (

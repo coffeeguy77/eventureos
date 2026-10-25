@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap,
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
@@ -24,6 +24,7 @@ const NAV = [
   { href: "/learn", label: "Learn", icon: GraduationCap },
   { href: "/store", label: "Shop", icon: Coffee },
   { href: "/wholesale", label: "Wholesale", icon: Truck },
+  { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
   { href: "/offers", label: "Offers", icon: BadgePercent },
   { href: "/website", label: "Website", icon: MonitorSmartphone },
   { href: "/clients", label: "Clients", icon: Users },
@@ -36,9 +37,9 @@ const NAV = [
   { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false, role }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {} }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean } }) {
   const pathname = usePathname();
-  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff"));
+  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]));
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
