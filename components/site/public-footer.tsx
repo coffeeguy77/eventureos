@@ -4,6 +4,7 @@ import { brandStyle } from "@/components/book/shell";
 import { SHOP_CSS } from "@/components/shop/frame";
 import { SiteFooter } from "@/components/site/site-footer";
 import { footerModel } from "@/lib/site/footer";
+import { arrangeMenu, footerMenuAuto, readMenus, visibleMenu } from "@/lib/site/menus";
 import { footerPageKey, footerToneFor } from "@/lib/site/footer-tone";
 import { cafePages, hoursRows, readCafe, type Weekly } from "@/lib/cafe/core";
 import { cafeWeekly } from "@/lib/cafe/server";
@@ -22,11 +23,12 @@ export async function PublicFooter({ org, weekly, note }: { org: PublicOrg; week
     const cafe = readCafe(org.rawSettings);
     w = cafePages(cafe).home && cafe.appUrl ? await cafeWeekly(cafe.appUrl) : null;
   }
+  const m = footerModel(org);
   return (
     <div data-footer-key={key} data-footer-tone={tone} style={brandStyle(org)} className="shop text-left">
       <style>{SHOP_CSS}</style>
       {note && <div className="mx-auto w-full max-w-[1360px] px-5 pb-6 pt-2 text-center text-[0.75rem] leading-relaxed text-[#8C847D] sm:px-8 lg:px-10">{note}</div>}
-      <SiteFooter m={footerModel(org)} variant="c" tone={tone} hours={hoursRows(w)} />
+      <SiteFooter m={m} variant="c" tone={tone} hours={hoursRows(w)} columns={visibleMenu(arrangeMenu(footerMenuAuto(m, org.slug), readMenus(org.rawSettings).footer))} />
     </div>
   );
 }

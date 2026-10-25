@@ -20,6 +20,11 @@ import { readSite } from "@/lib/site/site";
 import { newPages } from "@/lib/site/pages";
 import { launchCheck, suggest } from "@/lib/site/seo";
 
+import { publicOrg } from "@/lib/bookings/server";
+import { arrangeMenu, footerMenuAuto, readMenus, topMenuAuto } from "@/lib/site/menus";
+import { footerModel } from "@/lib/site/footer";
+import { MenuEditor } from "@/components/website/menu-editor";
+
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Website" };
 
@@ -31,7 +36,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const sp = await searchParams;
-  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" || sp.tab === "site" ? sp.tab : "analytics";
+  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" || sp.tab === "site" || sp.tab === "menus" ? sp.tab : "analytics";
   const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone").eq("id", org.id).single();
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
 
@@ -56,6 +61,14 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
       initial={{ home: site.home, domain: site.domain, live: site.live, oldSite: site.oldSite, fallback: site.fallback, pages: site.pages.map(({ index: _i, ...p }) => p), rules: site.rules.map(({ from, to, status, note }) => ({ from, to, status, note })), discovered: site.discovered.length }}
       pages={allTargets} suggestions={suggest(site, site.discovered, allTargets, { products })} checks={launchCheck(site, site.discovered, allTargets).checks}
       hits={(hitsR.data ?? []) as { path: string; kind: string; target: string | null; hits: number; last_at: string }[]} hitsReady={!hitsR.error} />;
+  } else if (tab === "menus") {
+    const pub = await publicOrg(o?.slug as string);
+    if (!pub) body = <p className="text-[0.875rem] text-ink-muted">Your public pages aren&apos;t switched on yet.</p>;
+    else {
+      const saved = readMenus(settings);
+      body = <MenuEditor slug={pub.slug} base={appBaseUrl()} pages={newPages(settings, o?.name as string)}
+        top={arrangeMenu(topMenuAuto(pub), saved.top)} footer={arrangeMenu(footerMenuAuto(footerModel(pub), pub.slug), saved.footer)} />;
+    }
   } else if (tab === "cafe") {
     const cafe = readCafe(settings);
     const [st, feed, snap] = await Promise.all([igStatus(org.id), igFeed(org.id, cafe.igFeedUrl || undefined), cafe.appUrl ? appSnapshot(cafe.appUrl, true) : Promise.resolve(null)]);
@@ -173,7 +186,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader eyebrow="Marketing" title="Website" subtitle="How people use your public pages, your events and café pages, and the come-back-and-finish reminders." />
-      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "site", label: "Pages, domain & SEO" }, { key: "reminders", label: "Reminders" }]} /></div>
+      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "site", label: "Pages, domain & SEO" }, { key: "menus", label: "Menus" }, { key: "reminders", label: "Reminders" }]} /></div>
       {body}
     </>
   );

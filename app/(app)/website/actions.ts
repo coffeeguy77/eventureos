@@ -147,3 +147,29 @@ export async function findOldAddresses(): Promise<Result<{ found: number; notes:
     return { found: r.found.length, notes: r.notes };
   });
 }
+
+/* ------------------------------------------------------------------ menus: top (computer + phone) and footer */
+
+export async function saveMenus(input: { top: unknown; footer: unknown }): Promise<Result> {
+  return run(async () => {
+    const { cleanSaved } = await import("@/lib/site/menus");
+    const top = cleanSaved(input?.top, 0) ?? [];
+    const footer = cleanSaved(input?.footer, 0) ?? [];
+    await patchSite({ menus: { top, footer } });
+    revalidatePath("/", "layout");
+    return "Menus saved — your website shows the new menus now.";
+  });
+}
+
+export async function resetMenus(which: "top" | "footer"): Promise<Result> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const { data } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const site = ((data?.settings as Record<string, unknown> | null)?.site ?? {}) as Record<string, unknown>;
+    const menus = { ...((site.menus as Record<string, unknown>) ?? {}) };
+    delete menus[which === "top" ? "top" : "footer"];
+    await patchSite({ menus });
+    revalidatePath("/", "layout");
+    return which === "top" ? "Top menu is back to the automatic one." : "Footer is back to the automatic one.";
+  });
+}

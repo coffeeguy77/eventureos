@@ -1,15 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Briefcase, CalendarDays, ChevronDown, Coffee, Flame, GraduationCap, MonitorPlay, ShoppingBag, Store, Truck } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import type { MenuIcon } from "@/lib/site/menus";
+import { MENU_ICON } from "./menu-icons";
 
-export type MenuKind = "lessons" | "academy" | "coffee" | "cafe" | "order" | "table" | "club" | "wholesale" | "jobs";
-const ICON = { lessons: GraduationCap, academy: MonitorPlay, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck, jobs: Briefcase };
+/** @deprecated use MenuIcon */
+export type MenuKind = MenuIcon;
 
 /** A dropdown in the site menu — "Gift Certificates" (barista lessons / coffee) and "Café" (order, book, club, wholesale). */
 export function GiftMenu({ label, items, light, active, itemClass, track = "Gift menu" }: {
   label: string; light: boolean; active: boolean; itemClass: string;
-  items: { kind: MenuKind; href: string; label: string; note: string }[];
+  items: { kind: MenuIcon; href: string; label: string; note: string; external?: boolean }[];
   /** analytics label prefix */ track?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -30,7 +32,7 @@ export function GiftMenu({ label, items, light, active, itemClass, track = "Gift
       {open && (
         <span role="menu" className={`fixed right-3 top-[52px] z-[60] w-[260px] rounded-2xl p-2 shadow-[0_24px_48px_-20px_rgba(0,0,0,.45)] ring-1 sm:absolute sm:right-0 sm:top-full ${light ? "bg-white ring-[#EDE3DB]" : "bg-[#1E1819] ring-white/10"}`}>
           {items.map((i) => {
-            const I = ICON[i.kind];
+            const I = MENU_ICON[i.kind] ?? MENU_ICON.link;
             return (
               <Link key={i.href} role="menuitem" href={i.href} onClick={() => setOpen(false)} data-track={`${track}: ${i.label}`}
                 className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition ${light ? "hover:bg-[#FBF1F3]" : "hover:bg-white/[0.06]"}`}>

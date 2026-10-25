@@ -2,14 +2,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Briefcase, CalendarDays, ChevronDown, ChevronRight, Coffee, Flame, Gift, GraduationCap, Mail, Menu, MonitorPlay, PartyPopper, Phone, ShoppingBag, Store, Truck, X } from "lucide-react";
-import type { MenuKind } from "./gift-menu";
+import { ChevronDown, ChevronRight, Mail, Menu, Phone, X } from "lucide-react";
+import type { MenuIcon } from "@/lib/site/menus";
+import { MENU_ICON } from "./menu-icons";
 
-type Section = "events" | "lessons" | "jobs" | "shop" | "cafe" | "gifts";
-export interface MobileItem { key: Section; label: string; href: string; note: string; children?: { kind: MenuKind; href: string; label: string; note: string }[] }
-
-const SECTION_ICON = { events: PartyPopper, lessons: GraduationCap, jobs: Briefcase, shop: Coffee, cafe: Store, gifts: Gift };
-const CHILD_ICON = { lessons: GraduationCap, academy: MonitorPlay, coffee: Coffee, cafe: Store, order: ShoppingBag, table: CalendarDays, club: Flame, wholesale: Truck, jobs: Briefcase };
+export interface MobileItem { key: string; icon: MenuIcon; label: string; href: string; note: string; children?: { kind: MenuIcon; href: string; label: string; note: string }[] }
 
 /** Phones: a "Menu" button that opens a full-screen menu with every section, its sub-pages, and call / email buttons. */
 export function MobileMenu({ items, active, light, logo, name, home, phone, email, cta }: {
@@ -63,9 +60,10 @@ export function MobileMenu({ items, active, light, logo, name, home, phone, emai
             )}
             <ul className="space-y-2.5">
               {items.map((it, n) => {
-                const I = SECTION_ICON[it.key];
+                const I = MENU_ICON[it.icon] ?? MENU_ICON.link;
                 const on = active === it.key;
                 const kids = it.children && it.children.length > 1 ? it.children : null;
+                const only = it.children?.length === 1 ? it.children[0] : null;
                 const isOpen = expanded === it.key;
                 const card = `flex w-full items-center gap-3.5 rounded-[20px] p-3.5 text-left transition active:scale-[0.99] ${on
                   ? light ? "bg-white ring-2 ring-[color-mix(in_srgb,var(--b)_70%,#ff0a6c)] shadow-[0_14px_30px_-22px_rgba(60,30,20,.5)]" : "bg-white/[0.08] ring-2 ring-[var(--b)]"
@@ -85,14 +83,14 @@ export function MobileMenu({ items, active, light, logo, name, home, phone, emai
                     {kids ? (
                       <button type="button" className={card} aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : it.key)} data-track={`Mobile menu: ${it.label}`}>{inner}</button>
                     ) : (
-                      <Link href={it.href} className={card} aria-current={on ? "page" : undefined} onClick={() => setOpen(false)} data-track={`Mobile menu: ${it.label}`}>{inner}</Link>
+                      <Link href={only?.href ?? it.href} className={card} aria-current={on ? "page" : undefined} onClick={() => setOpen(false)} data-track={`Mobile menu: ${it.label}`}>{inner}</Link>
                     )}
                     {kids && (
                       <div className={`grid transition-all duration-300 ${isOpen ? "mt-2 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                         <div className="overflow-hidden">
                           <div className="grid grid-cols-2 gap-2 p-0.5 pb-1">
                             {kids.map((k) => {
-                              const K = CHILD_ICON[k.kind];
+                              const K = MENU_ICON[k.kind] ?? MENU_ICON.link;
                               return (
                                 <Link key={k.href} href={k.href} onClick={() => setOpen(false)} data-track={`Mobile menu: ${it.label} · ${k.label}`}
                                   className={`flex min-h-[92px] flex-col justify-between rounded-2xl p-3 transition active:scale-[0.98] ${light ? "bg-[color-mix(in_srgb,var(--b)_7%,white)] ring-1 ring-[color-mix(in_srgb,var(--b)_18%,#EDE3DB)]" : "bg-white/[0.06] ring-1 ring-white/10"}`}>

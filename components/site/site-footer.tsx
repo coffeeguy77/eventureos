@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Briefcase, CalendarDays, ChevronDown, Coffee, Facebook, Flame, GraduationCap, Instagram, Mail, MapPin, Package, Phone, Store, Truck } from "lucide-react";
 import type { FooterGroup, FooterIcon, FooterLink, FooterModel } from "@/lib/site/footer";
+import type { MenuItem } from "@/lib/site/menus";
+import { MENU_ICON } from "./menu-icons";
 
 /**
  * The site-wide footer, in three designs to choose from:
@@ -166,15 +168,18 @@ function BusinessCard({ g }: { g: FooterGroup }) {
 }
 
 /* ------------------------------------------------------------------ C · compact (the site-wide footer; dark or light) */
-function Compact({ m, hours, tone = "light" }: { m: FooterModel; hours: Hours; tone?: FooterTone }) {
+function Compact({ m, hours, tone = "light", columns }: { m: FooterModel; hours: Hours; tone?: FooterTone; columns?: MenuItem[] }) {
   const t = TONE[tone];
   const dark = tone === "dark";
   const link = `block py-1 text-[0.875rem] transition ${t.link}`;
   const head = `flex items-center gap-2 text-[0.9375rem] font-semibold ${t.head}`;
-  const cols: { key: string; title: string; links: FooterLink[]; I?: typeof Coffee }[] = [
-    ...m.groups.map((g) => ({ key: g.key, title: g.title, links: g.links, I: ICON[g.key] })),
-    ...(m.company.length ? [{ key: "company", title: m.name, links: m.company }] : []),
-  ];
+  const cols: { key: string; title: string; links: FooterLink[]; I?: typeof Coffee }[] = columns
+    ? columns.filter((c) => c.children.length).map((c) => ({ key: c.id, title: c.label, I: c.icon === "info" ? undefined : MENU_ICON[c.icon],
+        links: c.children.map((l) => ({ label: l.label, href: l.href, external: l.external })) }))
+    : [
+      ...m.groups.map((g) => ({ key: g.key, title: g.title, links: g.links, I: ICON[g.key] })),
+      ...(m.company.length ? [{ key: "company", title: m.name, links: m.company }] : []),
+    ];
   return (
     <footer className={t.bg} data-footer="c" data-tone={tone}>
       <div className={`${WRAP} grid gap-10 py-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)] lg:gap-14`}>
@@ -217,9 +222,9 @@ function Compact({ m, hours, tone = "light" }: { m: FooterModel; hours: Hours; t
   );
 }
 
-export function SiteFooter({ m, variant = "c", tone = "dark", hours = [] }: { m: FooterModel; variant?: FooterVariant; tone?: FooterTone; hours?: Hours }) {
+export function SiteFooter({ m, variant = "c", tone = "dark", hours = [], columns }: { m: FooterModel; variant?: FooterVariant; tone?: FooterTone; hours?: Hours; /** the footer as arranged in Website → Menus */ columns?: MenuItem[] }) {
   if (variant === "b") return <Businesses m={m} hours={hours} />;
-  if (variant === "c") return <Compact m={m} hours={hours} tone={tone} />;
+  if (variant === "c") return <Compact m={m} hours={hours} tone={tone} columns={columns} />;
   return <Directory m={m} hours={hours} tone={tone} />;
 }
 
