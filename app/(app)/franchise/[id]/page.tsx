@@ -6,7 +6,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { emailConfigured } from "@/lib/email/send";
-import { MODEL_LABEL, QUESTIONS, STATUS_LABEL, STATUS_TONE, qText } from "@/lib/franchise/core";
+import { MODEL_LABEL, STATUS_LABEL, STATUS_TONE, qText, readQuestions } from "@/lib/franchise/core";
 import { FRANCHISE_COLS, type FranchiseRow } from "@/lib/franchise/server";
 import { FranchiseControls } from "@/components/franchise/controls";
 
@@ -22,7 +22,11 @@ export default async function FranchiseApplicationPage({ params }: { params: Pro
   if (!data) notFound();
   const a = data as unknown as FranchiseRow;
   const answers = a.answers ?? {};
+  const QUESTIONS = readQuestions((org as unknown as { settings: unknown }).settings);
   const sections = [...new Set(QUESTIONS.map((q) => q.section))];
+  // Answers to questions that have since been removed or renamed
+  const known = new Set(QUESTIONS.map((q) => q.key));
+  const extra = Object.entries(answers).filter(([k2, v]) => !known.has(k2) && k2 !== "agree" && v);
   const timeline = [
     { t: "Enquiry", at: a.created_at }, { t: "Application sent", at: a.invited_at }, { t: "Application in", at: a.applied_at },
     { t: a.status === "approved" ? "Approved" : a.status === "declined" ? "Declined" : a.status === "withdrawn" ? "Withdrawn" : "Decision", at: a.decided_at },
@@ -59,15 +63,23 @@ export default async function FranchiseApplicationPage({ params }: { params: Pro
                   <div key={sec}>
                     <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-brand-600">{qText(sec, org.name)}</p>
                     <dl className="mt-2 divide-y divide-line rounded-lg ring-1 ring-line">
-                      {QUESTIONS.filter((q) => q.section === sec && q.kind !== "yesno").map((q) => (
+                      {QUESTIONS.filter((q) => q.section === sec && q.key !== "agree").map((q) => (
                         <div key={q.key} className="grid gap-1 px-3 py-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-4">
                           <dt className="text-[0.8125rem] text-ink-muted">{qText(q.label, org.name)}</dt>
-                          <dd className="whitespace-pre-line text-[0.9375rem] text-ink">{answers[q.key] || <span className="text-ink-faint">—</span>}</dd>
+                          <dd className="whitespace-pre-line text-[0.9375rem] text-ink">{q.kind === "yesno" ? (answers[q.key] === "yes" ? "✓ Yes" : <span className="text-ink-faint">Not ticked</span>) : answers[q.key] || <span className="text-ink-faint">—</span>}</dd>
                         </div>
                       ))}
                     </dl>
                   </div>
                 ))}
+                {extra.length > 0 && (
+                  <div>
+                    <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">Other answers (questions since changed)</p>
+                    <dl className="mt-2 divide-y divide-line rounded-lg ring-1 ring-line">
+                      {extra.map(([k2, v]) => <div key={k2} className="grid gap-1 px-3 py-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-4"><dt className="text-[0.8125rem] text-ink-muted">{k2.replace(/_/g, " ")}</dt><dd className="whitespace-pre-line text-[0.9375rem] text-ink">{v}</dd></div>)}
+                    </dl>
+                  </div>
+                )}
                 {answers.agree === "yes" && <p className="text-[0.8125rem] text-ink-muted">✓ They confirmed their details are true and agreed to be contacted.</p>}
               </div>
             ) : <p className="px-5 pb-5 text-[0.875rem] text-ink-muted">Nothing yet.</p>}

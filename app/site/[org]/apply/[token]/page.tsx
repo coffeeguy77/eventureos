@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SiteFrame } from "@/components/site/site-frame";
 import { FranchiseApplication } from "@/components/site/franchise-application";
 import { applicationByToken } from "@/lib/franchise/server";
+import { readQuestions } from "@/lib/franchise/core";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string; token: string }> };
@@ -29,7 +30,7 @@ export default async function FranchiseApply(p: P) {
         ) : (
           <>
             <p className="mt-4 text-[1.125rem] leading-relaxed text-[#3A3431]">About 10 minutes. Tell us about you, where you&apos;d like to open and how you&apos;d fund it. There are no wrong answers — it just helps our first meeting go further.</p>
-            <div className="mt-8"><FranchiseApplication slug={org.slug} token={token} business={org.name} initial={app.answers ?? {}} phone={app.phone ?? ""} again={app.status === "applied" || app.status === "reviewing"} /></div>
+            <div className="mt-8"><FranchiseApplication slug={org.slug} token={token} business={org.name} initial={app.answers ?? {}} phone={app.phone ?? ""} again={app.status === "applied" || app.status === "reviewing"} questions={readQuestions(org.rawSettings)} /></div>
           </>
         )}
       </div>

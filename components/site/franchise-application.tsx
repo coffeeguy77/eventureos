@@ -2,18 +2,18 @@
 import { useState, useTransition } from "react";
 import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { sendFranchiseApplication } from "@/app/site/[org]/franchise-actions";
-import { QUESTIONS, qText } from "@/lib/franchise/core";
+import { qText, type Question } from "@/lib/franchise/core";
 
 const field = "w-full rounded-xl border border-[#E6DCD4] bg-white px-4 text-[1rem] text-[#151312] outline-none transition placeholder:text-[#9A918A] focus:border-[var(--pk)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--pk)_14%,transparent)]";
 
 /** The franchise application, opened from the emailed link. Answers can be updated until a decision is made. */
-export function FranchiseApplication({ slug, token, business, initial, phone, again }: { slug: string; token: string; business: string; initial: Record<string, string>; phone: string; again: boolean }) {
+export function FranchiseApplication({ slug, token, business, initial, phone, again, questions }: { slug: string; token: string; business: string; initial: Record<string, string>; phone: string; again: boolean; questions: Question[] }) {
   const [a, setA] = useState<Record<string, string>>({ ...initial, phone });
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
   const set = (k: string, v: string) => setA((x) => ({ ...x, [k]: v }));
-  const sections = [...new Set(QUESTIONS.map((q) => q.section))];
+  const sections = [...new Set(questions.map((q) => q.section))];
   if (done) return (
     <div className="rounded-[28px] bg-white p-8 text-center ring-1 ring-[#EDE3DB] sm:p-12" role="status">
       <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[color-mix(in_srgb,var(--pk)_14%,white)] text-[var(--pk)]"><Check className="h-7 w-7" /></span>
@@ -34,7 +34,7 @@ export function FranchiseApplication({ slug, token, business, initial, phone, ag
               <input id="q-phone" type="tel" autoComplete="tel" className={`${field} h-[50px]`} value={a.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></div>
           )}
           <div className="mt-5 space-y-5">
-            {QUESTIONS.filter((q) => q.section === sec).map((q) => {
+            {questions.filter((q) => q.section === sec).map((q) => {
               const id = `q-${q.key}`;
               const lab = <span className="text-[0.9375rem] font-semibold">{qText(q.label, business)}{q.required && q.kind !== "yesno" ? <span className="text-[var(--pk)]"> *</span> : null}{q.hint && <span className="ml-1 font-normal text-[#8C847D]">· {q.hint}</span>}</span>;
               if (q.kind === "yesno") return (

@@ -38,9 +38,9 @@ export const QUESTIONS: Question[] = [
 ];
 
 /** Check and tidy an application before saving. */
-export function cleanAnswers(raw: Record<string, unknown>, business = "us"): { ok: true; answers: Record<string, string> } | { ok: false; error: string } {
+export function cleanAnswers(raw: Record<string, unknown>, business = "us", questions: Question[] = QUESTIONS): { ok: true; answers: Record<string, string> } | { ok: false; error: string } {
   const answers: Record<string, string> = {};
-  for (const q of QUESTIONS) {
+  for (const q of questions) {
     const v = typeof raw[q.key] === "string" ? (raw[q.key] as string).trim().slice(0, q.kind === "long" ? 3000 : 300) : "";
     if (q.kind === "choice" && v && !q.options?.includes(v)) return { ok: false, error: `Pick one of the options for “${q.label}”.` };
     if (q.kind === "yesno" && v && v !== "yes") return { ok: false, error: "Tick the box to confirm." };
@@ -54,3 +54,50 @@ export const isEmail = (v: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
 
 /** Put the business's name into a question. */
 export const qText = (s: string, business: string) => s.replace(/\{business\}/g, business);
+
+// ------------------------------------------------------------------------------------------------ editable questions
+/**
+ * The business's own questions, edited in Franchise → Application questions. Saved at settings.franchise.questions;
+ * until it's been edited, the built-in set above is used. Old answers to removed questions are kept on the application.
+ */
+export const KINDS: Question["kind"][] = ["text", "long", "choice", "yesno"];
+export const KIND_LABEL: Record<Question["kind"], string> = { text: "Short answer", long: "Long answer", choice: "Pick one", yesno: "Tick box" };
+const KEY = /^[a-z0-9_]{1,40}$/;
+const t = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+
+/** Validate a list of questions (from the editor or from settings). Returns null when nothing usable is there. */
+export function cleanQuestions(v: unknown): { ok: true; questions: Question[] } | { ok: false; error: string } {
+  if (!Array.isArray(v)) return { ok: false, error: "No questions." };
+  const out: Question[] = [];
+  const seen = new Set<string>();
+  for (const [n, x] of v.slice(0, 60).entries()) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const label = t(o.label, 300);
+    if (!label) return { ok: false, error: `Question ${n + 1} needs some words.` };
+    let key = t(o.key, 40).toLowerCase();
+    if (!KEY.test(key)) key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 30) || `q${n + 1}`;
+    while (seen.has(key)) key = `${key.slice(0, 36)}_${n + 1}`;
+    seen.add(key);
+    const kind = KINDS.includes(o.kind as Question["kind"]) ? (o.kind as Question["kind"]) : "text";
+    const q: Question = { key, label, kind, section: t(o.section, 60) || "Questions" };
+    const hint = t(o.hint, 200); if (hint) q.hint = hint;
+    if (o.required === true) q.required = true;
+    if (kind === "choice") {
+      const opts = [...new Set((Array.isArray(o.options) ? o.options : []).map((x) => t(x, 120)).filter(Boolean))].slice(0, 12);
+      if (opts.length < 2) return { ok: false, error: `“${label.slice(0, 40)}” needs at least two choices.` };
+      q.options = opts;
+    }
+    out.push(q);
+  }
+  if (!out.length) return { ok: false, error: "Add at least one question." };
+  return { ok: true, questions: out };
+}
+
+export function readQuestions(settings: unknown): Question[] {
+  const f = settings && typeof settings === "object" ? (settings as Record<string, unknown>).franchise : null;
+  const raw = f && typeof f === "object" ? (f as Record<string, unknown>).questions : null;
+  if (!Array.isArray(raw)) return QUESTIONS;
+  const c = cleanQuestions(raw);
+  return c.ok ? c.questions : QUESTIONS;
+}

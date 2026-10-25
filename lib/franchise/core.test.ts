@@ -18,3 +18,27 @@ test("optional answers can be blank and the business name fills in", () => {
   assert.ok(r.ok && !("partners" in r.answers));
   assert.equal(qText("Why {business}?", "Acme"), "Why Acme?");
 });
+
+import { cleanQuestions, readQuestions } from "./core";
+test("edited questions are validated and keep their keys", () => {
+  const c = cleanQuestions([
+    { key: "area", label: "Where?", kind: "text", section: "Plans", required: true },
+    { label: "Do you own a van?", kind: "choice", options: ["Yes", "No", "", "Yes"], section: "Plans" },
+    { label: "Do you own a van?", kind: "weird", section: "" },
+  ]);
+  assert.ok(c.ok);
+  if (!c.ok) return;
+  assert.deepEqual(c.questions.map((q) => q.key), ["area", "do_you_own_a_van", "do_you_own_a_van_3"]);
+  assert.deepEqual(c.questions[1].options, ["Yes", "No"]);
+  assert.equal(c.questions[2].kind, "text");
+  assert.equal(c.questions[2].section, "Questions");
+  assert.equal(cleanQuestions([{ label: "Pick", kind: "choice", options: ["Only one"] }]).ok, false);
+  assert.equal(cleanQuestions([{ label: "" }]).ok, false);
+});
+test("saved questions replace the built-in set; answers follow the saved set", () => {
+  const settings = { franchise: { questions: [{ key: "van", label: "Van?", kind: "yesno", section: "S", required: true }] } };
+  assert.deepEqual(readQuestions(settings).map((q) => q.key), ["van"]);
+  assert.equal(readQuestions({}).length, QUESTIONS.length);
+  assert.equal(cleanAnswers({}, "Acme", readQuestions(settings)).ok, false);
+  assert.equal(cleanAnswers({ van: "yes" }, "Acme", readQuestions(settings)).ok, true);
+});

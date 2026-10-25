@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ListChecks } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
@@ -35,7 +35,8 @@ export default async function FranchisePage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader eyebrow="Growth" title="Franchise" subtitle="People who've asked about a franchise or brand licence. Send them the application, review it, then approve or decline."
-        actions={page ? <a href={`/site/${org.slug}/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600">View franchise page<ExternalLink className="h-3.5 w-3.5" /></a> : undefined} />
+        actions={<span className="flex flex-wrap items-center gap-4"><Link href="/franchise/questions" className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600"><ListChecks className="h-3.5 w-3.5" />Application questions</Link>
+          {page && <a href={`/site/${org.slug}/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600">View franchise page<ExternalLink className="h-3.5 w-3.5" /></a>}</span>} />
       {error ? (
         <Card><EmptyState title="Franchise needs a database update">Run <code>0066_franchise.sql</code> in Supabase → SQL editor, then refresh.</EmptyState></Card>
       ) : (

@@ -69,3 +69,38 @@ export async function saveFranchiseNotes(id: string, notes: string): Promise<R> 
     return { ok: true, message: "Notes saved." };
   });
 }
+
+/** Save the application form's questions (Franchise → Application questions). */
+export async function saveFranchiseQuestions(input: unknown): Promise<R> {
+  return wrap(async () => {
+    const ctx = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(ctx.role)) throw new Error("Only owners, admins and managers can change the application.");
+    const { cleanQuestions } = await import("@/lib/franchise/core");
+    const c = cleanQuestions(input);
+    if (!c.ok) throw new Error(c.error);
+    const { data, error: e1 } = await ctx.supabase.from("organisations").select("settings").eq("id", ctx.org.id).single();
+    if (e1) throw new Error(e1.message);
+    const settings = (data?.settings ?? {}) as Record<string, unknown>;
+    const franchise = (settings.franchise && typeof settings.franchise === "object" ? settings.franchise : {}) as Record<string, unknown>;
+    const { error } = await ctx.supabase.from("organisations").update({ settings: { ...settings, franchise: { ...franchise, questions: c.questions } } }).eq("id", ctx.org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/franchise");
+    revalidatePath("/site", "layout");
+    return { ok: true, message: `Saved — ${c.questions.length} question${c.questions.length === 1 ? "" : "s"}. New applications use them straight away.` };
+  });
+}
+
+export async function resetFranchiseQuestions(): Promise<R> {
+  return wrap(async () => {
+    const ctx = await requireOrg();
+    if (!["owner", "admin", "manager"].includes(ctx.role)) throw new Error("Only owners, admins and managers can change the application.");
+    const { data } = await ctx.supabase.from("organisations").select("settings").eq("id", ctx.org.id).single();
+    const settings = (data?.settings ?? {}) as Record<string, unknown>;
+    const franchise = { ...((settings.franchise as Record<string, unknown>) ?? {}) };
+    delete franchise.questions;
+    const { error } = await ctx.supabase.from("organisations").update({ settings: { ...settings, franchise } }).eq("id", ctx.org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/franchise");
+    return { ok: true, message: "Back to the built-in questions." };
+  });
+}

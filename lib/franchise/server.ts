@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { publicOrg } from "@/lib/bookings/server";
-import { cleanAnswers, isEmail, MODELS, type FranchiseModel, type FranchiseStatus } from "./core";
+import { cleanAnswers, isEmail, MODELS, readQuestions, type FranchiseModel, type FranchiseStatus } from "./core";
 
 const str = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,14 +51,14 @@ export async function submitApplication(slug: string, token: string, raw: Record
   const x = await applicationByToken(slug, token);
   if (!x) return { ok: false, error: "This application link isn't valid any more — please contact us." };
   if (["approved", "declined", "withdrawn"].includes(x.app.status)) return { ok: false, error: "This application has already been decided — please contact us if anything's changed." };
-  const c = cleanAnswers(raw, x.org.name);
+  const c = cleanAnswers(raw, x.org.name, readQuestions(x.org.rawSettings));
   if (!c.ok) return c;
   const phone = str(raw.phone, 40);
   const db = createServiceClient();
   const first = !["applied", "reviewing"].includes(x.app.status);
   const { error } = await db.from("franchise_applications").update({
     answers: c.answers, status: x.app.status === "reviewing" ? "reviewing" : "applied", applied_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    location: c.answers.area ?? null, ...(phone ? { phone } : {}),
+    ...(c.answers.area ? { location: c.answers.area } : {}), ...(phone ? { phone } : {}),
   }).eq("id", x.app.id);
   if (error) return { ok: false, error: "Couldn't save your application — please try again." };
   await db.from("notifications").insert({ organisation_id: x.org.id, type: "franchise.applied", title: `${first ? "Franchise application in" : "Franchise application updated"} — ${x.app.name}`.slice(0, 200),
