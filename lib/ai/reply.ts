@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripQuoted, localDate } from "@/lib/ai/classify";
 import { ANTHROPIC_URL, anthropicHeaders, parseJSONObject } from "@/lib/ai/claude";
+import { orgAiKey } from "@/lib/ai/key";
 import { priceJob, serviceHours, suggestedStaff, type PackageRules, type PricedService } from "@/lib/pricing/engine";
 
 /**
@@ -22,9 +23,8 @@ const clip = (s: string | null | undefined, n: number) => {
   return t.length > n ? t.slice(0, n) + "…" : t;
 };
 
-async function callClaudeRaw(system: string, user: string, maxTokens: number, timeoutMs: number) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("AI drafting needs ANTHROPIC_API_KEY set in Vercel.");
+async function callClaudeRaw(key: string | null, system: string, user: string, maxTokens: number, timeoutMs: number) {
+  if (!key) throw new Error("AI drafting needs a Claude API key — add one in Settings → Integrations.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -108,7 +108,7 @@ CONVERSATION TO ANSWER (oldest first; answer the latest message):
 SUBJECT: ${thread.subject ?? ""}
 ${convoText}`;
 
-  const raw = await callClaudeRaw(system, user, 1500, 45000);
+  const raw = await callClaudeRaw(await orgAiKey(org.id), system, user, 1500, 45000);
   const obj = parseJSONObject(raw);
   let body = typeof obj.reply === "string" ? obj.reply.trim() : "";
   if (!body) throw new Error("The AI didn't return a draft — try again.");

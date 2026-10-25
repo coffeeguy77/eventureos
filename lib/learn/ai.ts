@@ -38,9 +38,8 @@ export function coachSystem(mode: string, style: string, business: string) {
 type Block = { type: "text"; text: string } | { type: "image"; source: { type: "base64"; media_type: MediaType; data: string } };
 export interface ChatTurn { role: "user" | "assistant"; content: string }
 
-async function call(system: string, messages: { role: "user" | "assistant"; content: string | Block[] }[], maxTokens: number, timeoutMs = 30000) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("The AI coach isn't set up yet (no ANTHROPIC_API_KEY).");
+async function call(key: string | null | undefined, system: string, messages: { role: "user" | "assistant"; content: string | Block[] }[], maxTokens: number, timeoutMs = 30000) {
+  if (!key) throw new Error("The AI coach isn't set up yet — add a Claude API key in Settings → Integrations.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -57,7 +56,7 @@ async function call(system: string, messages: { role: "user" | "assistant"; cont
 }
 
 /** One coach reply. The last user turn can carry a photo. History is trimmed to the last 12 turns. */
-export async function coachReply(o: { mode: string; style: string; business: string; turns: ChatTurn[]; image?: { data: string; mediaType: MediaType } | null }) {
+export async function coachReply(o: { key: string | null; mode: string; style: string; business: string; turns: ChatTurn[]; image?: { data: string; mediaType: MediaType } | null }) {
   const turns = o.turns.filter((t) => t.content.trim()).slice(-12).map((t) => ({ role: t.role, content: t.content.slice(0, 4000) }));
   while (turns.length && turns[0].role !== "user") turns.shift();
   if (!turns.length || turns[turns.length - 1].role !== "user") throw new Error("Ask a question first.");
@@ -66,16 +65,16 @@ export async function coachReply(o: { mode: string; style: string; business: str
     const last = turns[turns.length - 1];
     msgs[msgs.length - 1] = { role: "user", content: [{ type: "image", source: { type: "base64", media_type: o.image.mediaType, data: o.image.data } }, { type: "text", text: last.content || "Analyse this image." }] };
   }
-  return call(coachSystem(o.mode, o.style, o.business), msgs, 900);
+  return call(o.key, coachSystem(o.mode, o.style, o.business), msgs, 900);
 }
 
 export interface PhotoResult { scores: Record<string, number>; strengths: string[]; improvements: string[]; tips: string[]; overall: number }
 
 /** Score a latte art or espresso photo (the Replit app's analyse prompt). */
-export async function analysePhoto(o: { kind: "latte_art" | "espresso"; data: string; mediaType: MediaType }): Promise<PhotoResult> {
+export async function analysePhoto(o: { key: string | null; kind: "latte_art" | "espresso"; data: string; mediaType: MediaType }): Promise<PhotoResult> {
   const what = o.kind === "latte_art" ? "latte art" : "espresso shots";
   const system = `You are an expert barista coach analyzing ${what}. Return ONLY valid JSON with: scores (object with 4 relevant metrics 0-100), strengths (array of 2-3 strings), improvements (array of 2-3 strings), tips (array of 2-3 strings). If the photo isn't of ${o.kind === "latte_art" ? "a coffee with latte art" : "an espresso shot"}, return scores of 0 and say so in improvements.`;
-  const text = await call(system, [{ role: "user", content: [
+  const text = await call(o.key, system, [{ role: "user", content: [
     { type: "image", source: { type: "base64", media_type: o.mediaType, data: o.data } },
     { type: "text", text: `Analyze this ${o.kind === "latte_art" ? "latte art" : "espresso shot"} and return JSON.` },
   ] }], 800);

@@ -7,7 +7,7 @@ import {
   submitMastery, submitVenue, useAi, type BuyResult,
 } from "@/lib/learn/server";
 import { analysePhoto, coachReply, MEDIA_TYPES, type ChatTurn, type MediaType, type PhotoResult } from "@/lib/learn/ai";
-import { aiConfigured } from "@/lib/ai/claude";
+import { orgAiKey } from "@/lib/ai/key";
 import type { Plan } from "@/lib/learn/core";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { academyStudent } from "@/lib/learn/god";
@@ -90,11 +90,12 @@ export async function saveRoastAction(slug: string, r: { name: string; history: 
 async function coachGate(slug: string, kind: "messages" | "photos") {
   const { org, me } = await signedIn(slug);
   if (!org.learn.ai.enabled) throw new Error("The AI coach is switched off.");
-  if (!aiConfigured()) throw new Error("The AI coach isn't set up yet.");
+  const key = await orgAiKey(org.id);
+  if (!key) throw new Error("The AI coach isn't set up yet.");
   const s = await learnerState(createServiceClient(), org, me.id, { god: me.god });
   if (!s.live) throw new Error("The AI coach is part of the full course.");
   if (!(await useAi(org, me.id, kind, me.god))) throw new Error(kind === "photos" ? "That's today's photo limit — try again tomorrow." : "That's today's limit for the coach — try again tomorrow.");
-  return { org, me, style: s.learner.coach_style };
+  return { org, me, style: s.learner.coach_style, key };
 }
 
 const cleanImage = (img: { data: string; mediaType: string } | null | undefined): { data: string; mediaType: MediaType } | null => {
@@ -108,18 +109,18 @@ const cleanImage = (img: { data: string; mediaType: string } | null | undefined)
 
 export async function coachAction(slug: string, mode: string, turns: ChatTurn[], image: { data: string; mediaType: string } | null): Promise<R<{ reply: string }>> {
   try {
-    const { org, style } = await coachGate(slug, "messages");
-    const reply = await coachReply({ mode, style, business: org.name, turns: (turns ?? []).map((t) => ({ role: t.role === "assistant" ? "assistant" : "user", content: String(t.content ?? "") })), image: cleanImage(image) });
+    const { org, style, key } = await coachGate(slug, "messages");
+    const reply = await coachReply({ key, mode, style, business: org.name, turns: (turns ?? []).map((t) => ({ role: t.role === "assistant" ? "assistant" : "user", content: String(t.content ?? "") })), image: cleanImage(image) });
     return { ok: true, reply };
   } catch (e) { return { ok: false, error: msg(e) }; }
 }
 
 export async function photoAction(slug: string, kind: "latte_art" | "espresso", image: { data: string; mediaType: string }): Promise<R<{ result: PhotoResult; badges: string[] }>> {
   try {
-    const { org, me } = await coachGate(slug, "photos");
+    const { org, me, key } = await coachGate(slug, "photos");
     const img = cleanImage(image);
     if (!img) throw new Error("Add a photo first.");
-    const result = await analysePhoto({ kind: kind === "espresso" ? "espresso" : "latte_art", ...img });
+    const result = await analysePhoto({ key, kind: kind === "espresso" ? "espresso" : "latte_art", ...img });
     const after = kind === "latte_art" ? await recordArtScore(org, me.id, result.overall) : { badges: [] };
     return { ok: true, result, badges: after.badges };
   } catch (e) { return { ok: false, error: msg(e) }; }

@@ -540,3 +540,35 @@ export async function refileThread(threadId: string, classification: string): Pr
     return { error: errMessage(e) };
   }
 }
+
+/* ------------------------------------------------------------------ AI (Claude) key */
+
+/** Save the business's own Claude API key (checked with Anthropic first). Used by the AI coach, photo scoring and reply drafts. */
+export async function saveAiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const { supabase, org, role } = await requireOrg();
+  if (!canManage(role)) return { error: "Only owners, admins and managers can change integrations." };
+  const key = String(form.get("key") ?? "").trim();
+  if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) return { error: "That doesn't look like a Claude API key — it starts with sk-ant-." };
+  const { testAiKey, forgetOrgAiKey, AI_PROVIDER } = await import("@/lib/ai/key");
+  const t = await testAiKey(key);
+  if (!t.ok) return { error: t.error };
+  const { error } = await supabase.rpc("save_integration_connection", {
+    p_org: org.id, p_provider: AI_PROVIDER, p_account_label: `Key ending ${key.slice(-4)}`, p_external_account_id: null, p_scopes: [],
+    p_access_token: key, p_refresh_token: null, p_expires_at: null, p_settings: {},
+  });
+  if (error) return { error: error.message };
+  forgetOrgAiKey(org.id);
+  revalidatePath(BASE);
+  return { ok: "Saved and checked — the AI coach, latte art scoring and reply drafts use your key now." };
+}
+
+export async function removeAiKeyAction(): Promise<ActionState> {
+  const { supabase, org, role } = await requireOrg();
+  if (!canManage(role)) return { error: "Only owners, admins and managers can change integrations." };
+  const { AI_PROVIDER, forgetOrgAiKey } = await import("@/lib/ai/key");
+  const { data: row } = await supabase.from("integrations").select("id").eq("organisation_id", org.id).eq("provider", AI_PROVIDER).maybeSingle();
+  if (row) { const { error } = await supabase.rpc("disconnect_integration", { p_integration_id: row.id }); if (error) return { error: error.message }; }
+  forgetOrgAiKey(org.id);
+  revalidatePath(BASE);
+  return { ok: "Key removed." };
+}

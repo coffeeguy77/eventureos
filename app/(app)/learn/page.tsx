@@ -7,7 +7,7 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { Kpi } from "@/components/records/kpi";
 import { money } from "@/lib/format";
-import { aiConfigured } from "@/lib/ai/claude";
+import { orgAiKey } from "@/lib/ai/key";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { courseOrder, hireSplit, liveAccess, PLAN_LABEL, priceStory, readLearnSettings, readQuiz, readRule, ruleText, type AccessRow } from "@/lib/learn/core";
 import pack from "@/lib/learn/packs/bean-culture.json";
@@ -66,11 +66,12 @@ export default async function LearnPage({ searchParams }: { searchParams: Promis
     const active = rows.filter((r) => liveAccess([r]));
     const byPlan = (p: string) => active.filter((r) => r.plan === p).length;
     const revenue = ((pays.data ?? []) as { amount: number }[]).reduce((t, p) => t + Number(p.amount), 0);
+    const aiOn = !!(await orgAiKey(o.id));
     const checks = [
       { ok: true, text: "Database update run" },
       { ok: imported, text: imported ? "Course imported" : "Import the course (Lessons tab)" },
       { ok: stripeReady, text: stripeReady ? "Stripe connected" : "Connect Stripe (Settings → Integrations) to take payments" },
-      { ok: aiConfigured(), text: aiConfigured() ? "AI coach key set" : "AI coach needs ANTHROPIC_API_KEY in Vercel" },
+      { ok: aiOn, text: aiOn ? "AI coach key set" : "AI coach needs a Claude API key (Settings → Integrations)" },
       { ok: s.enabled, text: s.enabled ? "Selling is ON" : "Selling is OFF — switch on in Plans & pricing when ready" },
     ];
     return (
