@@ -67,7 +67,7 @@ export function SectionBar({ title, titleHref, links, active, actions, cta, tone
     </div>
   );
   return (
-    <div className={`sticky top-0 z-40 border-b font-sans backdrop-blur-md ${dark ? "border-white/10 bg-[#141011]/92 text-white" : "border-[#EEE6DF] bg-[#FCFAF7]/92 text-[#151312]"}`} data-section-nav data-section-style="bar" data-section-tone={tone} data-floatable={floatable ? "1" : undefined}>
+    <div className={`sticky top-0 z-40 border-b font-sans backdrop-blur-md ${dark ? "border-white/10 bg-[#141011]/95 text-white" : "border-[#EEE6DF] bg-[#FCFAF7]/95 text-[#151312]"}`} data-section-nav data-section-style="bar" data-section-tone={tone} data-floatable={floatable ? "1" : undefined}>
       <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-10">{content}</div>
     </div>
   );
