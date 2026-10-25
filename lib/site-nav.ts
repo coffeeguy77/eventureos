@@ -15,3 +15,20 @@ export function readSiteNav(orgSettings: unknown): Record<SiteSection, string> {
   }
   return out;
 }
+
+/**
+ * Extra classes listed under Barista lessons in the menu and footer (e.g. a roasting course), straight to that course's page.
+ * Saved at settings.site.lessonLinks = [{ label, course: "<course slug>", note }].
+ */
+export interface LessonLink { label: string; href: string; note: string }
+export function lessonLinks(raw: unknown, slug: string): LessonLink[] {
+  const site = raw && typeof raw === "object" ? (raw as Record<string, unknown>).site : null;
+  const list = site && typeof site === "object" ? (site as Record<string, unknown>).lessonLinks : null;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((x) => {
+    if (!x || typeof x !== "object") return [];
+    const { label, course, note } = x as Record<string, unknown>;
+    if (typeof label !== "string" || !label.trim() || typeof course !== "string" || !/^[a-z0-9-]{1,80}$/.test(course)) return [];
+    return [{ label: label.trim().slice(0, 40), href: `/book/${slug}/${course}`, note: typeof note === "string" ? note.trim().slice(0, 60) : "" }];
+  }).slice(0, 4);
+}

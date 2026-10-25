@@ -3,7 +3,7 @@
  * (café, coffee shop, classes and academy, roasting space, events, wholesale, job board, info pages) and nothing else.
  */
 import type { PublicOrg } from "@/lib/bookings/server";
-import { readSiteNav } from "@/lib/site-nav";
+import { lessonLinks, readSiteNav } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
 import { readEvents } from "@/lib/events/core";
@@ -52,7 +52,7 @@ export function footerModel(org: PublicOrg): FooterModel {
     ...(gifts ? [{ label: "Coffee gift cards", href: `/shop/${base}/gift-card` }] : []),
   ] });
   if (classes || learn.enabled) groups.push({ key: "learn", title: labels.lessons || "Barista lessons", blurb: "Hands-on classes and learning online.", links: [
-    ...(classes ? [{ label: "Hands-on classes", href: `/${base}` }] : []),
+    ...(classes ? [{ label: "Hands-on classes", href: `/${base}` }, ...lessonLinks(s, base).map(({ label, href }) => ({ label, href }))] : []),
     ...(learn.enabled ? [{ label: learn.name, href: `/academy/${base}` }, { label: "Online lessons", href: `/academy/${base}/course` }, { label: "Roast simulator", href: `/academy/${base}/roast` }] : []),
     ...(learn.enabled && learn.ai.enabled ? [{ label: "AI coach", href: `/academy/${base}/coach` }] : []),
     ...(classes && gifts ? [{ label: "Class gift certificates", href: `/book/${base}/gift` }] : []),

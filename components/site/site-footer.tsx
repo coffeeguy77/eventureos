@@ -48,7 +48,7 @@ function ContactList({ m, tone }: { m: FooterModel; tone: "dark" | "light" }) {
 function HoursList({ hours, tone }: { hours: Hours; tone: "dark" | "light" }) {
   if (!hours.length) return null;
   return (
-    <dl className="space-y-1 text-[0.8438rem]">
+    <dl className="max-w-[280px] space-y-1 text-[0.8438rem]">
       {hours.map((r) => <div key={r.day} className="flex justify-between gap-6"><dt className={tone === "dark" ? "text-white/60" : "text-[#8C847D]"}>{r.day.slice(0, 3)}</dt><dd className={r.closed ? (tone === "dark" ? "text-white/40" : "text-[#A39A93]") : tone === "dark" ? "text-white/90" : "text-[#151312]"}>{r.text}</dd></div>)}
     </dl>
   );

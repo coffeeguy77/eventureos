@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
-import { readSiteNav, type SiteSection } from "@/lib/site-nav";
+import { readSiteNav, type SiteSection, lessonLinks as extraLessons } from "@/lib/site-nav";
 import { readJobSettings } from "@/lib/jobs/core";
 import { readShop } from "@/lib/shop/core";
 import { readEvents } from "@/lib/events/core";
@@ -46,6 +46,7 @@ export function MasterNav({ org, active, tone = "dark", cta }: { org: PublicOrg;
   const lessonLinks = [
     org.settings.enabled ? { kind: "lessons" as const, href: `/${base}`, label: "Hands-on classes", note: "Courses & upcoming dates" } : null,
     learn.enabled ? { kind: "academy" as const, href: `/academy/${base}`, label: learn.name, note: "Learn online, at your own pace" } : null,
+    ...(org.settings.enabled ? extraLessons(org.rawSettings, base).map((l) => ({ kind: "club" as const, ...l })) : []),
   ].filter((x): x is NonNullable<typeof x> => !!x);
   // Café: the café page, plus ordering, table bookings, roasting club and wholesale when they're on.
   const cafe = readCafe(org.rawSettings);
