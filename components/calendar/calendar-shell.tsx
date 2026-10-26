@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NotConnected } from "@/components/ui/connect-link";
 import { useCallback, useMemo, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -120,7 +121,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
             <span className={cn("w-full min-w-0 break-words text-[0.7188rem] sm:ml-auto sm:w-auto", google.error ? "font-medium text-rose-700" : google.connected ? "text-emerald-700" : "text-ink-faint")}>
               {google.error ? `Google Calendar sync error: ${google.error}`
                 : google.connected ? `Google Calendar connected${google.account ? ` (${google.account})` : ""}${google.lastSync ? ` · last sync ${google.lastSync}` : ""}`
-                  : "Google Calendar not connected · entries stay in EventureOS"}
+                  : <NotConnected name="Google Calendar" note="entries stay in EventureOS" className="hover:text-brand-700" />}
             </span>
           </div>
 

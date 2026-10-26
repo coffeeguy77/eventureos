@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotConnected } from "@/components/ui/connect-link";
 import { notFound } from "next/navigation";
 import { CustomerPricingCard, type CustomerPriceRow } from "./pricing-card";
 import { PaymentTermsControl } from "./terms-control";
@@ -260,7 +261,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               {c.xero_contact_id ? (
                 <span className="inline-flex items-center gap-1 text-emerald-700"><Link2 className="h-3.5 w-3.5" />Linked to Xero contact</span>
               ) : (
-                <span className="text-ink-faint">{xeroConnected ? "Not linked to a Xero contact yet" : "Xero not connected"}</span>
+                <span className="text-ink-faint">{xeroConnected ? "Not linked to a Xero contact yet" : <NotConnected name="Xero" />}</span>
               )}
               {lastContact && <span className="text-ink-faint">· Last email {relative(lastContact)}</span>}
             </div>
@@ -350,7 +351,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
               <Card>
                 <CardHeader title="Outstanding invoices" subtitle={openInvoices.length ? `${money(outstanding, cur)} across ${openInvoices.length} invoice${openInvoices.length === 1 ? "" : "s"}` : undefined}
-                  action={<span className="block max-w-[10rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{xeroConnected ? "Synced with Xero" : "Xero not connected"}</span>} />
+                  action={<span className="block max-w-[10rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{xeroConnected ? "Synced with Xero" : <NotConnected name="Xero" />}</span>} />
                 {openInvoices.length === 0 ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">Nothing owing. {live.length ? "All invoices are paid." : ""}</p> : (
                   <ul className="divide-y divide-line border-t border-line">
                     {openInvoices.map((i) => {
@@ -375,7 +376,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
               <Card>
                 <CardHeader title="Recent emails" action={<Link href={`/clients/${id}?tab=emails`} className="text-[0.7812rem] font-medium text-brand-600 hover:text-brand-700">All emails</Link>} />
-                {messages.length === 0 ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No emails linked to this client yet.{!gmailConnected && " Connect Gmail in Settings to bring conversations in automatically."}</p> : (
+                {messages.length === 0 ? <p className="px-5 pb-5 text-[0.7812rem] text-ink-muted">No emails linked to this client yet.{!gmailConnected && <> <a href="/settings/integrations" className="font-medium text-brand-700 underline underline-offset-2">Connect Gmail</a> to bring conversations in automatically.</>}</p> : (
                   <ul className="divide-y divide-line border-t border-line">
                     {messages.slice(0, 5).map((m) => {
                       const t = threads.find((x) => x.id === m.thread_id);
@@ -524,7 +525,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         {tab === "emails" && (
           <Card>
             <CardHeader title="Email history" subtitle="Every conversation with this client, across all their enquiries and events. Gmail stays the source of truth."
-              action={<span className="block max-w-[10rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{gmailConnected ? "Gmail connected" : "Gmail not connected"}</span>} />
+              action={<span className="block max-w-[10rem] text-right text-[0.7188rem] text-ink-faint sm:max-w-none">{gmailConnected ? "Gmail connected" : <NotConnected name="Gmail" />}</span>} />
             {threads.length > 0 && (
               <div className="flex flex-wrap gap-1.5 px-5 pb-3">
                 {[...new Set(threads.map((t) => t.classification))].map((k) => (
@@ -597,7 +598,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           <Card>
             <CardHeader title="Invoices" subtitle={`${money(live.reduce((s, i) => s + Number(i.total), 0), cur)} invoiced · ${money(outstanding, cur)} outstanding`}
               action={canManage(role) ? <ButtonLink href={`/invoices/new?customer=${c.id}`} variant="primary" size="sm" className="h-10 sm:h-8">New invoice</ButtonLink> : undefined} />
-            <p className="-mt-2 px-5 pb-3 text-[0.7188rem] text-ink-faint">{xeroConnected ? "Synced with Xero" : "Xero not connected · invoices recorded in EventureOS"}</p>
+            <p className="-mt-2 px-5 pb-3 text-[0.7188rem] text-ink-faint">{xeroConnected ? "Synced with Xero" : <NotConnected name="Xero" note="invoices recorded in EventureOS" />}</p>
             {invoices.length === 0 ? <EmptyState title="No invoices yet">Invoices raised for this client’s events appear here.</EmptyState> : (<>
               <ul className="divide-y divide-line border-t border-line md:hidden">
                 {invoices.map((i) => (

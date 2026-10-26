@@ -13,7 +13,7 @@ type Opt = { id: string; name: string; kind: string };
 type Ref = { item_id: string; qty: number; auto?: boolean };
 
 /** Add or edit a hire item: stock, rates for each unit, bond, turnaround, what goes with it, packages, maintenance dates. */
-export function ItemForm({ id, initial, units, others, categories, canEdit }: { id: string | null; initial: ItemInput; units: RateUnit[]; others: Opt[]; categories: string[]; canEdit: boolean }) {
+export function ItemForm({ id, initial, units, others, categories, canEdit, brands = [] }: { id: string | null; initial: ItemInput; units: RateUnit[]; others: Opt[]; categories: string[]; canEdit: boolean; brands?: { key: string; name: string }[] }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [rates, setRates] = useState<Record<string, string>>(() => Object.fromEntries(((initial.rates as { unit: string; price: number }[]) ?? []).map((r) => [r.unit, String(r.price)])));
@@ -57,6 +57,7 @@ export function ItemForm({ id, initial, units, others, categories, canEdit }: { 
           <div className="sm:col-span-2"><Label htmlFor="it-kind">Type</Label>
             <Select id="it-kind" value={f.kind} onChange={(e) => set("kind", e.target.value as ItemInput["kind"])}><option value="hire">Hire item</option><option value="sale">Sale item (sold, not returned)</option><option value="package">Package (a set of items)</option></Select></div>
           <div className="sm:col-span-2"><Label htmlFor="it-cat">Category</Label><Input id="it-cat" list="it-cats" value={f.category ?? ""} maxLength={80} onChange={(e) => set("category", e.target.value)} placeholder="e.g. Marquees" /><datalist id="it-cats">{categories.map((c) => <option key={c} value={c} />)}</datalist></div>
+          {brands.length > 1 && <div className="sm:col-span-2"><Label htmlFor="it-brand">Brand</Label><Select id="it-brand" value={f.brand ?? brands[0].key} onChange={(e) => set("brand", e.target.value)}>{brands.map((b) => <option key={b.key} value={b.key}>{b.name}</option>)}</Select></div>}
           <div className="sm:col-span-2"><Label htmlFor="it-sub" hint="optional">Sub-category</Label><Input id="it-sub" value={f.subcategory ?? ""} maxLength={80} onChange={(e) => set("subcategory", e.target.value)} /></div>
           {f.kind !== "package" && <>
             <div className="sm:col-span-2"><Label htmlFor="it-qty">{f.kind === "sale" ? "In stock" : "How many you own"}</Label><Input id="it-qty" type="number" min={0} value={f.quantity} onChange={(e) => set("quantity", Number(e.target.value))} /></div>

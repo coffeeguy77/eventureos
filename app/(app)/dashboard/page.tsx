@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotConnected } from "@/components/ui/connect-link";
 import { ArrowUpRight } from "lucide-react";
 import { canManage, requireOrg, getMembers } from "@/lib/context";
 import { loadRevenueStreams } from "@/lib/revenue/load";
@@ -255,7 +256,7 @@ export default async function DashboardPage() {
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           <Card>
-            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={<Link href="/calendar" className="text-[0.7188rem] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link>} />
+            <CardHeader title="Next 7 days" subtitle="Calendar preview across all resources" action={conn("google_calendar")?.status === "connected" ? <Link href="/calendar" className="text-[0.7188rem] text-ink-faint hover:text-ink">{connLabel("google_calendar", "Google Calendar")}</Link> : <span className="text-[0.7188rem]"><NotConnected name="Google Calendar" /></span>} />
             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-xl border-t border-line bg-line sm:grid-cols-7">
               {days.map((d) => {
                 const items = cal.filter((c) => localDay(c.starts_at) === d);
@@ -381,7 +382,7 @@ export default async function DashboardPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Recent customer communication" action={<span className="text-[0.7188rem] text-ink-faint">{conn("gmail")?.status === "connected" ? connLabel("gmail", "Gmail") : "Gmail not connected · demo messages"}</span>} />
+            <CardHeader title="Recent customer communication" action={<span className="text-[0.7188rem] text-ink-faint">{conn("gmail")?.status === "connected" ? connLabel("gmail", "Gmail") : <NotConnected name="Gmail" />}</span>} />
             <ul className="divide-y divide-line border-t border-line">
               {messages.map((m) => (
                 <li key={m.id}>

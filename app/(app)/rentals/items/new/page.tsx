@@ -15,8 +15,8 @@ export default async function NewHireItemPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New hire item" />
-      <ItemForm id={null} canEdit units={s.units} others={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind }))} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
-        initial={{ name: "", code: null, kind: "hire", category: null, subcategory: null, quantity: 1, out_of_service: 0, rates: [], bond: 0, buffer_hours: null, companions: [], package_lines: [], active: true }} />
+      <ItemForm id={null} canEdit units={s.units} brands={s.brands} others={items.map((i) => ({ id: i.id, name: i.name, kind: i.kind }))} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
+        initial={{ brand: s.brands[0]?.key ?? null, name: "", code: null, kind: "hire", category: null, subcategory: null, quantity: 1, out_of_service: 0, rates: [], bond: 0, buffer_hours: null, companions: [], package_lines: [], active: true }} />
     </div>
   );
 }

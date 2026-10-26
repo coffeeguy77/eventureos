@@ -12,7 +12,7 @@ import { APPS, appAllowed, appForPath } from "@/lib/apps";
 import { hireOn, orgAppAccess } from "@/lib/apps-server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
+  const { supabase, org, realProfile: profile, memberships, isSupportSession, current, role } = await requireOrg();
   const path = (await headers()).get("x-pathname") ?? "";
   if (path && !canOpen(role, path)) redirect(homeFor(role));
   const admin = await isSuperAdmin();

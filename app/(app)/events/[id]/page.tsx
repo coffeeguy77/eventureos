@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotConnected } from "@/components/ui/connect-link";
 import { AddToCalendarButton } from "@/components/calendar/add-to-calendar";
 import { notFound } from "next/navigation";
 import { Mail, Phone, MapPin, Clock, Users } from "lucide-react";
@@ -355,7 +356,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                 <CrewCard eventId={e.id} rows={crewList} options={crewOptions} canEdit={role === "owner" || role === "admin" || role === "manager"} needs={crewNeeds} confirmed={e.status === "confirmed"} />
               </Card>
               <Card>
-                <CardHeader title="Money" action={<span className="text-right text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected"}</span>} />
+                <CardHeader title="Money" action={<span className="text-right text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : <NotConnected name="Xero" />}</span>} />
                 <dl className="grid grid-cols-2 gap-4 px-5 pb-5">
                   <Field label="Quote">{currentVersion ? money(currentVersion.total, cur) : quote ? "Draft" : "—"}</Field>
                   <Field label="Invoiced">{money(invoiced, cur)}</Field>
@@ -485,7 +486,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader title="Calendar entries"
-                subtitle={`${integrations.google_calendar === "connected" ? "Google Calendar connected" : "Google Calendar not connected"}${runDays.length > 1 ? ` · ${runDays.length} days, one entry each` : ""}`}
+                subtitle={<>{integrations.google_calendar === "connected" ? "Google Calendar connected" : <NotConnected name="Google Calendar" />}{runDays.length > 1 ? ` · ${runDays.length} days, one entry each` : ""}</>}
                 action={cal.length > 0 ? <AddToCalendarButton eventId={e.id} onCalendar hasDate={!!e.event_date} size="xs" /> : undefined} />
               {cal.length === 0 ? <EmptyState title="Not on the calendar yet" action={<AddToCalendarButton eventId={e.id} onCalendar={false} hasDate={!!e.event_date} />}>Add it now, or it goes on automatically when the quote is accepted.</EmptyState> : (
                 <ul className="divide-y divide-line border-t border-line">
@@ -546,7 +547,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         {tab === "invoice" && (
           <Card>
             <CardHeader title="Invoices" subtitle={integrations.xero === "connected" ? "Invoices for this job — raised here or in Xero" : "Xero will be the accounting source of truth once connected"}
-              action={<span className="text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : "Xero not connected · demo invoices"}</span>} />
+              action={<span className="text-[0.7188rem] text-ink-faint">{integrations.xero === "connected" ? "Synced with Xero" : <NotConnected name="Xero" />}</span>} />
             {loose.length > 0 && (
               <div className="border-t border-line bg-amber-50/40 px-5 py-3">
                 <p className="text-[0.8125rem] font-semibold text-ink">{e.customer.name} has {loose.length === 1 ? "an invoice" : `${loose.length} invoices`} not linked to a job</p>

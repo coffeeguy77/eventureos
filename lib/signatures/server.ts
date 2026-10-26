@@ -43,6 +43,7 @@ export async function loadSignatureSetup(db: SupabaseClient, orgId: string): Pro
 export interface TeamPerson {
   userId: string;
   role: string;
+  title: string | null;
   accountName: string | null;
   accountEmail: string;
   /** What's stored in signature_profiles (null where they haven't set anything) */
@@ -52,8 +53,35 @@ export interface TeamPerson {
   updatedAt: string | null;
 }
 
+const SUPPORT = "EventureOS Support";
+
+/** The business itself as a signature person: its contact name, email and phone (used for EventureOS support sessions). */
+async function businessPerson(db: SupabaseClient, orgId: string): Promise<SignaturePerson> {
+  const { data } = await db.from("organisations").select("name, contact_email, contact_phone, settings").eq("id", orgId).maybeSingle();
+  const biz = ((data?.settings ?? {}) as { business?: { contact_name?: unknown; contact_title?: unknown } }).business ?? {};
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return {
+    ...Object.fromEntries(PERSON_FIELDS.map((f) => [f, null])),
+    display_name: str(biz.contact_name) ?? (data?.name as string | undefined) ?? null,
+    title: str(biz.contact_title),
+    email: (data?.contact_email as string | null) ?? null,
+    phone: (data?.contact_phone as string | null) ?? null,
+  } as SignaturePerson;
+}
+
 /** Everyone on the team (not customers), with their signature details resolved. */
 export async function loadTeamPeople(db: SupabaseClient, orgId: string, onlyUserId?: string): Promise<TeamPerson[]> {
+  const people = await loadTeamPeopleRaw(db, orgId, onlyUserId);
+  const support = people.filter((p) => p.title === SUPPORT);
+  if (!support.length && people.length) return people;
+  const biz = await businessPerson(db, orgId);
+  // EventureOS support signs as the business, and isn't listed as one of the team
+  if (onlyUserId) return people.map((p) => (p.title === SUPPORT ? { ...p, stored: null, person: biz } : p));
+  const team = people.filter((p) => p.title !== SUPPORT);
+  return team.length ? team : [{ userId: "business", role: "owner", title: null, accountName: biz.display_name ?? null, accountEmail: biz.email ?? "", stored: null, person: biz, updatedAt: null }];
+}
+
+async function loadTeamPeopleRaw(db: SupabaseClient, orgId: string, onlyUserId?: string): Promise<TeamPerson[]> {
   let q = db.from("organisation_users")
     .select("role, title, user:users!organisation_users_user_id_fkey(id, full_name, email)")
     .eq("organisation_id", orgId).eq("status", "active").neq("role", "customer");
@@ -75,7 +103,7 @@ export async function loadTeamPeople(db: SupabaseClient, orgId: string, onlyUser
       title: stored?.title || m.title || null,
       email: stored?.email || u.email || null,
     };
-    return { userId: u.id, role: m.role, accountName: u.full_name, accountEmail: u.email, stored, person, updatedAt: s?.updated_at ?? null };
+    return { userId: u.id, role: m.role, title: m.title as string | null, accountName: u.full_name, accountEmail: u.email, stored, person, updatedAt: s?.updated_at ?? null };
   }).sort((a, b) => (a.person.display_name ?? a.accountEmail).localeCompare(b.person.display_name ?? b.accountEmail));
 }
 

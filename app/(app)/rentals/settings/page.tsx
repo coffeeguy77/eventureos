@@ -14,7 +14,7 @@ export default async function HireSettingsPage() {
   const s = readHireSettings(org.settings);
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <HireSettingsForm initial={s} currency={org.currency} />
+      <HireSettingsForm initial={s} currency={org.currency} shopUrl={`/hire/${org.slug}/shop`} />
       {!(await orgAppAccess(org.id)) && <Card className="p-5"><HireSwitch on /></Card>}
     </div>
   );

@@ -34,6 +34,6 @@ export async function logActivity(supabase: SupabaseClient, a: ActivityInput) {
   if (error) throw new Error(`Audit log write failed: ${error.message}`);
 }
 
-export function actorName(profile: { full_name: string | null; email: string }) {
-  return profile.full_name ?? profile.email;
+export function actorName(profile: { full_name: string | null; email: string; actorLabel?: string }) {
+  return profile.actorLabel ?? profile.full_name ?? profile.email;
 }

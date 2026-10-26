@@ -67,9 +67,9 @@ export async function loadHolds(db: SupabaseClient, orgId: string, from: number,
   return { holds, pencilled };
 }
 
-export const BOOKING_LIST_COLS = "id, number, status, title, starts_at, ends_at, fulfilment, address, delivery_at, pickup_at, total, bond, bond_status, invoice_id, quote_expires, out_at, customer:customers(id, name), lines:hire_booking_lines(name, quantity, qty_out, qty_returned, qty_damaged)";
+export const BOOKING_LIST_COLS = "id, number, status, title, starts_at, ends_at, fulfilment, address, delivery_at, pickup_at, total, bond, bond_status, invoice_id, quote_expires, out_at, customer:customers(id, name), lines:hire_booking_lines(name, quantity, qty_out, qty_returned, qty_damaged, item_id, line_total)";
 export type BookingListRow = {
   id: string; number: string; status: HireStatus; title: string | null; starts_at: string; ends_at: string; fulfilment: "collect" | "deliver"; address: string | null;
   delivery_at: string | null; pickup_at: string | null; total: number; bond: number; bond_status: string; invoice_id: string | null; quote_expires: string | null; out_at: string | null;
-  customer: { id: string; name: string } | null; lines: { name: string; quantity: number; qty_out: number; qty_returned: number; qty_damaged: number }[];
+  customer: { id: string; name: string } | null; lines: { name: string; quantity: number; qty_out: number; qty_returned: number; qty_damaged: number; item_id: string | null; line_total: number }[];
 };

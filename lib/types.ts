@@ -35,6 +35,8 @@ export interface Member {
   id: string;
   full_name: string | null;
   email: string;
+  /** set during an EventureOS support session: the name the audit trail shows */
+  actorLabel?: string;
 }
 
 export interface Customer {

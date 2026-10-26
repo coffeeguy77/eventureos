@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Store, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { STATUS_LABEL, STATUS_TONE } from "@/lib/hire/core";
+import { STATUS_LABEL, STATUS_TONE, bookingBrand, type HireSettings } from "@/lib/hire/core";
 import type { BookingListRow } from "@/lib/hire/server";
 import { money } from "@/lib/format";
 
@@ -9,7 +9,8 @@ const when = (iso: string, tz: string) => new Intl.DateTimeFormat("en-AU", { tim
 export const hireWhen = when;
 
 /** One hire booking in a list: client, number, status, dates, how it gets there and what's on it. */
-export function BookingRow({ b, tz, currency, note, showMoney = true }: { b: BookingListRow; tz: string; currency: string; note?: React.ReactNode; showMoney?: boolean }) {
+export function BookingRow({ b, tz, currency, note, showMoney = true, hire }: { b: BookingListRow; tz: string; currency: string; note?: React.ReactNode; showMoney?: boolean; hire?: Pick<HireSettings, "brands" | "itemBrands"> }) {
+  const brand = hire && hire.brands.length > 1 ? bookingBrand(hire, b.lines) : null;
   const units = b.lines.reduce((a, l) => a + Number(l.quantity), 0);
   return (
     <li>
@@ -21,6 +22,7 @@ export function BookingRow({ b, tz, currency, note, showMoney = true }: { b: Boo
           <p className="flex flex-wrap items-center gap-2 text-[0.8438rem] font-medium text-ink">
             {b.customer?.name ?? "No client"}<span className="text-[0.75rem] font-normal text-ink-faint">{b.number}</span>
             <Badge tone={STATUS_TONE[b.status]}>{STATUS_LABEL[b.status]}</Badge>
+            {brand && hire && brand.key !== hire.brands[0].key && <Badge tone="neutral">{brand.name}</Badge>}
             {note}
           </p>
           <p className="truncate text-[0.75rem] text-ink-muted">{b.title ? `${b.title} · ` : ""}{b.lines.slice(0, 4).map((l) => `${Number(l.quantity)} × ${l.name}`).join(", ")}{b.lines.length > 4 ? ` +${b.lines.length - 4} more` : ""}{!b.lines.length ? "No items" : ""}</p>

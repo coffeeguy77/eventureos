@@ -43,7 +43,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow="Invoices" title="New invoice"
-        subtitle={xeroRes.data?.status === "connected" ? "Created here, then sent to Xero on the next sync." : "Xero isn’t connected — this invoice will be managed in EventureOS."} />
+        subtitle={xeroRes.data?.status === "connected" ? "Created here, then sent to Xero on the next sync." : <>Xero isn’t connected, so this invoice is managed in EventureOS. <a href="/settings/integrations" className="font-medium text-brand-700 underline underline-offset-2">Connect Xero</a></>} />
       <NewInvoiceForm
         customers={(custRes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
         events={(evRes.data ?? []).map((e) => ({ id: e.id, label: `EV-${e.number} · ${e.name}${e.event_date ? ` · ${fmtDate(e.event_date)}` : ""}`, customerId: e.customer_id, date: (e.event_date as string | null) ?? null }))}

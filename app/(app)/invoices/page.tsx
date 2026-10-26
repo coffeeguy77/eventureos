@@ -118,7 +118,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         ) : (
           <>
             <span className="font-semibold text-ink">Xero not connected</span>
-            <span className="text-ink-muted">Invoices and payments are managed in EventureOS until Xero is connected.</span>
+            <span className="text-ink-muted">Invoices and payments are managed in EventureOS until Xero is connected. <Link href="/settings/integrations" className="font-medium text-brand-700 underline underline-offset-2">Connect Xero</Link></span>
           </>
         )}
       </div>

@@ -100,3 +100,20 @@ test("bond and totals", () => {
   assert.equal(bondFor([{ itemId: "a", qty: 2 }, { itemId: "b", qty: 1 }], items, "max"), 200);
   assert.deepEqual(bookingTotal([{ line_total: 100 }, { line_total: 50 }], 60, 10), { items: 150, total: 200, gst: 18.18 });
 });
+
+test("brands, delivery area and shop settings", async () => {
+  const { brandOf, bookingBrand } = await import("./core");
+  const s = readHireSettings({ hire: {
+    brands: [{ key: "main", name: "Hire & Events" }, { name: "Capital Pinball" }, { key: "x", name: "" }],
+    itemBrands: { "11111111-1111-1111-1111-111111111111": "capital-pinball", bad: "main" },
+    deliveryZone: { label: "ACT", fee: 195, states: ["ACT", "nsw"] }, shop: { enabled: true, instantBook: true, intro: " Hi " },
+  } });
+  assert.deepEqual(s.brands.map((b) => b.key), ["main", "capital-pinball"]);
+  assert.deepEqual(Object.keys(s.itemBrands), ["11111111-1111-1111-1111-111111111111"]);
+  assert.deepEqual(s.deliveryZone, { label: "ACT", fee: 195, states: ["ACT"] });
+  assert.deepEqual(s.shop, { enabled: true, instantBook: true, intro: "Hi" });
+  assert.equal(brandOf(s, "11111111-1111-1111-1111-111111111111")?.name, "Capital Pinball");
+  assert.equal(brandOf(s, null)?.key, "main");
+  assert.equal(bookingBrand(s, [{ item_id: "11111111-1111-1111-1111-111111111111", line_total: 500 }, { item_id: null, line_total: 40 }])?.key, "capital-pinball");
+  assert.equal(brandOf(readHireSettings(null), "x"), null);
+});

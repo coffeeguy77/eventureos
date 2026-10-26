@@ -29,7 +29,16 @@ export interface HireSettings {
   defaultEnd: string;       // "17:00"
   quoteDays: number;        // quotes expire after
   deliveryFee: number;      // default delivery charge (inc GST)
+  /** delivery charged automatically online when the address is in one of these states (otherwise quoted) */
+  deliveryZone: { label: string; fee: number; states: string[] } | null;
+  /** trading names run from the one account (the first is the business itself) */
+  brands: Brand[];
+  /** item id → brand key (items not listed belong to the first brand) */
+  itemBrands: Record<string, string>;
+  /** the public hire shop (/hire/<business>/shop) */
+  shop: { enabled: boolean; instantBook: boolean; intro: string | null };
 }
+export interface Brand { key: string; name: string; email: string | null; phone: string | null }
 export const DEFAULT_UNITS: RateUnit[] = [
   { key: "each", label: "Per hire", hours: 0 },
   { key: "half_day", label: "Half day", hours: 4 },
@@ -39,7 +48,36 @@ export const DEFAULT_UNITS: RateUnit[] = [
 export const DEFAULT_HIRE: HireSettings = {
   enabled: false, units: DEFAULT_UNITS, bufferHours: 2, graceHours: 1, excludeWeekends: false, bondMode: "sum",
   depositPct: 0, defaultStart: "09:00", defaultEnd: "17:00", quoteDays: 14, deliveryFee: 0,
+  deliveryZone: null, brands: [], itemBrands: {}, shop: { enabled: false, instantBook: false, intro: null },
 };
+
+export function cleanBrands(raw: unknown): Brand[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Brand[] = [];
+  const str = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
+  for (const r of raw.slice(0, 12)) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const name = str(o.name, 120);
+    const key = (str(o.key, 40) ?? (name ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : "")).replace(/[^a-z0-9-]/g, "");
+    if (!name || !key || out.some((b) => b.key === key)) continue;
+    out.push({ key, name, email: str(o.email, 200), phone: str(o.phone, 40) });
+  }
+  return out;
+}
+/** The brand an item is sold under (null when the business has no brands). */
+export function brandOf(s: Pick<HireSettings, "brands" | "itemBrands">, itemId: string | null | undefined): Brand | null {
+  if (!s.brands.length) return null;
+  const k = itemId ? s.itemBrands[itemId] : undefined;
+  return s.brands.find((b) => b.key === k) ?? s.brands[0];
+}
+/** A booking's brand: the brand of most of what's on it (by value), else the main one. */
+export function bookingBrand(s: Pick<HireSettings, "brands" | "itemBrands">, lines: { item_id: string | null; line_total: number }[]): Brand | null {
+  if (!s.brands.length) return null;
+  const score = new Map<string, number>();
+  for (const l of lines) { const b = brandOf(s, l.item_id); if (b) score.set(b.key, (score.get(b.key) ?? 0) + Math.max(0.01, Number(l.line_total) || 0)); }
+  const best = [...score].sort((a, b) => b[1] - a[1])[0];
+  return s.brands.find((b) => b.key === best?.[0]) ?? s.brands[0];
+}
 
 const num = (v: unknown, lo: number, hi: number, d: number) => {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
@@ -76,6 +114,18 @@ export function readHireSettings(settings: unknown): HireSettings {
     defaultEnd: hhmm(h.defaultEnd, DEFAULT_HIRE.defaultEnd),
     quoteDays: Math.round(num(h.quoteDays, 1, 365, DEFAULT_HIRE.quoteDays)),
     deliveryFee: num(h.deliveryFee, 0, 100_000, 0),
+    deliveryZone: (() => {
+      const z = (h.deliveryZone ?? null) as Record<string, unknown> | null;
+      if (!z || typeof z !== "object") return null;
+      const states = Array.isArray(z.states) ? (z.states as unknown[]).filter((x): x is string => typeof x === "string" && /^[A-Z]{2,3}$/.test(x)) : [];
+      return states.length ? { label: typeof z.label === "string" && z.label.trim() ? z.label.trim().slice(0, 40) : states.join("/"), fee: num(z.fee, 0, 100_000, 0), states } : null;
+    })(),
+    brands: cleanBrands(h.brands),
+    itemBrands: h.itemBrands && typeof h.itemBrands === "object" ? Object.fromEntries(Object.entries(h.itemBrands as Record<string, unknown>).filter(([k, v]) => /^[0-9a-f-]{36}$/i.test(k) && typeof v === "string")) as Record<string, string> : {},
+    shop: (() => {
+      const o = (h.shop ?? {}) as Record<string, unknown>;
+      return { enabled: o.enabled === true, instantBook: o.instantBook === true, intro: typeof o.intro === "string" && o.intro.trim() ? o.intro.trim().slice(0, 600) : null };
+    })(),
   };
 }
 

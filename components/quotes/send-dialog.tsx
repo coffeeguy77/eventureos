@@ -172,7 +172,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] lg:overflow-hidden">
               {/* Compose */}
               <div className="min-w-0 space-y-4 p-4 sm:p-5 lg:overflow-y-auto">
-                {!setup.emailReady && <FormError message="Email can't be sent yet — connect Gmail in Settings → Integrations." />}
+                {!setup.emailReady && <p className="text-[0.8125rem] text-rose-600">Email can&apos;t be sent yet. <a href="/settings/integrations" className="font-medium underline underline-offset-2">Connect Gmail in Settings → Integrations</a></p>}
                 <div>
                   <p className="mb-1.5 text-[0.7812rem] font-medium text-ink">From</p>
                   <div role="radiogroup" aria-label="Send from" className="grid gap-2 sm:grid-cols-2">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NotConnected } from "@/components/ui/connect-link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { Card, EmptyState } from "@/components/ui/card";
@@ -55,7 +56,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     <div>
       <PageHeader title="Payments" subtitle="Every payment received, by customer, invoice and event."
         actions={<span className={cn("text-[0.75rem]", xeroConnected ? "text-emerald-700" : "text-ink-faint")}>
-          {xeroConnected ? `Synced with Xero${xeroRes.data?.last_sync_at ? ` · ${relative(xeroRes.data.last_sync_at)}` : ""}` : "Xero not connected · manual payments only"}
+          {xeroConnected ? `Synced with Xero${xeroRes.data?.last_sync_at ? ` · ${relative(xeroRes.data.last_sync_at)}` : ""}` : <NotConnected name="Xero" note="manual payments only" />}
         </span>} />
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">

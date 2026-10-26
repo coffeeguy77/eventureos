@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrg } from "@/lib/context";
 import { Card, EmptyState } from "@/components/ui/card";
 import { BookingRow } from "@/components/rentals/booking-row";
+import { readHireSettings } from "@/lib/hire/core";
 import { BOOKING_LIST_COLS, type BookingListRow } from "@/lib/hire/server";
 import { money } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -51,7 +52,7 @@ export default async function HireBookingsPage({ searchParams }: { searchParams:
       {rows.length === 0 ? <Card><EmptyState title="No hire bookings here" action={<Link href="/rentals/bookings/new" className="text-[0.8125rem] font-medium text-brand-700 hover:underline">New booking</Link>} /></Card> : (
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-line px-5 py-2.5 text-[0.75rem] text-ink-muted"><span>{rows.length} booking{rows.length === 1 ? "" : "s"}</span><span>Total {money(total, org.currency)}</span></div>
-          <ul className="divide-y divide-line">{rows.map((b) => <BookingRow key={b.id} b={b} tz={org.timezone} currency={org.currency} />)}</ul>
+          <ul className="divide-y divide-line">{rows.map((b) => <BookingRow key={b.id} b={b} tz={org.timezone} currency={org.currency} hire={readHireSettings(org.settings)} />)}</ul>
         </Card>
       )}
     </div>

@@ -71,7 +71,16 @@ export async function requireOrg() {
     if (crewSlug) redirect(`/crew/${crewSlug}?office=1`);
     redirect("/onboarding");
   }
-  return { ...ctx, org: ctx.current.organisation, role: ctx.current.role };
+  const org = ctx.current.organisation;
+  if (ctx.isSupportSession) {
+    // EventureOS support works as the business: emails, sign-offs and reply-to addresses are the business's own,
+    // never the support person's. The audit trail still says "EventureOS Support" (see actorName).
+    const biz = ((org.settings ?? {}) as { business?: { contact_name?: unknown } }).business;
+    const name = typeof biz?.contact_name === "string" && biz.contact_name.trim() ? biz.contact_name.trim() : org.name;
+    const profile = { ...ctx.profile, full_name: name, email: org.contact_email || ctx.profile.email, actorLabel: "EventureOS Support" } as Member;
+    return { ...ctx, realProfile: ctx.profile, profile, org, role: ctx.current.role };
+  }
+  return { ...ctx, realProfile: ctx.profile, org, role: ctx.current.role };
 }
 
 /** The staff app this login belongs to, if they're on an organisation's staff list (not an office user). */

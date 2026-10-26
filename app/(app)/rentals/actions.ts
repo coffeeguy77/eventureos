@@ -55,8 +55,17 @@ export async function saveHireSettings(input: Partial<HireSettings>): Promise<Re
       if (!units.some((u) => u.hours > 0)) throw new Error("Keep at least one timed rate (like Day).");
       clean.units = units;
     }
-    const { enabled: _e, ...rest } = clean;
-    await patchHire(rest);
+    // only what was sent is changed (brands, item brands and the shop are saved separately)
+    const patch: Record<string, unknown> = {};
+    for (const k of Object.keys(input) as (keyof HireSettings)[]) if (k !== "enabled" && k !== "itemBrands") patch[k] = clean[k];
+    if (input.brands) {
+      const { readHireSettings: r } = await import("@/lib/hire/core");
+      const { org } = await manager();
+      const keys = new Set(clean.brands.map((b) => b.key));
+      const current = r(org.settings).itemBrands;
+      patch.itemBrands = Object.fromEntries(Object.entries(current).filter(([, v]) => keys.has(v)));
+    }
+    await patchHire(patch as Partial<HireSettings>);
     return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
@@ -68,6 +77,8 @@ export interface ItemInput {
   quantity: number; out_of_service: number; rates: unknown; bond: number; buffer_hours?: number | null; companions: unknown; package_lines: unknown;
   image_url?: string | null; weight_kg?: number | null; dimensions?: string | null; location?: string | null; test_tag_due?: string | null; service_due?: string | null;
   notes?: string | null; active: boolean;
+  /** brand key (businesses with more than one trading name) */
+  brand?: string | null;
 }
 
 export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
@@ -109,6 +120,12 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
       if (error) throw new Error(error.message);
       itemId = data.id as string;
       await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "hire.item_created", entityType: "hire_item", entityId: itemId, summary: `${actorName(profile)} added hire item ${name}` });
+    }
+    if (input.brand !== undefined && s.brands.length) {
+      const key = s.brands.some((b) => b.key === input.brand) ? input.brand! : s.brands[0].key;
+      const map = { ...s.itemBrands };
+      if (key === s.brands[0].key) delete map[itemId!]; else map[itemId!] = key;
+      await patchHire({ itemBrands: map });
     }
     done(); return { ok: true, data: itemId! };
   } catch (e) { return { ok: false, error: err(e) }; }

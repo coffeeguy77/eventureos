@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireOrg } from "@/lib/context";
 import { PrintButton } from "@/components/kitchen/editors";
-import { STATUS_LABEL, type HireStatus } from "@/lib/hire/core";
+import { STATUS_LABEL, bookingBrand, readHireSettings, type HireStatus } from "@/lib/hire/core";
 import { loadItems } from "@/lib/hire/server";
 
 export const metadata = { title: "Pick list" };
@@ -13,7 +13,7 @@ export default async function PickListPage({ params }: { params: Promise<{ id: s
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { supabase, org } = await requireOrg();
   const { data: b } = await supabase.from("hire_bookings")
-    .select("number, status, title, starts_at, ends_at, fulfilment, address, delivery_at, pickup_at, notes, internal_notes, reference, customer:customers(name, phone, email), lines:hire_booking_lines(item_id, name, kind, quantity, sort)")
+    .select("number, status, title, starts_at, ends_at, fulfilment, address, delivery_at, pickup_at, notes, internal_notes, reference, customer:customers(name, phone, email), lines:hire_booking_lines(item_id, name, kind, quantity, sort, line_total)")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (!b) notFound();
   const items = new Map((await loadItems(supabase, org.id)).map((i) => [i.id, i]));
@@ -21,6 +21,7 @@ export default async function PickListPage({ params }: { params: Promise<{ id: s
   const f = (iso: string | null) => (iso ? new Intl.DateTimeFormat("en-AU", { timeZone: tz, weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso)) : "—");
   type L = { item_id: string | null; name: string; kind: string; quantity: number; sort: number };
   const lines = ((b.lines ?? []) as L[]).filter((l) => l.kind !== "misc").sort((x, y) => x.sort - y.sort);
+  const brand = bookingBrand(readHireSettings(org.settings), (b.lines ?? []) as { item_id: string | null; line_total: number }[]);
   const c = b.customer as unknown as { name: string; phone: string | null; email: string | null } | null;
   const rows: { name: string; qty: number; code: string | null; loc: string | null; sub?: boolean }[] = [];
   for (const l of lines) {
@@ -33,7 +34,7 @@ export default async function PickListPage({ params }: { params: Promise<{ id: s
     <div className="mx-auto max-w-3xl bg-white p-6 text-[0.8125rem] text-zinc-900 print:p-0">
       <div className="mb-4 flex items-start justify-between gap-4 print:hidden"><p className="text-zinc-500">Print this for the warehouse and the driver.</p><PrintButton /></div>
       <div className="flex items-start justify-between gap-4 border-b border-zinc-300 pb-3">
-        <div><p className="text-[1.25rem] font-bold">{b.fulfilment === "deliver" ? "Delivery docket" : "Pick list"} · {b.number}</p><p className="text-zinc-600">{org.name}</p></div>
+        <div><p className="text-[1.25rem] font-bold">{b.fulfilment === "deliver" ? "Delivery docket" : "Pick list"} · {b.number}</p><p className="text-zinc-600">{brand?.name ?? org.name}</p></div>
         <p className="text-right text-zinc-600">{STATUS_LABEL[b.status as HireStatus]}{b.reference ? <><br />Ref {b.reference}</> : null}</p>
       </div>
       <div className="grid grid-cols-2 gap-4 border-b border-zinc-300 py-3">

@@ -117,7 +117,7 @@ export function SendInvoiceDialog({ invoiceId, onClose, onDone, after }: {
           <>
             <div className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] lg:overflow-hidden">
               <div className="min-w-0 space-y-4 p-4 sm:p-5 lg:overflow-y-auto">
-                {!setup.emailReady && <FormError message="Email can't be sent yet — connect Gmail in Settings → Integrations." />}
+                {!setup.emailReady && <p className="text-[0.8125rem] text-rose-600">Email can&apos;t be sent yet. <a href="/settings/integrations" className="font-medium underline underline-offset-2">Connect Gmail in Settings → Integrations</a></p>}
                 {setup.isDraft && setup.xeroManaged && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-900 ring-1 ring-inset ring-amber-200">This invoice is still a draft in Xero — approve it in Xero so it can be paid.</p>}
                 <div>
                   <p className="mb-1.5 text-[0.7812rem] font-medium text-ink">From</p>

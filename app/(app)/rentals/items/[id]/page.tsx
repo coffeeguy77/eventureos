@@ -6,7 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { ItemForm } from "@/components/rentals/item-form";
 import { BookingRow } from "@/components/rentals/booking-row";
 import { addDaysISO, money, todayISO, zonedMidnightUTC } from "@/lib/format";
-import { hireable, readHireSettings, usageGrid, type HireItem } from "@/lib/hire/core";
+import { brandOf, hireable, readHireSettings, usageGrid, type HireItem } from "@/lib/hire/core";
 import { BOOKING_LIST_COLS, loadHolds, loadItems, type BookingListRow } from "@/lib/hire/server";
 
 export const metadata = { title: "Hire item" };
@@ -63,11 +63,11 @@ export default async function HireItemPage({ params }: { params: Promise<{ id: s
       {(upcoming ?? []).length > 0 && (
         <Card className="mb-5">
           <CardHeader title="Booked and quoted" />
-          <ul className="divide-y divide-line border-t border-line">{((upcoming ?? []) as unknown as BookingListRow[]).map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={org.currency} />)}</ul>
+          <ul className="divide-y divide-line border-t border-line">{((upcoming ?? []) as unknown as BookingListRow[]).map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={org.currency} hire={s} />)}</ul>
         </Card>
       )}
-      <ItemForm id={it.id} canEdit={canManage(role)} units={s.units} others={others} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
-        initial={{ ...it, rates: it.rates, companions: it.companions, package_lines: it.package_lines }} />
+      <ItemForm id={it.id} canEdit={canManage(role)} units={s.units} brands={s.brands} others={others} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
+        initial={{ ...it, brand: brandOf(s, it.id)?.key ?? null, rates: it.rates, companions: it.companions, package_lines: it.package_lines }} />
     </div>
   );
 }

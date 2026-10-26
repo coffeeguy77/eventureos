@@ -75,7 +75,7 @@ export default async function HireTodayPage() {
         <Card className="border-rose-200">
           <CardHeader title={<span className="flex items-center gap-2 text-rose-800"><AlertTriangle className="h-4 w-4" />Needs attention</span>} subtitle="Sort these first: overdue returns and bookings without enough stock." />
           <ul className="divide-y divide-line border-t border-line">
-            {overdue.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} note={<Badge tone="red">Overdue since {fmtDate(b.ends_at.slice(0, 10), "short")}</Badge>} />)}
+            {overdue.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} hire={s} note={<Badge tone="red">Overdue since {fmtDate(b.ends_at.slice(0, 10), "short")}</Badge>} />)}
             {clashes.map(({ b, text }) => <BookingRow key={`c${b.id}`} b={b} tz={tz} currency={cur} note={<Badge tone="red">{text}</Badge>} />)}
           </ul>
         </Card>
@@ -84,19 +84,19 @@ export default async function HireTodayPage() {
       <div className="grid gap-5 xl:grid-cols-2">
         <Card>
           <CardHeader title="Going out today" subtitle={going.some((b) => b.starts_at < nowIso) ? "Some are past their start time and haven't been marked out." : "Pick, load and mark them out."} />
-          {going.length ? <ul className="divide-y divide-line border-t border-line">{going.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} showMoney={false} note={b.starts_at < dayStart ? <Badge tone="amber">Late</Badge> : null} />)}</ul>
+          {going.length ? <ul className="divide-y divide-line border-t border-line">{going.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} hire={s} showMoney={false} note={b.starts_at < dayStart ? <Badge tone="amber">Late</Badge> : null} />)}</ul>
             : <EmptyState title="Nothing going out today" />}
         </Card>
         <Card>
           <CardHeader title="Coming back today" subtitle={outUnits ? `${outUnits} item${outUnits === 1 ? "" : "s"} still to check in, including overdue.` : "Check them in as they arrive."} />
-          {back.length ? <ul className="divide-y divide-line border-t border-line">{back.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} showMoney={false} />)}</ul>
+          {back.length ? <ul className="divide-y divide-line border-t border-line">{back.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} hire={s} showMoney={false} />)}</ul>
             : <EmptyState title="Nothing due back today" />}
         </Card>
       </div>
 
       <Card>
         <CardHeader title="Next 7 days" subtitle="Quotes are pencilled in. They don't hold stock until they're reserved or booked." action={<Link href="/rentals/bookings" className="text-[0.8125rem] font-medium text-brand-700 hover:underline">All bookings</Link>} />
-        {week.length ? <ul className="divide-y divide-line border-t border-line">{week.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} />)}</ul>
+        {week.length ? <ul className="divide-y divide-line border-t border-line">{week.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} hire={s} />)}</ul>
           : <EmptyState title="Nothing in the next week" action={<Link href="/rentals/bookings/new" className="text-[0.8125rem] font-medium text-brand-700 hover:underline">New booking</Link>} />}
       </Card>
 
@@ -104,7 +104,7 @@ export default async function HireTodayPage() {
         {expiring.length > 0 && (
           <Card>
             <CardHeader title="Quotes about to expire" subtitle="Follow up, or reserve the stock before someone else books it." />
-            <ul className="divide-y divide-line border-t border-line">{expiring.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} note={<Badge tone={b.quote_expires && b.quote_expires < today ? "red" : "amber"}>{b.quote_expires && b.quote_expires < today ? "Expired" : `Expires ${fmtDate(b.quote_expires, "short")}`}</Badge>} />)}</ul>
+            <ul className="divide-y divide-line border-t border-line">{expiring.map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={cur} hire={s} note={<Badge tone={b.quote_expires && b.quote_expires < today ? "red" : "amber"}>{b.quote_expires && b.quote_expires < today ? "Expired" : `Expires ${fmtDate(b.quote_expires, "short")}`}</Badge>} />)}</ul>
           </Card>
         )}
         {maintenance.length > 0 && (
