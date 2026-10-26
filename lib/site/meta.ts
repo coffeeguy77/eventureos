@@ -13,7 +13,10 @@ export function canonicalFor(org: { slug: string; rawSettings: Record<string, un
 }
 
 /** Page metadata with the canonical address filled in. */
-export function siteMeta(org: { slug: string; rawSettings: Record<string, unknown> }, internalPath: string, meta: Metadata): Metadata {
+export function siteMeta(org: { slug: string; rawSettings: Record<string, unknown>; name?: string }, internalPath: string, meta: Metadata): Metadata {
   const url = canonicalFor(org, internalPath);
-  return { ...meta, alternates: { ...(meta.alternates ?? {}), canonical: url }, openGraph: { ...(meta.openGraph ?? {}), url } };
+  // A business's own page carries its own title — never "· EventureOS" on the end (that would compete with its name in search)
+  const title = typeof meta.title === "string" ? { absolute: meta.title } : meta.title;
+  return { ...meta, ...(title ? { title } : {}), alternates: { ...(meta.alternates ?? {}), canonical: url },
+    openGraph: { ...(org.name ? { siteName: org.name } : {}), ...(typeof meta.title === "string" ? { title: meta.title } : {}), ...(meta.openGraph ?? {}), url } };
 }
