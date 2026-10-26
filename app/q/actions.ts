@@ -7,8 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 
 const TOKEN = /^[0-9a-f]{64}$/;
 
-async function requestInfo() {
-  const h = await headers();
+export async function requestInfo(h?: Headers) {
+  h = h ?? (await headers());
   const dec = (v: string | null) => { if (!v) return null; try { return decodeURIComponent(v).slice(0, 100); } catch { return v.slice(0, 100); } };
   return {
     ip: (h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip") ?? "").trim().slice(0, 64) || null,

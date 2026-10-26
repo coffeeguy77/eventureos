@@ -1,16 +1,18 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { CheckCircle2, Printer } from "lucide-react";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
-import { recordQuoteLinkView, respondViaQuoteLink, type LinkRespondState } from "../actions";
+import type { LinkRespondState } from "../actions";
+
+const post = (body: Record<string, unknown>) => fetch("/api/public/quote-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 import { cn } from "@/lib/cn";
 
 /** Records the view once the page has been visible for a moment in a real browser (email link scanners don't run this). */
 export function ViewBeacon({ token }: { token: string }) {
   useEffect(() => {
     let done = false;
-    const fire = () => { if (done || document.visibilityState !== "visible") return; done = true; void recordQuoteLinkView(token); };
+    const fire = () => { if (done || document.visibilityState !== "visible") return; done = true; void post({ kind: "view", token }).catch(() => undefined); };
     const t = setTimeout(fire, 1500);
     const onVis = () => { if (document.visibilityState === "visible") setTimeout(fire, 1500); };
     document.addEventListener("visibilitychange", onVis);
@@ -36,7 +38,18 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
   token: string; versionNumber: number; total: string; defaultName: string; businessName: string; needsApproval: boolean;
 }) {
   const [mode, setMode] = useState<"accept" | "decline">("accept");
-  const [state, action, pending] = useActionState<LinkRespondState, FormData>(respondViaQuoteLink, undefined);
+  const [state, setState] = useState<LinkRespondState>(undefined);
+  const [pending, startT] = useTransition();
+  const [reason, setReason] = useState("");
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    startT(async () => {
+      try {
+        const r = await post({ kind: "respond", token, decision: mode === "accept" ? "accepted" : "declined", name, reason, agree });
+        setState((await r.json()) as LinkRespondState);
+      } catch { setState({ error: "Couldn't reach us — check your connection and try again." }); }
+    });
+  };
   const [name, setName] = useState(defaultName);
   const [agree, setAgree] = useState(false);
 
@@ -67,7 +80,7 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
           ))}
         </div>
       </div>
-      <form action={action} className="mt-4 space-y-4">
+      <form onSubmit={submit} className="mt-4 space-y-4">
         <input type="hidden" name="token" value={token} />
         <input type="hidden" name="decision" value={mode === "accept" ? "accepted" : "declined"} />
         {mode === "accept" ? (
@@ -96,7 +109,7 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
           <>
             <div>
               <Label htmlFor="decline-reason" hint="Optional">Let us know why</Label>
-              <Textarea id="decline-reason" name="reason" maxLength={1000} placeholder="e.g. Our plans have changed" className="bg-surface text-base sm:text-[0.875rem]" />
+              <Textarea id="decline-reason" name="reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} placeholder="e.g. Our plans have changed" className="bg-surface text-base sm:text-[0.875rem]" />
             </div>
             <input type="hidden" name="name" value={name} />
             <FormError message={state?.error} />
