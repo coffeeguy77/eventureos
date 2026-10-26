@@ -193,3 +193,16 @@ export function parseMessage(msg: GmailMessage): ParsedMessage {
 function decodeEntities(s: string) {
   return s.replace(/&(#?\w+);/g, (m, e: string) => ENTITIES[e.toLowerCase()] ?? (e.startsWith("#") ? String.fromCharCode(Number(e.slice(1))) : m));
 }
+
+/** users.messages.attachments.get — https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages.attachments/get */
+export async function getAttachment(ctx: SyncContext, messageId: string, attachmentId: string): Promise<Uint8Array> {
+  const r = await apiJSON<{ data?: string; size?: number }>(ctx, `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`, {}, "Gmail attachments.get");
+  return new Uint8Array(Buffer.from((r.data ?? "").replace(/-/g, "+").replace(/_/g, "/"), "base64"));
+}
+
+/** The PDF attachments in a message (any depth). */
+export function pdfParts(part: GmailPart | undefined): GmailPart[] {
+  if (!part) return [];
+  const mine = (part.mimeType === "application/pdf" || /\.pdf$/i.test(part.filename ?? "")) && (part.body?.attachmentId || part.body?.data) ? [part] : [];
+  return [...mine, ...(part.parts ?? []).flatMap(pdfParts)];
+}

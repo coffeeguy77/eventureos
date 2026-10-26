@@ -78,6 +78,25 @@ export async function GET(req: NextRequest) {
     shopJobs = await runShopJobs(db);
   } catch (e) { shopJobs = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Pricing: new supplier invoices from Gmail (businesses with suppliers set up; quietly nothing before the 0070 update)
+  let pricingJobs: unknown = null;
+  if (!only.length) try {
+    const { data: ps, error: psErr } = await db.from("price_suppliers").select("organisation_id").eq("active", true);
+    if (!psErr) {
+      const { syncSupplierInvoices } = await import("@/lib/pricing/sync");
+      const { orgAiKey } = await import("@/lib/ai/key");
+      const out: Record<string, unknown> = {};
+      for (const orgId of new Set(((ps ?? []) as { organisation_id: string }[]).map((r) => r.organisation_id))) {
+        try {
+          const ctx = await buildContext(db, "service", orgId, "gmail", null);
+          const r = await syncSupplierInvoices(ctx, { aiKey: await orgAiKey(orgId) });
+          out[orgId] = { imported: r.imported, failed: r.failed, more: r.more };
+        } catch (e) { out[orgId] = { error: e instanceof Error ? e.message : String(e) }; }
+      }
+      pricingJobs = out;
+    }
+  } catch (e) { pricingJobs = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Online course (Learn): end passes that have run out, renew monthly plans (only while the business has it switched on)
   let learn: unknown = null;
   try {
@@ -147,5 +166,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }

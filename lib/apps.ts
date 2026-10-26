@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag";
 
 export interface AppInfo {
   key: AppKey;
@@ -109,6 +109,13 @@ export const APPS: AppInfo[] = [
     description: "Pages, menus and SEO on your own domain, with booking, hire, shop and enquiry forms built in.",
     features: ["Pages and menus you edit yourself", "Your own domain", "SEO redirects that keep your Google rankings", "Booking, hire and shop pages built in"],
     for: "Businesses that want one system for site and bookings",
+  },
+  {
+    key: "pricing", name: "Pricing", paths: ["/pricing"], icon: "tag",
+    tagline: "Catch price creep before it costs you.",
+    description: "Supplier invoices read straight from your email, every line's price tracked over time, and the cheapest supplier for each product when you order.",
+    features: ["Invoices read from Gmail automatically", "Price rises and incorrect invoices flagged", "Price history for every product", "Compare suppliers before you order"],
+    for: "Anyone buying stock from several suppliers",
   },
   {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",

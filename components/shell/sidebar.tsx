@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent,
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
@@ -24,6 +24,7 @@ const NAV = [
   { href: "/learn", label: "Learn", icon: GraduationCap },
   { href: "/store", label: "Shop", icon: Coffee },
   { href: "/wholesale", label: "Wholesale", icon: Truck },
+  { href: "/pricing", label: "Pricing", icon: Tag },
   { href: "/rentals", label: "Hire", icon: Tent, flag: "hire" as const },
   { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
   { href: "/offers", label: "Offers", icon: BadgePercent },
