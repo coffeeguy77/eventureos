@@ -24,16 +24,41 @@ import { confirmationEmail, giftEmail, officeAlertEmail, reminderEmail, seatOpen
 export interface PublicOrg {
   id: string; name: string; slug: string; logo_url: string | null; brand_colour: string | null; contact_email: string | null; contact_phone: string | null;
   website: string | null; address: string | null; timezone: string; currency: string; settings: BookingSettings; rawSettings: Record<string, unknown>; stripeReady: boolean;
+  /** accents in the business's own colour (businesses on chosen apps), not blended with the EventureOS pink */ pureBrand?: boolean;
 }
 
-const ORG_COLS = "id, name, slug, logo_url, brand_colour, contact_email, contact_phone, website, address, timezone, currency, settings, status";
+const ORG_COLS = "id, name, slug, logo_url, brand_colour, contact_email, contact_phone, website, address, timezone, currency, settings, status, app_access";
+
+/**
+ * A business on chosen apps only shows the public sections it has: classes need Classes & courses, the academy needs
+ * Academy, the coffee shop needs Shop; the job board, café and events pages only when it switched them on itself.
+ * (Businesses with every app — app_access null — are unchanged.) Settings readers default some of these to on, so
+ * without this a new client's site would show another business's kind of pages.
+ */
+export function publicSettings(raw: Record<string, unknown>, access: unknown): Record<string, unknown> {
+  if (!Array.isArray(access)) return raw;
+  const has = (k: string) => access.includes(k);
+  const sub = (k: string) => (raw[k] && typeof raw[k] === "object" ? (raw[k] as Record<string, unknown>) : null);
+  const off = (k: string, keep: boolean) => (keep ? raw[k] : { ...(sub(k) ?? {}), enabled: false });
+  return {
+    ...raw,
+    booking: off("booking", has("bookings") && !!sub("booking")),
+    learn: off("learn", has("learn") && sub("learn")?.enabled === true),
+    shop: off("shop", has("store") && sub("shop")?.enabled === true),
+    jobs: off("jobs", sub("jobs")?.enabled === true),
+    cafe: off("cafe", sub("cafe")?.enabled === true),
+    events: off("events", sub("events")?.enabled === true),
+  };
+}
 
 function toOrg(o: Record<string, unknown>, stripeReady: boolean): PublicOrg {
+  const raw = publicSettings((o.settings ?? {}) as Record<string, unknown>, o.app_access);
   return {
     id: o.id as string, name: o.name as string, slug: o.slug as string, logo_url: (o.logo_url as string) ?? null, brand_colour: (o.brand_colour as string) ?? null,
     contact_email: (o.contact_email as string) ?? null, contact_phone: (o.contact_phone as string) ?? null, website: (o.website as string) ?? null, address: (o.address as string) || null,
     timezone: (o.timezone as string) || "Australia/Sydney", currency: (o.currency as string) || "AUD",
-    settings: readSettings(o.settings), rawSettings: (o.settings ?? {}) as Record<string, unknown>, stripeReady,
+    settings: readSettings(raw), rawSettings: raw, stripeReady,
+    pureBrand: Array.isArray(o.app_access),
   };
 }
 

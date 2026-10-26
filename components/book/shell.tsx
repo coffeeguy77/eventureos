@@ -13,9 +13,9 @@ export function onColour(hex: string) {
   const L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
   return 1.05 / (L + 0.05) >= (L + 0.05) / 0.0556 ? "#ffffff" : "#111111";
 }
-export function brandStyle(org: Pick<PublicOrg, "brand_colour">): React.CSSProperties {
+export function brandStyle(org: Pick<PublicOrg, "brand_colour"> & { pureBrand?: boolean }): React.CSSProperties {
   const b = safeColour(org.brand_colour);
-  return { ["--b" as string]: b, ["--on-b" as string]: onColour(b) };
+  return { ["--b" as string]: b, ["--on-b" as string]: onColour(b), ...(org.pureBrand ? { ["--pk" as string]: b } : {}) };
 }
 
 /** Desktop page width for public pages (phones and tablets get the full width with side padding). */

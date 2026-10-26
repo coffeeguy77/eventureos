@@ -43,19 +43,19 @@ export async function MasterNav({ org, active, cta }: { org: PublicOrg; active?:
               {n > 0 && <span aria-hidden className={`mx-1 hidden h-4 w-px sm:block ${light ? "bg-[#E2D8D0]" : "bg-white/20"}`} />}
               {i.children.length > 1 ? (
                 <GiftMenu label={i.label} items={kids(i)} light={light} active={act === i.id} track={({ gifts: "Gift menu", lessons: "Lessons menu", cafe: "Café menu" } as Record<string, string>)[i.id] ?? `${i.label} menu`}
-                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
+                  itemClass={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[var(--pk,color-mix(in_srgb,var(--b)_40%,#ff0a6c))]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`} />
               ) : (
               <Link href={i.children[0]?.href ?? i.href} aria-current={act === i.id ? "page" : undefined}
-                className={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`}>
+                className={`relative inline-flex h-10 items-center whitespace-nowrap rounded-lg px-2 text-[15px] font-medium leading-none tracking-normal transition sm:h-[60px] sm:rounded-none sm:px-3 ${act === i.id ? (light ? "text-[var(--pk,color-mix(in_srgb,var(--b)_40%,#ff0a6c))]" : "text-[var(--b)]") : light ? "text-[#3A3431] hover:text-black" : "text-white/85 hover:text-white"}`}>
                 {i.label}
-                {act === i.id && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-[color-mix(in_srgb,var(--b)_70%,#ff0a6c)] max-sm:inset-x-2 max-sm:bottom-1 max-sm:h-[2px]" />}
+                {act === i.id && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-[var(--pk,color-mix(in_srgb,var(--b)_70%,#ff0a6c))] max-sm:inset-x-2 max-sm:bottom-1 max-sm:h-[2px]" />}
               </Link>
               )}
             </span>
           ))}
           {cta && (
             <Link href={cta.href} data-track={`${cta.label} (site menu)`}
-              className="shop-btn ml-4 inline-flex h-[42px] shrink-0 items-center gap-2 rounded-full bg-[color-mix(in_srgb,var(--b)_40%,#ff0a6c)] px-6 text-[0.9375rem] font-semibold text-white shadow-[0_10px_22px_-12px_color-mix(in_srgb,var(--b)_40%,#ff0a6c)] hover:brightness-105">
+              className="shop-btn ml-4 inline-flex h-[42px] shrink-0 items-center gap-2 rounded-full bg-[var(--pk,color-mix(in_srgb,var(--b)_40%,#ff0a6c))] px-6 text-[0.9375rem] font-semibold text-white shadow-[0_10px_22px_-12px_var(--pk,color-mix(in_srgb,var(--b)_40%,#ff0a6c))] hover:brightness-105">
               {cta.label}<ArrowRight className="h-4 w-4" />
             </Link>
           )}

@@ -111,8 +111,8 @@ export default async function SiteHome({ params }: P) {
         </section>
       )}
 
-      {/* About */}
-      <section className="bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)] py-16 sm:py-20">
+      {/* About (left out until there's something to say) */}
+      {(site.images.about || c("about.text", "") || about) && <section className="bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)] py-16 sm:py-20">
         <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
           {site.images.about
             ? <img {...edImg("site.images.about")} src={site.images.about} alt="" className="aspect-[4/3] w-full rounded-xl object-cover" />
@@ -124,7 +124,7 @@ export default async function SiteHome({ params }: P) {
             {about && <Link href={`/site/${org.slug}/${about.slug}`} className={`${btnLine} mt-6`}><span {...T("about.button", "Our story")} /><ArrowRight className="h-4 w-4" /></Link>}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* Contact */}
       <section className={`${WRAP} grid gap-10 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]`} id="contact">
