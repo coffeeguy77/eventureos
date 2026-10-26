@@ -8,6 +8,7 @@ import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
 import { PrefsSync } from "@/components/shell/personalise";
 import { readSite } from "@/lib/site/site";
+import { readHireSettings } from "@/lib/hire/core";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
@@ -15,7 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (path && !canOpen(role, path)) redirect(homeFor(role));
   const admin = await isSuperAdmin();
 
-  const flags = { franchise: readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise") };
+  const flags = {
+    franchise: readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
+    hire: readHireSettings(org.settings).enabled,
+  };
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
   const [notif, unread, openEnquiries, dueTasks] = await Promise.all([
     supabase

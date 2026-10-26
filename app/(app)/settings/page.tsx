@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { ActionForm, SubmitButton } from "./forms";
 import { updateOrganisation } from "./actions";
+import { HireSwitch } from "@/components/rentals/hire-switch";
+import { readHireSettings } from "@/lib/hire/core";
 import { BUSINESS_TYPES, CURRENCIES, PLAN_LABEL, ROLE_LABEL, TIMEZONES } from "./constants";
 
 export const metadata = { title: "Settings" };
@@ -103,6 +105,17 @@ export default async function OrganisationSettingsPage() {
               <Field label="Currency">{o.currency}</Field>
             </dl>
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Modules" subtitle="Sections only some businesses use." />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[0.875rem] font-medium text-ink">Hire</p>
+            <p className="text-[0.8125rem] text-ink-muted">Hire out equipment: items and rates, bookings with live availability, deliveries and returns.</p>
+          </div>
+          {canEdit || role === "manager" ? <HireSwitch on={readHireSettings(o.settings).enabled} /> : <Badge tone={readHireSettings(o.settings).enabled ? "green" : "neutral"}>{readHireSettings(o.settings).enabled ? "On" : "Off"}</Badge>}
         </div>
       </Card>
 

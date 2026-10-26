@@ -1,0 +1,20 @@
+import { redirect } from "next/navigation";
+import { canManage, requireOrg } from "@/lib/context";
+import { HireSettingsForm } from "@/components/rentals/settings-form";
+import { HireSwitch } from "@/components/rentals/hire-switch";
+import { Card } from "@/components/ui/card";
+import { readHireSettings } from "@/lib/hire/core";
+
+export const metadata = { title: "Hire settings" };
+
+export default async function HireSettingsPage() {
+  const { org, role } = await requireOrg();
+  if (!canManage(role)) redirect("/rentals");
+  const s = readHireSettings(org.settings);
+  return (
+    <div className="mx-auto max-w-3xl space-y-5">
+      <HireSettingsForm initial={s} currency={org.currency} />
+      <Card className="p-5"><HireSwitch on /></Card>
+    </div>
+  );
+}
