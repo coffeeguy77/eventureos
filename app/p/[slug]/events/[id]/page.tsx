@@ -640,7 +640,10 @@ function Payments({ slug, invoices, payments, cur, tz, cardPayments }: { slug: s
                         Issued {fmtDate(i.issue_date)}{i.due_date && ` · Due ${fmtDate(i.due_date)}`}
                       </p>
                     </div>
-                    <Badge tone={s.tone}>{s.label}</Badge>
+                    <span className="flex items-center gap-2">
+                      {i.status !== "void" && <a href={`/p/${slug}/invoices/${i.id}?download=1`} className="inline-flex items-center gap-1 text-[0.7812rem] font-semibold text-[var(--portal-brand)] hover:underline"><Download className="h-3.5 w-3.5" />{Number(i.balance) <= 0 ? "Tax invoice (paid)" : "Invoice PDF"}</a>}
+                      <Badge tone={s.tone}>{s.label}</Badge>
+                    </span>
                   </div>
                   <dl className="tabular mt-3 grid grid-cols-3 gap-3 text-[0.8125rem]">
                     <div><dt className="text-[0.7188rem] text-ink-faint">Total (incl. GST)</dt><dd className="text-ink">{money(i.total, i.currency || cur)}</dd></div>

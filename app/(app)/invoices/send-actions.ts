@@ -335,3 +335,74 @@ export async function sendInvoiceEmail(invoiceId: string, input: SendInvoiceInpu
     return { ok: false, error: e instanceof Error ? e.message : "Couldn't send the invoice." };
   }
 }
+
+/* ------------------------------------------------------------------ email a receipt or the paid tax invoice (PDF attached) */
+
+export interface SendDocInput {
+  doc: "receipt" | "tax_invoice";
+  paymentId?: string | null;
+  recipients: { email: string; name?: string | null }[];
+  subject: string;
+  message: string;
+  via: "gmail" | "resend";
+}
+
+export async function sendInvoiceDoc(invoiceId: string, input: SendDocInput): Promise<Result<{ sent: string[] }>> {
+  try {
+    const via = input.via === "gmail" ? "gmail" : "resend";
+    const recipients = [...new Set((input.recipients ?? []).map((r) => String(r.email ?? "").trim().toLowerCase()).filter(Boolean))];
+    if (!recipients.length) throw new Error("Add at least one email address to send to.");
+    if (recipients.length > MAX_RECIPIENTS) throw new Error(`You can send to up to ${MAX_RECIPIENTS} people at once.`);
+    for (const e of recipients) if (!EMAIL.test(e)) throw new Error(`“${e}” isn't a valid email address.`);
+    const subject = String(input.subject ?? "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
+    const message = String(input.message ?? "").replace(/\r\n/g, "\n").trim().slice(0, 5000);
+    if (!subject) throw new Error("Add a subject.");
+    if (!message) throw new Error("Add a message.");
+
+    const { supabase, org, user, profile, inv } = await load(invoiceId);
+    let pdf: { bytes: Uint8Array; file: string };
+    let heading: string;
+    if (input.doc === "receipt") {
+      if (!input.paymentId || !UUID.test(input.paymentId)) throw new Error("Choose which payment to send the receipt for.");
+      const { data: p } = await supabase.from("payments").select("id").eq("id", input.paymentId).eq("invoice_id", inv.id).eq("organisation_id", org.id).maybeSingle();
+      if (!p) throw new Error("That payment isn't on this invoice.");
+      const { receiptPdf } = await import("@/lib/payments/receipt");
+      const r = await receiptPdf(input.paymentId);
+      if (!r) throw new Error("Couldn't make the receipt.");
+      pdf = r; heading = "Payment receipt";
+    } else {
+      const { invoicePdf } = await import("@/lib/invoices/document");
+      const r = await invoicePdf(inv.id);
+      if (!r) throw new Error("Couldn't make the invoice PDF.");
+      pdf = r; heading = r.paid ? `Tax invoice ${inv.number} — paid` : `Tax invoice ${inv.number}`;
+    }
+
+    const { invoiceDocEmail } = await import("@/lib/email/templates");
+    const { data: o } = await supabase.from("organisations").select("brand_colour, logo_url, contact_email").eq("id", org.id).single();
+    const orgRow = o as { brand_colour: string | null; logo_url: string | null; contact_email: string | null } | null;
+    const sig = await signatureForSend(supabase, org.id, user.id, null).catch(() => null);
+    const m = invoiceDocEmail({ businessName: org.name, heading, message, url: `${appBaseUrl()}/pay/${inv.pay_token}`, brand: orgRow?.brand_colour, logoUrl: orgRow?.logo_url, signatureText: sig?.text ?? null });
+    const html = sig?.html ? m.html.replace("</body>", `<div style="max-width:520px;margin:0 auto;padding:0 16px 24px">${sig.html}</div></body>`) : m.html;
+    const fromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;
+
+    if (via === "gmail") {
+      const gm = await gmailSender(supabase, org.id, user.id);
+      if (!gm) throw new Error("Gmail isn't connected (or needs reconnecting in Settings → Integrations). Choose “EventureOS” to send without it.");
+      const raw = buildRawMessage({ from: gm.address, fromName, to: recipients, subject, text: m.text, html, attachments: [{ filename: pdf.file, contentType: "application/pdf", data: pdf.bytes }] });
+      await sendGmail(gm.ctx, raw, null);
+    } else {
+      if (!emailConfigured()) throw new Error("Email sending isn't set up (RESEND_API_KEY is missing in Vercel).");
+      const content = Buffer.from(pdf.bytes).toString("base64");
+      for (const e of recipients) await sendEmail({ to: e, subject, html, text: m.text, replyTo: profile.email || orgRow?.contact_email || null, fromName: org.name, attachments: [{ filename: pdf.file, content }] });
+    }
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: input.doc === "receipt" ? "invoice.receipt_emailed" : "invoice.tax_invoice_emailed", entityType: "invoice", entityId: inv.id,
+      customerId: inv.customer_id, eventId: inv.event_id,
+      summary: `${actorName(profile)} emailed ${input.doc === "receipt" ? `a receipt for ${inv.number}` : `the ${heading.toLowerCase()}`} to ${recipients.join(", ")}`,
+    });
+    revalidatePath(`/invoices/${inv.id}`);
+    return { ok: true, data: { sent: recipients } };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't send that." };
+  }
+}

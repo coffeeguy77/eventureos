@@ -147,3 +147,12 @@ export function franchiseApplicationEmail(o: { businessName: string; firstName: 
   const text = `${paragraphs.join("\n\n")}\n\nStart your application: ${o.url}`;
   return { subject, html, text };
 }
+
+/** A receipt or paid tax invoice sent from the invoice page (the PDF is attached). */
+export function invoiceDocEmail(o: { businessName: string; heading: string; message: string; url: string; brand?: string | null; logoUrl?: string | null; signatureText?: string | null }) {
+  const paragraphs = o.message.split(/\n{2,}/).map((p) => p.replace(/\n/g, " ").trim()).filter(Boolean);
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: o.heading, paragraphs,
+    button: { label: "View invoice & receipts", url: o.url }, footer: `Sent by ${o.businessName}. The PDF is attached to this email.` });
+  const text = `${o.message}\n\nView your invoice and receipts: ${o.url}${o.signatureText ? `\n\n${o.signatureText}` : ""}`;
+  return { html, text };
+}

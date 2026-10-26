@@ -14,6 +14,7 @@ import { daysBetween, fmtDate, fmtDateTime, money, relative, todayISO, zonedTime
 import type { ActivityLog, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { EmailInvoiceButton, InvoiceActions } from "./controls";
+import { DocMenu } from "./doc-menu";
 import { InvoiceJobPicker } from "@/components/invoices/link-job";
 import { OldLines } from "@/components/history/old-lines";
 import { copyJobs, copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
@@ -119,6 +120,13 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
               urgency: inv.due_date && daysBetween(today, inv.due_date) <= 2 ? "soon" : "normal",
             };
 
+  // Send or download: invoice (to pay), receipts, the paid tax invoice
+  const payAsc = [...payments].sort((a, b) => a.paid_at.localeCompare(b.paid_at));
+  const docMenu = (
+    <DocMenu invoiceId={inv.id} number={inv.number} business={org.name} owing={Number(inv.balance) > 0} paid={Number(inv.balance) <= 0 && inv.status !== "void"}
+      canEmail={canManage(role)} customerFirst={null}
+      payments={payAsc.map((p, n) => ({ id: p.id, label: `${inv.number}-R${n + 1} · ${money(p.amount, cur)} · ${fmtDateTime(p.paid_at, tz, "date")}` }))} />
+  );
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
@@ -221,7 +229,8 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
           )}
 
           <Card>
-            <CardHeader title="Payments" subtitle={`${money(received, cur)} received${credited ? ` · ${money(credited, cur)} credited` : ""}`} />
+            <CardHeader title="Payments" subtitle={`${money(received, cur)} received${credited ? ` · ${money(credited, cur)} credited` : ""}`}
+              action={inv.status !== "draft" && inv.status !== "void" ? docMenu : undefined} />
             {credits.length > 0 && (
               <ul className="divide-y divide-line border-t border-line bg-amber-50/40">
                 {credits.map((c) => (
@@ -259,7 +268,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         {/* On phones/tablets: actions, customer and event come first; activity goes last. */}
         <div className="order-first space-y-6 xl:order-none xl:col-start-2 xl:row-start-1">
           <Card>
-            <CardHeader title="Actions" />
+            <CardHeader title="Actions" action={inv.status !== "draft" && inv.status !== "void" ? docMenu : undefined} />
             {canManage(role) && inv.status !== "void" && Number(inv.balance) > 0 && inv.customer && (
               <EmailInvoiceButton invoiceId={inv.id} autoOpen={sp.send === "1"} after={{
                 clientId: inv.customer.id, clientName: inv.customer.name, eventId: inv.event?.id ?? "", tz,

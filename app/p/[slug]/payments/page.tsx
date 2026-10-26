@@ -33,7 +33,7 @@ export default async function PortalPayments({ params }: { params: Promise<{ slu
       <Link href={`/p/${slug}`} className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink"><ArrowLeft className="h-4 w-4" />Your account</Link>
       <div>
         <h1 className="portal-serif text-[2.25rem] font-semibold leading-tight text-ink">Invoices &amp; receipts</h1>
-        <p className="mt-1 text-[0.9375rem] text-ink-muted">Download a receipt for any payment you&apos;ve made.</p>
+        <p className="mt-1 text-[0.9375rem] text-ink-muted">Download your invoices, paid tax invoices and a receipt for every payment.</p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"><p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">To pay</p><p className="tabular mt-1 text-[1.375rem] font-semibold text-ink">{money(owing, cur)}</p></div>
@@ -75,6 +75,7 @@ export default async function PortalPayments({ params }: { params: Promise<{ slu
                   </div>
                   <span className="flex items-center gap-2">
                     <Badge tone={s.tone}>{s.label}</Badge>
+                    {i.status !== "void" && <a href={`/p/${slug}/invoices/${i.id}?download=1`} className={portalButton("secondary", "h-9 text-[0.8125rem]")}><Download className="h-4 w-4" />{Number(i.balance) <= 0 ? "Tax invoice (paid)" : "Invoice PDF"}</a>}
                     <a href={`/pay/${i.pay_token}`} className={portalButton(isOpenInvoice(i) ? "primary" : "secondary", "h-9 text-[0.8125rem]")}>{isOpenInvoice(i) ? "Pay" : "View"}</a>
                   </span>
                 </li>

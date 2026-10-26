@@ -96,6 +96,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
             </div>
           )}
         </div>
+        <p className="mt-4 text-center"><a href={`/pay/${token}/invoice?download=1`} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-muted hover:text-ink"><Download className="h-4 w-4" />{Number(inv.balance) <= 0 ? "Download the paid tax invoice (PDF)" : "Download the invoice (PDF)"}</a></p>
         <p className="mt-6 text-center text-[0.75rem] text-ink-faint">
           Questions? Contact {inv.org.name}{inv.org.contact_email ? ` · ${inv.org.contact_email}` : ""}{inv.org.contact_phone ? ` · ${inv.org.contact_phone}` : ""}
         </p>
