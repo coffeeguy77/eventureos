@@ -124,7 +124,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   });
 
   const colour = org.colour && /^#[0-9a-f]{6}$/i.test(org.colour) ? org.colour : "#1f2937";
-  const input = "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-[0.9375rem] text-zinc-900 outline-none focus:border-[var(--bc)] focus:ring-2 focus:ring-[var(--bc)]/20";
+  const input = "h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-[0.9375rem] text-zinc-900 outline-none focus:border-[var(--bc)]";
 
   if (step === "done" && result) {
     return (
@@ -169,7 +169,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
           </ul>
         )}
         {suggestions.length > 0 && (
-          <div className="mt-4 rounded-xl bg-[var(--bc)]/5 p-3">
+          <div className="mt-4 rounded-xl p-3" style={{ background: "color-mix(in srgb, var(--bc) 6%, white)" }}>
             <p className="flex items-center gap-1.5 text-[0.75rem] font-semibold text-[var(--bc)]"><Sparkles className="h-3.5 w-3.5" />Goes well with</p>
             {suggestions.map((s) => <button key={s.id} type="button" onClick={() => setQty(s.id, s.qty)} className="mt-2 flex w-full items-center justify-between rounded-lg bg-white px-3 py-2 text-left text-[0.8125rem] ring-1 ring-zinc-200 hover:ring-[var(--bc)]"><span>+ {s.qty} × {byId.get(s.id)!.name}</span><span className="text-zinc-500">{money(byId.get(s.id)!.price * s.qty)}</span></button>)}
           </div>
@@ -186,9 +186,9 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
             {fulfilment === "deliver" ? (
               <div className="mt-3 grid grid-cols-6 gap-2">
                 <input aria-label="Street address" placeholder="Street address" value={addr.street} onChange={(e) => setAddr({ ...addr, street: e.target.value })} className={`${input} col-span-6`} />
-                <input aria-label="Suburb" placeholder="Suburb" value={addr.suburb} onChange={(e) => setAddr({ ...addr, suburb: e.target.value })} className={`${input} col-span-3`} />
-                <select aria-label="State" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`${input} col-span-1 px-1`}>{STATES.map((s) => <option key={s}>{s}</option>)}</select>
-                <input aria-label="Postcode" placeholder="Postcode" inputMode="numeric" value={addr.postcode} onChange={(e) => setAddr({ ...addr, postcode: e.target.value.replace(/\D/g, "").slice(0, 4) })} className={`${input} col-span-2`} />
+                <input aria-label="Suburb" placeholder="Suburb" value={addr.suburb} onChange={(e) => setAddr({ ...addr, suburb: e.target.value })} className={`${input} col-span-6`} />
+                <select aria-label="State" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} className={`${input} col-span-3`}>{STATES.map((s) => <option key={s}>{s}</option>)}</select>
+                <input aria-label="Postcode" placeholder="Postcode" inputMode="numeric" value={addr.postcode} onChange={(e) => setAddr({ ...addr, postcode: e.target.value.replace(/\D/g, "").slice(0, 4) })} className={`${input} col-span-3`} />
               </div>
             ) : org.address && <p className="mt-3 text-[0.8125rem] text-zinc-600">Pick up from <span className="whitespace-pre-line font-medium text-zinc-900">{org.address.replace(/\n/g, ", ")}</span></p>}
           </div>
@@ -275,7 +275,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
                   return (
                     <article key={it.id} className={`flex flex-col rounded-2xl bg-white p-4 ring-1 ring-zinc-200 transition ${out ? "opacity-70" : "hover:shadow-md"}`}>
                       {it.image ? <img src={it.image} alt="" className="mb-3 aspect-[4/3] w-full rounded-xl object-cover" /> : (
-                        <div className="mb-3 grid aspect-[5/2] place-items-center rounded-xl bg-[var(--bc)]/[0.06] text-[1.5rem] font-black tracking-tight text-[var(--bc)]/40">{initials(it.name)}</div>
+                        <div className="mb-3 grid aspect-[5/2] place-items-center rounded-xl text-[1.5rem] font-black tracking-tight" style={{ background: "color-mix(in srgb, var(--bc) 7%, white)", color: "color-mix(in srgb, var(--bc) 45%, white)" }}>{initials(it.name)}</div>
                       )}
                       <p className="text-[0.9375rem] font-semibold leading-snug text-zinc-900">{it.name}</p>
                       {it.description && <p className="mt-1 line-clamp-2 whitespace-pre-line text-[0.8125rem] text-zinc-500">{it.description}</p>}
@@ -349,7 +349,7 @@ function DateField({ label, date, time, min, onChange }: { label: string; date: 
       <span className="mb-1 block text-[0.75rem] font-semibold uppercase tracking-wide text-zinc-500">{label}</span>
       <span className="flex gap-2">
         <input type="date" value={date} min={min} onChange={(e) => e.target.value && onChange(e.target.value, time)} className={`${cls} min-w-0 flex-1`} />
-        <input type="time" value={time} onChange={(e) => e.target.value && onChange(date, e.target.value)} className={`${cls} w-[7.5rem]`} aria-label={`${label} time`} />
+        <input type="time" value={time} onChange={(e) => e.target.value && onChange(date, e.target.value)} className={`${cls} w-[8.75rem] shrink-0`} aria-label={`${label} time`} />
       </span>
     </label>
   );
