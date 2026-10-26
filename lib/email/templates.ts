@@ -34,6 +34,20 @@ export function teamInviteEmail(o: { businessName: string; inviterName: string; 
   return { subject, html, text };
 }
 
+/** A business account EventureOS has set up for a client: the owner's welcome and sign-up link. */
+export function clientWelcomeEmail(o: { businessName: string; ownerName: string | null; url: string; apps: string[] }) {
+  const subject = `Your EventureOS account for ${o.businessName} is ready`;
+  const paragraphs = [
+    `Hi${o.ownerName ? ` ${o.ownerName}` : ""}, we've set up ${o.businessName} on EventureOS and made you its owner.`,
+    o.apps.length ? `Switched on for you: ${o.apps.join(", ")}, plus enquiries, clients, quotes, events, calendar, invoices and the customer portal.` : "Enquiries, clients, quotes, events, calendar, invoices and the customer portal are ready to use.",
+    "Create your account with this email address and you'll go straight in.",
+  ];
+  const html = layout({ brand: "#6028EC", businessName: "EventureOS", heading: `Welcome to EventureOS`, paragraphs,
+    button: { label: "Set up my account", url: o.url }, footer: "Not expecting this? You can ignore it." });
+  const text = `${paragraphs.join("\n\n")}\n\nSet up your account: ${o.url}\n\nNot expecting this? You can ignore it.`;
+  return { subject, html, text };
+}
+
 export function portalInviteEmail(o: { businessName: string; inviterName: string | null; firstName: string; eventName: string; eventDate: string | null; url: string; brand?: string | null; logoUrl?: string | null }) {
   const subject = `You've been added to ${o.eventName} with ${o.businessName}`;
   const paragraphs = [

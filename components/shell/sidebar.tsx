@@ -38,9 +38,9 @@ const NAV = [
   { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {} }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean } }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {} }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean; locked?: string[] } }) {
   const pathname = usePathname();
-  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]));
+  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]) && !(flags.locked ?? []).includes(i.href));
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">

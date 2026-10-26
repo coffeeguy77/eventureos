@@ -58,6 +58,7 @@ export default async function AdminOrganisations({ searchParams }: { searchParam
         subtitle="Change plans, suspend accounts and open an audited support session."
         actions={
           <form className="flex w-full gap-2 sm:w-auto">
+            <Link href="/admin/clients/new" className={buttonClass("primary", "sm", "h-10 shrink-0 sm:h-9")}>New client</Link>
             <Input name="q" defaultValue={q ?? ""} placeholder="Search business or owner" className="h-10 w-full py-1.5 sm:h-9 sm:w-[240px]" />
           </form>
         }
@@ -192,7 +193,7 @@ function ManagePanel({ o, inSession, until, idp }: { o: OrgRow; inSession: boole
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="rounded-xl border border-line bg-surface p-4">
-        <div className="text-[0.8125rem] font-semibold text-ink">Plan & status</div>
+        <div className="flex items-center justify-between gap-3"><span className="text-[0.8125rem] font-semibold text-ink">Plan & status</span><Link href={`/admin/clients/${o.id}`} className="text-[0.75rem] font-medium text-brand-700 hover:underline">Apps &amp; team →</Link></div>
         <p className="mt-0.5 text-[0.75rem] text-ink-muted">Suspending blocks the portal and website form. Logged in the organisation’s audit trail.</p>
         <ActionForm action={setOrganisationPlanStatus} className="mt-3">
           <input type="hidden" name="org_id" value={o.id} />

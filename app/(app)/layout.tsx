@@ -8,7 +8,8 @@ import { MobileTabBar } from "@/components/shell/mobile-nav";
 import { Topbar } from "@/components/shell/topbar";
 import { PrefsSync } from "@/components/shell/personalise";
 import { readSite } from "@/lib/site/site";
-import { readHireSettings } from "@/lib/hire/core";
+import { APPS, appAllowed, appForPath } from "@/lib/apps";
+import { hireOn, orgAppAccess } from "@/lib/apps-server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, profile, memberships, isSupportSession, current, role } = await requireOrg();
@@ -16,9 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (path && !canOpen(role, path)) redirect(homeFor(role));
   const admin = await isSuperAdmin();
 
+  // apps EventureOS hasn't given this business are hidden and locked
+  const access = await orgAppAccess(org.id);
+  const app = path ? appForPath(path) : null;
+  if (app && !appAllowed(access, app)) redirect(`/settings/apps?locked=${app}`);
   const flags = {
-    franchise: readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
-    hire: readHireSettings(org.settings).enabled,
+    franchise: appAllowed(access, "franchise") && readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
+    hire: hireOn(access, org.settings),
+    locked: APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths),
   };
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
   const [notif, unread, openEnquiries, dueTasks] = await Promise.all([

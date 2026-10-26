@@ -55,7 +55,7 @@ const isActive = (pathname: string, href: string) => pathname === href || pathna
 /** App-style bottom tab bar for phones and tablets (hidden on desktop, where the sidebar shows). */
 export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user, flags = {} }: {
   role: OrgRole;
-  flags?: { franchise?: boolean; hire?: boolean };
+  flags?: { franchise?: boolean; hire?: boolean; locked?: string[] };
   enquiries: number;
   isSuperAdmin: boolean;
   orgs: { id: string; name: string; role: string }[];
@@ -76,7 +76,7 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
   }, [open]);
 
   const tabs = role === "staff" ? [{ href: "/my-jobs", label: "My jobs", icon: Briefcase, badge: false }] : TABS.filter((t) => canOpen(role, t.href));
-  const more = MORE.filter((m) => canOpen(role, m.href) && (!("flag" in m && m.flag) || !!flags[m.flag]));
+  const more = MORE.filter((m) => canOpen(role, m.href) && (!("flag" in m && m.flag) || !!flags[m.flag]) && !(flags.locked ?? []).includes(m.href));
   const create = role === "staff" ? [] : CREATE.filter((c) => canOpen(role, c.href));
   const moreActive = !open && more.some((m) => isActive(pathname, m.href));
   const current = orgs.find((o) => o.id === currentOrgId);

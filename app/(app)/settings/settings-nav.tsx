@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { Building2, CalendarRange, Code2, FlaskConical, Palette, PenLine, PlugZap, Tags, Users, Zap } from "lucide-react";
+import { Building2, LayoutGrid, CalendarRange, Code2, FlaskConical, Palette, PenLine, PlugZap, Tags, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const ITEMS = [
   { href: "/settings", label: "Organisation", icon: Building2, exact: true },
+  { href: "/settings/apps", label: "Apps", icon: LayoutGrid },
   { href: "/settings/branding", label: "Branding & portal", icon: Palette },
   { href: "/settings/team", label: "Team", icon: Users },
   { href: "/settings/signatures", label: "Email signatures", icon: PenLine },

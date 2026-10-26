@@ -11,6 +11,7 @@ const BASE = "https://www.eventureos.com.au";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const out: MetadataRoute.Sitemap = [
     { url: `${BASE}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${BASE}/apps`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${BASE}/login`, changeFrequency: "yearly", priority: 0.3 },
   ];
   if (!serviceRoleConfigured()) return out;

@@ -6,6 +6,7 @@ import { ActionForm, SubmitButton } from "./forms";
 import { updateOrganisation } from "./actions";
 import { HireSwitch } from "@/components/rentals/hire-switch";
 import { readHireSettings } from "@/lib/hire/core";
+import { orgAppAccess } from "@/lib/apps-server";
 import { BUSINESS_TYPES, CURRENCIES, PLAN_LABEL, ROLE_LABEL, TIMEZONES } from "./constants";
 
 export const metadata = { title: "Settings" };
@@ -108,7 +109,7 @@ export default async function OrganisationSettingsPage() {
         </div>
       </Card>
 
-      <Card>
+      {!(await orgAppAccess(org.id)) && <Card>
         <CardHeader title="Modules" subtitle="Sections only some businesses use." />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4">
           <div className="min-w-0">
@@ -117,7 +118,7 @@ export default async function OrganisationSettingsPage() {
           </div>
           {canEdit || role === "manager" ? <HireSwitch on={readHireSettings(o.settings).enabled} /> : <Badge tone={readHireSettings(o.settings).enabled ? "green" : "neutral"}>{readHireSettings(o.settings).enabled ? "On" : "Off"}</Badge>}
         </div>
-      </Card>
+      </Card>}
 
       <Card>
         <CardHeader title="Subscription" subtitle="Your plan is managed by EventureOS. Contact support to change it." />

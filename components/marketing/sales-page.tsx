@@ -30,7 +30,7 @@ const FAQ: [string, string][] = [
   ["How much does it cost?", "Plans are being finalised. Book a demo and we’ll talk you through access for your business."],
 ];
 
-function Wordmark({ className }: { className?: string }) {
+export function Wordmark({ className }: { className?: string }) {
   return (
     <>
       <Image src="/brand/eventureos-wordmark-white.png" alt="EventureOS" width={152} height={23} priority className={`mk-wm-light ${className ?? ""}`} />
@@ -99,6 +99,7 @@ export function SalesPage() {
           <nav aria-label="Main" className="hidden items-center gap-7 text-[0.875rem] text-[rgb(var(--muted))] lg:flex">
             <a href="#how" className="hover:text-[rgb(var(--ink))]">How it works</a>
             <a href="#product" className="hover:text-[rgb(var(--ink))]">Product</a>
+            <Link href="/apps" className="hover:text-[rgb(var(--ink))]">Apps</Link>
             <a href="#integrations" className="hover:text-[rgb(var(--ink))]">Integrations</a>
             <a href="#pricing" className="hover:text-[rgb(var(--ink))]">Pricing</a>
             <a href="#faq" className="hover:text-[rgb(var(--ink))]">FAQ</a>
@@ -385,7 +386,7 @@ export function SalesPage() {
             <Wordmark className="h-[22px] w-auto" />
             <p className="mk-muted mt-4 max-w-sm text-[0.9375rem]">Event management software for caterers, mobile bars, coffee carts, hire companies, venues and planners.</p>
           </div>
-          <nav aria-label="Product" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Product</p><ul className="mk-muted space-y-2"><li><a href="#how" className="hover:text-[rgb(var(--ink))]">How it works</a></li><li><a href="#product" className="hover:text-[rgb(var(--ink))]">Tour</a></li><li><a href="#integrations" className="hover:text-[rgb(var(--ink))]">Integrations</a></li><li><a href="#pricing" className="hover:text-[rgb(var(--ink))]">Pricing</a></li></ul></nav>
+          <nav aria-label="Product" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Product</p><ul className="mk-muted space-y-2"><li><a href="#how" className="hover:text-[rgb(var(--ink))]">How it works</a></li><li><a href="#product" className="hover:text-[rgb(var(--ink))]">Tour</a></li><li><Link href="/apps" className="hover:text-[rgb(var(--ink))]">Apps</Link></li><li><a href="#integrations" className="hover:text-[rgb(var(--ink))]">Integrations</a></li><li><a href="#pricing" className="hover:text-[rgb(var(--ink))]">Pricing</a></li></ul></nav>
           <nav aria-label="Company" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Get started</p><ul className="mk-muted space-y-2"><li><a href="#demo" className="hover:text-[rgb(var(--ink))]">Book a demo</a></li><li><a href="#faq" className="hover:text-[rgb(var(--ink))]">FAQ</a></li></ul></nav>
           <nav aria-label="Account" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Customers</p><ul className="mk-muted space-y-2"><li><Link href="/login" className="hover:text-[rgb(var(--ink))]">Sign in</Link></li></ul></nav>
         </div>

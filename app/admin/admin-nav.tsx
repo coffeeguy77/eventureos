@@ -7,6 +7,8 @@ import { cn } from "@/lib/cn";
 const ITEMS = [
   { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/organisations", label: "Organisations" },
+  { href: "/admin/clients/new", label: "New client" },
+  { href: "/admin/plans", label: "Plans & apps" },
   { href: "/admin/audit", label: "Support audit" },
   { href: "/admin/demo-requests", label: "Demo requests" },
 ];

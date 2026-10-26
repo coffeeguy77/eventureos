@@ -4,21 +4,21 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { RentalsNav } from "@/components/rentals/nav";
 import { HireSwitch } from "@/components/rentals/hire-switch";
-import { readHireSettings } from "@/lib/hire/core";
+import { hireOn, orgAppAccess } from "@/lib/apps-server";
 
 export const metadata = { title: "Hire" };
 
 export default async function RentalsLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, role } = await requireOrg();
   if (role === "staff") redirect("/my-jobs");
-  const s = readHireSettings(org.settings);
+  const on = hireOn(await orgAppAccess(org.id), org.settings);
   const manager = canManage(role);
   const { count, error } = await supabase.from("hire_bookings").select("id", { count: "exact", head: true })
     .eq("organisation_id", org.id).eq("status", "out").lt("ends_at", new Date().toISOString());
   if (error && /hire_bookings|does not exist|Could not find/i.test(error.message)) {
     return <Card className="p-6 text-[0.875rem] text-ink-muted">Hire needs its database update first: run <span className="font-mono">supabase/migrations/0067_hire.sql</span> in Supabase (SQL editor), then refresh.</Card>;
   }
-  if (!s.enabled) {
+  if (!on) {
     return (
       <div className="mx-auto max-w-2xl">
         <PageHeader eyebrow="Hire" title="Hire out equipment" subtitle="Items, rates and stock, hire bookings with live availability, deliveries and returns, all joined to your clients, events and invoices." />
