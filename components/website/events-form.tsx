@@ -67,6 +67,44 @@ export function EventsForm({ initial, packages, slug, base, menus }: { initial: 
       </Card>
 
       <Card className="p-5">
+        <h2 className="font-semibold text-ink">Coffee cart &amp; van pages (for Google)</h2>
+        <p className="mt-0.5 text-[0.8125rem] text-ink-muted">These pages are what people find when they search, e.g. &quot;coffee cart hire {v.city || "your city"}&quot;. Add the longer description, your common questions, the size drawing and downloads.</p>
+        <div className="mt-4 space-y-5">
+          {(["cart", "van"] as const).filter((k) => v.fleet[k] > 0).map((k) => {
+            const pg = v.pages[k] ?? { metaDescription: "", about: "", highlights: [], faqs: [], specs: { length: null, width: null, height: null, vehicle: "", equipment: [], power: "", note: "" }, artwork: false, documents: false };
+            const setPg = (patch: Partial<typeof pg>) => set("pages", { ...v.pages, [k]: { ...pg, ...patch } });
+            const setSpec = (patch: Partial<typeof pg.specs>) => setPg({ specs: { ...pg.specs, ...patch } });
+            const num = (x: string) => (x.trim() ? Math.max(0, Math.round(Number(x))) || null : null);
+            return (
+              <details key={k} className="rounded-lg border border-line p-4" open={k === "cart"}>
+                <summary className="cursor-pointer font-semibold text-ink">{v.labels[k]} page</summary>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-md-${k}`} hint={`${pg.metaDescription.length}/160 — what Google shows under the title`}>Search description</Label><Input id={`pg-md-${k}`} maxLength={170} value={pg.metaDescription} onChange={(e) => setPg({ metaDescription: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-ab-${k}`} hint="blank line = new paragraph · ## = small heading">Longer description</Label><Textarea id={`pg-ab-${k}`} rows={8} value={pg.about} onChange={(e) => setPg({ about: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-hl-${k}`} hint="one per line: Title | text">Highlights</Label>
+                    <Textarea id={`pg-hl-${k}`} rows={4} defaultValue={pg.highlights.map((h) => `${h.title} | ${h.text}`).join("\n")} onBlur={(e) => setPg({ highlights: e.target.value.split("\n").map((l) => { const [t, ...r] = l.split("|"); return { title: (t ?? "").trim(), text: r.join("|").trim() }; }).filter((h) => h.title) })} /></div>
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-fq-${k}`} hint="Q: question, then A: answer — blank line between">Common questions</Label>
+                    <Textarea id={`pg-fq-${k}`} rows={10} defaultValue={pg.faqs.map((f) => `Q: ${f.q}\nA: ${f.a}`).join("\n\n")}
+                      onBlur={(e) => setPg({ faqs: e.target.value.split(/\n\s*\n/).map((b) => { const q = /^Q:\s*(.+)$/im.exec(b)?.[1]?.trim() ?? ""; const a = /^A:\s*([\s\S]+)$/im.exec(b)?.[1]?.trim() ?? ""; return { q, a }; }).filter((f) => f.q || f.a) })} /></div>
+                  <div className="grid grid-cols-3 gap-2 sm:col-span-2">
+                    <div><Label htmlFor={`pg-l-${k}`}>{k === "van" ? "Length" : "Width"} (mm)</Label><Input id={`pg-l-${k}`} inputMode="numeric" value={pg.specs.length ?? ""} onChange={(e) => setSpec({ length: num(e.target.value) })} /></div>
+                    <div><Label htmlFor={`pg-w-${k}`}>{k === "van" ? "Width" : "Depth"} (mm)</Label><Input id={`pg-w-${k}`} inputMode="numeric" value={pg.specs.width ?? ""} onChange={(e) => setSpec({ width: num(e.target.value) })} /></div>
+                    <div><Label htmlFor={`pg-h-${k}`}>Height (mm)</Label><Input id={`pg-h-${k}`} inputMode="numeric" value={pg.specs.height ?? ""} onChange={(e) => setSpec({ height: num(e.target.value) })} /></div>
+                  </div>
+                  <div><Label htmlFor={`pg-vh-${k}`} hint="optional">Vehicle / model</Label><Input id={`pg-vh-${k}`} value={pg.specs.vehicle} onChange={(e) => setSpec({ vehicle: e.target.value })} /></div>
+                  <div><Label htmlFor={`pg-pw-${k}`} hint="optional">Power</Label><Input id={`pg-pw-${k}`} value={pg.specs.power} onChange={(e) => setSpec({ power: e.target.value })} /></div>
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-eq-${k}`} hint={k === "cart" ? "one per line — the first two are labelled on the drawing (machine, grinder)" : "one per line"}>Equipment</Label><Textarea id={`pg-eq-${k}`} rows={3} defaultValue={pg.specs.equipment.join("\n")} onBlur={(e) => setSpec({ equipment: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></div>
+                  <div className="sm:col-span-2"><Label htmlFor={`pg-nt-${k}`} hint="optional">Note under the size</Label><Textarea id={`pg-nt-${k}`} rows={2} value={pg.specs.note} onChange={(e) => setSpec({ note: e.target.value })} /></div>
+                  <label className="flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" className="h-4 w-4" checked={pg.artwork} onChange={(e) => setPg({ artwork: e.target.checked })} />Show artwork templates (Customer Portal → Documents, &quot;Artwork template&quot;, public)</label>
+                  <label className="flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" className="h-4 w-4" checked={pg.documents} onChange={(e) => setPg({ documents: e.target.checked })} />Show food licence &amp; insurance downloads</label>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="p-5">
         <h2 className="font-semibold text-ink">Catering</h2>
         <p className="mt-0.5 text-[0.8125rem] text-ink-muted">The catering order page. Menu items come from Settings → Services &amp; pricing (categories starting with &quot;Catering&quot;). Prices show + GST.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-4">

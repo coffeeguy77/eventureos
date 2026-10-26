@@ -10,6 +10,8 @@ export async function serveLibraryDoc(orgId: string, docId: string, today: strin
   if (opts.publicOnly) q = q.eq("public_share", true);
   const { data: d } = await q.maybeSingle();
   if (!d?.storage_path || (d.expires_on && d.expires_on < today)) return new NextResponse("This document isn't available any more.", { status: 404 });
+  // Files that ship with the website (e.g. artwork templates) are stored as "media:/media/…"
+  if (d.storage_path.startsWith("media:/media/")) return NextResponse.redirect(new URL(d.storage_path.slice(6), process.env.APP_URL?.trim() || "https://www.eventureos.com.au"), { status: 302 });
   const { data, error } = await db.storage.from("documents").createSignedUrl(d.storage_path, 300, { download: d.name });
   if (error || !data) return new NextResponse("Couldn't open the document — please try again.", { status: 500 });
   return NextResponse.redirect(data.signedUrl, { status: 302 });

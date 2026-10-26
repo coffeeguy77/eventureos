@@ -28,6 +28,36 @@ export interface EventsSettings {
   drinks: DrinkGroup[];                           // the drinks menu page
   areas: string[];                                // places served, for the hire pages
   catering: CateringSettings;
+  /** Extra content for the coffee cart / van pages (search pages): long copy, highlights, FAQs, size and equipment */
+  pages: Partial<Record<"cart" | "van", HirePageExtras>>;
+}
+
+export interface HirePageExtras {
+  metaDescription: string;                        // Google's description (blank = built from the short description)
+  about: string;                                  // longer copy for search ("## " = heading, blank line = new paragraph)
+  highlights: { title: string; text: string }[];  // small feature tiles
+  faqs: { q: string; a: string }[];               // added after the built-in questions
+  specs: { length: number | null; width: number | null; height: number | null; vehicle: string; equipment: string[]; power: string; note: string };
+  artwork: boolean;                               // show the artwork templates (document library → "Artwork template")
+  documents: boolean;                             // link to the food licence & insurance documents
+}
+const EMPTY_EXTRAS: HirePageExtras = { metaDescription: "", about: "", highlights: [], faqs: [], specs: { length: null, width: null, height: null, vehicle: "", equipment: [], power: "", note: "" }, artwork: false, documents: false };
+
+export function readHirePage(v: unknown): HirePageExtras {
+  if (!v || typeof v !== "object") return EMPTY_EXTRAS;
+  const o = v as Record<string, unknown>;
+  const t = (x: unknown, n: number) => (typeof x === "string" ? x.trim().slice(0, n) : "");
+  const mm = (x: unknown) => { const n = Math.round(Number(x)); return Number.isFinite(n) && n > 0 && n < 20000 ? n : null; };
+  const sp = (o.specs && typeof o.specs === "object" ? o.specs : {}) as Record<string, unknown>;
+  return {
+    metaDescription: t(o.metaDescription, 170),
+    about: t(o.about, 8000),
+    highlights: (Array.isArray(o.highlights) ? o.highlights : []).slice(0, 9).map((h) => ({ title: t((h as Record<string, unknown>)?.title, 60), text: t((h as Record<string, unknown>)?.text, 400) })).filter((h) => h.title),
+    faqs: (Array.isArray(o.faqs) ? o.faqs : []).slice(0, 20).map((f) => ({ q: t((f as Record<string, unknown>)?.q, 160), a: t((f as Record<string, unknown>)?.a, 1500) })).filter((f) => f.q && f.a),
+    specs: { length: mm(sp.length), width: mm(sp.width), height: mm(sp.height), vehicle: t(sp.vehicle, 80), equipment: (Array.isArray(sp.equipment) ? sp.equipment : []).map((e) => t(e, 120)).filter(Boolean).slice(0, 8), power: t(sp.power, 300), note: t(sp.note, 400) },
+    artwork: o.artwork === true,
+    documents: o.documents === true,
+  };
 }
 
 /** How the catering order page works (settings.events.catering). Prices on the page are shown + GST. */
@@ -53,7 +83,7 @@ export const DEFAULT_EVENTS: EventsSettings = {
     van: "A coffee van that brings the café to you — made for outdoor events and big crowds.",
     diy: "Professional espresso equipment delivered and set up, so your team can make the coffee.",
   },
-  packages: {}, leadDays: 5, stickerPrice: null, stickerSize: "50mm round", images: {}, drinks: [], areas: [], catering: DEFAULT_CATERING,
+  packages: {}, leadDays: 5, stickerPrice: null, stickerSize: "50mm round", images: {}, drinks: [], areas: [], catering: DEFAULT_CATERING, pages: {},
 };
 
 const str = (v: unknown, d: string, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : d);
@@ -89,6 +119,7 @@ export function readEvents(orgSettings: unknown): EventsSettings {
     drinks,
     areas: Array.isArray(raw.areas) ? raw.areas.map((a) => str(a, "", 40)).filter(Boolean).slice(0, 12) : d.areas,
     catering: readCatering(raw.catering),
+    pages: Object.fromEntries((["cart", "van"] as const).map((k) => [k, readHirePage(obj(raw.pages)[k])])),
   };
 }
 

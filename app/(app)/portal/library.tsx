@@ -54,6 +54,7 @@ export function DocumentLibrary({ orgId, docs, today, canEdit }: { orgId: string
 
   async function open(d: LibraryDoc) {
     if (!d.storage_path) return;
+    if (d.storage_path.startsWith("media:/media/")) { window.open(d.storage_path.slice(6), "_blank", "noopener"); return; }
     const { data, error } = await createClient().storage.from("documents").createSignedUrl(d.storage_path, 120, { download: d.name });
     if (error || !data) { setMsg({ text: `Couldn't open ${d.name}.`, ok: false }); return; }
     window.location.assign(data.signedUrl);
