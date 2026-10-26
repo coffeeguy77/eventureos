@@ -6,9 +6,9 @@ import { actorName, logActivity } from "@/lib/activity";
 import { addDaysISO, todayISO, zonedTimeUTC } from "@/lib/format";
 import {
   STATUS_LABEL, HOLDS_STOCK, bondFor, bookingTotal, chargeableHours, checkStock, cleanRates, cleanRefs, cleanUnits, companionsFor, isStatus,
-  priceItem, readHireSettings, weekendDaysBetween, type HireItem, type HireSettings, type HireStatus, type Shortage,
+  cleanImages, cleanSpecs, itemSlug, priceItem, readHireSettings, weekendDaysBetween, type HireItem, type HireSettings, type HireStatus, type Shortage,
 } from "@/lib/hire/core";
-import { loadHolds, loadItems } from "@/lib/hire/server";
+import { loadHolds, loadItems, productPagesReady } from "@/lib/hire/server";
 
 /** Hire (back end): settings, items, bookings — live pricing and stock checks — status changes, returns and invoicing. */
 export type Result<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -79,6 +79,9 @@ export interface ItemInput {
   notes?: string | null; active: boolean;
   /** brand key (businesses with more than one trading name) */
   brand?: string | null;
+  /** product page (migration 0069): photos (first = main), web address, write-up, specs, suggested add-ons, search text */
+  images?: string[]; slug?: string | null; details?: string | null; specs?: { label: string; value: string }[]; related?: string[];
+  seo_title?: string | null; seo_description?: string | null; show_online?: boolean;
 }
 
 export async function saveItem(id: string | null, input: ItemInput): Promise<Result<string>> {
@@ -93,7 +96,8 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
     const quantity = int(input.quantity), oos = int(input.out_of_service);
     if (kind === "hire" && oos > quantity) throw new Error("Out of service can't be more than you own.");
     const date = (v: unknown) => (typeof v === "string" && DATE.test(v) ? v : null);
-    const image = t(input.image_url, 1000);
+    const images = input.images !== undefined ? cleanImages(input.images) : null;
+    const image = images ? images[0] ?? null : t(input.image_url, 1000);
     if (image && !/^https:\/\//i.test(image) && !image.startsWith("/")) throw new Error("The image needs to be a web address starting with https://");
     const package_lines = kind === "package" ? cleanRefs<{ item_id: string; qty: number }>(input.package_lines, () => ({}), id ?? undefined) : [];
     if (kind === "package" && !package_lines.length) throw new Error("Add what's in the package.");
@@ -111,12 +115,29 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
       const { data: dup } = await supabase.from("hire_items").select("id, name").eq("organisation_id", org.id).ilike("code", row.code.replace(/[%_]/g, "\\$&")).maybeSingle();
       if (dup && dup.id !== id) throw new Error(`Code ${row.code} is already used by ${dup.name}.`);
     }
+    // product page
+    const ready = await productPagesReady(supabase);
+    const page: Record<string, unknown> = {};
+    if (ready) {
+      if (images) page.images = images;
+      const wanted = itemSlug(t(input.slug, 80) ?? "") || itemSlug(name) || "item";
+      const { data: taken } = await supabase.from("hire_items").select("id, slug").eq("organisation_id", org.id).like("slug", `${wanted}%`).limit(500);
+      const used = new Set(((taken ?? []) as { id: string; slug: string }[]).filter((r) => r.id !== id).map((r) => r.slug));
+      let slug = wanted; for (let n = 2; used.has(slug); n++) slug = `${wanted}-${n}`;
+      page.slug = slug;
+      if (input.details !== undefined) page.details = t(input.details, 12000);
+      if (input.specs !== undefined) page.specs = cleanSpecs(input.specs);
+      if (input.related !== undefined) page.related = [...new Set((Array.isArray(input.related) ? input.related : []).filter((x) => typeof x === "string" && UUID.test(x) && x !== id))].slice(0, 12);
+      if (input.seo_title !== undefined) page.seo_title = t(input.seo_title, 70);
+      if (input.seo_description !== undefined) page.seo_description = t(input.seo_description, 170);
+      if (input.show_online !== undefined) page.show_online = input.show_online !== false;
+    }
     let itemId = id;
     if (id) {
-      const { error } = await supabase.from("hire_items").update(row).eq("id", id).eq("organisation_id", org.id);
+      const { error } = await supabase.from("hire_items").update({ ...row, ...page }).eq("id", id).eq("organisation_id", org.id);
       if (error) throw new Error(error.message);
     } else {
-      const { data, error } = await supabase.from("hire_items").insert(row).select("id").single();
+      const { data, error } = await supabase.from("hire_items").insert({ ...row, ...page }).select("id").single();
       if (error) throw new Error(error.message);
       itemId = data.id as string;
       await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "hire.item_created", entityType: "hire_item", entityId: itemId, summary: `${actorName(profile)} added hire item ${name}` });
@@ -127,8 +148,33 @@ export async function saveItem(id: string | null, input: ItemInput): Promise<Res
       if (key === s.brands[0].key) delete map[itemId!]; else map[itemId!] = key;
       await patchHire({ itemBrands: map });
     }
-    done(); return { ok: true, data: itemId! };
+    done(); revalidatePath("/hire", "layout");
+    return { ok: true, data: itemId! };
   } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Draft a product page from a few facts (the business's own AI key, or the platform's). Only what's given is used. */
+export async function draftItemPage(input: { name: string; category?: string | null; description?: string | null; facts?: string | null; brand?: string | null }): Promise<Result<{ details: string; seo_title: string; seo_description: string; specs: { label: string; value: string }[] }>> {
+  try {
+    const { org, supabase } = await manager();
+    const name = t(input.name, 200);
+    if (!name) throw new Error("Give the item a name first.");
+    const { data: o0 } = await supabase.from("organisations").select("address").eq("id", org.id).maybeSingle();
+    const address = (o0 as { address?: string | null } | null)?.address ?? null;
+    const { orgAiKey } = await import("@/lib/ai/key");
+    const { callClaude, parseJSONObject } = await import("@/lib/ai/claude");
+    const key = await orgAiKey(org.id);
+    if (!key) throw new Error("AI writing isn't set up yet — connect an Anthropic key in Settings → Integrations.");
+    const s = readHireSettings(org.settings);
+    const business = (s.brands.find((b) => b.key === input.brand) ?? s.brands[0])?.name ?? org.name;
+    const system = `You write product pages for an Australian event hire business, for customers searching the web to hire an item.
+Write in Australian English, warm and clear, no hype words like "ultimate" or "unforgettable", no emojis, no exclamation marks.
+Use ONLY the facts provided. Never invent sizes, weights, power needs, prices, numbers, brands, awards or reviews. If a fact isn't given, leave it out.
+Reply with ONLY a JSON object: {"details": "2–4 short paragraphs separated by a blank line: what it is, why it suits events, what's included / setup, who it's great for", "seo_title": "under 60 characters, e.g. '<Item> Hire Canberra | <Business>' using the location only if given", "seo_description": "under 155 characters, plain sentence", "specs": [{"label": "...", "value": "..."}] (only specs stated in the facts; may be empty)}`;
+    const user = `Business: ${business}${address ? `\nBased at: ${address.replace(/\n/g, ", ")}` : ""}\nItem: ${name}\nCategory: ${t(input.category, 80) ?? "—"}\nShort description: ${t(input.description, 2000) ?? "—"}\nFacts from the owner: ${t(input.facts, 3000) ?? "—"}`;
+    const o = parseJSONObject(await callClaude(system, user, { key, maxTokens: 1200, timeoutMs: 30000, temperature: 0.4 }));
+    return { ok: true, data: { details: t(o.details, 12000) ?? "", seo_title: t(o.seo_title, 70) ?? "", seo_description: t(o.seo_description, 170) ?? "", specs: cleanSpecs(o.specs) } };
+  } catch (e) { return { ok: false, error: /Anthropic API/.test(err(e)) ? "The AI writer couldn't be reached — try again in a minute." : err(e) }; }
 }
 
 /* ------------------------------------------------------------------ bookings: pricing and checks */

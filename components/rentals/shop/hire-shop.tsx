@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertTriangle, ArrowRight, CalendarDays, Check, CircleCheck, Loader2, Mail, Minus, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Loader2, Mail, Minus, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, X } from "lucide-react";
 import type { ShopItem } from "@/lib/hire/shop";
 import { shopAvailabilityAction, shopQuoteAction, shopSubmitAction, type BasketPrice } from "@/app/hire/[org]/shop/actions";
 
 type Win = { startDate: string; startTime: string; endDate: string; endTime: string };
 type Avail = Record<string, { free: number; freeFrom: number | null }>;
-type Settings = { depositPct: number; zone: { label: string; fee: number; states: string[] } | null; instant: boolean; intro: string | null; defaultStart: string; defaultEnd: string };
+type Settings = { depositPct: number; zone: { label: string; fee: number; states: string[] } | null; instant: boolean; intro: string | null; defaultStart: string; defaultEnd: string; look: Look };
+export type Look = { heading: string | null; heroImage: string | null; slides: { image: string; heading: string | null; text: string | null; link: string | null }[]; logoSize: "md" | "lg" | "xl" };
+export type ShopOrgInfo = { name: string; logo: string | null; colour: string | null; phone: string | null; email: string | null; address: string | null };
+/** The basket is kept in the browser so "Add to my hire" on an item's page joins what's already picked. */
+export const basketKey = (slug: string) => `hire-basket:${slug}`;
+export function readBasket(slug: string): { id: string; qty: number }[] {
+  try { const v = JSON.parse(localStorage.getItem(basketKey(slug)) ?? "[]"); return Array.isArray(v) ? v.filter((x) => x && typeof x.id === "string" && Number(x.qty) > 0).map((x) => ({ id: x.id, qty: Math.round(Number(x.qty)) })) : []; } catch { return []; }
+}
+export function writeBasket(slug: string, b: { id: string; qty: number }[]) { try { localStorage.setItem(basketKey(slug), JSON.stringify(b)); } catch { /* private window */ } }
 const STATES = ["ACT", "NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT"];
 
 const addDays = (d: string, n: number) => { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
@@ -18,10 +26,11 @@ const dow = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
  * a basket priced by the server as you go, with delivery charged automatically inside the delivery area;
  * then an instant booking with a card deposit, or a request the business confirms.
  */
-export function HireShop({ slug, tz, today, currency, org, items, brands, settings, initialWindow, initialAvail }: {
+export function HireShop({ slug, tz, today, currency, org, items, brands, settings, initialWindow, initialAvail, initialAdd = [] }: {
   slug: string; tz: string; today: string; currency: string;
-  org: { name: string; logo: string | null; colour: string | null; phone: string | null; email: string | null; address: string | null };
+  org: ShopOrgInfo;
   items: ShopItem[]; brands: { key: string; name: string }[]; settings: Settings; initialWindow: Win; initialAvail: Avail;
+  /** items sent from a product page (?add=) */ initialAdd?: { id: string; qty: number }[];
 }) {
   const money = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency, minimumFractionDigits: n % 1 ? 2 : 0 }).format(n);
   const when = (ms: number) => new Intl.DateTimeFormat("en-AU", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
@@ -44,6 +53,20 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   const [pending, start] = useTransition();
   const loadedAt = useRef(Date.now());
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+
+  // the basket survives page changes (and picks up anything sent from an item's page)
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const saved = readBasket(slug).filter((b) => byId.has(b.id));
+    for (const a of initialAdd) if (byId.has(a.id) && !saved.some((b) => b.id === a.id)) saved.push(a);
+    setBasket(saved); setRestored(true);
+    if (initialAdd.length) {
+      setOpen(true);
+      try { const u = new URL(window.location.href); u.searchParams.delete("add"); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { if (restored) writeBasket(slug, basket); }, [slug, basket, restored]);
 
   // availability for the dates
   const wkey = `${win.startDate}${win.startTime}${win.endDate}${win.endTime}`;
@@ -119,6 +142,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
     setErr(null);
     const r = await shopSubmitAction(slug, { ...win, lines: basket, fulfilment, address: fulfilment === "deliver" ? addr : null, ...me, company: me.company || null, notes: me.notes || null, t: loadedAt.current });
     if (!r.ok) { setErr(r.error); return; }
+    writeBasket(slug, []);
     if (r.payUrl) { window.location.href = r.payUrl; return; }
     setResult({ kind: r.kind, number: r.number }); setStep("done"); setOpen(false); window.scrollTo({ top: 0, behavior: "smooth" });
   });
@@ -128,7 +152,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
 
   if (step === "done" && result) {
     return (
-      <Frame org={org} colour={colour}>
+      <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={`/hire/${slug}/shop`}>
         <div className="mx-auto max-w-xl px-4 py-20 text-center">
           <CircleCheck className="mx-auto h-14 w-14 text-emerald-600" />
           <h1 className="mt-5 text-[2rem] font-bold tracking-tight text-zinc-900">Thanks{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</h1>
@@ -229,11 +253,12 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   );
 
   return (
-    <Frame org={org} colour={colour}>
-      <section className="bg-[var(--bc)] text-white">
-        <div className="mx-auto max-w-[1240px] px-4 pb-8 pt-10 sm:px-6 sm:pt-14">
-          <h1 className="text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.75rem]">Hire for your event</h1>
-          <p className="mt-2 max-w-2xl text-[1.0625rem] text-white/80">{settings.intro ?? "Pick your dates to see what's free and what it costs, then book in a couple of minutes."}</p>
+    <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={`/hire/${slug}/shop`}>
+      {settings.look.slides.length > 0 && <Slides slides={settings.look.slides} />}
+      <section className="relative bg-[var(--bc)] text-white" style={settings.look.heroImage ? { backgroundImage: `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.45)), url("${settings.look.heroImage.replace(/"/g, "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
+        <div className={`mx-auto max-w-[1240px] px-4 pb-8 sm:px-6 ${settings.look.heroImage ? "pt-16 sm:pt-24" : "pt-10 sm:pt-14"}`}>
+          <h1 className="text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.75rem]">{settings.look.heading ?? "Hire for your event"}</h1>
+          <p className="mt-2 max-w-2xl text-[1.0625rem] text-white/85">{settings.intro ?? "Pick your dates to see what's free and what it costs, then book in a couple of minutes."}</p>
           <div className="mt-6 rounded-2xl bg-white p-3 text-zinc-900 shadow-xl sm:p-4">
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
               <DateField label="Start" date={win.startDate} time={win.startTime} min={today} onChange={(d, t) => setWin((w) => ({ ...w, startDate: d, startTime: t, endDate: w.endDate < d ? d : w.endDate }))} />
@@ -266,7 +291,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
           </div>
           {!grouped.length && <p className="py-16 text-center text-zinc-500">Nothing matches. Try another search.</p>}
           {grouped.map(([c, list]) => (
-            <section key={c} className="mt-6">
+            <section key={c} id={c} className="mt-6 scroll-mt-28">
               <h2 className="mb-3 text-[1.25rem] font-bold text-zinc-900">{c}</h2>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {list.map((it) => {
@@ -274,10 +299,10 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
                   const out = it.kind !== "sale" && free <= 0;
                   return (
                     <article key={it.id} className={`flex flex-col rounded-2xl bg-white p-4 ring-1 ring-zinc-200 transition ${out ? "opacity-70" : "hover:shadow-md"}`}>
-                      {it.image ? <img src={it.image} alt="" className="mb-3 aspect-[4/3] w-full rounded-xl object-cover" /> : (
-                        <div className="mb-3 grid aspect-[5/2] place-items-center rounded-xl text-[1.5rem] font-black tracking-tight" style={{ background: "color-mix(in srgb, var(--bc) 7%, white)", color: "color-mix(in srgb, var(--bc) 45%, white)" }}>{initials(it.name)}</div>
-                      )}
-                      <p className="text-[0.9375rem] font-semibold leading-snug text-zinc-900">{it.name}</p>
+                      {it.image && (it.slug
+                        ? <a href={`/hire/${slug}/shop/${it.slug}`} className="mb-3 block overflow-hidden rounded-xl"><img src={it.image} alt={it.name} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]" /></a>
+                        : <img src={it.image} alt={it.name} loading="lazy" className="mb-3 aspect-[4/3] w-full rounded-xl object-cover" />)}
+                      <p className="text-[0.9375rem] font-semibold leading-snug text-zinc-900">{it.slug ? <a href={`/hire/${slug}/shop/${it.slug}`} className="hover:text-[var(--bc)] hover:underline">{it.name}</a> : it.name}</p>
                       {it.description && <p className="mt-1 line-clamp-2 whitespace-pre-line text-[0.8125rem] text-zinc-500">{it.description}</p>}
                       <div className="mt-auto pt-3">
                         <p className="text-[0.75rem] font-medium">
@@ -319,12 +344,15 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   );
 }
 
-function Frame({ org, colour, children }: { org: { name: string; logo: string | null; phone: string | null; email: string | null; address: string | null }; colour: string; children: React.ReactNode }) {
+const LOGO = { md: "h-12 max-w-[200px]", lg: "h-16 max-w-[240px] sm:h-20 sm:max-w-[300px]", xl: "h-20 max-w-[260px] sm:h-28 sm:max-w-[380px]" } as const;
+
+export function Frame({ org, colour, logoSize = "lg", home, children }: { org: Omit<ShopOrgInfo, "colour">; colour: string; logoSize?: Look["logoSize"]; home?: string; children: React.ReactNode }) {
+  const logo = org.logo ? <img src={org.logo} alt={org.name} className={`w-auto object-contain ${LOGO[logoSize]}`} /> : <span className="text-[1.25rem] font-bold">{org.name}</span>;
   return (
     <div className="min-h-screen bg-[#f7f7f8] font-sans text-zinc-900" style={{ ["--bc" as string]: colour }}>
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1240px] items-center gap-4 px-4 py-3 sm:px-6">
-          {org.logo ? <img src={org.logo} alt={org.name} className="h-12 w-auto max-w-[160px] object-contain" /> : <span className="text-[1.125rem] font-bold">{org.name}</span>}
+          {home ? <a href={home} aria-label={`${org.name} — hire shop`}>{logo}</a> : logo}
           <div className="ml-auto flex items-center gap-2">
             {org.email && <a href={`mailto:${org.email}`} className="hidden h-10 items-center gap-2 rounded-full px-3 text-[0.875rem] font-medium text-zinc-600 hover:bg-zinc-100 sm:flex"><Mail className="h-4 w-4" />{org.email}</a>}
             {org.phone && <a href={`tel:${org.phone.replace(/\s/g, "")}`} className="flex h-10 items-center gap-2 rounded-full bg-zinc-900 px-4 text-[0.875rem] font-semibold text-white"><Phone className="h-4 w-4" />{org.phone}</a>}
@@ -342,7 +370,7 @@ function Frame({ org, colour, children }: { org: { name: string; logo: string | 
   );
 }
 
-function DateField({ label, date, time, min, onChange }: { label: string; date: string; time: string; min: string; onChange: (d: string, t: string) => void }) {
+export function DateField({ label, date, time, min, onChange }: { label: string; date: string; time: string; min: string; onChange: (d: string, t: string) => void }) {
   const cls = "h-11 rounded-xl border border-zinc-300 bg-white px-3 text-[0.9375rem] outline-none focus:border-[var(--bc)]";
   return (
     <label className="block">
@@ -355,7 +383,7 @@ function DateField({ label, date, time, min, onChange }: { label: string; date: 
   );
 }
 
-function Stepper({ qty, max, onChange }: { qty: number; max: number; onChange: (n: number) => void }) {
+export function Stepper({ qty, max, onChange }: { qty: number; max: number; onChange: (n: number) => void }) {
   return (
     <div className="flex items-center rounded-full ring-1 ring-zinc-300">
       <button type="button" aria-label="Fewer" onClick={() => onChange(qty - 1)} className="grid h-9 w-9 place-items-center text-zinc-600 hover:text-zinc-900"><Minus className="h-4 w-4" /></button>
@@ -365,11 +393,51 @@ function Stepper({ qty, max, onChange }: { qty: number; max: number; onChange: (
   );
 }
 
-function initials(name: string) {
-  return name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter((w) => w && !/^(and|with|the|of|for|\d+)$/i.test(w)).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+/** A scrolling banner: swipe or use the arrows; moves on by itself every 6 seconds unless you're hovering or prefer less motion. */
+function Slides({ slides }: { slides: Look["slides"] }) {
+  const [i, setI] = useState(0);
+  const [hold, setHold] = useState(false);
+  const n = slides.length;
+  const touch = useRef<number | null>(null);
+  useEffect(() => {
+    if (n < 2 || hold || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setI((x) => (x + 1) % n), 6000);
+    return () => clearInterval(t);
+  }, [n, hold]);
+  const go = (d: number) => setI((x) => (x + d + n) % n);
+  return (
+    <section aria-roledescription="carousel" aria-label="Featured" className="relative overflow-hidden bg-zinc-900" onMouseEnter={() => setHold(true)} onMouseLeave={() => setHold(false)}
+      onTouchStart={(e) => { touch.current = e.touches[0].clientX; }} onTouchEnd={(e) => { const s = touch.current; touch.current = null; if (s == null) return; const dx = e.changedTouches[0].clientX - s; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); }}>
+      <div className="flex transition-transform duration-700 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
+        {slides.map((s, k) => {
+          const body = (
+            <div className="relative aspect-[4/3] w-full sm:aspect-[21/8]">
+              <img src={s.image} alt={s.heading ?? ""} className="absolute inset-0 h-full w-full object-cover" loading={k ? "lazy" : "eager"} />
+              {(s.heading || s.text) && (
+                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/20 to-transparent">
+                  <div className="mx-auto w-full max-w-[1240px] px-4 pb-10 sm:px-6 sm:pb-14">
+                    {s.heading && <p className="max-w-3xl text-[1.75rem] font-extrabold leading-tight tracking-tight text-white sm:text-[3rem]">{s.heading}</p>}
+                    {s.text && <p className="mt-2 max-w-2xl text-[1rem] text-white/85 sm:text-[1.125rem]">{s.text}</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+          return <div key={k} className="w-full shrink-0" aria-hidden={k !== i} role="group" aria-roledescription="slide" aria-label={`${k + 1} of ${n}`}>{s.link ? <a href={s.link} tabIndex={k === i ? 0 : -1}>{body}</a> : body}</div>;
+        })}
+      </div>
+      {n > 1 && <>
+        <button type="button" aria-label="Previous" onClick={() => go(-1)} className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-zinc-900 shadow hover:bg-white sm:grid"><ChevronLeft className="h-5 w-5" /></button>
+        <button type="button" aria-label="Next" onClick={() => go(1)} className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-zinc-900 shadow hover:bg-white sm:grid"><ChevronRight className="h-5 w-5" /></button>
+        <div className="absolute inset-x-0 bottom-3 flex justify-center gap-2">
+          {slides.map((_, k) => <button key={k} type="button" aria-label={`Show slide ${k + 1}`} aria-current={k === i} onClick={() => setI(k)} className={`h-2 rounded-full transition-all ${k === i ? "w-6 bg-white" : "w-2 bg-white/50"}`} />)}
+        </div>
+      </>}
+    </section>
+  );
 }
 
-function fmtWin(w: Win, tz: string) {
+export function fmtWin(w: Win, tz: string) {
   const d = (date: string, time: string) => new Intl.DateTimeFormat("en-AU", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00Z`)) + ` ${fmt12(time)}`;
   void tz;
   return `${d(w.startDate, w.startTime)} → ${d(w.endDate, w.endTime)}`;

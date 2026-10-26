@@ -31,6 +31,7 @@ export async function shopOrg(slug: string): Promise<ShopOrg | null> {
 export interface ShopItem {
   id: string; name: string; description: string | null; category: string | null; brand: string | null; kind: "hire" | "sale" | "package";
   price: number; priceNote: string; image: string | null; max: number; companions: { id: string; qty: number }[];
+  /** product page web address part (null = no page) */ slug: string | null;
 }
 
 /** What's on show: active items with a price (sale items are add-ons). */
@@ -38,19 +39,35 @@ export function catalogue(items: ItemRow[], s: HireSettings): ShopItem[] {
   const byId = new Map<string, HireItem>(items.map((i) => [i.id, i]));
   const out: ShopItem[] = [];
   for (const it of items) {
-    if (!it.active) continue;
+    if (!it.active || !it.show_online) continue;
     const p = priceItem(it, byId, s.units, 24);
     if (!(p.each > 0)) continue;
     const timed = it.rates.some((r) => (s.units.find((u) => u.key === r.unit)?.hours ?? 0) > 0);
     out.push({
       id: it.id, name: it.name, description: it.description, category: it.category, brand: brandOf(s, it.id)?.key ?? null, kind: it.kind,
       price: p.each, priceNote: it.kind === "sale" ? "each" : timed ? "per day" : "per hire",
-      image: it.image_url && /^https:\/\//.test(it.image_url) ? it.image_url : null,
+      image: it.images[0] ?? null, slug: it.slug,
       max: it.kind === "hire" ? hireable(it) : it.kind === "sale" ? Math.max(1, it.quantity) : 50,
       companions: it.companions.filter((c) => byId.get(c.item_id)?.active).map((c) => ({ id: c.item_id, qty: c.qty })),
     });
   }
   return out;
+}
+
+/** One item's product page: the item, its gallery and write-up, and what's suggested with it. */
+export async function productPage(so: ShopOrg, slug: string) {
+  if (!/^[a-z0-9-]{1,90}$/.test(slug)) return null;
+  const items = await loadItems(createServiceClient(), so.org.id, { activeOnly: true });
+  const it = items.find((i) => i.slug === slug && i.show_online);
+  if (!it) return null;
+  const shop = catalogue(items, so.s);
+  const me = shop.find((x) => x.id === it.id);
+  if (!me) return null;
+  const pick = (ids: string[]) => ids.map((id) => shop.find((x) => x.id === id)).filter((x): x is ShopItem => !!x);
+  // the owner's picks, then what usually goes with it, then a few from the same category
+  const related = pick([...new Set([...it.related, ...it.companions.map((c) => c.item_id)])]);
+  const more = shop.filter((x) => x.id !== it.id && x.category === it.category && !related.some((r) => r.id === x.id) && x.kind !== "sale").slice(0, Math.max(0, 4 - related.length));
+  return { item: it, me, related, more, shop };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;

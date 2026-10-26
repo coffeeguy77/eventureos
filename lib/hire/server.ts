@@ -1,13 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { HOLDS_STOCK, holdsFrom, type HireItem, type HireStatus, type Hold } from "./core";
+import { HOLDS_STOCK, cleanImages, cleanSpecs, holdsFrom, type HireItem, type HireStatus, type Hold } from "./core";
 
 /** Loading hire data for the back end (the caller's client, so row-level security applies). */
 
 export const ITEM_COLS = "id, code, name, description, kind, category, subcategory, quantity, out_of_service, rates, bond, buffer_hours, companions, package_lines, image_url, weight_kg, dimensions, location, test_tag_due, service_due, notes, active, sort";
+/** Product page columns (migration 0069). Until it's run, items load without them. */
+export const PAGE_COLS = "images, slug, details, specs, related, seo_title, seo_description, show_online";
 export type ItemRow = HireItem & {
   description: string | null; subcategory: string | null; image_url: string | null; weight_kg: number | null; dimensions: string | null;
   location: string | null; test_tag_due: string | null; service_due: string | null; notes: string | null; sort: number;
+  images: string[]; slug: string | null; details: string | null; specs: { label: string; value: string }[]; related: string[];
+  seo_title: string | null; seo_description: string | null; show_online: boolean;
 };
+let pagesReady: boolean | null = null, checkedAt = 0;
+const knownMissing = () => pagesReady === false && Date.now() - checkedAt < 60_000; // re-check a minute later, in case it's just been run
+const mark = (ok: boolean) => { pagesReady = ok; checkedAt = Date.now(); };
+/** True once migration 0069 (product pages) has been run. */
+export async function productPagesReady(db: SupabaseClient): Promise<boolean> {
+  if (pagesReady) return true;
+  if (knownMissing()) return false;
+  const { error } = await db.from("hire_items").select("slug").limit(1);
+  mark(!error);
+  return !error;
+}
+export const missingColumn = (m: string | undefined) => !!m && /column .* does not exist|could not find .* column/i.test(m);
 
 export function toItem(r: Record<string, unknown>): ItemRow {
   return {
@@ -17,15 +33,28 @@ export function toItem(r: Record<string, unknown>): ItemRow {
     rates: Array.isArray(r.rates) ? (r.rates as { unit: string; price: number }[]).map((x) => ({ unit: x.unit, price: Number(x.price) || 0 })) : [],
     companions: Array.isArray(r.companions) ? (r.companions as HireItem["companions"]) : [],
     package_lines: Array.isArray(r.package_lines) ? (r.package_lines as HireItem["package_lines"]) : [],
+    images: cleanImages(Array.isArray(r.images) && r.images.length ? r.images : r.image_url ? [r.image_url] : []),
+    slug: typeof r.slug === "string" && r.slug ? r.slug : null,
+    details: typeof r.details === "string" ? r.details : null,
+    specs: cleanSpecs(r.specs),
+    related: Array.isArray(r.related) ? (r.related as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    seo_title: typeof r.seo_title === "string" ? r.seo_title : null,
+    seo_description: typeof r.seo_description === "string" ? r.seo_description : null,
+    show_online: r.show_online !== false,
   };
 }
 
 export async function loadItems(db: SupabaseClient, orgId: string, opts: { activeOnly?: boolean } = {}): Promise<ItemRow[]> {
-  let q = db.from("hire_items").select(ITEM_COLS).eq("organisation_id", orgId).order("category", { nullsFirst: false }).order("sort").order("name").limit(5000);
-  if (opts.activeOnly) q = q.eq("active", true);
-  const { data, error } = await q;
+  const run = (cols: string) => {
+    let q = db.from("hire_items").select(cols).eq("organisation_id", orgId).order("category", { nullsFirst: false }).order("sort").order("name").limit(5000);
+    if (opts.activeOnly) q = q.eq("active", true);
+    return q;
+  };
+  let { data, error } = await run(knownMissing() ? ITEM_COLS : `${ITEM_COLS}, ${PAGE_COLS}`);
+  if (error && missingColumn(error.message)) { mark(false); ({ data, error } = await run(ITEM_COLS)); }
+  else if (!error && !knownMissing()) mark(true);
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Record<string, unknown>[]).map(toItem);
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(toItem);
 }
 
 export type BookingLite = { id: string; number: string; status: HireStatus; starts_at: string; ends_at: string; customer: string };

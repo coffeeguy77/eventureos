@@ -7,7 +7,8 @@ import { ItemForm } from "@/components/rentals/item-form";
 import { BookingRow } from "@/components/rentals/booking-row";
 import { addDaysISO, money, todayISO, zonedMidnightUTC } from "@/lib/format";
 import { brandOf, hireable, readHireSettings, usageGrid, type HireItem } from "@/lib/hire/core";
-import { BOOKING_LIST_COLS, loadHolds, loadItems, type BookingListRow } from "@/lib/hire/server";
+import { BOOKING_LIST_COLS, loadHolds, loadItems, productPagesReady, type BookingListRow } from "@/lib/hire/server";
+import { appBaseUrl } from "@/lib/integrations/registry";
 
 export const metadata = { title: "Hire item" };
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ export default async function HireItemPage({ params }: { params: Promise<{ id: s
   ]);
   const revenue = ((earned ?? []) as { line_total: number }[]).reduce((a, r) => a + Number(r.line_total), 0);
   const others = items.filter((i) => i.id !== id && i.active).map((i) => ({ id: i.id, name: i.name, kind: i.kind }));
+  const pagesReady = await productPagesReady(supabase);
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader eyebrow="Items & rates" title={it.name} actions={<ButtonLink href={`/rentals/bookings/new?item=${it.id}`} size="sm">Book this</ButtonLink>} />
@@ -66,7 +68,7 @@ export default async function HireItemPage({ params }: { params: Promise<{ id: s
           <ul className="divide-y divide-line border-t border-line">{((upcoming ?? []) as unknown as BookingListRow[]).map((b) => <BookingRow key={b.id} b={b} tz={tz} currency={org.currency} hire={s} />)}</ul>
         </Card>
       )}
-      <ItemForm id={it.id} canEdit={canManage(role)} units={s.units} brands={s.brands} others={others} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
+      <ItemForm id={it.id} orgId={org.id} pagesReady={pagesReady} shopBase={s.shop.enabled ? `${appBaseUrl()}/hire/${org.slug}/shop` : null} canEdit={canManage(role)} units={s.units} brands={s.brands} others={others} categories={[...new Set(items.map((i) => i.category).filter(Boolean) as string[])].sort()}
         initial={{ ...it, brand: brandOf(s, it.id)?.key ?? null, rates: it.rates, companions: it.companions, package_lines: it.package_lines }} />
     </div>
   );

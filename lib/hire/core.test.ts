@@ -111,9 +111,20 @@ test("brands, delivery area and shop settings", async () => {
   assert.deepEqual(s.brands.map((b) => b.key), ["main", "capital-pinball"]);
   assert.deepEqual(Object.keys(s.itemBrands), ["11111111-1111-1111-1111-111111111111"]);
   assert.deepEqual(s.deliveryZone, { label: "ACT", fee: 195, states: ["ACT"] });
-  assert.deepEqual(s.shop, { enabled: true, instantBook: true, intro: "Hi" });
+  assert.deepEqual(s.shop, { enabled: true, instantBook: true, intro: "Hi", heading: null, heroImage: null, slides: [], logoSize: "lg" });
+  const look = readHireSettings({ hire: { shop: { heroImage: "http://x.com/a.jpg", logoSize: "xl", slides: [{ image: "https://x.com/1.jpg", heading: " Big ", link: "javascript:alert(1)" }, { image: "nope" }, { image: "https://x.com/2.jpg", link: "/hire/a/shop/b" }] } } }).shop;
+  assert.equal(look.heroImage, null); assert.equal(look.logoSize, "xl");
+  assert.deepEqual(look.slides, [{ image: "https://x.com/1.jpg", heading: "Big", text: null, link: null }, { image: "https://x.com/2.jpg", heading: null, text: null, link: "/hire/a/shop/b" }]);
   assert.equal(brandOf(s, "11111111-1111-1111-1111-111111111111")?.name, "Capital Pinball");
   assert.equal(brandOf(s, null)?.key, "main");
   assert.equal(bookingBrand(s, [{ item_id: "11111111-1111-1111-1111-111111111111", line_total: 500 }, { item_id: null, line_total: 40 }])?.key, "capital-pinball");
   assert.equal(brandOf(readHireSettings(null), "x"), null);
+});
+
+test("product page fields", async () => {
+  const { itemSlug, cleanImages, cleanSpecs } = await import("./core");
+  assert.equal(itemSlug("Big Buck Hunter (Arcade) – Café & Bar!"), "big-buck-hunter-arcade-cafe-and-bar");
+  assert.equal(itemSlug("!!!"), "");
+  assert.deepEqual(cleanImages(["https://a.com/1.jpg", "https://a.com/1.jpg", "http://a.com/2.jpg", 5, " https://a.com/3.jpg "]), ["https://a.com/1.jpg", "https://a.com/3.jpg"]);
+  assert.deepEqual(cleanSpecs([{ label: "Size", value: "2m" }, { label: "", value: "x" }, null]), [{ label: "Size", value: "2m" }]);
 });

@@ -3,6 +3,7 @@ import { createServiceClient, serviceRoleConfigured } from "@/lib/integrations/r
 import { hirePageSlug, offered, readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
 import { readSite } from "@/lib/site/site";
+import { readHireSettings } from "@/lib/hire/core";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
@@ -17,7 +18,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   if (!serviceRoleConfigured()) return out;
   try {
     const db = createServiceClient();
-    const { data: all } = await db.from("organisations").select("id, slug, settings").eq("status", "active");
+    const { data: all } = await db.from("organisations").select("id, slug, settings, app_access").eq("status", "active");
     // A business on its own domain lists its pages in its own sitemap (www.its-domain/sitemap.xml), not here
     const orgs = (all ?? []).filter((o) => !readSite(o.settings).live);
     for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
@@ -36,6 +37,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       out.push({ url: h, changeFrequency: "weekly", priority: 0.9 });
       for (const k of offered(ev)) if (k !== "diy") out.push({ url: `${h}/${hirePageSlug(k, ev)}`, changeFrequency: "weekly", priority: 0.9 });
       for (const p of ["quote", "drinks", "branding", "catering"]) out.push({ url: `${h}/${p}`, changeFrequency: "weekly", priority: 0.7 });
+    }
+    // online hire shops and their item pages
+    const shops = ((orgs ?? []) as { id: string; slug: string; settings: Record<string, unknown> | null; app_access: string[] | null }[]).filter((o) => {
+      const h = readHireSettings(o.settings);
+      return h.shop.enabled && (Array.isArray(o.app_access) ? o.app_access.includes("rentals") : h.enabled);
+    });
+    for (const o of shops) {
+      out.push({ url: `${BASE}/hire/${o.slug}/shop`, changeFrequency: "daily", priority: 0.9 });
+      const { data: items, error } = await db.from("hire_items").select("slug, updated_at").eq("organisation_id", o.id).eq("active", true).eq("show_online", true).not("slug", "is", null).limit(2000);
+      if (!error) for (const it of (items ?? []) as { slug: string; updated_at: string }[]) out.push({ url: `${BASE}/hire/${o.slug}/shop/${it.slug}`, lastModified: it.updated_at, changeFrequency: "weekly", priority: 0.8 });
     }
     const live = ((orgs ?? []) as { id: string; slug: string; settings: Record<string, unknown> | null }[])
       .filter((o) => !!o.settings?.booking && (o.settings.booking as { enabled?: boolean }).enabled !== false);

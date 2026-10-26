@@ -38,8 +38,8 @@ export function anthropicHeaders(key: string): Record<string, string> {
 }
 
 /** Call Claude and return the text of the first text block. Throws on HTTP error / timeout. */
-export async function callClaude(system: string, user: string, { maxTokens = 800, timeoutMs = 12000 } = {}): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
+export async function callClaude(system: string, user: string, { maxTokens = 800, timeoutMs = 12000, key: ownKey, temperature = 0 }: { maxTokens?: number; timeoutMs?: number; key?: string | null; temperature?: number } = {}): Promise<string> {
+  const key = ownKey || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -51,7 +51,7 @@ export async function callClaude(system: string, user: string, { maxTokens = 800
       body: JSON.stringify({
         model: aiModel(),
         max_tokens: maxTokens,
-        temperature: 0,
+        temperature,
         system,
         messages: [{ role: "user", content: user }],
       }),

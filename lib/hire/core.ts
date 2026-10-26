@@ -36,7 +36,31 @@ export interface HireSettings {
   /** item id → brand key (items not listed belong to the first brand) */
   itemBrands: Record<string, string>;
   /** the public hire shop (/hire/<business>/shop) */
-  shop: { enabled: boolean; instantBook: boolean; intro: string | null };
+  shop: ShopLook;
+}
+/** The hire shop's switches and look: an optional photo behind the date picker, a scrolling banner above it, logo size. */
+export interface ShopLook {
+  enabled: boolean; instantBook: boolean; intro: string | null;
+  heading: string | null;
+  heroImage: string | null;
+  slides: { image: string; heading: string | null; text: string | null; link: string | null }[];
+  logoSize: "md" | "lg" | "xl";
+}
+export const DEFAULT_SHOP: ShopLook = { enabled: false, instantBook: false, intro: null, heading: null, heroImage: null, slides: [], logoSize: "lg" };
+const webImage = (v: unknown) => (typeof v === "string" && /^https:\/\/\S+$/i.test(v.trim()) && v.length <= 1000 ? v.trim() : null);
+const line = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
+export function cleanShop(raw: unknown): ShopLook {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const slides = Array.isArray(o.slides) ? (o.slides as unknown[]).slice(0, 8).flatMap((x) => {
+    const r = (x ?? {}) as Record<string, unknown>;
+    const image = webImage(r.image);
+    const link = typeof r.link === "string" && (/^https:\/\/\S+$/i.test(r.link.trim()) || /^\/[^\s/]/.test(r.link.trim())) ? r.link.trim().slice(0, 500) : null;
+    return image ? [{ image, heading: line(r.heading, 120), text: line(r.text, 240), link }] : [];
+  }) : [];
+  return {
+    enabled: o.enabled === true, instantBook: o.instantBook === true, intro: line(o.intro, 600), heading: line(o.heading, 80),
+    heroImage: webImage(o.heroImage), slides, logoSize: o.logoSize === "md" || o.logoSize === "xl" ? o.logoSize : "lg",
+  };
 }
 export interface Brand { key: string; name: string; email: string | null; phone: string | null }
 export const DEFAULT_UNITS: RateUnit[] = [
@@ -48,7 +72,7 @@ export const DEFAULT_UNITS: RateUnit[] = [
 export const DEFAULT_HIRE: HireSettings = {
   enabled: false, units: DEFAULT_UNITS, bufferHours: 2, graceHours: 1, excludeWeekends: false, bondMode: "sum",
   depositPct: 0, defaultStart: "09:00", defaultEnd: "17:00", quoteDays: 14, deliveryFee: 0,
-  deliveryZone: null, brands: [], itemBrands: {}, shop: { enabled: false, instantBook: false, intro: null },
+  deliveryZone: null, brands: [], itemBrands: {}, shop: DEFAULT_SHOP,
 };
 
 export function cleanBrands(raw: unknown): Brand[] {
@@ -122,10 +146,7 @@ export function readHireSettings(settings: unknown): HireSettings {
     })(),
     brands: cleanBrands(h.brands),
     itemBrands: h.itemBrands && typeof h.itemBrands === "object" ? Object.fromEntries(Object.entries(h.itemBrands as Record<string, unknown>).filter(([k, v]) => /^[0-9a-f-]{36}$/i.test(k) && typeof v === "string")) as Record<string, string> : {},
-    shop: (() => {
-      const o = (h.shop ?? {}) as Record<string, unknown>;
-      return { enabled: o.enabled === true, instantBook: o.instantBook === true, intro: typeof o.intro === "string" && o.intro.trim() ? o.intro.trim().slice(0, 600) : null };
-    })(),
+    shop: cleanShop(h.shop),
   };
 }
 
@@ -358,4 +379,32 @@ export function bookingTotal(lines: { line_total: number }[], deliveryFee: numbe
   const total = Math.max(0, Math.round((items + (deliveryFee || 0) - (discount || 0)) * 100) / 100);
   const gst = Math.round((total / 11) * 100) / 100;
   return { items: Math.round(items * 100) / 100, total, gst };
+}
+
+/* ------------------------------------------------------------------ product pages */
+
+/** A web address part from a name: "Big Buck Hunter (Arcade)" → "big-buck-hunter-arcade". */
+export function itemSlug(name: string): string {
+  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80).replace(/-+$/, "");
+}
+/** Photos: web addresses only, no repeats, at most 12. */
+export function cleanImages(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    const u = typeof v === "string" ? v.trim() : "";
+    if (/^https:\/\/\S+$/i.test(u) && u.length <= 1000 && !out.includes(u)) out.push(u);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+/** Specs shown on the product page, e.g. Size: 2m × 1m. */
+export function cleanSpecs(raw: unknown): { label: string; value: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 20).flatMap((x) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const label = typeof o.label === "string" ? o.label.trim().slice(0, 60) : "";
+    const value = typeof o.value === "string" ? o.value.trim().slice(0, 200) : "";
+    return label && value ? [{ label, value }] : [];
+  });
 }
