@@ -13,6 +13,8 @@ import { readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
 import { readLearnSettings } from "@/lib/learn/core";
 import type { FooterModel } from "@/lib/site/footer";
+import { readHireSettings } from "@/lib/hire/core";
+import { readSite } from "@/lib/site/site";
 
 export const MENU_ICONS = ["events", "lessons", "academy", "jobs", "shop", "coffee", "cafe", "order", "table", "club", "roast", "wholesale", "gifts", "franchise", "info", "link"] as const;
 export type MenuIcon = (typeof MENU_ICONS)[number];
@@ -106,6 +108,9 @@ export function topMenuAuto(org: PublicOrg): MenuNode[] {
     ...(cp.club ? [{ id: "", label: cafe.clubTitle || "Roasting Club", href: `/cafe/${base}/roasting-club`, note: "Shared roasting space", icon: "club" as const }] : []),
     ...(cp.wholesale ? [{ id: "", label: "Wholesale", href: `/cafe/${base}/wholesale`, note: "Coffee for your business", icon: "wholesale" as const }] : []),
   ] });
+  // the online hire shop (Hire app) and pages the business has put in the menu
+  if (readHireSettings(s).shop.enabled) out.push({ id: "hireshop", label: "Hire", href: `/hire/${base}/shop`, note: "See what's free and book online", icon: "events" });
+  for (const p of readSite(s).pages.filter((x) => x.menu)) out.push({ id: `page-${p.slug}`, label: p.title.slice(0, 40), href: `/site/${base}/${p.slug}`, icon: p.form === "franchise" ? "franchise" : "info" });
   const lessonsGift = classes && org.stripeReady;
   const coffeeGift = shop && org.stripeReady;
   if (lessonsGift || coffeeGift) out.push({ id: "gifts", label: labels.gifts, href: lessonsGift ? `/book/${base}/gift` : `/shop/${base}/gift-card`, note: "Classes & coffee gift cards", icon: "gifts", children: [

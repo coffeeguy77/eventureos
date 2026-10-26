@@ -26,11 +26,12 @@ const dow = (d: string) => new Date(d + "T00:00:00Z").getUTCDay();
  * a basket priced by the server as you go, with delivery charged automatically inside the delivery area;
  * then an instant booking with a card deposit, or a request the business confirms.
  */
-export function HireShop({ slug, tz, today, currency, org, items, brands, settings, initialWindow, initialAvail, initialAdd = [] }: {
+export function HireShop({ slug, tz, today, currency, org, items, brands, settings, initialWindow, initialAvail, initialAdd = [], site }: {
   slug: string; tz: string; today: string; currency: string;
   org: ShopOrgInfo;
   items: ShopItem[]; brands: { key: string; name: string }[]; settings: Settings; initialWindow: Win; initialAvail: Avail;
   /** items sent from a product page (?add=) */ initialAdd?: { id: string; qty: number }[];
+  /** the business's website: home and menu pages */ site?: { home: string | null; links: SiteLink[] };
 }) {
   const money = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency, minimumFractionDigits: n % 1 ? 2 : 0 }).format(n);
   const when = (ms: number) => new Intl.DateTimeFormat("en-AU", { timeZone: tz, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
@@ -152,7 +153,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
 
   if (step === "done" && result) {
     return (
-      <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={`/hire/${slug}/shop`}>
+      <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
         <div className="mx-auto max-w-xl px-4 py-20 text-center">
           <CircleCheck className="mx-auto h-14 w-14 text-emerald-600" />
           <h1 className="mt-5 text-[2rem] font-bold tracking-tight text-zinc-900">Thanks{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</h1>
@@ -253,7 +254,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   );
 
   return (
-    <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={`/hire/${slug}/shop`}>
+    <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
       {settings.look.slides.length > 0 && <Slides slides={settings.look.slides} />}
       <section className="relative bg-[var(--bc)] text-white" style={settings.look.heroImage ? { backgroundImage: `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.45)), url("${settings.look.heroImage.replace(/"/g, "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
         <div className={`mx-auto max-w-[1240px] px-4 pb-8 sm:px-6 ${settings.look.heroImage ? "pt-16 sm:pt-24" : "pt-10 sm:pt-14"}`}>
@@ -346,23 +347,27 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
 
 const LOGO = { md: "h-12 max-w-[200px]", lg: "h-16 max-w-[240px] sm:h-20 sm:max-w-[300px]", xl: "h-20 max-w-[260px] sm:h-28 sm:max-w-[380px]" } as const;
 
-export function Frame({ org, colour, logoSize = "lg", home, children }: { org: Omit<ShopOrgInfo, "colour">; colour: string; logoSize?: Look["logoSize"]; home?: string; children: React.ReactNode }) {
+export type SiteLink = { label: string; href: string };
+export function Frame({ org, colour, logoSize = "lg", home, links = [], children }: { org: Omit<ShopOrgInfo, "colour">; colour: string; logoSize?: Look["logoSize"]; home?: string; /** the business's website pages */ links?: SiteLink[]; children: React.ReactNode }) {
   const logo = org.logo ? <img src={org.logo} alt={org.name} className={`w-auto object-contain ${LOGO[logoSize]}`} /> : <span className="text-[1.25rem] font-bold">{org.name}</span>;
   return (
     <div className="min-h-screen bg-[#f7f7f8] font-sans text-zinc-900" style={{ ["--bc" as string]: colour }}>
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1240px] items-center gap-4 px-4 py-3 sm:px-6">
-          {home ? <a href={home} aria-label={`${org.name} — hire shop`}>{logo}</a> : logo}
+          {home ? <a href={home} aria-label={`${org.name} — home`}>{logo}</a> : logo}
+          {links.length > 0 && <nav aria-label={org.name} className="hidden items-center gap-1 md:flex">{links.map((l) => <a key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-[0.9375rem] font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900">{l.label}</a>)}</nav>}
           <div className="ml-auto flex items-center gap-2">
             {org.email && <a href={`mailto:${org.email}`} className="hidden h-10 items-center gap-2 rounded-full px-3 text-[0.875rem] font-medium text-zinc-600 hover:bg-zinc-100 sm:flex"><Mail className="h-4 w-4" />{org.email}</a>}
             {org.phone && <a href={`tel:${org.phone.replace(/\s/g, "")}`} className="flex h-10 items-center gap-2 rounded-full bg-zinc-900 px-4 text-[0.875rem] font-semibold text-white"><Phone className="h-4 w-4" />{org.phone}</a>}
           </div>
         </div>
       </header>
+      {links.length > 0 && <nav aria-label={`${org.name} pages`} className="no-scrollbar flex gap-1 overflow-x-auto border-b border-zinc-200 bg-white px-3 py-1.5 md:hidden">{links.map((l) => <a key={l.href} href={l.href} className="shrink-0 rounded-lg px-3 py-1.5 text-[0.875rem] font-medium text-zinc-700">{l.label}</a>)}</nav>}
       {children}
       <footer className="border-t border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-3 px-4 py-6 text-[0.8125rem] text-zinc-500 sm:px-6">
           <p>{org.name}{org.address ? ` · ${org.address.replace(/\n/g, ", ")}` : ""}</p>
+          {links.length > 0 && <p className="flex flex-wrap gap-3">{links.map((l) => <a key={l.href} href={l.href} className="hover:text-zinc-900 hover:underline">{l.label}</a>)}</p>}
           <p>Bookings by EventureOS</p>
         </div>
       </footer>

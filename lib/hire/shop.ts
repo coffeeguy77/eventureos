@@ -8,6 +8,7 @@ import {
   type HireItem, type HireSettings, type Hold,
 } from "./core";
 import { loadHolds, loadItems, type ItemRow } from "./server";
+import { readSite } from "@/lib/site/site";
 
 /**
  * The public hire shop (/hire/<business>/shop): the catalogue, live availability for chosen dates, and online
@@ -26,6 +27,15 @@ export async function shopOrg(slug: string): Promise<ShopOrg | null> {
   const allowed = Array.isArray(access) ? access.includes("rentals") : s.enabled;
   if (!allowed || !s.shop.enabled) return null;
   return { org, s };
+}
+
+/** The business's website around the shop: its home page and the pages it has put in the menu. */
+export function siteLinks(so: ShopOrg): { home: string | null; links: { label: string; href: string }[] } {
+  const site = readSite(so.org.rawSettings);
+  const home = site.home ? `/site/${so.org.slug}` : null;
+  const pages = site.pages.filter((p) => p.menu).map((p) => ({ label: p.title.slice(0, 30), href: `/site/${so.org.slug}/${p.slug}` }));
+  if (!home && !pages.length) return { home: null, links: [] };
+  return { home, links: [...(home ? [{ label: "Home", href: home }] : []), { label: "Hire", href: `/hire/${so.org.slug}/shop` }, ...pages] };
 }
 
 export interface ShopItem {

@@ -11,7 +11,18 @@ export interface InfoPage {
   metaTitle: string; metaDescription: string; form: PageForm; footer: boolean;
   /** "franchise" = the designed franchise page (sections, steps, FAQ, enquiry form); otherwise a plain text page */
   layout: "standard" | "franchise";
+  /** blocks under the page's text: photos with words, galleries, buttons */
+  sections: PageSection[];
+  /** shown in the top menu (pages made before this was added stay out of it) */
+  menu: boolean;
 }
+export type PageSection =
+  | { id: string; type: "text"; heading: string; body: string }
+  | { id: string; type: "imageText"; image: string | null; heading: string; body: string; side: "left" | "right"; label: string; link: string }
+  | { id: string; type: "image"; image: string | null; caption: string; wide: boolean }
+  | { id: string; type: "gallery"; heading: string; images: string[] }
+  | { id: string; type: "cta"; heading: string; body: string; label: string; link: string };
+export const SECTION_TYPES = ["text", "imageText", "image", "gallery", "cta"] as const;
 export interface Rule { id: string; from: string; to: string; status: 301 | 410; note: string }
 export interface Found { path: string; title: string; source: string }
 export interface SiteSettings {
@@ -30,8 +41,10 @@ export interface SiteSettings {
   discovered: Found[];
   /** Home page photos: hero, about, and one per section card */
   images: Record<string, string | null>;
+  /** logo size in the menu bar */
+  logoSize: "md" | "lg" | "xl";
 }
-export const SITE_IMAGES = ["hero", "about", "classes", "hire", "academy", "cafe", "shop", "jobs"] as const;
+export const SITE_IMAGES = ["hero", "about", "classes", "hire", "hireshop", "academy", "cafe", "shop", "jobs"] as const;
 
 /** The public sections that live under /<section>/<business>/… */
 export const SECTIONS = ["hire", "shop", "cafe", "jobs", "academy", "book", "site"] as const;
@@ -71,6 +84,28 @@ function readRule(v: unknown, i: number): Rule | null {
   return { id: str(r.id, 40) || `r${i}`, from: from.endsWith("*") ? normPath(from.slice(0, -1)).replace(/\/?$/, "/") + "*" : normPath(from), to, status, note: str(r.note, 200) };
 }
 
+/** A button link: a page on this site ("/contact", "/hire/…") or https. */
+export const okLink = (v: unknown) => { const t = str(v, 400); return /^https:\/\/[^\s"'<>]{3,}$/.test(t) || /^\/[a-z0-9/_#?=&.-]*$/i.test(t) ? t : ""; };
+
+export function readSections(v: unknown): PageSection[] {
+  if (!Array.isArray(v)) return [];
+  const out: PageSection[] = [];
+  const ids = new Set<string>();
+  for (const [i, raw] of v.slice(0, 30).entries()) {
+    const o = obj(raw);
+    let id = str(o.id, 24).replace(/[^a-z0-9]/gi, "") || `s${i}`;
+    while (ids.has(id)) id += "x";
+    ids.add(id);
+    const heading = str(o.heading, 160), body = str(o.body, 8000);
+    if (o.type === "text") { if (heading || body) out.push({ id, type: "text", heading, body }); }
+    else if (o.type === "imageText") { const image = okImage(o.image); if (image || heading || body) out.push({ id, type: "imageText", image, heading, body, side: o.side === "right" ? "right" : "left", label: str(o.label, 60), link: okLink(o.link) }); }
+    else if (o.type === "image") { const image = okImage(o.image); if (image) out.push({ id, type: "image", image, caption: str(o.caption, 200), wide: o.wide === true }); }
+    else if (o.type === "gallery") { const images = (Array.isArray(o.images) ? o.images : []).map(okImage).filter((x): x is string => !!x).slice(0, 24); if (images.length) out.push({ id, type: "gallery", heading, images }); }
+    else if (o.type === "cta") { const label = str(o.label, 60), link = okLink(o.link); if (heading || (label && link)) out.push({ id, type: "cta", heading, body: str(o.body, 600), label, link }); }
+  }
+  return out;
+}
+
 export function readPage(v: unknown, index = 0): InfoPage | null {
   const p = obj(v);
   const slug = pageSlug(p.slug);
@@ -81,6 +116,7 @@ export function readPage(v: unknown, index = 0): InfoPage | null {
     index, slug, title, eyebrow: str(p.eyebrow, 80), intro: str(p.intro, 600), body: str(p.body, 30000), heroImage: okImage(p.heroImage),
     metaTitle: str(p.metaTitle, 120), metaDescription: str(p.metaDescription, 300), form, footer: p.footer !== false,
     layout: p.layout === "franchise" ? "franchise" : "standard",
+    sections: readSections(p.sections), menu: p.menu === true,
   };
 }
 
@@ -97,6 +133,7 @@ export function readSite(settings: unknown): SiteSettings {
     oldSite: /^https?:\/\/[a-z0-9.-]+\.[a-z]{2,}\/?$/i.test(old) ? old.replace(/\/$/, "") : null,
     pages, rules, fallback: s.fallback !== false, discovered,
     images: Object.fromEntries(SITE_IMAGES.map((k) => [k, okImage(obj(s.images)[k])])),
+    logoSize: s.logoSize === "lg" || s.logoSize === "xl" ? s.logoSize : "md",
   };
 }
 

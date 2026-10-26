@@ -17,7 +17,9 @@ export async function MasterNav({ org, active, cta }: { org: PublicOrg; active?:
   const pm = await currentPageMenu(org);
   const light = pm.tone === "light";
   const base = org.slug;
-  const homeHref = readSite(org.rawSettings).home ? `/site/${base}` : `/${base}`;
+  const site = readSite(org.rawSettings);
+  const homeHref = site.home ? `/site/${base}` : `/${base}`;
+  const logoCls = { md: "h-9 max-w-[180px]", lg: "h-12 max-w-[230px]", xl: "h-14 max-w-[260px] sm:h-[72px] sm:max-w-[320px]" }[site.logoSize];
   const all = arrangeMenu(topMenuAuto(org), readMenus(org.rawSettings).top);
   const desktop = visibleMenu(all, "desktop");
   const phone = visibleMenu(all, "mobile");
@@ -31,8 +33,8 @@ export async function MasterNav({ org, active, cta }: { org: PublicOrg; active?:
     <>
     <div className={`relative z-50 border-b font-sans ${light ? "border-[#EEE6DF] bg-[#FCFAF7] text-[#1F1B19]" : "border-white/10 bg-[#141011] text-white"}`} data-master-nav data-menu-key={pm.key} data-menu-tone={pm.tone}>
       <div className={`${PAGE} flex min-h-[60px] flex-wrap items-center gap-x-8 gap-y-0`}>
-        <Link href={homeHref} className="flex h-[60px] shrink-0 items-center" aria-label={`${org.name} home`}>
-          {logo ? <img src={logo} alt={org.name} className="h-9 max-w-[180px] object-contain" /> : <span className="text-[17px] font-semibold">{org.name}</span>}
+        <Link href={homeHref} className={`flex shrink-0 items-center ${site.logoSize === "md" ? "h-[60px]" : "min-h-[60px] py-2"}`} aria-label={`${org.name} home`}>
+          {logo ? <img src={logo} alt={org.name} className={`${logoCls} object-contain`} /> : <span className="text-[17px] font-semibold">{org.name}</span>}
         </Link>
         {mobile.length > 0 && <MobileMenu items={mobile} active={act} light={light} logo={logo} name={org.name} home={homeHref} phone={org.contact_phone} email={org.contact_email} cta={cta} />}
         <nav aria-label={org.name} className="hidden items-center gap-1 lg:flex lg:flex-1 lg:justify-end">

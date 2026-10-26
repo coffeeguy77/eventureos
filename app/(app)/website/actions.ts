@@ -97,14 +97,46 @@ async function patchSite(patch: Record<string, unknown>) {
   return { supabase, org, settings: { ...settings, site: { ...site, ...patch } } };
 }
 
-export async function saveSitePages(input: { home: boolean; pages: unknown[] }): Promise<Result> {
+export async function saveSitePages(input: { home: boolean; pages: unknown[]; logoSize?: string }): Promise<Result> {
   return run(async () => {
     const { readSite } = await import("@/lib/site/site");
     const clean = readSite({ site: { pages: input.pages } }).pages.map(({ index: _i, ...p }) => p);
     if (clean.length < (input.pages ?? []).length) throw new Error("Every page needs a title and an address that isn't already used (and isn't one of EventureOS's own, like hire or shop).");
-    await patchSite({ home: input.home === true, pages: clean });
+    const patch: Record<string, unknown> = { home: input.home === true, pages: clean };
+    if (input.logoSize !== undefined) patch.logoSize = readSite({ site: { logoSize: input.logoSize } }).logoSize;
+    await patchSite(patch);
     return `Saved — ${clean.length} page${clean.length === 1 ? "" : "s"}${input.home ? " and your home page" : ""}.`;
   });
+}
+
+/** Write a page from a few key details, in the business's own name. Only what's given is used. */
+export async function draftSitePage(input: { title: string; slug?: string; form?: string; facts?: string }): Promise<Result<{
+  eyebrow: string; intro: string; body: string; metaTitle: string; metaDescription: string; sections: import("@/lib/site/site").PageSection[];
+}>> {
+  return run(async () => {
+    const { supabase, org } = await manager();
+    const title = String(input.title ?? "").trim().slice(0, 120);
+    if (!title) throw new Error("Give the page a title first.");
+    const { orgAiKey } = await import("@/lib/ai/key");
+    const { callClaude, parseJSONObject } = await import("@/lib/ai/claude");
+    const { readSections } = await import("@/lib/site/site");
+    const key = await orgAiKey(org.id);
+    if (!key) throw new Error("AI writing isn't set up yet — connect an Anthropic key in Settings → Integrations.");
+    const { data: o } = await supabase.from("organisations").select("name, business_type, address, contact_phone").eq("id", org.id).single();
+    const row = (o ?? {}) as { name?: string; business_type?: string | null; address?: string | null; contact_phone?: string | null };
+    const facts = String(input.facts ?? "").trim().slice(0, 3000);
+    const system = `You write website pages for small Australian businesses. Australian English, warm, plain and confident. No hype words ("ultimate", "unforgettable", "world-class"), no emojis, no exclamation marks.
+Use ONLY the facts provided about the business. Never invent years in business, awards, numbers, staff names, prices, reviews, testimonials or guarantees. If a detail isn't given, write around it.
+Text fields may use: blank line between paragraphs, "- " list items, **bold**.
+Reply with ONLY a JSON object:
+{"eyebrow": "2–3 words", "intro": "one or two sentences", "body": "", "sections": [ up to 4 items, each either {"type":"imageText","heading":"...","body":"1–2 short paragraphs"} or {"type":"text","heading":"...","body":"..."}, and finish with one {"type":"cta","heading":"...","body":"one line","label":"button words","link":"/contact"} ], "metaTitle": "under 60 characters", "metaDescription": "under 155 characters"}
+${input.form === "contact" ? "This is the contact page: keep it short (1–2 sections), invite people to call or send a message, mention the area served if given. The page already shows the address, phone, email, a form and a map, so don't repeat them. Skip the cta." : ""}`;
+    const user = `Business: ${row.name ?? org.name}\nType of business: ${row.business_type ?? "—"}\nLocation: ${row.address ? row.address.replace(/\n/g, ", ") : "—"}\nPage title: ${title}\nKey details from the owner: ${facts || "—"}`;
+    const d = parseJSONObject(await callClaude(system, user, { key, maxTokens: 1800, timeoutMs: 40000, temperature: 0.5 }));
+    const t = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
+    const sections = readSections((Array.isArray(d.sections) ? d.sections : []).map((x, i) => ({ ...(x as object), id: `ai${Date.now().toString(36)}${i}`, image: null, side: i % 2 ? "right" : "left" })));
+    return { eyebrow: t(d.eyebrow, 80), intro: t(d.intro, 600), body: t(d.body, 8000), metaTitle: t(d.metaTitle, 120), metaDescription: t(d.metaDescription, 300), sections };
+  }).then((r) => (r.ok ? r : { ok: false as const, error: /Anthropic API/.test(r.error) ? "The AI writer couldn't be reached — try again in a minute." : r.error }));
 }
 
 export async function saveSiteDomain(input: { domain: string; oldSite: string; live: boolean; fallback: boolean }): Promise<Result> {

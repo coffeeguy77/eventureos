@@ -3,7 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { publicOrg } from "@/lib/bookings/server";
-import { blocks, inline, matchRule, readSite, type InfoPage } from "@/lib/site/site";
+import { blocks, inline, matchRule, readSite, type InfoPage, type PageSection } from "@/lib/site/site";
 import { ed, edImg } from "@/lib/site/copy";
 import { siteMeta } from "@/lib/site/meta";
 import { SiteFrame, internalHref } from "@/components/site/site-frame";
@@ -43,6 +43,73 @@ function Body({ pg }: { pg: InfoPage }) {
         ? <h2 key={i} className="shop-serif pt-4 text-[1.625rem] font-medium leading-tight text-[#151312]"><Text s={b.text} /></h2>
         : b.t === "ul" ? <ul key={i} className="list-disc space-y-1.5 pl-5 marker:text-[var(--pk)]">{b.items.map((it, j) => <li key={j}><Text s={it} /></li>)}</ul>
         : <p key={i}><Text s={b.text} /></p>)}
+    </div>
+  );
+}
+
+function Rich({ text }: { text: string }) {
+  return (
+    <div className="space-y-4 text-[1rem] leading-[1.75] text-[#3A3431]">
+      {blocks(text).map((b, i) => b.t === "h"
+        ? <h3 key={i} className="shop-serif pt-2 text-[1.375rem] font-medium leading-tight text-[#151312]"><Text s={b.text} /></h3>
+        : b.t === "ul" ? <ul key={i} className="list-disc space-y-1.5 pl-5 marker:text-[var(--pk)]">{b.items.map((it, j) => <li key={j}><Text s={it} /></li>)}</ul>
+        : <p key={i}><Text s={b.text} /></p>)}
+    </div>
+  );
+}
+
+function Btn({ label, link, slug }: { label: string; link: string; slug: string }) {
+  if (!label || !link) return null;
+  const cls = "shop-btn inline-flex h-[52px] items-center justify-center rounded-full bg-[var(--pk)] px-8 text-[0.9375rem] font-semibold text-white hover:brightness-105";
+  if (/^https:/.test(link)) return <a href={link} target="_blank" rel="noopener noreferrer" className={cls}>{label}</a>;
+  // clean addresses (/contact, /hire/…) work on both the business's domain and EventureOS
+  const href = /^\/(site|hire|shop|cafe|jobs|academy|book)\/[a-z0-9-]+/.test(link) || link.includes("#") ? link : internalHref(slug, link);
+  return <Link href={href} className={cls}>{label}</Link>;
+}
+
+/** The blocks under a page's text: photo + words, photos, galleries, call-to-action bands. */
+function Sections({ sections, slug }: { sections: PageSection[]; slug: string }) {
+  return (
+    <div className="space-y-16 pb-16 sm:space-y-20 sm:pb-20">
+      {sections.map((x) => {
+        if (x.type === "text") return (
+          <section key={x.id} className="mx-auto max-w-[760px] px-5 sm:px-6">
+            {x.heading && <h2 className="shop-serif mb-4 text-[2rem] font-medium leading-tight">{x.heading}</h2>}
+            {x.body && <Rich text={x.body} />}
+          </section>
+        );
+        if (x.type === "imageText") return (
+          <section key={x.id} className="mx-auto grid max-w-[1200px] items-center gap-8 px-5 sm:px-6 lg:grid-cols-2 lg:gap-14">
+            {x.image && <img src={x.image} alt={x.heading} loading="lazy" className={`aspect-[4/3] w-full rounded-xl object-cover ${x.side === "right" ? "lg:order-2" : ""}`} />}
+            <div className={x.image ? "" : "lg:col-span-2 max-w-[760px]"}>
+              {x.heading && <h2 className="shop-serif mb-4 text-[2rem] font-medium leading-tight">{x.heading}</h2>}
+              {x.body && <Rich text={x.body} />}
+              {x.label && x.link && <div className="mt-6"><Btn label={x.label} link={x.link} slug={slug} /></div>}
+            </div>
+          </section>
+        );
+        if (x.type === "image") return (
+          <figure key={x.id} className={`mx-auto px-5 sm:px-6 ${x.wide ? "max-w-[1400px]" : "max-w-[960px]"}`}>
+            {x.image && <img src={x.image} alt={x.caption} loading="lazy" className="w-full rounded-xl object-cover" />}
+            {x.caption && <figcaption className="mt-3 text-center text-[0.875rem] text-[#5E5853]">{x.caption}</figcaption>}
+          </figure>
+        );
+        if (x.type === "gallery") return (
+          <section key={x.id} className="mx-auto max-w-[1200px] px-5 sm:px-6">
+            {x.heading && <h2 className="shop-serif mb-6 text-[2rem] font-medium leading-tight">{x.heading}</h2>}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{x.images.map((u, i) => <img key={u + i} src={u} alt="" loading="lazy" className="aspect-square w-full rounded-lg object-cover" />)}</div>
+          </section>
+        );
+        return (
+          <section key={x.id} className="mx-auto max-w-[1200px] px-5 sm:px-6">
+            <div className="rounded-2xl bg-[color-mix(in_srgb,var(--pk)_8%,#FFF8F5)] px-6 py-10 text-center sm:px-12 sm:py-14">
+              {x.heading && <h2 className="shop-serif text-[2rem] font-medium leading-tight">{x.heading}</h2>}
+              {x.body && <p className="mx-auto mt-3 max-w-[560px] text-[1.0625rem] text-[#5E5853]">{x.body}</p>}
+              {x.label && x.link && <div className="mt-6"><Btn label={x.label} link={x.link} slug={slug} /></div>}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -100,6 +167,7 @@ export default async function InfoPageView(p: P) {
           </aside>
         )}
       </div>
+      {pg.sections.length > 0 && <Sections sections={pg.sections} slug={org.slug} />}
     </SiteFrame>
   );
 }

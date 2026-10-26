@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { shopAvailability, shopOrg, catalogue } from "@/lib/hire/shop";
+import { shopAvailability, shopOrg, catalogue, siteLinks } from "@/lib/hire/shop";
+import { OwnerEdit } from "@/components/rentals/shop/owner-edit";
 import { loadItems } from "@/lib/hire/server";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { addDaysISO, todayISO } from "@/lib/format";
@@ -40,7 +41,8 @@ export default async function HireShopPage({ params, searchParams }: { params: P
     return it ? [{ id: it.id, qty: Math.max(1, Math.min(it.kind === "sale" ? 999 : it.max, Math.round(Number(q) || 1))) }] : [];
   });
   return (
-    <HireShop
+    <>
+    <HireShop site={siteLinks(so)}
       slug={org.slug} tz={org.timezone} today={today} currency={org.currency}
       org={{ name: org.name, logo: org.logo_url, colour: org.brand_colour, phone: org.contact_phone, email: org.contact_email, address: org.address }}
       items={items} brands={s.brands.filter((b) => usedBrands.has(b.key)).map((b) => ({ key: b.key, name: b.name }))}
@@ -48,5 +50,7 @@ export default async function HireShopPage({ params, searchParams }: { params: P
         look: { heading: s.shop.heading, heroImage: s.shop.heroImage, slides: s.shop.slides, logoSize: s.shop.logoSize } }}
       initialWindow={window} initialAvail={avail} initialAdd={add}
     />
+    <OwnerEdit slug={org.slug} href="/rentals/settings" label="Edit shop" />
+    </>
   );
 }

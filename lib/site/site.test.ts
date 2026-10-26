@@ -87,3 +87,26 @@ test("SEO Saver: suggestions and launch check", () => {
   assert.equal(lc.checks.find((c) => c.from === "/about-us")?.ok, true);
   assert.equal(cleanRules([{ id: "a", from: "/x", to: "/x", status: 301, note: "" }, { id: "b", from: "/y", to: "/", status: 301, note: "" }, { id: "c", from: "/y", to: "/z", status: 301, note: "" }]).map((r) => r.id).join(), "b");
 });
+
+test("page sections, menu flag and logo size", async () => {
+  const { readSections } = await import("./site");
+  const s = readSite({ site: { logoSize: "xl", pages: [{ slug: "contact", title: "Contact", menu: true, sections: [
+    { id: "a", type: "text", heading: "Hi", body: "There" },
+    { id: "a", type: "imageText", image: "javascript:x", heading: "Photo", link: "javascript:alert(1)", label: "Go" },
+    { type: "image", image: "https://x.com/a.jpg", caption: "c" },
+    { type: "image", image: "nope" },
+    { type: "gallery", images: ["https://x.com/1.jpg", "bad"] },
+    { type: "cta", heading: "Book", label: "Book now", link: "/hire/x/shop" },
+    { type: "weird" },
+  ] }, { slug: "old", title: "Old" }] } });
+  assert.equal(s.logoSize, "xl");
+  assert.equal(s.pages[0].menu, true); assert.equal(s.pages[1].menu, false);
+  const sec = s.pages[0].sections;
+  assert.deepEqual(sec.map((x) => x.type), ["text", "imageText", "image", "gallery", "cta"]);
+  assert.equal(sec[1].id, "ax");
+  assert.equal(sec[1].type === "imageText" && sec[1].image, null);
+  assert.equal(sec[1].type === "imageText" && sec[1].link, "");
+  assert.deepEqual(sec[3].type === "gallery" && sec[3].images, ["https://x.com/1.jpg"]);
+  assert.equal(readSite({}).logoSize, "md");
+  assert.deepEqual(readSections("x"), []);
+});

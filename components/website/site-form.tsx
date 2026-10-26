@@ -7,8 +7,9 @@ import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { findOldAddresses, saveSeoRules, saveSiteDomain, saveSitePages } from "@/app/(app)/website/actions";
 import type { Check as LaunchCheck, Suggestion } from "@/lib/site/seo";
 import type { NewPage } from "@/lib/site/pages";
+import { PageFields, STARTERS, type BuilderPage } from "./page-builder";
 
-type Page = { slug: string; title: string; eyebrow: string; intro: string; body: string; heroImage: string | null; metaTitle: string; metaDescription: string; form: "none" | "contact" | "franchise"; footer: boolean; layout?: "standard" | "franchise" };
+type Page = BuilderPage;
 type Rule = { from: string; to: string; status: 301 | 410; note: string };
 type Hit = { path: string; kind: string; target: string | null; hits: number; last_at: string };
 
@@ -25,17 +26,18 @@ function useSave() {
     setMsg(r.ok ? { ok: true, text: ok ? ok(r.data) : String(r.data) } : { ok: false, text: r.error });
   });
   const note = msg && <p role="status" className={`text-[0.8125rem] font-medium ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</p>;
-  return { go, pending, note };
+  const fail = (text: string) => setMsg({ ok: false, text });
+  return { go, pending, note, fail };
 }
 
-const blank = (): Page => ({ slug: "", title: "", eyebrow: "", intro: "", body: "", heroImage: null, metaTitle: "", metaDescription: "", form: "none", footer: true });
-
-export function SiteForm({ slug, base, initial, pages: targets, suggestions, checks, hits, hitsReady }: {
-  slug: string; base: string;
-  initial: { home: boolean; domain: string | null; live: boolean; oldSite: string | null; fallback: boolean; pages: Page[]; rules: Rule[]; discovered: number };
+export function SiteForm({ slug, base, orgId, initial, pages: targets, suggestions, checks, hits, hitsReady }: {
+  slug: string; base: string; orgId: string;
+  initial: { home: boolean; domain: string | null; live: boolean; oldSite: string | null; fallback: boolean; pages: Page[]; rules: Rule[]; discovered: number; logoSize: "md" | "lg" | "xl" };
   pages: NewPage[]; suggestions: Suggestion[]; checks: LaunchCheck[]; hits: Hit[]; hitsReady: boolean;
 }) {
   const [home, setHome] = useState(initial.home);
+  const [logoSize, setLogoSize] = useState(initial.logoSize);
+  const [starter, setStarter] = useState(false);
   const [pages, setPages] = useState<Page[]>(initial.pages);
   const [open, setOpen] = useState<number | null>(null);
   const [dom, setDom] = useState({ domain: initial.domain ?? "", oldSite: initial.oldSite ?? "", live: initial.live, fallback: initial.fallback });
@@ -62,7 +64,9 @@ export function SiteForm({ slug, base, initial, pages: targets, suggestions, che
         <CardHeader title="Home page & your pages" subtitle="A home page that introduces everything you do, plus pages like About, Contact and Franchise. Every word can also be changed on the page itself with “Edit this page”." />
         <div className="space-y-4 px-5 pb-5">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-zinc-50 p-3">
-            <Toggle on={home} onChange={setHome} label="Show the home page" hint="Your logo in the site menu opens it. Off: the logo opens your classes page." />
+            <Toggle on={home} onChange={setHome} label="Show the home page" hint="Your logo in the site menu opens it. Off: the logo opens your bookings page." />
+            <label className="flex items-center gap-2 text-[0.8125rem] text-ink">Logo size
+              <Select aria-label="Logo size" value={logoSize} onChange={(e) => setLogoSize(e.target.value as typeof logoSize)} className="w-auto"><option value="md">Standard</option><option value="lg">Large</option><option value="xl">Extra large</option></Select></label>
             <a href={`${base}/site/${slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600">Preview<ExternalLink className="h-3.5 w-3.5" /></a>
           </div>
           <ul className="divide-y divide-line rounded-lg ring-1 ring-line">
@@ -72,32 +76,32 @@ export function SiteForm({ slug, base, initial, pages: targets, suggestions, che
                   <button type="button" onClick={() => setOpen(open === i ? null : i)} className="min-w-0 flex-1 text-left">
                     <span className="font-semibold text-ink">{p.title || "New page"}</span> <span className="text-[0.8125rem] text-ink-faint">/{p.slug || "…"}</span>
                     {p.form !== "none" && <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] text-ink-muted">{p.form} form</span>}
+                    {p.menu && <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] text-ink-muted">in menu</span>}
                   </button>
                   {p.slug && <a href={`${base}/site/${slug}/${p.slug}`} target="_blank" rel="noopener noreferrer" className="text-[0.8125rem] font-semibold text-brand-600">View</a>}
                   <button type="button" aria-label={`Remove ${p.title}`} onClick={() => { setPages(pages.filter((_, j) => j !== i)); setOpen(null); }} className="p-1 text-ink-faint hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </div>
-                {open === i && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div><Label htmlFor={`pt${i}`}>Title</Label><Input id={`pt${i}`} value={p.title} maxLength={120} onChange={(e) => setPage(i, { title: e.target.value, ...(p.slug ? {} : { slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") }) })} /></div>
-                    <div><Label htmlFor={`ps${i}`} hint="the address, e.g. about-us">Address</Label><Input id={`ps${i}`} value={p.slug} maxLength={80} onChange={(e) => setPage(i, { slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} /></div>
-                    <div><Label htmlFor={`pe${i}`} hint="small heading above the title">Eyebrow</Label><Input id={`pe${i}`} value={p.eyebrow} maxLength={80} onChange={(e) => setPage(i, { eyebrow: e.target.value })} /></div>
-                    <div><Label htmlFor={`pi${i}`} hint="https:// link (or change it on the page)">Photo</Label><Input id={`pi${i}`} value={p.heroImage ?? ""} onChange={(e) => setPage(i, { heroImage: e.target.value || null })} /></div>
-                    <div className="sm:col-span-2"><Label htmlFor={`pn${i}`}>Introduction</Label><Textarea id={`pn${i}`} rows={2} value={p.intro} maxLength={600} onChange={(e) => setPage(i, { intro: e.target.value })} /></div>
-                    <div className="sm:col-span-2"><Label htmlFor={`pb${i}`} hint="blank line = new paragraph · ## heading · - list item · **bold** · [link](https://…)">Text</Label><Textarea id={`pb${i}`} rows={12} value={p.body} onChange={(e) => setPage(i, { body: e.target.value })} /></div>
-                    <div><Label htmlFor={`pf${i}`}>Form on the page</Label><Select id={`pf${i}`} value={p.form} onChange={(e) => setPage(i, { form: e.target.value as Page["form"] })}><option value="none">None</option><option value="contact">Contact form</option><option value="franchise">Franchise enquiry form</option></Select></div>
-                    <div><Label htmlFor={`pl${i}`}>Page design</Label><Select id={`pl${i}`} value={p.layout ?? "standard"} onChange={(e) => setPage(i, { layout: e.target.value as Page["layout"] })}><option value="standard">Text page</option><option value="franchise">Franchise sales page (with application pipeline)</option></Select></div>
-                    <div className="flex items-end"><Toggle on={p.footer} onChange={(v) => setPage(i, { footer: v })} label="Link in the footer" /></div>
-                    <div><Label htmlFor={`pmt${i}`} hint="for Google (optional)">Search title</Label><Input id={`pmt${i}`} value={p.metaTitle} maxLength={120} onChange={(e) => setPage(i, { metaTitle: e.target.value })} /></div>
-                    <div><Label htmlFor={`pmd${i}`} hint="for Google (optional)">Search description</Label><Input id={`pmd${i}`} value={p.metaDescription} maxLength={300} onChange={(e) => setPage(i, { metaDescription: e.target.value })} /></div>
-                  </div>
-                )}
+                {open === i && <PageFields i={i} p={p} orgId={orgId} set={(patch) => setPage(i, patch)} onError={(m) => p1.fail(m)} />}
               </li>
             ))}
             {!pages.length && <li className="p-3 text-[0.8125rem] text-ink-muted">No pages yet.</li>}
           </ul>
           <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={() => { setPages([...pages, blank()]); setOpen(pages.length); }}><Plus className="h-4 w-4" />Add a page</Button>
-            <Button variant="primary" disabled={p1.pending} onClick={() => p1.go(() => saveSitePages({ home, pages }))}>Save pages</Button>
+            <span className="relative">
+              <Button onClick={() => setStarter(!starter)} aria-expanded={starter}><Plus className="h-4 w-4" />Add a page</Button>
+              {starter && (
+                <span className="absolute left-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-lg bg-surface py-1 shadow-lg ring-1 ring-line">
+                  {STARTERS.map((st) => (
+                    <button key={st.key} type="button" className="block w-full px-3 py-2 text-left text-[0.8125rem] text-ink hover:bg-canvas" onClick={() => {
+                      const pg = st.make();
+                      if (pg.slug && pages.some((x) => x.slug === pg.slug)) pg.slug = `${pg.slug}-2`;
+                      setPages([...pages, pg]); setOpen(pages.length); setStarter(false);
+                    }}>{st.label}</button>
+                  ))}
+                </span>
+              )}
+            </span>
+            <Button variant="primary" disabled={p1.pending} onClick={() => p1.go(() => saveSitePages({ home, pages, logoSize }))}>Save pages</Button>
             {p1.note}
           </div>
         </div>

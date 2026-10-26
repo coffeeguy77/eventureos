@@ -37,9 +37,15 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const sp = await searchParams;
-  const tab = sp.tab === "events" || sp.tab === "reminders" || sp.tab === "cafe" || sp.tab === "site" || sp.tab === "menus" ? sp.tab : "analytics";
-  const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone").eq("id", org.id).single();
+  const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone, app_access").eq("id", org.id).single();
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
+  // The events and café pages belong to the events and café side of things; businesses on chosen apps only see what's theirs
+  const allApps = !Array.isArray((o as { app_access?: unknown } | null)?.app_access);
+  const showEvents = allApps || readEvents(settings).enabled;
+  const showCafe = allApps || readCafe(settings).enabled;
+  const showReminders = allApps || showEvents || showCafe;
+  const want = sp.tab;
+  const tab = (want === "events" && showEvents) || (want === "reminders" && showReminders) || (want === "cafe" && showCafe) || want === "site" || want === "menus" ? want! : want === undefined && !allApps ? "site" : "analytics";
 
   let body: React.ReactNode;
   if (tab === "events") {
@@ -58,8 +64,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     ]);
     const products = ((prods ?? []) as { slug: string | null }[]).map((x) => x.slug).filter((x): x is string => !!x);
     const allTargets = [...targets, ...products.map((x) => ({ path: `/shop/p/${x}`, title: x.replace(/-/g, " "), group: "Shop products" }))];
-    body = <SiteForm slug={o?.slug as string} base={appBaseUrl()}
-      initial={{ home: site.home, domain: site.domain, live: site.live, oldSite: site.oldSite, fallback: site.fallback, pages: site.pages.map(({ index: _i, ...p }) => p), rules: site.rules.map(({ from, to, status, note }) => ({ from, to, status, note })), discovered: site.discovered.length }}
+    body = <SiteForm slug={o?.slug as string} base={appBaseUrl()} orgId={org.id}
+      initial={{ logoSize: site.logoSize, home: site.home, domain: site.domain, live: site.live, oldSite: site.oldSite, fallback: site.fallback, pages: site.pages.map(({ index: _i, ...p }) => p), rules: site.rules.map(({ from, to, status, note }) => ({ from, to, status, note })), discovered: site.discovered.length }}
       pages={allTargets} suggestions={suggest(site, site.discovered, allTargets, { products })} checks={launchCheck(site, site.discovered, allTargets).checks}
       hits={(hitsR.data ?? []) as { path: string; kind: string; target: string | null; hits: number; last_at: string }[]} hitsReady={!hitsR.error} />;
   } else if (tab === "menus") {
@@ -187,8 +193,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader eyebrow="Marketing" title="Website" subtitle="How people use your public pages, your events and café pages, and the come-back-and-finish reminders." />
-      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, { key: "events", label: "Events pages" }, { key: "cafe", label: "Café pages" }, { key: "site", label: "Pages, domain & SEO" }, { key: "menus", label: "Menus" }, { key: "reminders", label: "Reminders" }]} /></div>
+      <PageHeader eyebrow="Marketing" title="Website" subtitle={allApps ? "How people use your public pages, your events and café pages, and the come-back-and-finish reminders." : "Your home page and pages, menus, your own domain, and how people use your site."} />
+      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, ...(showEvents ? [{ key: "events", label: "Events pages" }] : []), ...(showCafe ? [{ key: "cafe", label: "Café pages" }] : []), { key: "site", label: "Pages, domain & SEO" }, { key: "menus", label: "Menus" }, ...(showReminders ? [{ key: "reminders", label: "Reminders" }] : [])]} /></div>
       {body}
     </>
   );
