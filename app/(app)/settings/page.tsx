@@ -12,12 +12,13 @@ export default async function OrganisationSettingsPage() {
   const { supabase, org, role } = await requireOrg();
   const { data: o, error } = await supabase
     .from("organisations")
-    .select("name, slug, business_type, contact_email, contact_phone, address, website, timezone, currency, plan, status, created_at")
+    .select("name, slug, business_type, contact_email, contact_phone, address, website, timezone, currency, plan, status, created_at, settings")
     .eq("id", org.id)
     .single();
   if (error) throw new Error(`Could not load organisation: ${error.message}`);
 
   const canEdit = role === "owner" || role === "admin";
+  const abn = ((o.settings as { business?: { abn?: unknown } } | null)?.business?.abn as string | undefined) ?? "";
   const businessTypes = o.business_type && !BUSINESS_TYPES.includes(o.business_type) ? [o.business_type, ...BUSINESS_TYPES] : BUSINESS_TYPES;
   const currencies = CURRENCIES.includes(o.currency) ? CURRENCIES : [o.currency, ...CURRENCIES];
 
@@ -57,6 +58,10 @@ export default async function OrganisationSettingsPage() {
                   <Label htmlFor="contact_phone">Phone</Label>
                   <Input id="contact_phone" name="contact_phone" type="tel" defaultValue={o.contact_phone ?? ""} />
                 </div>
+                <div>
+                  <Label htmlFor="abn" hint="printed on receipts">ABN</Label>
+                  <Input id="abn" name="abn" inputMode="numeric" placeholder="12 345 678 901" defaultValue={abn} />
+                </div>
                 <div className="sm:col-span-2">
                   <Label htmlFor="address">Address</Label>
                   <Textarea id="address" name="address" rows={2} className="min-h-0" defaultValue={o.address ?? ""} />
@@ -91,6 +96,7 @@ export default async function OrganisationSettingsPage() {
               <Field label="Business type">{o.business_type ?? "—"}</Field>
               <Field label="Contact email"><span className="break-words">{o.contact_email ?? "—"}</span></Field>
               <Field label="Phone">{o.contact_phone ?? "—"}</Field>
+              <Field label="ABN">{abn || "—"}</Field>
               <Field label="Address" className="sm:col-span-2"><span className="whitespace-pre-line">{o.address ?? "—"}</span></Field>
               <Field label="Website"><span className="break-all">{o.website ?? "—"}</span></Field>
               <Field label="Timezone">{o.timezone}</Field>

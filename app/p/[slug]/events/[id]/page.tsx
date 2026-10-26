@@ -16,6 +16,7 @@ import { Detail, Panel, PortalLink, portalButton } from "../../ui";
 import { AddPersonForm, MessageForm, PortalTabsNav, QuoteResponse, UploadButton } from "./client";
 import { DiyCalculator } from "./diy-calculator";
 import { hasDiyHire } from "@/lib/diy/coffee-guide";
+import { methodLabel } from "@/lib/payments/receipt-pdf";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -187,7 +188,7 @@ export default async function PortalEventPage({ params, searchParams }: {
           <Documents slug={slug} e={e} orgId={org.id} docs={docs} supabase={supabase} tz={tz} />
         )}
 
-        {tab === "payments" && <Payments invoices={invoices} payments={payments} cur={cur} tz={tz} cardPayments={cardPayments} />}
+        {tab === "payments" && <Payments slug={slug} invoices={invoices} payments={payments} cur={cur} tz={tz} cardPayments={cardPayments} />}
 
         {tab === "messages" && <Messages slug={slug} e={e} messages={messages} businessName={branding.name} tz={tz} />}
       </div>
@@ -605,7 +606,7 @@ async function Documents({ slug, e, orgId, docs, supabase, tz }: {
 /* Payments                                                            */
 /* ================================================================== */
 
-function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: PortalInvoice[]; payments: PortalPayment[]; cur: string; tz: string; cardPayments: boolean }) {
+function Payments({ slug, invoices, payments, cur, tz, cardPayments }: { slug: string; invoices: PortalInvoice[]; payments: PortalPayment[]; cur: string; tz: string; cardPayments: boolean }) {
   const live = invoices.filter((i) => i.status !== "void");
   const outstanding = live.reduce((s, i) => s + (isOpenInvoice(i) ? Number(i.balance) : 0), 0);
   const paid = live.reduce((s, i) => s + Number(i.amount_paid), 0);
@@ -669,7 +670,7 @@ function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: Por
         )}
       </Panel>
 
-      <Panel title="Payments received">
+      <Panel title="Payments received" subtitle="Download a receipt for any payment.">
         {payments.length === 0 ? (
           <p className="border-t border-line px-4 py-8 text-center text-[0.8125rem] text-ink-muted sm:px-6">No payments recorded yet.</p>
         ) : (
@@ -679,12 +680,14 @@ function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: Por
               <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-[0.8438rem] text-ink">{fmtDateTime(p.paid_at, tz, "date")}</p>
-                  <p className="break-words text-[0.7812rem] capitalize text-ink-muted">
-                    {invoices.find((i) => i.id === p.invoice_id)?.number ?? "—"}{p.method ? ` · ${p.method.replace(/_/g, " ")}` : ""}
-                    {p.reference && <span className="normal-case text-ink-faint"> · {p.reference}</span>}
+                  <p className="break-words text-[0.7812rem] text-ink-muted">
+                    {invoices.find((i) => i.id === p.invoice_id)?.number ?? "—"} · {methodLabel(p.method, p.reference)}
                   </p>
                 </div>
-                <span className="tabular shrink-0 text-[0.875rem] font-semibold text-ink">{money(p.amount, cur)}</span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="tabular text-[0.875rem] font-semibold text-ink">{money(p.amount, cur)}</span>
+                  <a href={`/p/${slug}/receipts/${p.id}?download=1`} className="inline-flex items-center gap-1 text-[0.7812rem] font-semibold text-[var(--portal-brand)]"><Download className="h-3.5 w-3.5" />Receipt</a>
+                </span>
               </li>
             ))}
           </ul>
@@ -695,7 +698,8 @@ function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: Por
                   <th className="px-5 py-2.5 font-medium sm:px-6">Date</th>
                   <th className="px-3 py-2.5 font-medium">Invoice</th>
                   <th className="px-3 py-2.5 font-medium">Method</th>
-                  <th className="px-5 py-2.5 text-right font-medium sm:px-6">Amount</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Amount</th>
+                  <th className="px-5 py-2.5 text-right font-medium sm:px-6"><span className="sr-only">Receipt</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -703,8 +707,9 @@ function Payments({ invoices, payments, cur, tz, cardPayments }: { invoices: Por
                   <tr key={p.id}>
                     <td className="px-5 py-3 text-ink sm:px-6">{fmtDateTime(p.paid_at, tz, "date")}</td>
                     <td className="px-3 py-3 text-ink-muted">{invoices.find((i) => i.id === p.invoice_id)?.number ?? "—"}</td>
-                    <td className="px-3 py-3 capitalize text-ink-muted">{p.method?.replace(/_/g, " ") ?? "—"}{p.reference && <span className="normal-case text-ink-faint"> · {p.reference}</span>}</td>
-                    <td className="tabular px-5 py-3 text-right font-medium text-ink sm:px-6">{money(p.amount, cur)}</td>
+                    <td className="px-3 py-3 text-ink-muted">{methodLabel(p.method, p.reference)}</td>
+                    <td className="tabular px-3 py-3 text-right font-medium text-ink">{money(p.amount, cur)}</td>
+                    <td className="px-5 py-3 text-right sm:px-6"><a href={`/p/${slug}/receipts/${p.id}?download=1`} className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-[var(--portal-brand)] hover:underline"><Download className="h-3.5 w-3.5" />Receipt</a></td>
                   </tr>
                 ))}
               </tbody>

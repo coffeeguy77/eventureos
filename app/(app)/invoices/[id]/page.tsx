@@ -245,7 +245,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                         {p.reference ? `Ref ${p.reference} · ` : ""}{p.xero_payment_id ? "From Xero" : `Recorded manually${p.created_by && names[p.created_by] ? ` by ${names[p.created_by]}` : ""}`}
                       </p>
                     </div>
-                    <span className="tabular shrink-0 text-[0.8438rem] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="tabular text-[0.8438rem] font-medium text-emerald-700">{money(p.amount, cur)}</span>
+                      {inv.status !== "void" && <a href={`/invoices/${inv.id}/receipt/${p.id}`} target="_blank" rel="noopener" className="text-[0.75rem] font-semibold text-brand-600 hover:underline">Receipt</a>}
+                    </span>
                   </li>
                 ))}
               </ul>

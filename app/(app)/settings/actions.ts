@@ -77,7 +77,7 @@ function diff(before: Record<string, unknown>, after: Record<string, unknown>) {
 
 const FIELD_LABEL: Record<string, string> = {
   name: "name", business_type: "business type", contact_email: "contact email", contact_phone: "phone",
-  address: "address", website: "website", timezone: "timezone", currency: "currency",
+  address: "address", website: "website", timezone: "timezone", currency: "currency", abn: "ABN",
 };
 
 // ---------------------------------------------------------------------------
@@ -118,10 +118,20 @@ export async function updateOrganisation(_prev: ActionState, form: FormData): Pr
     .single();
   if (e1) return { error: `Couldn't load your organisation: ${e1.message}` };
 
+  // ABN (printed on receipts) lives in settings.business
+  const abnRaw = (str(form.get("abn")) ?? "").replace(/\s+/g, "");
+  if (abnRaw && !/^\d{11}$/.test(abnRaw)) return { error: "An ABN is 11 digits." };
+  const abn = abnRaw ? abnRaw.replace(/^(\d{2})(\d{3})(\d{3})(\d{3})$/, "$1 $2 $3 $4") : null;
+  const { data: sRow } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+  const settings = ((sRow?.settings ?? {}) as Record<string, unknown>);
+  const business = (settings.business && typeof settings.business === "object" ? settings.business : {}) as Record<string, unknown>;
+  const abnChanged = (typeof business.abn === "string" ? business.abn : null) !== abn;
+
   const changes = diff(before, next);
+  if (abnChanged) changes.abn = [business.abn ?? null, abn];
   if (!Object.keys(changes).length) return { ok: "No changes to save." };
 
-  const { error } = await supabase.from("organisations").update(next).eq("id", org.id);
+  const { error } = await supabase.from("organisations").update(abnChanged ? { ...next, settings: { ...settings, business: { ...business, abn } } } : next).eq("id", org.id);
   if (error) return { error: `Couldn't save organisation details: ${error.message}` };
 
   await logActivity(supabase, {

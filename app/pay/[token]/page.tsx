@@ -1,11 +1,12 @@
 import { billToLines, loadBillTo } from "@/lib/customers/bill-to";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { notFound } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Download } from "lucide-react";
 import { invoiceByToken, payable } from "@/lib/payments/service";
 import { fmtDate, money } from "@/lib/format";
 import { PayButton } from "./pay-button";
 import { InvoiceViewBeacon } from "./view-beacon";
+import { ReceiptWait } from "./receipt-wait";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pay invoice", robots: { index: false, follow: false } };
@@ -31,6 +32,10 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const received = Math.max(0, Number(inv.amount_paid) - credited);
   const bill = billToLines(await loadBillTo(svc, inv.organisation_id, inv.customer_id, evc?.primary_contact_id ?? null).catch(() => null));
   const kind = inv.kind === "deposit" ? "Deposit invoice" : inv.kind === "final" ? "Final invoice" : "Invoice";
+  // Receipts: one per payment on this invoice
+  const { data: pays } = await svc.from("payments").select("id, amount, paid_at, method, reference").eq("invoice_id", inv.id).order("paid_at", { ascending: true }).order("created_at", { ascending: true });
+  const payments = (pays ?? []) as { id: string; amount: number; paid_at: string; method: string | null; reference: string | null }[];
+  const recent = payments.some((x) => Date.now() - Date.parse(x.paid_at) < 15 * 60_000);
 
   return (
     <main className="min-h-screen bg-canvas px-4 py-10 sm:py-16">
@@ -66,7 +71,8 @@ export default async function PayPage({ params, searchParams }: { params: Promis
               <div className="text-center">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
                 <p className="mt-2 text-[1rem] font-semibold text-ink">{justPaid ? "Payment received — thank you!" : credited > 0 ? "Nothing more to pay on this invoice." : "This invoice is paid — thank you!"}</p>
-                <p className="mt-1 text-[0.8125rem] text-ink-muted">{justPaid ? "Stripe will email your receipt. " : ""}{inv.org.name} has been notified.</p>
+                <p className="mt-1 text-[0.8125rem] text-ink-muted">{inv.org.name} has been notified.{justPaid && !recent ? " Your receipt will appear below in a few seconds." : ""}</p>
+                {justPaid && !recent && <ReceiptWait />}
               </div>
             ) : canPay ? (
               <PayButton token={token} label={`Pay ${money(inv.balance, cur, { cents: true })} by card`} colour={colour} />
@@ -76,6 +82,19 @@ export default async function PayPage({ params, searchParams }: { params: Promis
               </p>
             )}
           </div>
+          {payments.length > 0 && (
+            <div className="border-t border-line p-6">
+              <p className="text-[0.75rem] font-semibold uppercase tracking-wider text-ink-faint">Payment receipts</p>
+              <ul className="mt-3 space-y-2">
+                {payments.map((x, i) => (
+                  <li key={x.id} className="flex items-center justify-between gap-3 text-[0.875rem]">
+                    <span className="min-w-0"><span className="block text-ink">{money(x.amount, cur, { cents: true })} · {fmtDate(x.paid_at.slice(0, 10), "long")}</span><span className="block text-[0.75rem] text-ink-faint">Receipt {inv.number ?? "INV"}-R{i + 1}</span></span>
+                    <a href={`/pay/${token}/receipt/${x.id}?download=1`} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-semibold text-white" style={{ background: colour }}><Download className="h-4 w-4" />Receipt</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <p className="mt-6 text-center text-[0.75rem] text-ink-faint">
           Questions? Contact {inv.org.name}{inv.org.contact_email ? ` · ${inv.org.contact_email}` : ""}{inv.org.contact_phone ? ` · ${inv.org.contact_phone}` : ""}
