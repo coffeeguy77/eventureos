@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { RentalsNav } from "@/components/rentals/nav";
 import { HireSwitch } from "@/components/rentals/hire-switch";
 import { hireOn, orgAppAccess } from "@/lib/apps-server";
+import { readHireSettings } from "@/lib/hire/core";
 
 export const metadata = { title: "Hire" };
 
@@ -36,7 +37,7 @@ export default async function RentalsLayout({ children }: { children: React.Reac
   }
   return (
     <div>
-      <RentalsNav overdue={count ?? 0} canManage={manager} />
+      <RentalsNav overdue={count ?? 0} canManage={manager} shopUrl={readHireSettings(org.settings).shop.enabled ? `/hire/${org.slug}/shop` : null} />
       {children}
     </div>
   );

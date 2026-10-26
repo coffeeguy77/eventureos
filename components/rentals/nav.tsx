@@ -15,7 +15,7 @@ const ITEMS = [
 ];
 
 /** The Hire section's menu (Today, Bookings, Availability, Items & rates, Settings) and the New booking button. */
-export function RentalsNav({ overdue, canManage }: { overdue: number; canManage: boolean }) {
+export function RentalsNav({ overdue, canManage, shopUrl }: { overdue: number; canManage: boolean; shopUrl?: string | null }) {
   const path = usePathname();
   return (
     <div className="mb-5 flex items-end gap-3 border-b border-line print:hidden">
@@ -31,6 +31,7 @@ export function RentalsNav({ overdue, canManage }: { overdue: number; canManage:
           );
         })}
       </nav>
+      {shopUrl && <a href={shopUrl} target="_blank" rel="noreferrer" className={buttonClass("secondary", "sm", "mb-2 hidden shrink-0 sm:inline-flex")}>Online shop ↗</a>}
       <Link href="/rentals/bookings/new" className={buttonClass("primary", "sm", "mb-2 hidden shrink-0 sm:inline-flex")}><Plus className="h-4 w-4" />New booking</Link>
     </div>
   );

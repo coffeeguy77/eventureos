@@ -187,6 +187,9 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     p_payer: s.customer_details?.name ?? null, p_xero_payment_id: xeroId, p_xero_error: xeroErr,
   });
   if (error) throw new Error(`Couldn't record the payment: ${error.message}`);
+  // An online hire held while the customer paid its deposit is now booked
+  await db.from("hire_bookings").update({ status: "booked", updated_at: new Date().toISOString() }).eq("organisation_id", orgId).eq("invoice_id", inv.id).eq("status", "reservation")
+    .then(() => undefined, () => undefined);
   return `recorded ${amount} on ${inv.number ?? inv.id}${xeroId ? " (Xero)" : xeroErr ? ` (Xero failed: ${xeroErr})` : ""}`;
 }
 
