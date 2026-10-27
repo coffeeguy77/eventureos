@@ -240,3 +240,15 @@ export async function linkClient(accountId: string, customerId: string): Promise
     done(accountId); return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** Delete a website (WHM terminate, or just the record here). Typed-domain confirmation; dry run respected. */
+export async function deleteWebsiteNow(id: string, mode: "terminate" | "forget", confirm: string): Promise<R<string>> {
+  try {
+    const { db, org, user } = await hosting();
+    await ownAccount(db, org.id, id);
+    const { deleteWebsite } = await import("@/lib/hosting/server");
+    const r = await deleteWebsite(db, org.id, id, { mode: mode === "terminate" ? "terminate" : "forget", confirm: String(confirm ?? ""), actor: user.id });
+    done(id); revalidatePath("/hosting/recurring");
+    return { ok: true, data: r.message };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

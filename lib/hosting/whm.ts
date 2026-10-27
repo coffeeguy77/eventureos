@@ -59,3 +59,7 @@ export async function whmSuspend(s: WhmServer, user: string, reason: string): Pr
 export async function whmUnsuspend(s: WhmServer, user: string): Promise<WhmResult> {
   try { return result(await call(s, "unsuspendacct", { user }), "Unsuspended", "Unsuspend failed"); } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "Unsuspend failed" }; }
 }
+/** Terminate (delete) a cPanel account: its website, email and files are removed from the server. Permanent. */
+export async function whmTerminate(s: WhmServer, user: string): Promise<WhmResult> {
+  try { return result(await call(s, "removeacct", { username: user, keepdns: "0" }), "Account removed", "Removal failed"); } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "Removal failed" }; }
+}

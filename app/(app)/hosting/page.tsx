@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { fmtDateTime, money } from "@/lib/format";
 import { ATTENTION, REVIEW, STATUS_TONE } from "@/lib/hosting/core";
+import { describeSchedule, type Unit } from "@/lib/recurring/core";
 import { Card, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckNow } from "@/components/hosting/check-now";
@@ -12,10 +13,10 @@ export const dynamic = "force-dynamic";
 
 const VIEWS = [
   { key: "attention", label: "Needs action" }, { key: "suspended", label: "Suspended" }, { key: "due", label: "Due soon" },
-  { key: "paid", label: "Paid" }, { key: "review", label: "To match" }, { key: "noclient", label: "No client" }, { key: "protected", label: "Protected" }, { key: "all", label: "All" },
+  { key: "paid", label: "Paid" }, { key: "review", label: "To match" }, { key: "noclient", label: "No client" }, { key: "noinvoice", label: "No invoice" }, { key: "protected", label: "Protected" }, { key: "all", label: "All" },
 ] as const;
 
-type Row = { id: string; domain: string; username: string | null; plan: string | null; on_server: boolean; suspended: boolean; suspended_by_app: boolean; billing_status: string | null; match_status: string | null; amount_due: number | null; days_overdue: number | null; due_date: string | null; last_notice_at: string | null; customer_id: string | null; hosting_servers: { name: string; kind: string } | null; customers: { name: string } | null };
+type Row = { id: string; domain: string; username: string | null; plan: string | null; on_server: boolean; suspended: boolean; suspended_by_app: boolean; billing_status: string | null; match_status: string | null; amount_due: number | null; days_overdue: number | null; due_date: string | null; last_notice_at: string | null; customer_id: string | null; invoice_id: string | null; hosting_servers: { name: string; kind: string } | null; customers: { name: string } | null };
 
 /** Every hosting account, matched to its invoice: who's paid, who's overdue, who's suspended. */
 export default async function HostingPage({ searchParams }: { searchParams: Promise<{ v?: string; q?: string }> }) {
@@ -23,11 +24,16 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const view = VIEWS.find((x) => x.key === sp.v)?.key ?? "attention";
   const [{ data }, { data: xero }, { count: servers }] = await Promise.all([
-    supabase.from("hosting_accounts").select("id, domain, username, plan, on_server, suspended, suspended_by_app, billing_status, match_status, amount_due, days_overdue, due_date, last_notice_at, customer_id, hosting_servers(name, kind), customers(name)").eq("organisation_id", org.id).order("domain").limit(5000),
+    supabase.from("hosting_accounts").select("id, domain, username, plan, on_server, suspended, suspended_by_app, billing_status, match_status, amount_due, days_overdue, due_date, last_notice_at, customer_id, invoice_id, hosting_servers(name, kind), customers(name)").eq("organisation_id", org.id).order("domain").limit(5000),
     supabase.from("integrations").select("status, last_sync_at, last_sync_status").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle(),
     supabase.from("hosting_servers").select("id", { count: "exact", head: true }).eq("organisation_id", org.id),
   ]);
   const all = (data ?? []) as unknown as Row[];
+  // repeating invoices tied to each site (quietly none before the recurring update)
+  const { data: recData } = await supabase.from("recurring_invoices").select("id, hosting_account_id, total, every, unit, status").eq("organisation_id", org.id).not("hosting_account_id", "is", null).limit(5000).then((x) => x, () => ({ data: [] }));
+  const recFor = new Map<string, { id: string; total: number; every: number; unit: Unit; status: string }[]>();
+  for (const r of (recData ?? []) as { id: string; hosting_account_id: string; total: number; every: number; unit: Unit; status: string }[]) recFor.set(r.hosting_account_id, [...(recFor.get(r.hosting_account_id) ?? []), r]);
+  const noInvoice = (r: Row) => !recFor.has(r.id) && !r.invoice_id;
   const st = (r: Row) => r.billing_status ?? "No Match";
   const counts = {
     attention: all.filter((r) => r.on_server && ATTENTION.includes(st(r) as never)).length,
@@ -37,6 +43,7 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
     review: all.filter((r) => r.on_server && (REVIEW.includes(st(r) as never) || r.match_status === "Client Match" || r.match_status === "Multiple Matches")).length,
     protected: all.filter((r) => ["VIP Protected", "Disputed", "Manual Override", "Extended"].includes(st(r))).length,
     noclient: all.filter((r) => !r.customer_id).length,
+    noinvoice: all.filter(noInvoice).length,
     all: all.length,
   };
   let rows = all;
@@ -46,6 +53,7 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
   if (view === "paid") rows = all.filter((r) => st(r) === "Paid");
   if (view === "review") rows = all.filter((r) => r.on_server && (REVIEW.includes(st(r) as never) || r.match_status === "Client Match" || r.match_status === "Multiple Matches"));
   if (view === "noclient") rows = all.filter((r) => !r.customer_id);
+  if (view === "noinvoice") rows = all.filter(noInvoice);
   if (view === "protected") rows = all.filter((r) => ["VIP Protected", "Disputed", "Manual Override", "Extended"].includes(st(r)));
   const q = (sp.q ?? "").trim().toLowerCase();
   if (q) rows = rows.filter((r) => [r.domain, r.username, r.customers?.name].filter(Boolean).join(" ").toLowerCase().includes(q));
@@ -73,6 +81,10 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[0.875rem] font-medium text-ink">{r.domain}{!r.on_server && <span className="ml-2 text-[0.7188rem] font-normal text-ink-faint">no longer on the server</span>}</p>
                   <p className="truncate text-[0.75rem] text-ink-muted">{!r.customer_id && <span className="mr-1 rounded bg-zinc-100 px-1 text-ink-faint">no client</span>}{[r.customers?.name, r.hosting_servers?.name, r.username, r.plan].filter(Boolean).join(" · ")}{r.match_status === "Client Match" ? " · matched by client" : ""}</p>
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {(recFor.get(r.id) ?? []).map((rc) => <span key={rc.id} className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[0.6875rem] font-medium text-sky-800 ring-1 ring-inset ring-sky-200">↻ {money(Number(rc.total), org.currency)} {describeSchedule(rc.every, rc.unit).toLowerCase()}{rc.status !== "active" ? ` · ${rc.status}` : ""}</span>)}
+                    {noInvoice(r) && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-800 ring-1 ring-inset ring-amber-200">no invoice</span>}
+                  </span>
                 </div>
                 {Number(r.amount_due) > 0 && <span className="text-right text-[0.8125rem] tabular-nums text-ink">{money(Number(r.amount_due), org.currency)}{(r.days_overdue ?? 0) > 0 && <span className="block text-[0.6875rem] text-rose-700">{r.days_overdue} days over</span>}</span>}
                 {r.suspended && <Badge tone="red">{r.suspended_by_app ? "Suspended" : "Suspended (outside)"}</Badge>}

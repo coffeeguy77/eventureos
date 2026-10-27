@@ -5,7 +5,7 @@ import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { billingReference, readHosting, STATUS_TONE, stripMarker } from "@/lib/hosting/core";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AccountDetails, NoticeComposer, SuspendControls } from "@/components/hosting/account-tools";
+import { AccountDetails, DeleteWebsite, NoticeComposer, SuspendControls } from "@/components/hosting/account-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +65,7 @@ export default async function HostingAccountPage({ params }: { params: Promise<{
         <div className="space-y-5">
           <SuspendControls id={a.id as string} suspended={!!a.suspended} byApp={!!a.suspended_by_app} kind={server?.kind ?? "whm"} dryRun={s.dryRun} domain={a.domain as string} />
           <NoticeComposer id={a.id as string} templates={s.templates.map((t) => ({ key: t.key, name: t.name }))} />
+          <DeleteWebsite id={a.id as string} domain={a.domain as string} kind={server?.kind ?? "whm"} onServer={!!a.on_server} dryRun={s.dryRun} />
           <Card>
             <CardHeader title="History" />
             <ul className="divide-y divide-line border-t border-line">

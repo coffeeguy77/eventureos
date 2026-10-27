@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Mail, Power, PowerOff, Send } from "lucide-react";
+import { Check, Loader2, Mail, Power, PowerOff, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
-import { previewNotice, saveAccount, sendNoticeNow, suspendNow, unsuspendNow, type AccountInput } from "@/app/(app)/hosting/actions";
+import { deleteWebsiteNow, previewNotice, saveAccount, sendNoticeNow, suspendNow, unsuspendNow, type AccountInput } from "@/app/(app)/hosting/actions";
 
 type Msg = { ok: boolean; text: string } | null;
 const Status = ({ m }: { m: Msg }) => (m ? <p role="status" className={`text-[0.8125rem] font-medium ${m.ok ? "text-emerald-700" : "text-rose-700"}`}>{m.text}</p> : null);
@@ -118,6 +118,44 @@ export function SuspendControls({ id, suspended, byApp, kind, dryRun, domain }: 
           <label className="flex items-center gap-2 text-[0.8125rem]"><input type="checkbox" className="h-4 w-4" checked={notify} onChange={(e) => setNotify(e.target.checked)} />Email the customer the "{suspended ? "Back online" : "Suspended"}" notice</label>
           <p className="text-[0.75rem] text-ink-muted">{dryRun ? `Dry run is on: ${domain} won't really change — it's logged.` : `${suspended ? "Switch" : "Suspend"} ${domain} now?`}</p>
           <div className="flex gap-2"><Button variant="primary" disabled={pending} onClick={go}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{suspended ? "Yes, switch it back on" : "Yes, suspend"}</Button><Button variant="ghost" onClick={() => setAsk(false)}>Cancel</Button></div>
+        </>}
+        <Status m={msg} />
+      </div>
+    </Card>
+  );
+}
+
+/** Delete the website: WHM terminate (permanent) or just remove it from EventureOS. Type the domain to confirm. */
+export function DeleteWebsite({ id, domain, kind, onServer, dryRun }: { id: string; domain: string; kind: string; onServer: boolean; dryRun: boolean }) {
+  const router = useRouter();
+  const canTerminate = kind === "whm" && onServer;
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"terminate" | "forget">(canTerminate ? "terminate" : "forget");
+  const [typed, setTyped] = useState("");
+  const [msg, setMsg] = useState<Msg>(null);
+  const [pending, start] = useTransition();
+  const go = () => start(async () => {
+    setMsg(null);
+    const r = await deleteWebsiteNow(id, mode, typed);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    if (/Dry run/.test(r.data)) { setMsg({ ok: true, text: r.data }); setOpen(false); router.refresh(); return; }
+    router.push("/hosting?v=all");
+  });
+  return (
+    <Card>
+      <CardHeader title="Delete website" />
+      <div className="space-y-3 border-t border-line px-5 py-4">
+        {!open ? <Button variant="danger" onClick={() => setOpen(true)}><Trash2 className="h-4 w-4" />Delete…</Button> : <>
+          <div className="space-y-2 text-[0.8125rem]">
+            {canTerminate && <label className="flex items-start gap-2"><input type="radio" name={`del-${id}`} className="mt-0.5" checked={mode === "terminate"} onChange={() => setMode("terminate")} /><span><span className="font-medium text-rose-700">Delete from the server (WHM)</span><span className="block text-[0.75rem] text-ink-muted">Removes the cPanel account — website, email accounts, databases and files. This can't be undone; take a backup first if you might need it.</span></span></label>}
+            <label className="flex items-start gap-2"><input type="radio" name={`del-${id}`} className="mt-0.5" checked={mode === "forget"} onChange={() => setMode("forget")} /><span><span className="font-medium text-ink">Remove from EventureOS only</span><span className="block text-[0.75rem] text-ink-muted">{kind === "whm" && onServer ? "Not possible while it's still on the server — the next sync would add it back." : "For a site that's already gone, or a SiteGround site. Nothing changes on any server."}</span></span></label>
+          </div>
+          <div><Label htmlFor={`del-t-${id}`}>Type {domain} to confirm</Label><Input id={`del-t-${id}`} value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)} /></div>
+          {dryRun && mode === "terminate" && <p className="text-[0.75rem] text-amber-800">Dry run is on — this will only be logged. Turn dry run off in Settings to really delete.</p>}
+          <div className="flex gap-2">
+            <Button variant="danger" disabled={pending || typed.trim().toLowerCase().replace(/^www\./, "") !== domain.toLowerCase().replace(/^www\./, "")} onClick={go}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}{mode === "terminate" ? "Delete it from the server" : "Remove it"}</Button>
+            <Button variant="ghost" onClick={() => { setOpen(false); setTyped(""); }}>Cancel</Button>
+          </div>
         </>}
         <Status m={msg} />
       </div>

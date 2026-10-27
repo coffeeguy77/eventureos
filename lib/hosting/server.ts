@@ -5,7 +5,7 @@ import {
   billingReference, billingState, canAutoSuspend, canAutoUnsuspend, codeRules, fillNotice, hasMarker, matchInvoice, normalizeDomain, readHosting, stripMarker, withMarker,
   type HostingSettings, type Inv,
 } from "./core";
-import { whmAccounts, whmSuspend, whmUnsuspend, whmVersion, type WhmServer } from "./whm";
+import { whmAccounts, whmSuspend, whmTerminate, whmUnsuspend, whmVersion, type WhmServer } from "./whm";
 
 /**
  * Hosting (server side): sync accounts from WHM, work out who's paid (from the invoices table — Xero-synced or made
@@ -298,3 +298,32 @@ export async function siteStatus(db: SupabaseClient, key: string) {
 }
 
 export { stripMarker };
+
+/**
+ * Delete a website. "terminate": removes the cPanel account from WHM (website, email, files — permanent), then the
+ * record here. "forget": removes only the record here (for a site that's already gone, or SiteGround).
+ * The person must type the domain to confirm. Dry run logs what would happen and changes nothing.
+ */
+export async function deleteWebsite(db: SupabaseClient, orgId: string, id: string, o: { mode: "terminate" | "forget"; confirm: string; actor: string | null }) {
+  const { s } = await settingsFor(db, orgId);
+  const { a, server } = await loadAccount(db, orgId, id);
+  if (normalizeDomain(o.confirm).replace(/^www\./, "") !== normalizeDomain(a.domain).replace(/^www\./, "")) throw new Error(`Type ${a.domain} exactly to confirm.`);
+  if (o.mode === "terminate") {
+    if (server.kind !== "whm") throw new Error("SiteGround sites can't be deleted from here — delete it in Site Tools, then remove it here.");
+    if (!a.username) throw new Error("This account has no cPanel username.");
+    if (a.vip) throw new Error("This site is VIP protected — untick VIP first.");
+    if (s.dryRun) {
+      await logEvent(db, { orgId, accountId: a.id, serverId: server.id, action: "terminate", dryRun: true, detail: `Dry run: would delete ${a.domain} (cPanel ${a.username}) from ${server.name}`, actor: o.actor });
+      return { dryRun: true, message: `Dry run is on — ${a.domain} was not deleted (logged what would happen).` };
+    }
+    const r = await whmTerminate(await whmFor(db, server), a.username);
+    if (!r.ok) { await logEvent(db, { orgId, accountId: a.id, serverId: server.id, action: "terminate", ok: false, detail: r.message, actor: o.actor }); throw new Error(`WHM: ${r.message}`); }
+  } else if (server.kind === "whm" && a.on_server) {
+    throw new Error("It's still on the server, so the next sync would bring it back. Delete it from WHM instead, or wait until it's gone.");
+  }
+  // the log outlives the account (kept against the server)
+  await logEvent(db, { orgId, serverId: server.id, action: o.mode === "terminate" ? "terminate" : "forget", detail: o.mode === "terminate" ? `Deleted ${a.domain} (cPanel ${a.username}) from ${server.name}` : `Removed ${a.domain} from EventureOS`, actor: o.actor });
+  await db.from("recurring_invoices").update({ hosting_account_id: null }).eq("hosting_account_id", a.id).then(() => undefined, () => undefined);
+  await db.from("hosting_accounts").delete().eq("id", a.id);
+  return { dryRun: false, message: o.mode === "terminate" ? `${a.domain} deleted from ${server.name}.` : `${a.domain} removed from EventureOS.` };
+}
