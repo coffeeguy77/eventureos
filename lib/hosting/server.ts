@@ -86,6 +86,7 @@ type InvRow = { id: string; number: string; reference: string | null; status: st
 const toInv = (r: InvRow): Inv => ({
   id: r.id, number: r.number, reference: r.reference, status: r.status, total: Number(r.total) || 0, amountPaid: Number(r.amount_paid) || 0, dueDate: r.due_date, issueDate: r.issue_date,
   itemCodes: (Array.isArray(r.line_items) ? r.line_items : []).map((l) => (l?.item_code ?? "").trim()).filter(Boolean), customerId: r.customer_id, payToken: r.pay_token,
+  text: `${r.reference ?? ""} ${(Array.isArray(r.line_items) ? r.line_items : []).map((l) => (l as { description?: string | null })?.description ?? "").join(" ")}`.toLowerCase(),
 });
 const INV_COLS = "id, number, reference, status, total, amount_paid, due_date, issue_date, line_items, customer_id, pay_token";
 
@@ -115,7 +116,7 @@ export async function checkBilling(db: SupabaseClient, orgId: string, s?: Hostin
   let changed = 0;
   for (const a of accounts) {
     const ref = a.billing_reference?.trim() || null;
-    const m = matchInvoice(ref, invoices, rules, a.customer_id);
+    const m = matchInvoice(ref, invoices, rules, a.customer_id, a.domain);
     const st = billingState({ hasRef: !!ref, match: m, now, s: S, flags: {
       suspended: a.suspended, byApp: a.suspended_by_app, category: a.suspension_category, manual: a.manual_override, disputed: a.disputed, vip: a.vip,
       lastNoticeAt: a.last_notice_at, lastNoticeType: a.last_notice_type, extensionUntil: a.extension_until,

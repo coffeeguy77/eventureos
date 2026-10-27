@@ -208,3 +208,35 @@ export async function saveHostingSettings(input: Record<string, unknown>): Promi
     return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** Billing check: pull Xero's repeating invoices, link clear client matches, tie repeating invoices to sites. */
+export async function matchBillingNow(): Promise<R<string>> {
+  try {
+    const { db, org, user } = await hosting();
+    const { applyBillingMatches } = await import("@/lib/hosting/billing-check");
+    const msg = await applyBillingMatches(db, org.id, user.id, async () => {
+      const { buildContext } = await import("@/lib/integrations/sync-runner");
+      const { importRepeatingFromXero } = await import("@/lib/recurring/server");
+      const r = await importRepeatingFromXero(await buildContext(db, "service", org.id, "xero", user.id));
+      return `Xero: ${r.found} repeating invoices, ${r.imported} new (paused)${r.unmatched.length ? `, ${r.unmatched.length} whose Xero contact isn't a client here yet` : ""}`;
+    });
+    done(); revalidatePath("/hosting/recurring");
+    return { ok: true, data: msg };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Confirm (or change) which client a site belongs to. */
+export async function linkClient(accountId: string, customerId: string): Promise<R> {
+  try {
+    const { db, org, user } = await hosting();
+    await ownAccount(db, org.id, accountId);
+    if (!UUID.test(customerId)) throw new Error("Choose the client.");
+    const { data: c } = await db.from("customers").select("id, name").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    if (!c) throw new Error("That client couldn't be found.");
+    const { error } = await db.from("hosting_accounts").update({ customer_id: c.id, updated_at: new Date().toISOString() }).eq("id", accountId);
+    if (error) throw new Error(error.message);
+    await logEvent(db, { orgId: org.id, accountId, action: "setting", detail: `Linked to ${c.name}`, actor: user.id });
+    await checkBilling(db, org.id);
+    done(accountId); return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

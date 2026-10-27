@@ -8,6 +8,8 @@
  * but never trigger anything automatic.
  */
 
+import { mentions } from "./match";
+
 export const APP_SUSPENSION_MARKER = "[wc-app-suspend]";
 export const withMarker = (reason: string | null | undefined) => { const b = (reason ?? "").trim(); return b.includes(APP_SUSPENSION_MARKER) ? b : b ? `${b} ${APP_SUSPENSION_MARKER}` : APP_SUSPENSION_MARKER; };
 export const hasMarker = (reason: string | null | undefined) => typeof reason === "string" && reason.includes(APP_SUSPENSION_MARKER);
@@ -76,7 +78,7 @@ export const isHostingCode = (code: string | null | undefined, r: CodeRules) => 
 export const hasHostingCode = (cs: string[], r: CodeRules) => cs.some((c) => isHostingCode(c, r));
 
 /** An invoice as the matcher sees it (from the invoices table: Xero-synced or made here). */
-export interface Inv { id: string; number: string; reference: string | null; status: string; total: number; amountPaid: number; dueDate: string | null; issueDate: string | null; itemCodes: string[]; customerId: string | null; payToken: string | null }
+export interface Inv { id: string; number: string; reference: string | null; status: string; total: number; amountPaid: number; dueDate: string | null; issueDate: string | null; itemCodes: string[]; customerId: string | null; payToken: string | null; /** reference + line descriptions, lower case */ text?: string }
 export const amountDue = (i: Inv) => Math.max(0, Math.round((i.total - i.amountPaid) * 100) / 100);
 const enforceable = (i: Inv) => i.status !== "draft" && i.status !== "void";
 export const isPaid = (i: Inv) => i.status === "paid" || (amountDue(i) <= 0 && i.status !== "draft");
@@ -92,12 +94,15 @@ function pick(pool: Inv[]) {
  * Match by reference (Host Manager's strict rule). If nothing references the account and it's linked to a client,
  * fall back to that client's invoices with a hosting item code — a "Client Match", which is shown but never automated.
  */
-export function matchInvoice(ref: string | null, invoices: Inv[], r: CodeRules, customerId: string | null = null): Match {
+export function matchInvoice(ref: string | null, invoices: Inv[], r: CodeRules, customerId: string | null = null, domain: string | null = null): Match {
   const R = (ref ?? "").trim();
   const cands = R ? invoices.filter((i) => enforceable(i) && typeof i.reference === "string" && i.reference.includes(R)) : [];
   if (!cands.length) {
     if (customerId) {
-      const mine = invoices.filter((i) => i.customerId === customerId && enforceable(i) && hasHostingCode(i.itemCodes, r));
+      const all = invoices.filter((i) => i.customerId === customerId && enforceable(i) && hasHostingCode(i.itemCodes, r));
+      // a client with several sites: prefer the invoices that name this site
+      const named = domain ? all.filter((i) => !!i.text && mentions(i.text, domain)) : [];
+      const mine = named.length ? named : all;
       if (mine.length) return { status: "Client Match", invoice: pick(mine), reason: `No invoice references ${R || "this account"}; using the client's latest hosting invoice. Check it's the right one — nothing automatic happens on a client match.`, candidates: mine.length };
     }
     return { status: "No Match", invoice: null, reason: R ? `No invoice reference contains "${R}"` : "No billing reference", candidates: 0 };
