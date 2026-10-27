@@ -8,6 +8,7 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { bucket, daysBetween } from "@/lib/accounts/core";
 import { loadOwing } from "@/lib/accounts/server";
 import { cn } from "@/lib/cn";
+import { HostingPills, hostingByClient } from "@/components/hosting/pills";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const disputed = (cid: string) => { const last = N.find((n) => n.customer_id === cid && ["dispute", "plan", "promise", "call", "note"].includes(n.kind)); return last?.kind === "dispute"; };
   const lastTouch = (cid: string) => [N.find((n) => n.customer_id === cid)?.created_at, E.find((e) => e.customer_id === cid)?.sent_at].filter(Boolean).sort().pop() ?? null;
 
+  const hostingPills = await hostingByClient(supabase, org.id, [...byCust.keys()]);
   let rows = [...byCust.values()];
   const q = (sp.q ?? "").trim().toLowerCase();
   if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q));
@@ -103,6 +105,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
                   <Link href={`/accounts/${r.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-zinc-50">
                     <div className="min-w-0 flex-1 basis-56">
                       <p className="text-[0.875rem] font-semibold text-ink">{r.name}{disputed(r.id) && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-800">Disputed</span>}</p>
+                      {hostingPills.has(r.id) && <div className="mt-1"><HostingPills list={hostingPills.get(r.id)} link={false} /></div>}
                       <p className="text-[0.75rem] text-ink-faint">{r.invoices} invoice{r.invoices === 1 ? "" : "s"}{r.oldestDays ? ` · oldest ${r.oldestDays} days overdue` : ""} · {touched ? `last contact ${relative(touched)}` : <span className="text-amber-700">not contacted yet</span>}</p>
                       {s && <p className={cn("mt-0.5 truncate text-[0.75rem]", late ? "font-medium text-rose-700" : "text-ink-muted")}>Next: {s.next_step}{s.next_step_due ? ` · ${late ? "was due" : "due"} ${fmtDate(s.next_step_due, "short")}` : ""}</p>}
                       {p && <p className="mt-0.5 text-[0.75rem] text-emerald-700">Promised {p.promise_amount ? money(Number(p.promise_amount), cur) : "payment"} on {fmtDate(p.promise_date, "short")}{p.remind && !p.reminded_at ? " · invoice emails that morning" : p.reminded_at ? " · reminder sent" : ""}</p>}

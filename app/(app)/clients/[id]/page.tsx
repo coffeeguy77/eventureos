@@ -1,3 +1,4 @@
+import { HostingPills, hostingByClient } from "@/components/hosting/pills";
 import Link from "next/link";
 import { NotConnected } from "@/components/ui/connect-link";
 import { notFound } from "next/navigation";
@@ -70,6 +71,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tab: TabKey = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as TabKey) : "overview";
   const { supabase, org, role } = await requireOrg();
+  const hostingPills = await hostingByClient(supabase, org.id, [id]);
   const tz = org.timezone;
   const cur = org.currency;
 
@@ -250,6 +252,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               <Badge tone="slate">{c.kind === "company" ? "Company" : "Individual"}</Badge>
               {c.tags.map((t) => <Badge key={t}>{t}</Badge>)}
             </div>
+            {hostingPills.has(id) && <div className="mt-1.5"><HostingPills list={hostingPills.get(id)} max={10} /></div>}
             <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-ink-muted">
               {c.company && c.company !== c.name && <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-ink-faint" />{c.company}</span>}
               {primary && c.kind === "company" && <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-ink-faint" />{primary.first_name} {primary.last_name}{primary.position ? ` · ${primary.position}` : ""}</span>}

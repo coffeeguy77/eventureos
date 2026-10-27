@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ButtonLink } from "@/components/ui/button";
 import { FilterBar } from "@/components/records/filter-bar";
 import { fmtDate, money } from "@/lib/format";
+import { HostingPills, hostingByClient } from "@/components/hosting/pills";
+import { codeRules, hasHostingCode, readHosting } from "@/lib/hosting/core";
 
 export const metadata = { title: "Clients" };
 
@@ -17,25 +19,53 @@ type Row = {
 const PAGE = 100;
 const SORTS = [{ value: "value", label: "Lifetime value" }, { value: "owing", label: "Outstanding" }, { value: "recent", label: "Recently invoiced" }];
 
-export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; kind?: string; sort?: string; page?: string }> }) {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; kind?: string; sort?: string; page?: string; hosting?: string }> }) {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
   const money_ = role === "owner" || role === "admin" || role === "manager";
   const page = Math.max(1, Math.floor(Number(sp.page) || 1));
   const sort = SORTS.some((x) => x.value === sp.sort) ? sp.sort! : "name";
-  const { data, error } = await supabase.rpc("client_list", {
-    p_org: org.id, p_q: sp.q?.trim().slice(0, 100) || null, p_kind: sp.kind === "company" || sp.kind === "individual" ? sp.kind : null,
-    p_sort: sort, p_limit: PAGE, p_offset: (page - 1) * PAGE,
-  });
-  if (error) throw new Error(`Could not load clients: ${error.message}`);
-  const rows = (data ?? []) as Row[];
-  const total = Number(rows[0]?.total_count ?? 0);
+  // Hosting filter: clients with a hosting account, without one, or billed for hosting but with no site linked
+  const hostingFilter = ["yes", "none", "missing"].includes(sp.hosting ?? "") ? sp.hosting! : null;
+  const allHosting = await hostingByClient(supabase, org.id);
+  const hasHosting = allHosting.size > 0;
+  let rows: Row[];
+  let total: number;
+  if (!hostingFilter) {
+    const { data, error } = await supabase.rpc("client_list", {
+      p_org: org.id, p_q: sp.q?.trim().slice(0, 100) || null, p_kind: sp.kind === "company" || sp.kind === "individual" ? sp.kind : null,
+      p_sort: sort, p_limit: PAGE, p_offset: (page - 1) * PAGE,
+    });
+    if (error) throw new Error(`Could not load clients: ${error.message}`);
+    rows = (data ?? []) as Row[];
+    total = Number(rows[0]?.total_count ?? 0);
+  } else {
+    const { data, error } = await supabase.rpc("client_list", {
+      p_org: org.id, p_q: sp.q?.trim().slice(0, 100) || null, p_kind: sp.kind === "company" || sp.kind === "individual" ? sp.kind : null,
+      p_sort: sort, p_limit: 5000, p_offset: 0,
+    });
+    if (error) throw new Error(`Could not load clients: ${error.message}`);
+    let keep = new Set<string>();
+    if (hostingFilter === "missing") {
+      const rules = codeRules(readHosting(org.settings));
+      const since = new Date(Date.now() - 396 * 86_400_000).toISOString().slice(0, 10);
+      const { data: inv } = await supabase.from("invoices").select("customer_id, line_items").eq("organisation_id", org.id).gte("issue_date", since).neq("status", "void").limit(10000);
+      for (const i of (inv ?? []) as { customer_id: string | null; line_items: { item_code?: string | null }[] | null }[])
+        if (i.customer_id && !allHosting.has(i.customer_id) && hasHostingCode((i.line_items ?? []).map((l) => (l?.item_code ?? "").trim()).filter(Boolean), rules)) keep.add(i.customer_id);
+      const { data: rec } = await supabase.from("recurring_invoices").select("customer_id").eq("organisation_id", org.id).eq("category", "hosting").neq("status", "ended").then((x) => x, () => ({ data: [] }));
+      for (const r of (rec ?? []) as { customer_id: string }[]) if (!allHosting.has(r.customer_id)) keep.add(r.customer_id);
+    } else keep = new Set(allHosting.keys());
+    const filtered = ((data ?? []) as Row[]).filter((c) => (hostingFilter === "none" ? !keep.has(c.id) : keep.has(c.id)));
+    total = filtered.length;
+    rows = filtered.slice((page - 1) * PAGE, page * PAGE);
+  }
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const href = (p: number) => {
     const q = new URLSearchParams();
     if (sp.q) q.set("q", sp.q);
     if (sp.kind) q.set("kind", sp.kind);
     if (sort !== "name") q.set("sort", sort);
+    if (sp.hosting) q.set("hosting", sp.hosting);
     if (p > 1) q.set("page", String(p));
     const s = q.toString();
     return `/clients${s ? `?${s}` : ""}`;
@@ -49,6 +79,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         <div className="border-b border-line px-4 py-3">
           <FilterBar searchPlaceholder="Search name, company, email, phone…"
             filters={[{ key: "kind", label: "Type", options: [{ value: "company", label: "Companies" }, { value: "individual", label: "Individuals" }] },
+              ...(hasHosting ? [{ key: "hosting", label: "Hosting", options: [{ value: "yes", label: "Has hosting" }, { value: "missing", label: "Billed for hosting — no site linked" }, { value: "none", label: "No hosting" }] }] : []),
               ...(money_ ? [{ key: "sort", label: "Sort: name", options: SORTS }] : [])]} />
         </div>
         {rows.length === 0 ? <EmptyState title="No clients found" /> : (
@@ -64,6 +95,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       <div className="truncate text-[0.8438rem] font-medium text-ink">{c.name}</div>
                       <div className="truncate text-[0.7812rem] text-ink-muted">{c.email ?? c.phone ?? "—"}</div>
                       <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">{c.events} event{c.events === 1 ? "" : "s"}</div>
+                      {allHosting.has(c.id) && <div className="mt-1"><HostingPills list={allHosting.get(c.id)} max={2} link={false} /></div>}
                     </div>
                     {owing > 0 && (
                       <div className="shrink-0 text-right">
@@ -96,6 +128,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                             <span className="flex gap-1">{(c.tags ?? []).slice(0, 2).map((t) => <Badge key={t} className="!py-0 !text-[0.6562rem]">{t}</Badge>)}</span>
                           </span>
                         </Link>
+                        {allHosting.has(c.id) && <div className="mt-1.5 pl-[42px]"><HostingPills list={allHosting.get(c.id)} /></div>}
                       </td>
                       <td className="px-4 py-3 text-ink-muted"><span className="block">{c.email ?? "—"}</span><span className="text-[0.75rem] text-ink-faint">{c.phone}</span></td>
                       <td className="tabular px-4 py-3 text-right text-ink">{c.events}{upcoming > 0 && <span className="block text-[0.7188rem] text-ink-faint">{upcoming} upcoming</span>}</td>

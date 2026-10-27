@@ -16,7 +16,7 @@ test("strong match from a repeating invoice; weak name-only suggestion", () => {
   const rec = [{ id: "r1", customer_id: "c1", text: "Web hosting - smithplumbing.com.au", category: "hosting", hosting_account_id: null, status: "paused" }];
   const m = matchAccounts(accounts, customers, [], rec);
   assert.equal(m[0].best?.customerId, "c1"); assert.equal(m[0].strong, true);
-  assert.equal(m[1].best?.customerId, "c2"); assert.equal(m[1].strong, false);
+  assert.equal(m[1].best?.customerId, "c2"); assert.equal(m[1].strong, true); // exact name, nobody else
   const r = matchRecurring([{ ...accounts[0], customer_id: "c1" }, { ...accounts[1], customer_id: "c2" }], rec);
   assert.equal(r.get("r1")?.accountId, "a1");
 });

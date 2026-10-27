@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const VIEWS = [
   { key: "attention", label: "Needs action" }, { key: "suspended", label: "Suspended" }, { key: "due", label: "Due soon" },
-  { key: "paid", label: "Paid" }, { key: "review", label: "To match" }, { key: "protected", label: "Protected" }, { key: "all", label: "All" },
+  { key: "paid", label: "Paid" }, { key: "review", label: "To match" }, { key: "noclient", label: "No client" }, { key: "protected", label: "Protected" }, { key: "all", label: "All" },
 ] as const;
 
 type Row = { id: string; domain: string; username: string | null; plan: string | null; on_server: boolean; suspended: boolean; suspended_by_app: boolean; billing_status: string | null; match_status: string | null; amount_due: number | null; days_overdue: number | null; due_date: string | null; last_notice_at: string | null; customer_id: string | null; hosting_servers: { name: string; kind: string } | null; customers: { name: string } | null };
@@ -36,6 +36,7 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
     paid: all.filter((r) => st(r) === "Paid").length,
     review: all.filter((r) => r.on_server && (REVIEW.includes(st(r) as never) || r.match_status === "Client Match" || r.match_status === "Multiple Matches")).length,
     protected: all.filter((r) => ["VIP Protected", "Disputed", "Manual Override", "Extended"].includes(st(r))).length,
+    noclient: all.filter((r) => !r.customer_id).length,
     all: all.length,
   };
   let rows = all;
@@ -44,6 +45,7 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
   if (view === "due") rows = all.filter((r) => st(r) === "Due Soon");
   if (view === "paid") rows = all.filter((r) => st(r) === "Paid");
   if (view === "review") rows = all.filter((r) => r.on_server && (REVIEW.includes(st(r) as never) || r.match_status === "Client Match" || r.match_status === "Multiple Matches"));
+  if (view === "noclient") rows = all.filter((r) => !r.customer_id);
   if (view === "protected") rows = all.filter((r) => ["VIP Protected", "Disputed", "Manual Override", "Extended"].includes(st(r)));
   const q = (sp.q ?? "").trim().toLowerCase();
   if (q) rows = rows.filter((r) => [r.domain, r.username, r.customers?.name].filter(Boolean).join(" ").toLowerCase().includes(q));
@@ -70,7 +72,7 @@ export default async function HostingPage({ searchParams }: { searchParams: Prom
               <Link key={r.id} href={`/hosting/${r.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-canvas">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[0.875rem] font-medium text-ink">{r.domain}{!r.on_server && <span className="ml-2 text-[0.7188rem] font-normal text-ink-faint">no longer on the server</span>}</p>
-                  <p className="truncate text-[0.75rem] text-ink-muted">{[r.customers?.name, r.hosting_servers?.name, r.username, r.plan].filter(Boolean).join(" · ")}{r.match_status === "Client Match" ? " · matched by client" : ""}</p>
+                  <p className="truncate text-[0.75rem] text-ink-muted">{!r.customer_id && <span className="mr-1 rounded bg-zinc-100 px-1 text-ink-faint">no client</span>}{[r.customers?.name, r.hosting_servers?.name, r.username, r.plan].filter(Boolean).join(" · ")}{r.match_status === "Client Match" ? " · matched by client" : ""}</p>
                 </div>
                 {Number(r.amount_due) > 0 && <span className="text-right text-[0.8125rem] tabular-nums text-ink">{money(Number(r.amount_due), org.currency)}{(r.days_overdue ?? 0) > 0 && <span className="block text-[0.6875rem] text-rose-700">{r.days_overdue} days over</span>}</span>}
                 {r.suspended && <Badge tone="red">{r.suspended_by_app ? "Suspended" : "Suspended (outside)"}</Badge>}

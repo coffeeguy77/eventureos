@@ -34,8 +34,12 @@ export function matchAccounts(accounts: MAccount[], customers: MCustomer[], invo
   for (const c of customers) {
     const e = (c.email ?? "").trim().toLowerCase();
     if (e) { byEmail.set(e, [...(byEmail.get(e) ?? []), c]); const d = emailDomain(e); if (d && !GENERIC.has(d)) byEmailDomain.set(d, [...(byEmailDomain.get(d) ?? []), c]); }
-    for (const n of new Set([alnum(c.name), alnum(c.company ?? "")])) if (n.length >= 5) byName.set(n, [...(byName.get(n) ?? []), c]);
+    for (const n of new Set([alnum(c.name), alnum(c.company ?? "")])) if (n.length >= 6) byName.set(n, [...(byName.get(n) ?? []), c]);
   }
+  // the agency's own addresses (on many accounts as the server contact) say nothing about the client
+  const own = new Map<string, number>();
+  for (const a of accounts) { const d = emailDomain(a.server_email); if (d) own.set(d, (own.get(d) ?? 0) + 1); }
+  const ownDomains = new Set([...own].filter(([, n]) => n > 3).map(([d]) => d));
   return accounts.map((a) => {
     const d = bare(a.domain);
     const label = alnum(d.split(".")[0] ?? "");
@@ -48,18 +52,19 @@ export function matchAccounts(accounts: MAccount[], customers: MCustomer[], invo
     };
     for (const r of rec) if (mentions(r.text, d)) add(r.customer_id, 100, "A repeating invoice names the domain");
     for (const i of inv) if (mentions(i.text, d)) add(i.customer_id, 80, "An invoice names the domain");
-    for (const c of byEmailDomain.get(d) ?? []) add(c.id, 60, `Their email is @${d}`);
+    if (!ownDomains.has(d)) for (const c of byEmailDomain.get(d) ?? []) add(c.id, 60, `Their email is @${d}`);
     const se = (a.server_email ?? "").trim().toLowerCase();
-    if (se) {
+    if (se && !se.includes(",") && !ownDomains.has(emailDomain(se))) {
       for (const c of byEmail.get(se) ?? []) add(c.id, 60, "Same email as on the server");
       const sd = emailDomain(se);
       if (sd && sd !== d && !GENERIC.has(sd)) for (const c of byEmailDomain.get(sd) ?? []) add(c.id, 30, `Server email is @${sd}, like theirs`);
     }
-    if (label.length >= 5) for (const c of byName.get(label) ?? []) add(c.id, 40, "Name matches the domain");
+    if (label.length >= 6) for (const c of byName.get(label) ?? []) add(c.id, 40, "Name matches the domain");
     const list = [...cands.values()].sort((x, y) => y.score - x.score);
     const best = list[0] ?? null;
     const second = list[1]?.score ?? 0;
-    const strong = !!best && best.score >= 60 && second < best.score / 2;
+    // a clear winner with real evidence — or the client's full name is exactly the domain and nobody else fits
+    const strong = !!best && ((best.score >= 60 && second < best.score / 2) || (best.score === 40 && list.length === 1));
     return { accountId: a.id, best, others: list.slice(1, 4), strong };
   });
 }
