@@ -181,7 +181,7 @@ export async function deletePrintFile(fileId: string): Promise<R> {
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
-export async function savePrintSettings(input: { enabled: boolean; firstMetre: number; perMetre: number; setup: number; cut: number; rollWidth: number; rounding: string; gstPct: number; intro?: string | null }): Promise<R> {
+export async function savePrintSettings(input: { enabled: boolean; firstMetre: number; perMetre: number; setup: number; cut: number; rollWidth: number; rounding: string; gstPct: number; intro?: string | null; equipment?: string[] }): Promise<R> {
   try {
     const { supabase, org } = await printing();
     const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();

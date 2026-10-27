@@ -22,7 +22,7 @@ export function PrintSettingsForm({ initial, pageUrl }: { initial: PrintSettings
   const ex3 = priceJob({ items: [{ description: "", width_m: 1.2, length_m: 3, qty: 1 }], setup: true, cut: true }, s);
   const save = () => start(async () => {
     setMsg(null);
-    const r = await savePrintSettings({ ...s, intro: s.intro ?? null });
+    const r = await savePrintSettings({ ...s, intro: s.intro ?? null, equipment: s.equipment.map((x) => x.trim()).filter(Boolean) });
     setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error });
     if (r.ok) router.refresh();
   });
@@ -33,6 +33,7 @@ export function PrintSettingsForm({ initial, pageUrl }: { initial: PrintSettings
         <div className="space-y-3 border-t border-line px-5 py-4">
           <label className="flex items-center gap-2 text-[0.875rem]"><input type="checkbox" className="h-4 w-4" checked={s.enabled} onChange={(e) => set({ enabled: e.target.checked })} />Show the Printing page and menu link</label>
           {s.enabled && <p className="text-[0.75rem] text-ink-muted">Page: <a href={pageUrl} target="_blank" rel="noreferrer" className="underline">{pageUrl}</a></p>}
+          <div><Label htmlFor="ps-eq" hint="one per line — shown on the page">Your equipment</Label><Textarea id="ps-eq" rows={2} value={s.equipment.join("\n")} onChange={(e) => set({ equipment: e.target.value.split("\n") })} placeholder={"e.g. Wide-format latex printer\nPrecision plotter cutter"} /></div>
           <div><Label htmlFor="ps-intro" hint="optional">Intro on the page</Label><Textarea id="ps-intro" rows={3} maxLength={800} value={s.intro ?? ""} onChange={(e) => set({ intro: e.target.value })} placeholder="e.g. Banners, signage, stickers and decals printed in-house. Send your artwork and we'll quote." /></div>
         </div>
       </Card>

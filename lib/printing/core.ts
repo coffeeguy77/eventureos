@@ -4,8 +4,8 @@
  * $40 setup per job, $40 for cutting (plotter) per job. Lineal metres are added up across the job's prints.
  */
 export interface PrintRates { firstMetre: number; perMetre: number; setup: number; cut: number; rollWidth: number; rounding: "exact" | "0.1" | "1"; gstPct: number }
-export interface PrintSettings extends PrintRates { enabled: boolean; intro: string | null }
-export const DEFAULT_PRINT: PrintSettings = { enabled: false, firstMetre: 120, perMetre: 20, setup: 40, cut: 40, rollWidth: 1.2, rounding: "exact", gstPct: 10, intro: null };
+export interface PrintSettings extends PrintRates { enabled: boolean; intro: string | null; /** the printers and cutters, shown on the page */ equipment: string[] }
+export const DEFAULT_PRINT: PrintSettings = { enabled: false, firstMetre: 120, perMetre: 20, setup: 40, cut: 40, rollWidth: 1.2, rounding: "exact", gstPct: 10, intro: null, equipment: [] };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 
@@ -17,6 +17,7 @@ export function readPrinting(settings: unknown): PrintSettings {
     setup: num(p.setup, 0, 100_000, DEFAULT_PRINT.setup), cut: num(p.cut, 0, 100_000, DEFAULT_PRINT.cut),
     rollWidth: num(p.rollWidth, 0.1, 10, DEFAULT_PRINT.rollWidth), rounding: p.rounding === "0.1" || p.rounding === "1" ? p.rounding : "exact",
     gstPct: num(p.gstPct, 0, 30, DEFAULT_PRINT.gstPct), intro: typeof p.intro === "string" && p.intro.trim() ? p.intro.trim().slice(0, 800) : null,
+    equipment: Array.isArray(p.equipment) ? p.equipment.filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, 80)).filter(Boolean).slice(0, 6) : [],
   };
 }
 

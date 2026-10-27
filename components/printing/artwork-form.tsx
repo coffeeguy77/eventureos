@@ -85,12 +85,16 @@ export function ArtworkForm({ slug, rates }: { slug: string; rates: PrintRates }
         <p className="text-[0.9375rem] font-semibold">Sizes <span className="font-normal text-[#5E5853]">(optional — for a price estimate)</span></p>
         <div className="mt-2 space-y-2">
           {items.map((it, k) => (
-            <div key={k} className="grid grid-cols-[minmax(0,1fr)_88px_88px_70px_auto] items-center gap-2">
-              <input aria-label="What" placeholder="What (e.g. banner)" value={it.description} onChange={(e) => setItem(k, { description: e.target.value })} className={`${input} h-11 px-3 text-[0.9375rem]`} />
-              <input aria-label="Width in metres" type="number" min={0} step="0.01" placeholder="W (m)" value={it.width_m || ""} onChange={(e) => setItem(k, { width_m: Number(e.target.value) })} className={`${input} h-11 px-2 text-[0.9375rem]`} />
-              <input aria-label="Length in metres" type="number" min={0} step="0.01" placeholder="L (m)" value={it.length_m || ""} onChange={(e) => setItem(k, { length_m: Number(e.target.value) })} className={`${input} h-11 px-2 text-[0.9375rem]`} />
-              <input aria-label="How many" type="number" min={1} value={it.qty} onChange={(e) => setItem(k, { qty: Math.max(1, Number(e.target.value) || 1) })} className={`${input} h-11 px-2 text-[0.9375rem]`} />
-              <button type="button" aria-label="Remove" onClick={() => setItems(items.length > 1 ? items.filter((_, j) => j !== k) : [{ description: "", width_m: 0, length_m: 0, qty: 1 }])} className="grid h-11 w-9 place-items-center text-[#8C847D] hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+            <div key={k} className="rounded-2xl bg-[#FAF6F2] p-3">
+              <div className="flex items-center gap-2">
+                <input aria-label="What is it" placeholder="What is it? e.g. Banner" value={it.description} onChange={(e) => setItem(k, { description: e.target.value })} className={`${input} h-11 min-w-0 flex-1 px-3 text-[1rem]`} />
+                <button type="button" aria-label="Remove this size" onClick={() => setItems(items.length > 1 ? items.filter((_, j) => j !== k) : [{ description: "", width_m: 0, length_m: 0, qty: 1 }])} className="grid h-11 w-10 shrink-0 place-items-center text-[#8C847D] hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <label className="block"><span className="mb-1 block text-[0.75rem] font-medium text-[#5E5853]">Width (m)</span><input inputMode="decimal" type="number" min={0} step="0.01" placeholder="1.2" value={it.width_m || ""} onChange={(e) => setItem(k, { width_m: Number(e.target.value) })} className={`${input} h-11 px-3 text-[1rem]`} /></label>
+                <label className="block"><span className="mb-1 block text-[0.75rem] font-medium text-[#5E5853]">Length (m)</span><input inputMode="decimal" type="number" min={0} step="0.01" placeholder="2" value={it.length_m || ""} onChange={(e) => setItem(k, { length_m: Number(e.target.value) })} className={`${input} h-11 px-3 text-[1rem]`} /></label>
+                <label className="block"><span className="mb-1 block text-[0.75rem] font-medium text-[#5E5853]">How many</span><input inputMode="numeric" type="number" min={1} value={it.qty} onChange={(e) => setItem(k, { qty: Math.max(1, Number(e.target.value) || 1) })} className={`${input} h-11 px-3 text-[1rem]`} /></label>
+              </div>
             </div>
           ))}
           <button type="button" onClick={() => setItems([...items, { description: "", width_m: 0, length_m: 0, qty: 1 }])} className="inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--pk)]"><Plus className="h-4 w-4" />Another size</button>
@@ -109,9 +113,13 @@ export function ArtworkForm({ slug, rates }: { slug: string; rates: PrintRates }
         </button>
         {files.length > 0 && <ul className="mt-2 space-y-1">{files.map((f, k) => <li key={k} className="flex items-center justify-between rounded-lg bg-[#FAF6F2] px-3 py-2 text-[0.875rem]"><span className="truncate">{f.name} <span className="text-[#8C847D]">· {(f.size / 1_048_576).toFixed(1)} MB</span></span><button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles(files.filter((_, j) => j !== k))}><X className="h-4 w-4" /></button></li>)}</ul>}
       </div>
-      <input aria-label="Needed by" type="date" value={me.neededBy} onChange={(e) => setMe({ ...me, neededBy: e.target.value })} className={`${input} max-w-xs`} title="When do you need it?" />
+      <label className="block">
+        <span className="text-[0.9375rem] font-semibold">When do you need it by? <span className="font-normal text-[#5E5853]">(optional)</span></span>
+        <span className="mt-0.5 block text-[0.8125rem] text-[#5E5853]">Your event or install date, so we can plan the print run.</span>
+        <input type="date" min={new Date().toISOString().slice(0, 10)} value={me.neededBy} onChange={(e) => setMe({ ...me, neededBy: e.target.value })} className={`${input} mt-2 block w-full min-w-0 max-w-full appearance-none sm:max-w-xs`} />
+      </label>
       {err && <p className="rounded-xl bg-rose-50 px-4 py-3 text-[0.9375rem] text-rose-700" role="alert">{err}</p>}
-      <button type="button" disabled={!!busy} onClick={send} className="shop-btn inline-flex h-[56px] items-center justify-center gap-2 rounded-full bg-[var(--pk)] px-8 text-[1rem] font-semibold text-white disabled:opacity-60">{busy ? <><Loader2 className="h-5 w-5 animate-spin" />{busy}</> : "Send my print job"}</button>
+      <button type="button" disabled={!!busy} onClick={send} className="shop-btn inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[var(--pk)] px-8 text-[1rem] font-semibold text-white disabled:opacity-60 sm:w-auto">{busy ? <><Loader2 className="h-5 w-5 animate-spin" />{busy}</> : "Send my print job"}</button>
     </div>
   );
 }
