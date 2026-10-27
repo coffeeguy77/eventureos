@@ -170,3 +170,19 @@ export function invoiceDocEmail(o: { businessName: string; heading: string; mess
   const text = `${o.message}\n\nView your invoice and receipts: ${o.url}${o.signatureText ? `\n\n${o.signatureText}` : ""}`;
   return { html, text };
 }
+
+/** A print job quote: the lines, the total and a link to approve it (and send more artwork). */
+export function printQuoteEmail(o: { businessName: string; firstName: string; number: string; lines: { description: string; amount: string }[]; exGst: string; gst: string; total: string; note?: string | null; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = [
+    `Hi ${o.firstName},`,
+    `Here's your quote for print job ${o.number}:`,
+    ...o.lines.map((l) => `${l.description} — ${l.amount}`),
+    `Subtotal ${o.exGst} + GST ${o.gst} = ${o.total}`,
+    ...(o.note ? [o.note] : []),
+    "Approve it with the button below and we'll get printing. You can also send more artwork there.",
+  ];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: `Quote for print job ${o.number}: ${o.total}`, paragraphs,
+    button: { label: "View & approve the quote", url: o.url }, footer: `Sent by ${o.businessName}.` });
+  const text = `${paragraphs.join("\n")}\n\nView & approve: ${o.url}`;
+  return { html, text };
+}

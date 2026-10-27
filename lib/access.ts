@@ -7,7 +7,7 @@ import type { OrgRole } from "@/lib/types";
  *  - sales: enquiries, clients, events, quotes, calendar — no invoices, payments, reports or settings
  *  - staff (field staff): only My jobs
  */
-const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/website", "/learn", "/franchise", "/pricing", "/accounts"];
+const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing"];
 const STAFF_ALLOWED = ["/my-jobs", "/my-signature"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
@@ -22,7 +22,7 @@ export const SECTIONS: { key: string; label: string; group: string }[] = [
   { key: "/enquiries", label: "Enquiries", group: "Sales" }, { key: "/crm", label: "CRM", group: "Sales" }, { key: "/quotes", label: "Quotes", group: "Sales" },
   { key: "/clients", label: "Clients", group: "Sales" }, { key: "/tasks", label: "To-do", group: "Sales" },
   { key: "/events", label: "Events", group: "Operations" }, { key: "/calendar", label: "Calendar", group: "Operations" }, { key: "/rentals", label: "Hire", group: "Operations" },
-  { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" },
+  { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" }, { key: "/printing", label: "Printing", group: "Operations" },
   { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
   { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },
   { key: "/store", label: "Shop", group: "Selling online" }, { key: "/wholesale", label: "Wholesale", group: "Selling online" }, { key: "/offers", label: "Offers", group: "Selling online" },

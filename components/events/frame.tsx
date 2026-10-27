@@ -10,13 +10,14 @@ import { SHOP_CSS, WRAP, serif } from "@/components/shop/frame";
 import { MasterNav } from "@/components/site/master-nav";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { hirePageSlug, offered, type EventsSettings } from "@/lib/events/core";
+import { readPrinting } from "@/lib/printing/core";
 
 export { WRAP, serif };
 export const btn = "shop-btn inline-flex h-[60px] items-center justify-center gap-2.5 rounded-full bg-[var(--pk)] px-9 text-[1.0625rem] font-semibold text-white shadow-[0_16px_30px_-16px_var(--pk)] hover:brightness-105";
 export const btnOutline = "shop-btn inline-flex h-[60px] items-center justify-center gap-2 rounded-full border-[1.5px] border-[#1F1B19] bg-white/70 px-9 text-[1rem] font-semibold text-[#1F1B19] hover:bg-white";
 export const eyebrow = "text-[0.875rem] font-semibold uppercase tracking-[0.16em] text-[var(--pk)]";
 
-export type EventsPage = "home" | "cart" | "van" | "drinks" | "branding" | "catering" | "quote";
+export type EventsPage = "home" | "cart" | "van" | "drinks" | "branding" | "catering" | "quote" | "printing";
 
 export function eventsNav(org: Pick<PublicOrg, "slug">, s: EventsSettings) {
   const base = `/hire/${org.slug}`;
@@ -28,6 +29,7 @@ export function eventsNav(org: Pick<PublicOrg, "slug">, s: EventsSettings) {
     { key: "drinks" as EventsPage, href: `${base}/drinks`, label: "Drinks menu" },
     { key: "branding" as EventsPage, href: `${base}/branding`, label: "Branding" },
     { key: "catering" as EventsPage, href: `${base}/catering`, label: "Catering" },
+    ...(readPrinting((org as { rawSettings?: unknown }).rawSettings).enabled ? [{ key: "printing" as EventsPage, href: `${base}/printing`, label: "Printing" }] : []),
   ];
 }
 

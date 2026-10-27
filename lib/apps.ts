@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer";
 
 export interface AppInfo {
   key: AppKey;
@@ -116,6 +116,13 @@ export const APPS: AppInfo[] = [
     description: "Supplier invoices read straight from your email, every line's price tracked over time, and the cheapest supplier for each product when you order.",
     features: ["Invoices read from Gmail automatically", "Price rises and incorrect invoices flagged", "Price history for every product", "Compare suppliers before you order"],
     for: "Anyone buying stock from several suppliers",
+  },
+  {
+    key: "printing", name: "Printing", paths: ["/printing"], icon: "printer",
+    tagline: "Print jobs quoted, artwork collected, invoiced.",
+    description: "Customers upload their artwork on your website, you quote by the lineal metre with setup and cutting, and turn the job into an invoice.",
+    features: ["Artwork uploads from your website", "Quotes priced by the lineal metre", "Customers approve online", "One click to invoice"],
+    for: "Sign, banner and sticker printers",
   },
   {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",
