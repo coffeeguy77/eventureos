@@ -35,6 +35,8 @@ function revalidateAll(provider?: string) {
   revalidatePath(BASE);
   revalidatePath(`${BASE}/review`);
   if (provider) revalidatePath(`${BASE}/${provider}`);
+  // money pages read what Xero brings in
+  if (provider === "xero") { revalidatePath("/accounts", "layout"); revalidatePath("/invoices", "layout"); revalidatePath("/hosting", "layout"); }
 }
 
 // ------------------------------------------------------------------------------------------------

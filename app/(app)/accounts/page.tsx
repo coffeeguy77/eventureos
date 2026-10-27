@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ChevronRight, Phone } from "lucide-react";
 import { requireOrg } from "@/lib/context";
-import { fmtDate, money, relative, todayISO } from "@/lib/format";
+import { fmtDate, fmtDateTime, money, relative, todayISO } from "@/lib/format";
+import { SyncNowButton } from "@/app/(app)/settings/integrations/controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
 import { bucket, daysBetween } from "@/lib/accounts/core";
@@ -21,6 +22,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const view = VIEWS.find((x) => x.key === sp.v)?.key ?? "overdue";
   const today = todayISO(org.timezone);
+  const { data: xero } = await supabase.from("integrations").select("status, last_sync_at, last_sync_status, last_error").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle();
   const [owing, { data: notes }, { data: emails }] = await Promise.all([
     loadOwing(supabase, org.id),
     supabase.from("collection_notes").select("id, customer_id, kind, body, promise_date, promise_amount, remind, reminded_at, next_step, next_step_due, done_at, created_at").eq("organisation_id", org.id).order("created_at", { ascending: false }).limit(5000),
@@ -62,6 +64,15 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader eyebrow="Accounts" title="Money owing" subtitle="Every unpaid invoice — from EventureOS and from Xero — by customer, with the last conversation and the next step." />
+      {xero && ["connected", "syncing", "error"].includes(String(xero.status)) && (
+        <Card className="mb-4 flex flex-wrap items-center gap-3 p-3">
+          <p className="min-w-0 flex-1 text-[0.8125rem] text-ink-muted">
+            <span className="font-medium text-ink">Xero</span> last checked {xero.last_sync_at ? <><strong className="text-ink">{relative(xero.last_sync_at)}</strong> ({fmtDateTime(xero.last_sync_at, org.timezone)})</> : "never"}{xero.last_sync_status === "error" && xero.last_error ? <span className="text-rose-700"> · last check failed: {String(xero.last_error).slice(0, 120)}</span> : null}.
+            <span className="block text-[0.75rem] text-ink-faint">Payments show here once they're entered or reconciled in Xero — a bank deposit that isn't reconciled yet won't show.</span>
+          </p>
+          <SyncNowButton provider="xero" label="Check Xero now" />
+        </Card>
+      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile label="Owing" value={money(total, cur, { cents: false })} sub={`${owing.length} invoice${owing.length === 1 ? "" : "s"} · ${byCust.size} customer${byCust.size === 1 ? "" : "s"}`} />
         <Tile label="Overdue" value={money(overdue, cur, { cents: false })} tone={overdue > 0 ? "red" : undefined} sub={`90+ days: ${money(ageing["90+"], cur, { cents: false })}`} />
