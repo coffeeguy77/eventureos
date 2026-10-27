@@ -17,6 +17,7 @@ import { DocumentsList, type DocRow } from "@/components/records/documents-list"
 import { ActivityFeed } from "@/components/records/activity-feed";
 import { NextActionBanner } from "@/components/records/next-action";
 import { AssignSelect, ConvertToEvent, DetailsEditor, StatusSelect } from "./controls";
+import { TagEditor } from "@/components/enquiries/tag-editor";
 import { addNote, createTask } from "@/app/(app)/record-actions";
 import { enquiryNextAction } from "@/lib/next-action";
 import { CLASSIFICATION, ENQUIRY_SOURCE, ENQUIRY_STATUS, EVENT_STATUS, QUOTE_STATUS } from "@/lib/status";
@@ -91,6 +92,10 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
   const star = e as { starred_at?: string | null; star_note?: string | null; starred_by?: string | null };
   const displayName = e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown sender";
 
+  // tags in use across enquiries, to suggest (none before the 0071 database update)
+  const { data: tagRows, error: tagErr } = await supabase.from("enquiries").select("tags").eq("organisation_id", org.id).not("tags", "eq", "{}").limit(3000);
+  const tagsReady = !tagErr;
+  const tagSuggestions = [...new Set(((tagRows ?? []) as { tags: string[] | null }[]).flatMap((r) => r.tags ?? []))].sort();
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3 sm:gap-4">
@@ -110,6 +115,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
               </Badge></>
             )}
           </p>
+          {tagsReady && <div className="mt-2"><TagEditor id={e.id} initial={(e as { tags?: string[] | null }).tags ?? []} suggestions={tagSuggestions} /></div>}
         </div>
         <div className="grid w-full grid-cols-2 items-center gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <AssignSelect id={e.id} assignee={e.assigned_to} members={memberOpts} />

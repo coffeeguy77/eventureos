@@ -25,7 +25,8 @@ export async function runProviderSync(ctx: SyncContext, opts: { full?: boolean }
     return { provider, ok: false, message: `Can't sync until ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} set.` };
   }
   try {
-    const r = provider === "gmail" ? await syncGmail(ctx)
+    const r = provider === "gmail2" ? await (await import("@/lib/mail/rules")).runMailboxRules(ctx)
+      : provider === "gmail" ? await syncGmail(ctx)
       : provider === "google_calendar" ? await syncGoogleCalendar(ctx)
       : await syncXero(ctx, opts);
     return { provider, ok: true, message: r.message };

@@ -16,18 +16,22 @@ async function manager() {
   if (!canManage(ctx.role)) throw new Error("Only owners, admins and managers can see supplier pricing.");
   return ctx;
 }
-async function gmailContext() {
+export type Mailbox = "gmail" | "gmail2";
+const box = (v: unknown): Mailbox => (v === "gmail2" ? "gmail2" : "gmail");
+async function gmailContext(mailbox: Mailbox = "gmail") {
   const { org, user } = await manager();
   const { createServiceClient } = await import("@/lib/integrations/runtime");
   const { buildContext } = await import("@/lib/integrations/sync-runner");
   // the service client reads the Gmail connection's tokens; every query below is scoped to this business
-  return buildContext(createServiceClient(), "service", org.id, "gmail", user.id).catch(() => { throw new Error("Connect Gmail first (Settings → Integrations)."); });
+  return buildContext(createServiceClient(), "service", org.id, mailbox, user.id)
+    .catch(() => { throw new Error(mailbox === "gmail2" ? "Connect the second Gmail account first (Settings → Integrations)." : "Connect Gmail first (Settings → Integrations)."); });
 }
 
 export interface SupplierInput {
   name: string; match_from: string[] | string; match_subject?: string | null; match_exclude?: string[] | string; parser?: string; active?: boolean;
   min_order?: number | string | null; free_delivery_over?: number | string | null; delivery_fee?: number | string | null;
   rep_name?: string | null; rep_email?: string | null; rep_phone?: string | null; notes?: string | null;
+  /** which Gmail account their invoices arrive in */ mailbox?: Mailbox;
 }
 
 export async function saveSupplier(id: string | null, input: SupplierInput): Promise<Result<string>> {
@@ -44,23 +48,27 @@ export async function saveSupplier(id: string | null, input: SupplierInput): Pro
       rep_name: t(input.rep_name, 120), rep_email: t(input.rep_email, 200), rep_phone: t(input.rep_phone, 40), notes: t(input.notes, 2000), updated_at: new Date().toISOString(),
     };
     let sid = id;
-    if (id) {
-      const { error } = await supabase.from("price_suppliers").update(row).eq("id", id).eq("organisation_id", org.id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { data, error } = await supabase.from("price_suppliers").insert(row).select("id").single();
-      if (error) throw new Error(error.message);
-      sid = data.id as string;
+    const write = async (r: Record<string, unknown>) => {
+      if (id) { const { error } = await supabase.from("price_suppliers").update(r).eq("id", id).eq("organisation_id", org.id); return error; }
+      const { data, error } = await supabase.from("price_suppliers").insert(r).select("id").single();
+      if (!error) sid = data.id as string;
+      return error;
+    };
+    let e = await write({ ...row, mailbox: box(input.mailbox) });
+    if (e && /mailbox/.test(e.message)) {
+      if (box(input.mailbox) === "gmail2") throw new Error("Choosing the second Gmail account needs the 0071 database update first.");
+      e = await write(row);
     }
+    if (e) throw new Error(e.message);
     revalidatePath("/pricing", "layout");
     return { ok: true, data: sid! };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
 /** People who've emailed you PDF invoices in the last year — to pick suppliers from. */
-export async function findSenders(): Promise<Result<{ email: string; name: string | null; domain: string; count: number; subject: string | null; last: string | null }[]>> {
+export async function findSenders(mailbox: Mailbox = "gmail"): Promise<Result<{ email: string; name: string | null; domain: string; count: number; subject: string | null; last: string | null }[]>> {
   try {
-    const ctx = await gmailContext();
+    const ctx = await gmailContext(box(mailbox));
     const { findInvoiceSenders } = await import("@/lib/pricing/sync");
     const { ownAddresses } = await import("@/lib/integrations/gmail-sync");
     const own = [ctx.integration.account_label ?? "", ...ownAddresses(ctx)].filter((x) => x.includes("@"));
@@ -69,14 +77,14 @@ export async function findSenders(): Promise<Result<{ email: string; name: strin
 }
 
 /** Read new invoices from Gmail (or everything since a date, for history). Runs ~45 s; call again while `more`. */
-export async function syncInvoices(opts: { supplierId?: string; historyFrom?: string } = {}): Promise<Result<{ imported: number; duplicates: number; skipped: number; failed: number; more: boolean; lines: string[] }>> {
+export async function syncInvoices(opts: { supplierId?: string; historyFrom?: string; mailbox?: Mailbox } = {}): Promise<Result<{ imported: number; duplicates: number; skipped: number; failed: number; more: boolean; lines: string[] }>> {
   try {
     if (opts.supplierId && !UUID.test(opts.supplierId)) throw new Error("Refresh and try again.");
     if (opts.historyFrom && !/^\d{4}-\d{2}-\d{2}$/.test(opts.historyFrom)) throw new Error("Choose a start date.");
-    const ctx = await gmailContext();
+    const ctx = await gmailContext(box(opts.mailbox));
     const { orgAiKey } = await import("@/lib/ai/key");
     const { syncSupplierInvoices } = await import("@/lib/pricing/sync");
-    const r = await syncSupplierInvoices(ctx, { ...opts, aiKey: await orgAiKey(ctx.org.id) });
+    const r = await syncSupplierInvoices(ctx, { supplierId: opts.supplierId, historyFrom: opts.historyFrom, aiKey: await orgAiKey(ctx.org.id) });
     revalidatePath("/pricing", "layout");
     return { ok: true, data: { ...r, lines: r.lines.slice(-40) } };
   } catch (e) { return { ok: false, error: err(e) }; }

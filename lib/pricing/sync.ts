@@ -18,12 +18,22 @@ export async function syncSupplierInvoices(ctx: SyncContext, opts: { supplierId?
   const started = Date.now();
   const out: PricingSync = { imported: 0, duplicates: 0, skipped: 0, failed: 0, more: false, lines: [] };
   const orgId = ctx.org.id;
-  let q = ctx.db.from("price_suppliers").select(SUP_COLS).eq("organisation_id", orgId).eq("active", true);
-  if (opts.supplierId) q = q.eq("id", opts.supplierId);
-  const { data, error } = await q;
+  // only the suppliers whose invoices arrive in this mailbox (yours, or the second Gmail account)
+  const box = ctx.integration.provider;
+  const load = (withBox: boolean) => {
+    let q = ctx.db.from("price_suppliers").select(withBox ? `${SUP_COLS}, mailbox` : SUP_COLS).eq("organisation_id", orgId).eq("active", true);
+    if (withBox) q = q.eq("mailbox", box);
+    if (opts.supplierId) q = q.eq("id", opts.supplierId);
+    return q;
+  };
+  let { data, error } = await load(true);
+  if (error && /mailbox/.test(error.message)) {
+    if (box !== "gmail") return out; // before the 0071 update every supplier is in the main mailbox
+    ({ data, error } = await load(false));
+  }
   if (error) throw new Error(error.message);
-  const suppliers = ((data ?? []) as PriceSupplier[]).filter((s) => s.match_from.length || s.match_subject?.trim());
-  if (!suppliers.length) throw new Error("Add a supplier's invoice email address first (Pricing → Suppliers).");
+  const suppliers = ((data ?? []) as unknown as PriceSupplier[]).filter((s) => s.match_from.length || s.match_subject?.trim());
+  if (!suppliers.length) return out;
   const today = todayISO(ctx.org.timezone);
 
   for (const s of suppliers) {

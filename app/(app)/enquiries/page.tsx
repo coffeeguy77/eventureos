@@ -11,7 +11,7 @@ import { enquiryNextAction } from "@/lib/next-action";
 import { fmtDate, money, relative } from "@/lib/format";
 import type { Enquiry, EnquirySource, EnquiryStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { Archive, Ban, Inbox, ShieldAlert } from "lucide-react";
+import { Archive, Ban, Inbox, ShieldAlert, Tag as TagIcon } from "lucide-react";
 import { cookies } from "next/headers";
 import { parsePrefs, PREFS_COOKIE } from "@/lib/theme/prefs";
 import { EnquiryTabBar } from "@/components/enquiries/tab-bar";
@@ -25,10 +25,10 @@ import { DEFAULT_SPAM_PHRASES } from "@/lib/integrations/spam";
 
 export const metadata = { title: "Enquiries" };
 
-type Row = Enquiry & { customer: { name: string } | null; starred_at?: string | null; star_note?: string | null };
+type Row = Enquiry & { customer: { name: string } | null; starred_at?: string | null; star_note?: string | null; tags?: string[] | null };
 
 export default async function EnquiriesPage({ searchParams }: {
-  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string; past?: string }>;
+  searchParams: Promise<{ status?: string; source?: string; assignee?: string; q?: string; folder?: string; past?: string; tag?: string }>;
 }) {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
@@ -133,6 +133,8 @@ export default async function EnquiriesPage({ searchParams }: {
   else query = query.not("status", "in", "(spam,archived)");
   if (pastOnly) query = query.is("event_id", null).lt("event_date", today);
   if (sp.source) query = query.eq("source", sp.source);
+  const tag = (sp.tag ?? "").trim().slice(0, 40);
+  if (tag) query = query.contains("tags", [tag]);
   if (sp.assignee === "unassigned") query = query.is("assigned_to", null);
   else if (sp.assignee) query = query.eq("assigned_to", sp.assignee);
   if (sp.q) {
@@ -149,7 +151,15 @@ export default async function EnquiriesPage({ searchParams }: {
     if (r.error && /starred_at/.test(r.error.message)) return supabase.from("enquiries").select("status").eq("organisation_id", org.id).neq("status", "spam");
     return r;
   };
-  const [{ data, error }, { data: allStatuses, error: e2 }] = await Promise.all([query, statusRows()]);
+  const [{ data, error }, { data: allStatuses, error: e2 }, { data: tagRows }] = await Promise.all([
+    query, statusRows(),
+    // every tag in use (quietly none before the 0071 database update)
+    supabase.from("enquiries").select("tags").eq("organisation_id", org.id).not("tags", "eq", "{}").neq("status", "spam").limit(5000),
+  ]);
+  if (error && tag && /tags/.test(error.message)) throw new Error("Tags need the 0071 database update — run it in Supabase, then refresh.");
+  const tagCounts = new Map<string, number>();
+  for (const r of (tagRows ?? []) as { tags: string[] | null }[]) for (const t of r.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  const allTags = [...tagCounts].sort((a, b) => a[0].localeCompare(b[0]));
   if (error && statusKey === "starred" && /starred_at/.test(error.message)) throw new Error("Stars need the 0046 database update — run it in Supabase, then refresh.");
   if (error || e2) throw new Error(`Could not load enquiries: ${(error ?? e2)!.message}`);
   // Starred ones first (newest star first), then the usual newest-received order
@@ -176,7 +186,16 @@ export default async function EnquiriesPage({ searchParams }: {
     if (sp.source) p.set("source", sp.source);
     if (sp.assignee) p.set("assignee", sp.assignee);
     if (sp.q) p.set("q", sp.q);
+    if (tag) p.set("tag", tag);
     if (archivedView) p.set("folder", "archived");
+    const s = p.toString();
+    return s ? `/enquiries?${s}` : "/enquiries";
+  };
+  const tagHref = (t: string | null) => {
+    const p = new URLSearchParams();
+    if (statusKey !== "open" && !archivedView) p.set("status", statusKey);
+    if (archivedView) p.set("folder", "archived");
+    if (t) p.set("tag", t);
     const s = p.toString();
     return s ? `/enquiries?${s}` : "/enquiries";
   };
@@ -203,6 +222,18 @@ export default async function EnquiriesPage({ searchParams }: {
         <EnquiryTabBar active={statusKey} pinned={prefs.enqTabs} tabs={tabs.map((t) => ({ key: t.key, label: t.label, count: counts[t.key] ?? 0, href: qs(t.key) }))} />
       )}
       {!archivedView && (statusKey === "open" || pastOnly) && pastCount > 0 && <TidyBanner count={pastCount} showing={pastOnly} />}
+      {allTags.length > 0 && (
+        <div className="no-scrollbar mb-3 flex items-center gap-1.5 overflow-x-auto" aria-label="Tags">
+          <span className="flex shrink-0 items-center gap-1 pr-1 text-[0.75rem] font-medium text-ink-faint"><TagIcon className="h-3.5 w-3.5" />Tags</span>
+          {tag && <Link href={tagHref(null)} className="shrink-0 rounded-full px-3 py-1 text-[0.7812rem] font-medium text-ink-muted ring-1 ring-line hover:text-ink">All</Link>}
+          {allTags.map(([t, n]) => (
+            <Link key={t} href={tagHref(t === tag ? null : t)} aria-current={t === tag ? "true" : undefined}
+              className={cn("shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium", t === tag ? "bg-brand-500 text-on-brand" : "bg-brand-50 text-brand-800 ring-1 ring-brand-200 hover:ring-brand-400")}>
+              {t} <span className="opacity-70">{n}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <Card>
         <div className="border-b border-line px-4 py-3">
@@ -236,6 +267,7 @@ export default async function EnquiriesPage({ searchParams }: {
                         {e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown"}
                       </div>
                       <div className="truncate text-[0.7812rem] text-ink-muted">{e.title}</div>
+                      {(e.tags ?? []).length > 0 && <div className="mt-0.5 flex flex-wrap gap-1">{(e.tags ?? []).map((t) => <span key={t} className="rounded-full bg-brand-50 px-1.5 text-[0.6875rem] font-medium text-brand-800">{t}</span>)}</div>}
                       {e.star_note && <div className="truncate text-[0.75rem] text-amber-800">★ {e.star_note}</div>}
                       <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
                         {e.event_date ? fmtDate(e.event_date) : "No date"} · {relative(e.received_at)}
@@ -285,6 +317,7 @@ export default async function EnquiriesPage({ searchParams }: {
                       <td className="max-w-[240px] px-4 py-3">
                         <span className="block truncate text-ink">{e.title}</span>
                         <span className="text-[0.75rem] text-ink-faint">ENQ-{e.number}{e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
+                        {(e.tags ?? []).length > 0 && <span className="mt-0.5 flex flex-wrap gap-1">{(e.tags ?? []).map((t) => <span key={t} className="rounded-full bg-brand-50 px-1.5 text-[0.6875rem] font-medium text-brand-800">{t}</span>)}</span>}
                         {e.star_note && <span className="block truncate text-[0.75rem] text-amber-800" title={e.star_note}>★ {e.star_note}</span>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.event_type ?? "—"}</td>

@@ -4,7 +4,7 @@
  */
 
 export type ProviderId =
-  | "gmail" | "google_calendar" | "xero"
+  | "gmail" | "gmail2" | "google_calendar" | "xero"
   | "outlook" | "microsoft_calendar" | "stripe" | "square" | "myob" | "quickbooks" | "mailchimp" | "twilio" | "zapier" | "make";
 
 export type ProviderCategory = "Email" | "Calendar" | "Accounting" | "Payments" | "Marketing" | "Messaging" | "Automation";
@@ -42,6 +42,15 @@ export const PROVIDERS: ProviderDef[] = [
     docsUrl: "https://developers.google.com/workspace/gmail/api/guides",
   },
   {
+    id: "gmail2", name: "Second Gmail account", category: "Email", availability: "live", statusSource: "integrations_table",
+    description: "Another person's Gmail (e.g. a manager who gets supplier invoices or catering enquiries). Nothing comes in from it except what you choose: supplier invoices for Pricing, and enquiries matching rules you set and preview.",
+    requiredEnv: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    optionalEnv: ["SUPABASE_SERVICE_ROLE_KEY"],
+    capabilities: ["Supplier invoices for Pricing", "Enquiries only from rules you set", "Preview before it's on", "Tags on what it brings in"],
+    mark: { letter: "G", bg: "bg-amber-50", fg: "text-amber-700" },
+    docsUrl: "https://developers.google.com/workspace/gmail/api/guides",
+  },
+  {
     id: "google_calendar", name: "Google Calendar", category: "Calendar", availability: "live", statusSource: "integrations_table",
     description: "Push confirmed events, site visits and setups to the Google calendars you choose, without duplicates. Optionally show busy time from Google.",
     requiredEnv: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
@@ -72,7 +81,7 @@ export const PROVIDERS: ProviderDef[] = [
 ];
 
 export const LIVE_PROVIDERS = PROVIDERS.filter((p) => p.availability === "live");
-export type LiveProviderId = "gmail" | "google_calendar" | "xero";
+export type LiveProviderId = "gmail" | "gmail2" | "google_calendar" | "xero";
 
 export function getProvider(id: string): ProviderDef | undefined {
   return PROVIDERS.find((p) => p.id === id);
@@ -112,5 +121,6 @@ export function appBaseUrl(requestOrigin?: string) {
 }
 
 export function redirectUri(provider: LiveProviderId, requestOrigin?: string) {
-  return `${appBaseUrl(requestOrigin)}/api/integrations/${provider}/callback`;
+  // the second Gmail account comes back through Gmail's own return address (already registered with Google)
+  return `${appBaseUrl(requestOrigin)}/api/integrations/${provider === "gmail2" ? "gmail" : provider}/callback`;
 }

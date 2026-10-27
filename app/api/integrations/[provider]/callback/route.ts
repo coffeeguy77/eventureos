@@ -14,8 +14,11 @@ export const dynamic = "force-dynamic";
  * then store it with rpc save_integration_connection (tokens go straight into integration_credentials).
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
-  const { provider } = await params;
+  const { provider: path } = await params;
   const sp = request.nextUrl.searchParams;
+  // the second Gmail account returns through Gmail's address; the signed state says which one it was
+  let provider = path;
+  try { const peek = JSON.parse(Buffer.from((sp.get("state") ?? "").split(".")[0] ?? "", "base64url").toString("utf8")) as { p?: string }; if (path === "gmail" && peek.p === "gmail2") provider = "gmail2"; } catch { /* checked properly below */ }
   const cookieName = oauthCookieName(provider);
   const finish = (path: string) => {
     const res = NextResponse.redirect(new URL(path, request.url));
@@ -69,6 +72,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 async function identify(provider: LiveProviderId, accessToken: string): Promise<{ label: string; externalId: string; settings: Record<string, unknown> }> {
+  if (provider === "gmail2") {
+    const p = await gmailProfileWithToken(accessToken);
+    return { label: p.emailAddress, externalId: p.emailAddress.toLowerCase(), settings: {} };
+  }
   if (provider === "gmail") {
     const p = await gmailProfileWithToken(accessToken);
     // reset the incremental pointer: the next sync scans the last 14 days (existing messages are skipped)

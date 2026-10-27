@@ -63,6 +63,15 @@ export const OAUTH: Record<LiveProviderId, OAuthProviderConfig> = {
     pkce: true, tokenAuth: "body",
     extraAuthParams: { access_type: "offline", prompt: "consent" },
   },
+  // a second person's Gmail: read only (nothing is sent from it); always ask which Google account
+  gmail2: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    clientIdEnv: "GOOGLE_CLIENT_ID", clientSecretEnv: "GOOGLE_CLIENT_SECRET",
+    scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+    pkce: true, tokenAuth: "body",
+    extraAuthParams: { access_type: "offline", prompt: "select_account consent" },
+  },
   google_calendar: {
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",

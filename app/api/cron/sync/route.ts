@@ -23,7 +23,7 @@ function authorised(req: NextRequest) {
   return false;
 }
 
-const PROVIDERS: LiveProviderId[] = ["gmail", "google_calendar", "xero"];
+const PROVIDERS: LiveProviderId[] = ["gmail", "gmail2", "google_calendar", "xero"];
 
 export async function GET(req: NextRequest) {
   if (!process.env.CRON_SECRET?.trim() && !process.env.SYNC_TRIGGER_SECRET?.trim()) {
@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
 
   // ?providers=gmail,google_calendar limits a run (the frequent email sync); no parameter = everything
   const only = (req.nextUrl.searchParams.get("providers") ?? "").split(",").map((x) => x.trim()).filter((x): x is LiveProviderId => PROVIDERS.includes(x as LiveProviderId));
-  const providers = only.length ? only : PROVIDERS;
+  // the second Gmail account's rules run with the frequent Gmail sync
+  const providers: LiveProviderId[] = only.length ? (only.includes("gmail") && !only.includes("gmail2") ? [...only, "gmail2"] : only) : PROVIDERS;
 
   let db;
   try { db = createServiceClient(); } catch (e) {
@@ -87,11 +88,13 @@ export async function GET(req: NextRequest) {
       const { orgAiKey } = await import("@/lib/ai/key");
       const out: Record<string, unknown> = {};
       for (const orgId of new Set(((ps ?? []) as { organisation_id: string }[]).map((r) => r.organisation_id))) {
-        try {
-          const ctx = await buildContext(db, "service", orgId, "gmail", null);
-          const r = await syncSupplierInvoices(ctx, { aiKey: await orgAiKey(orgId) });
-          out[orgId] = { imported: r.imported, failed: r.failed, more: r.more };
-        } catch (e) { out[orgId] = { error: e instanceof Error ? e.message : String(e) }; }
+        for (const mailbox of ["gmail", "gmail2"] as const) {
+          try {
+            const ctx = await buildContext(db, "service", orgId, mailbox, null);
+            const r = await syncSupplierInvoices(ctx, { aiKey: await orgAiKey(orgId) });
+            out[`${orgId}:${mailbox}`] = { imported: r.imported, failed: r.failed, more: r.more };
+          } catch (e) { out[`${orgId}:${mailbox}`] = { error: e instanceof Error ? e.message : String(e) }; }
+        }
       }
       pricingJobs = out;
     }

@@ -18,6 +18,9 @@ import type { InvoiceStatus } from "@/lib/types";
 import { CalendarSettingsForm, CopyBlock, DisconnectButton, EmailCleanupPanel, GmailSettingsForm, ImportForm, SyncNowButton, XeroSettingsForm } from "../controls";
 import { Code, Mark, STATUS, SYNC_STATUS } from "../ui";
 import { headers } from "next/headers";
+import { MailboxRules } from "@/components/integrations/mailbox-rules";
+import { cleanRules } from "@/lib/mail/rules-core";
+import { todayISO } from "@/lib/format";
 
 export const metadata = { title: "Integration settings" };
 
@@ -64,6 +67,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="min-w-0 break-words">{p.name} connected as <strong>{row!.account_label}</strong>.{" "}
             {provider === "gmail" && "Press Sync now to bring in the last 14 days, or import historical enquiries below."}
+            {provider === "gmail2" && "Nothing comes in from it yet. Add enquiry rules below, and choose this account for suppliers in Pricing → Suppliers."}
             {provider === "google_calendar" && "Now choose which EventureOS calendars sync to which Google calendar."}
             {provider === "xero" && "Press Sync now to bring in your sales invoices and quotes as client history. Contacts with sales become clients (or are linked by exact email); possible duplicates wait in match review."}
           </span>
@@ -86,6 +90,7 @@ export default async function ProviderSettingsPage({ params, searchParams }: { p
           )}
 
           {connected && provider === "gmail" && <GmailSection orgId={org.id} settings={settings} aiConfigured={env.ai} manager={manager} />}
+          {connected && provider === "gmail2" && <MailboxSection orgId={org.id} tz={org.timezone} account={row!.account_label ?? "this Gmail account"} settings={settings} />}
           {connected && provider === "google_calendar" && <CalendarSection orgId={org.id} settings={settings} manager={manager} />}
           {connected && provider === "xero" && <XeroSection orgId={org.id} currency={org.currency} tz={org.timezone} settings={settings} manager={manager} userId={user.id} orgSettings={org.settings} />}
 
@@ -322,5 +327,22 @@ async function XeroSection({ orgId, currency, tz, settings, manager, userId, org
           )}
       </Card>
     </>
+  );
+}
+
+async function MailboxSection({ orgId, tz, account, settings }: { orgId: string; tz: string; account: string; settings: Record<string, unknown> }) {
+  const { supabase } = await requireOrg();
+  const { data } = await supabase.from("enquiries").select("tags").eq("organisation_id", orgId).not("tags", "eq", "{}").limit(2000);
+  const tags = [...new Set(((data ?? []) as { tags: string[] | null }[]).flatMap((r) => r.tags ?? []))].sort();
+  const today = todayISO(tz);
+  return (
+    <div className="space-y-5">
+      <MailboxRules initial={cleanRules(settings.rules, today)} account={account} tags={tags} today={today} />
+      <Card className="p-5 text-[0.8125rem] text-ink-muted">
+        <p className="font-medium text-ink">Supplier invoices</p>
+        <p className="mt-1">To read a supplier&apos;s invoices from this account, open <Link href="/pricing/suppliers" className="font-medium text-brand-700 underline">Pricing → Suppliers</Link> and set &ldquo;Invoices arrive in&rdquo; to {account}.</p>
+        <p className="mt-2">This account is read only: EventureOS never sends, labels or deletes anything in it.</p>
+      </Card>
+    </div>
   );
 }
