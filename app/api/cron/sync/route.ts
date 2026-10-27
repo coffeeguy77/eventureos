@@ -121,6 +121,13 @@ export async function GET(req: NextRequest) {
     paymentReminders = await runPaymentReminders(db);
   } catch (e) { paymentReminders = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Accounts: on the day a customer promised to pay, email them the invoice with its pay link (8am–5pm their time)
+  let promiseReminders: unknown = null;
+  try {
+    const { runPromiseReminders } = await import("@/lib/accounts/server");
+    promiseReminders = await runPromiseReminders(db);
+  } catch (e) { promiseReminders = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Wholesale orders from another system's order emails (e.g. Ordermentum) — with the frequent Gmail sync; only businesses that switched it on
   let wholesale: unknown = null;
   if (providers.includes("gmail" as LiveProviderId)) try {
@@ -169,5 +176,5 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }

@@ -13,11 +13,16 @@ export const metadata = { title: "Pay invoice", robots: { index: false, follow: 
 
 const safeColour = (c?: string | null) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : "#6028EC");
 
-export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ paid?: string }> }) {
+export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ paid?: string; ce?: string }> }) {
   const { token } = await params;
   const sp = await searchParams;
   const found = await invoiceByToken(token);
   if (!found) notFound();
+  // opened from a chasing email in Accounts: count the pay-link click (only for that invoice's own email)
+  if (sp.ce && /^[0-9a-f-]{36}$/i.test(sp.ce)) {
+    const { recordCollectionClick } = await import("@/lib/accounts/track");
+    await recordCollectionClick(sp.ce, found.inv.id).catch(() => undefined);
+  }
   const { inv, stripeReady } = found;
   const colour = safeColour(inv.org.brand_colour);
   const cur = inv.currency || "AUD";

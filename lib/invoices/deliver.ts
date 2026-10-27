@@ -18,6 +18,8 @@ export interface DeliverInput {
   actor: string;
   /** "invoice" (first email) or a reminder key, e.g. "pre_7", "overdue_1" */
   kind: string;
+  /** Accounts: the collection email this is, so opens and pay-link clicks are counted */
+  track?: string;
 }
 export type DeliverResult = { ok: true; to: string[]; via: "gmail" | "email" } | { ok: false; error: string };
 
@@ -77,6 +79,7 @@ export async function invoiceWords(db: SupabaseClient, inv: Inv, recipients: { n
     first_name: firstName, event: inv.event?.name ?? "your event", event_date: inv.event?.event_date ? fmtDate(inv.event.event_date, "long") : "the day",
     invoice: inv.number, amount: money(inv.balance, cur, { cents: true }), due_date: inv.due_date ? fmtDate(inv.due_date, "long") : "now",
     business: (org?.name as string) ?? "", days: days == null ? "" : String(days),
+    days_overdue: inv.due_date && inv.due_date < today ? String(Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${inv.due_date}T00:00:00Z`)) / 86400000)) : "0",
   };
 }
 
@@ -104,10 +107,12 @@ export async function deliverInvoice(db: SupabaseClient, invoiceId: string, inpu
     eventLine: inv.event ? [inv.event.name, inv.event.event_date ? fmtDate(inv.event.event_date, "long") : null].filter(Boolean).join(" · ") : null,
     total: money(inv.total, cur, { cents: true }), amountDue: money(inv.balance, cur, { cents: true }),
     paidNote: Number(inv.amount_paid) > 0 ? `${money(inv.amount_paid, cur, { cents: true })} of ${money(inv.total, cur, { cents: true })} already paid` : null,
-    dueDate: inv.due_date ? fmtDate(inv.due_date, "long") : null, message: input.message, url: `${appBaseUrl()}/pay/${inv.pay_token}`,
+    dueDate: inv.due_date ? fmtDate(inv.due_date, "long") : null, message: input.message, url: `${appBaseUrl()}/pay/${inv.pay_token}${input.track ? `?ce=${input.track}` : ""}`,
     cardPayments: (stripe as { status?: string } | null)?.status === "connected", signatureHtml: sig?.html ?? null, signatureText: sig?.text ?? null,
   });
 
+  // a tiny image that tells us the email was opened (most email apps load it; some block images, so opens are a lower bound)
+  if (input.track && /^[0-9a-f-]{36}$/i.test(input.track)) m.html = m.html.replace(/<\/body>/i, `<img src="${appBaseUrl()}/api/t/o/${input.track}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" /></body>`);
   let via: "gmail" | "email" | null = null;
   // Gmail first (it's from the business's own address, and lands in the job's conversation)
   try {
