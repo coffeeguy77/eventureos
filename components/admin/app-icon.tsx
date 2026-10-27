@@ -1,7 +1,7 @@
-import { Tag, BadgePercent, ChefHat, Coffee, GraduationCap, Handshake, MonitorSmartphone, Tent, Ticket, Truck, Wallet, Printer } from "lucide-react";
+import { Tag, BadgePercent, ChefHat, Coffee, GraduationCap, Handshake, MonitorSmartphone, Tent, Ticket, Truck, Wallet, Printer, Server } from "lucide-react";
 import type { AppIcon as Key } from "@/lib/apps";
 
-const ICONS = { tent: Tent, ticket: Ticket, graduation: GraduationCap, coffee: Coffee, percent: BadgePercent, truck: Truck, chef: ChefHat, wallet: Wallet, monitor: MonitorSmartphone, handshake: Handshake, tag: Tag, printer: Printer };
+const ICONS = { tent: Tent, ticket: Ticket, graduation: GraduationCap, coffee: Coffee, percent: BadgePercent, truck: Truck, chef: ChefHat, wallet: Wallet, monitor: MonitorSmartphone, handshake: Handshake, tag: Tag, printer: Printer, server: Server };
 
 export function AppIcon({ icon, className }: { icon: Key; className?: string }) {
   const I = ICONS[icon];

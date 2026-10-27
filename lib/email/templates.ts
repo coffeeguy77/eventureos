@@ -3,7 +3,7 @@
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const safeColour = (c?: string | null) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : "#6028EC");
 
-function layout(o: { brand: string; logoUrl?: string | null; businessName: string; heading: string; paragraphs: string[]; button: { label: string; url: string }; footer: string }) {
+function layout(o: { brand: string; logoUrl?: string | null; businessName: string; heading: string; paragraphs: string[]; button?: { label: string; url: string } | null; footer: string }) {
   const colour = safeColour(o.brand);
   const logo = o.logoUrl && /^https:\/\//.test(o.logoUrl)
     ? `<img src="${esc(o.logoUrl)}" alt="${esc(o.businessName)}" height="40" style="display:block;height:40px;max-width:200px;border:0">`
@@ -15,8 +15,8 @@ function layout(o: { brand: string; logoUrl?: string | null; businessName: strin
 <tr><td style="padding:28px 28px 8px">${logo}</td></tr>
 <tr><td style="padding:12px 28px 0;font:600 20px/1.35 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b">${esc(o.heading)}</td></tr>
 ${o.paragraphs.map((p) => `<tr><td style="padding:12px 28px 0;font:400 15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#3f3f46">${esc(p)}</td></tr>`).join("")}
-<tr><td style="padding:24px 28px 8px"><a href="${esc(o.button.url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font:600 15px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:14px 22px;border-radius:10px">${esc(o.button.label)}</a></td></tr>
-<tr><td style="padding:8px 28px 28px;font:400 12.5px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#71717a">If the button doesn't work, copy this link:<br><a href="${esc(o.button.url)}" style="color:#71717a;word-break:break-all">${esc(o.button.url)}</a></td></tr>
+${o.button ? `<tr><td style="padding:24px 28px 8px"><a href="${esc(o.button.url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font:600 15px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:14px 22px;border-radius:10px">${esc(o.button.label)}</a></td></tr>
+<tr><td style="padding:8px 28px 28px;font:400 12.5px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#71717a">If the button doesn't work, copy this link:<br><a href="${esc(o.button.url)}" style="color:#71717a;word-break:break-all">${esc(o.button.url)}</a></td></tr>` : `<tr><td style="padding:0 0 24px"></td></tr>`}
 </table>
 <p style="margin:16px 0 0;font:400 12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#a1a1aa">${esc(o.footer)}</p>
 </td></tr></table></body></html>`;
@@ -185,4 +185,12 @@ export function printQuoteEmail(o: { businessName: string; firstName: string; nu
     button: { label: "View & approve the quote", url: o.url }, footer: `Sent by ${o.businessName}.` });
   const text = `${paragraphs.join("\n")}\n\nView & approve: ${o.url}`;
   return { html, text };
+}
+
+/** A hosting notice (overdue, suspension warning, suspended, back online), written from the business's templates. */
+export function hostingNoticeEmail(o: { brandName: string; subject: string; message: string; payUrl: string | null; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = o.message.split(/\n{2,}/).map((p) => p.replace(/\n/g, " ").trim()).filter(Boolean);
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.brandName, heading: o.subject, paragraphs,
+    button: o.payUrl ? { label: "Pay the invoice", url: o.payUrl } : null, footer: `Sent by ${o.brandName}.` });
+  return { html, text: o.message };
 }

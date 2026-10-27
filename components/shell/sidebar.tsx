@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer } from "lucide-react";
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
 import { BusinessRail, type OrgChip } from "./business-rail";
@@ -26,6 +26,7 @@ const NAV = [
   { href: "/wholesale", label: "Wholesale", icon: Truck },
   { href: "/pricing", label: "Pricing", icon: Tag },
   { href: "/printing", label: "Printing", icon: Printer },
+  { href: "/hosting", label: "Hosting", icon: Server },
   { href: "/rentals", label: "Hire", icon: Tent, flag: "hire" as const },
   { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
   { href: "/offers", label: "Offers", icon: BadgePercent },
@@ -41,7 +42,7 @@ const NAV = [
   { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {}, orgs = [], currentOrgId = "" }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null }; orgs?: OrgChip[]; currentOrgId?: string }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {}, orgs = [], currentOrgId = "" }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null; labels?: Record<string, string> }; orgs?: OrgChip[]; currentOrgId?: string }) {
   const pathname = usePathname();
   const items = NAV.filter((i) => canOpen(role, i.href, flags.sections) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]) && !(flags.locked ?? []).includes(i.href));
   return (
@@ -65,7 +66,7 @@ export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {
               )}
             >
               <Icon className={cn("h-[16px] w-[16px] shrink-0", active ? "text-brand-600" : "text-ink-faint group-hover:text-ink-muted")} strokeWidth={1.8} />
-              <span className="flex-1 truncate">{item.label}</span>
+              <span className="flex-1 truncate">{flags.labels?.[item.href] ?? item.label}</span>
               {count > 0 && (
                 <span className="rounded-full bg-brand-500 px-1.5 py-px text-[0.6562rem] font-semibold text-on-brand">{count}</span>
               )}

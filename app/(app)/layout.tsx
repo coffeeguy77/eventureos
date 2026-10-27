@@ -1,3 +1,4 @@
+import { readHosting } from "@/lib/hosting/core";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireOrg, isSuperAdmin } from "@/lib/context";
@@ -26,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     hire: hireOn(access, org.settings),
     locked: APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths),
     sections,
+    labels: { "/hosting": readHosting(org.settings).menuLabel },
   };
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
   const [notif, unread, openEnquiries, dueTasks] = await Promise.all([

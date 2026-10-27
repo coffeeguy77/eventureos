@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -30,6 +30,7 @@ const MORE = [
   { href: "/wholesale", label: "Wholesale", icon: Truck },
   { href: "/pricing", label: "Pricing", icon: Tag },
   { href: "/printing", label: "Printing", icon: Printer },
+  { href: "/hosting", label: "Hosting", icon: Server },
   { href: "/rentals", label: "Hire", icon: Tent, flag: "hire" as const },
   { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
   { href: "/offers", label: "Offers", icon: BadgePercent },
@@ -58,7 +59,7 @@ const isActive = (pathname: string, href: string) => pathname === href || pathna
 /** App-style bottom tab bar for phones and tablets (hidden on desktop, where the sidebar shows). */
 export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user, flags = {} }: {
   role: OrgRole;
-  flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null };
+  flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null; labels?: Record<string, string> };
   enquiries: number;
   isSuperAdmin: boolean;
   orgs: { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean }[];
@@ -133,7 +134,7 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
                     className={cn("flex flex-col items-center gap-1.5 rounded-xl px-1 py-3 text-[0.7188rem] font-medium",
                       active ? "bg-brand-50 text-brand-700" : "text-ink hover:bg-zinc-50")}>
                     <Icon className={cn("h-6 w-6", active ? "text-brand-600" : "text-ink-muted")} strokeWidth={1.8} />
-                    {m.label}
+                    {flags.labels?.[m.href] ?? m.label}
                   </Link>
                 );
               })}

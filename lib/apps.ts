@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "hosting"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server";
 
 export interface AppInfo {
   key: AppKey;
@@ -123,6 +123,13 @@ export const APPS: AppInfo[] = [
     description: "Customers upload their artwork on your website, you quote by the lineal metre with setup and cutting, and turn the job into an invoice.",
     features: ["Artwork uploads from your website", "Quotes priced by the lineal metre", "Customers approve online", "One click to invoice"],
     for: "Sign, banner and sticker printers",
+  },
+  {
+    key: "hosting", name: "Hosting", paths: ["/hosting"], icon: "server",
+    tagline: "Hosting clients who pay — or get a reminder.",
+    description: "Your WHM and SiteGround hosting accounts matched to their invoices, with overdue notices, suspension when it's earned and automatic switch-back-on when they pay.",
+    features: ["Accounts synced from WHM", "Matched to invoices by reference", "Notices from your own templates", "Suspend and unsuspend (dry run first)"],
+    for: "Web designers and agencies hosting client sites",
   },
   {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",

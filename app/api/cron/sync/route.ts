@@ -176,5 +176,20 @@ export async function GET(req: NextRequest) {
     }
   }
   for (const r of results) if (!r.ok) console.error(`[cron/sync] ${r.provider} for ${r.organisation_id}: ${r.message}`);
-  return NextResponse.json({ ok: true, ran: results.length, results, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
+
+  // Hosting (after Xero, so payments are fresh): sync WHM servers, recheck billing, automatic actions (dry run by default)
+  let hosting: unknown = null;
+  if (!only.length) try {
+    const { data: hs, error: hsErr } = await db.from("hosting_servers").select("organisation_id").eq("active", true);
+    if (!hsErr) {
+      const { runHosting } = await import("@/lib/hosting/server");
+      const out: Record<string, unknown> = {};
+      for (const orgId of new Set(((hs ?? []) as { organisation_id: string }[]).map((r) => r.organisation_id))) {
+        try { const r = await runHosting(db, orgId); out[orgId] = { servers: r.notes, checked: r.billing.accounts, changed: r.billing.changed, auto: r.auto }; }
+        catch (e) { out[orgId] = { error: e instanceof Error ? e.message : String(e) }; }
+      }
+      hosting = out;
+    }
+  } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
+  return NextResponse.json({ ok: true, ran: results.length, results, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }
