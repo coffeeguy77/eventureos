@@ -102,7 +102,7 @@ function PrinterArt({ rollWidth }: { rollWidth: number }) {
           <text x="260" y="250" textAnchor="middle" fill="#fff" style={{ font: "700 54px/1 Georgia, serif", letterSpacing: "-1px" }}>BIG</text>
           <text x="260" y="300" textAnchor="middle" fill="#fff" style={{ font: "italic 600 34px/1 Georgia, serif" }}>&amp; bold</text>
           {/* contour-cut sticker */}
-          <g transform="translate(330 330) rotate(-12)">
+          <g transform="translate(366 372) rotate(-12) scale(.85)">
             <path d="M0-46 13-14 47-12 21 9 30 42 0 24-30 42-21 9-47-12-13-14Z" fill="#fff" />
             <path d="M0-56 16-18 58-15 26 11 37 52 0 30-37 52-26 11-58-15-16-18Z" fill="none" stroke="#fff" strokeWidth="2.5" strokeDasharray="7 6" />
           </g>
