@@ -121,6 +121,12 @@ function ShopLookEditor({ orgId, look, onChange, onError }: { orgId: string; loo
     <div className="mt-4 space-y-4 border-t border-line pt-4">
       <div><Label htmlFor="hs-logo">Logo size in the shop</Label>
         <Select id="hs-logo" value={look.logoSize} onChange={(e) => onChange({ ...look, logoSize: e.target.value as ShopLook["logoSize"] })} className="max-w-xs"><option value="md">Standard</option><option value="lg">Large</option><option value="xl">Extra large</option></Select></div>
+      <div><Label htmlFor="hs-accent" hint="optional">Highlight colour</Label>
+        <p className="text-[0.75rem] text-ink-muted">For the buttons that should stand out — "Browse", "Continue", "Request a quote". Without one, your brand colour is used.</p>
+        <div className="mt-1 flex items-center gap-2">
+          <input id="hs-accent" type="color" value={look.accent ?? "#f6c51b"} onChange={(e) => onChange({ ...look, accent: e.target.value })} className="h-9 w-14 cursor-pointer rounded border border-line" />
+          {look.accent ? <button type="button" onClick={() => onChange({ ...look, accent: null })} className="text-[0.75rem] text-ink-muted underline">Use the brand colour</button> : <span className="text-[0.75rem] text-ink-muted">Not set</span>}
+        </div></div>
       <div>
         <p className="text-[0.8125rem] font-medium text-ink">Photo behind the date picker</p>
         <p className="text-[0.75rem] text-ink-muted">Optional. Without one, your brand colour is used. A wide photo works best.</p>

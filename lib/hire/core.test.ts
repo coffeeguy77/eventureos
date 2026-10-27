@@ -111,7 +111,7 @@ test("brands, delivery area and shop settings", async () => {
   assert.deepEqual(s.brands.map((b) => b.key), ["main", "capital-pinball"]);
   assert.deepEqual(Object.keys(s.itemBrands), ["11111111-1111-1111-1111-111111111111"]);
   assert.deepEqual(s.deliveryZone, { label: "ACT", fee: 195, states: ["ACT"] });
-  assert.deepEqual(s.shop, { enabled: true, instantBook: true, intro: "Hi", heading: null, heroImage: null, slides: [], logoSize: "lg" });
+  assert.deepEqual(s.shop, { enabled: true, instantBook: true, intro: "Hi", heading: null, heroImage: null, slides: [], logoSize: "lg", accent: null });
   const look = readHireSettings({ hire: { shop: { heroImage: "http://x.com/a.jpg", logoSize: "xl", slides: [{ image: "https://x.com/1.jpg", heading: " Big ", link: "javascript:alert(1)" }, { image: "nope" }, { image: "https://x.com/2.jpg", link: "/hire/a/shop/b" }] } } }).shop;
   assert.equal(look.heroImage, null); assert.equal(look.logoSize, "xl");
   assert.deepEqual(look.slides, [{ image: "https://x.com/1.jpg", heading: "Big", text: null, link: null }, { image: "https://x.com/2.jpg", heading: null, text: null, link: "/hire/a/shop/b" }]);

@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertTriangle, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Loader2, Mail, Minus, Phone, Plus, Search, ShoppingBag, Sparkles, Store, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Loader2, Mail, Minus, Phone, Plus, Search, ShoppingBag, ShoppingCart, Sparkles, Store, Trash2, Truck, X, LayoutGrid } from "lucide-react";
+import "@fontsource-variable/newsreader/opsz.css";
+import { categoryIcon } from "./category-icon";
 import type { ShopItem } from "@/lib/hire/shop";
 import { shopAvailabilityAction, shopQuoteAction, shopSubmitAction, type BasketPrice } from "@/app/hire/[org]/shop/actions";
 
 type Win = { startDate: string; startTime: string; endDate: string; endTime: string };
 type Avail = Record<string, { free: number; freeFrom: number | null }>;
 type Settings = { depositPct: number; zone: { label: string; fee: number; states: string[] } | null; instant: boolean; intro: string | null; defaultStart: string; defaultEnd: string; look: Look };
-export type Look = { heading: string | null; heroImage: string | null; slides: { image: string; heading: string | null; text: string | null; link: string | null }[]; logoSize: "md" | "lg" | "xl" };
+export type Look = { heading: string | null; heroImage: string | null; slides: { image: string; heading: string | null; text: string | null; link: string | null }[]; logoSize: "md" | "lg" | "xl"; accent?: string | null };
 export type ShopOrgInfo = { name: string; logo: string | null; colour: string | null; phone: string | null; email: string | null; address: string | null };
 /** The basket is kept in the browser so "Add to my hire" on an item's page joins what's already picked. */
 export const basketKey = (slug: string) => `hire-basket:${slug}`;
@@ -153,7 +155,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
 
   if (step === "done" && result) {
     return (
-      <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
+      <Frame org={org} colour={colour} accent={settings.look.accent} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
         <div className="mx-auto max-w-xl px-4 py-20 text-center">
           <CircleCheck className="mx-auto h-14 w-14 text-emerald-600" />
           <h1 className="mt-5 text-[2rem] font-bold tracking-tight text-zinc-900">Thanks{me.name ? `, ${me.name.split(" ")[0]}` : ""}!</h1>
@@ -230,7 +232,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
           </dl>
           {fulfilment === "deliver" && price?.deliveryQuoted && <p className="mt-2 text-[0.75rem] text-zinc-500">Outside {settings.zone?.label ?? "our area"}? We&apos;ll quote delivery when we confirm.</p>}
           {step === "shop"
-            ? <button type="button" onClick={() => { setStep("details"); setOpen(true); }} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--bc)] text-[1rem] font-bold text-white hover:brightness-110">Continue <ArrowRight className="h-4 w-4" /></button>
+            ? <button type="button" onClick={() => { setStep("details"); setOpen(true); }} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--ac)] text-[1rem] font-bold text-[var(--ac-ink)] hover:brightness-105">Continue <ArrowRight className="h-4 w-4" /></button>
             : (
               <div className="mt-4 space-y-2">
                 <input aria-label="Your name" placeholder="Your name" value={me.name} onChange={(e) => setMe({ ...me, name: e.target.value })} className={input} />
@@ -241,7 +243,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
                 <input tabIndex={-1} aria-hidden="true" autoComplete="off" value={me.website} onChange={(e) => setMe({ ...me, website: e.target.value })} className="hidden" />
                 {err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[0.8125rem] text-rose-700" role="alert">{err}</p>}
                 <button type="button" disabled={pending || !me.name || !me.email || !me.phone || (fulfilment === "deliver" && (!addr.street || !addr.suburb))} onClick={submit}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--bc)] text-[1rem] font-bold text-white hover:brightness-110 disabled:opacity-50">
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[var(--ac)] text-[1rem] font-bold text-[var(--ac-ink)] hover:brightness-105 disabled:opacity-50">
                   {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}{instant ? `Book & pay ${money(price!.deposit)} deposit` : "Send booking request"}
                 </button>
                 <p className="text-center text-[0.75rem] text-zinc-500">{instant ? "Your booking is held while you pay. The balance is due before your hire." : "No payment now. We'll confirm availability and send your invoice."}</p>
@@ -254,27 +256,32 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   );
 
   return (
-    <Frame org={org} colour={colour} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
+    <Frame org={org} colour={colour} accent={settings.look.accent} logoSize={settings.look.logoSize} home={site?.home ?? `/hire/${slug}/shop`} links={site?.links}>
       {settings.look.slides.length > 0 && <Slides slides={settings.look.slides} />}
-      <section className="relative bg-[var(--bc)] text-white" style={settings.look.heroImage ? { backgroundImage: `linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.45)), url("${settings.look.heroImage.replace(/"/g, "%22")}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}>
-        <div className={`mx-auto max-w-[1240px] px-4 pb-8 sm:px-6 ${settings.look.heroImage ? "pt-16 sm:pt-24" : "pt-10 sm:pt-14"}`}>
-          <h1 className="text-[2rem] font-extrabold leading-tight tracking-tight sm:text-[2.75rem]">{settings.look.heading ?? "Hire for your event"}</h1>
-          <p className="mt-2 max-w-2xl text-[1.0625rem] text-white/85">{settings.intro ?? "Pick your dates to see what's free and what it costs, then book in a couple of minutes."}</p>
-          <div className="mt-6 rounded-2xl bg-white p-3 text-zinc-900 shadow-xl sm:p-4">
+      <section className="relative overflow-hidden bg-[var(--bc)] text-white">
+        {settings.look.heroImage && <>
+          <img src={settings.look.heroImage} alt="" className="absolute inset-y-0 right-0 h-full w-full object-cover sm:w-[62%]" />
+          <div aria-hidden className="absolute inset-0 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--bc)_70%,transparent),var(--bc)_85%)] sm:bg-[linear-gradient(90deg,var(--bc)_38%,color-mix(in_srgb,var(--bc)_55%,transparent)_62%,transparent_100%)]" />
+        </>}
+        <div className={`relative mx-auto max-w-[1240px] px-4 pb-8 sm:px-6 ${settings.look.heroImage ? "pt-12 sm:pt-20" : "pt-10 sm:pt-14"}`}>
+          <h1 className="max-w-[640px] text-[2.25rem] font-bold leading-[1.05] tracking-tight sm:text-[3.5rem]" style={{ fontFamily: "'Newsreader Variable', Georgia, 'Times New Roman', serif" }}>{settings.look.heading ?? "Hire for your event"}</h1>
+          <p className="mt-3 max-w-xl text-[1.0625rem] text-white/85">{settings.intro ?? "Pick your dates to see what's free and what it costs, then book in a couple of minutes."}</p>
+          <div className="mt-6 max-w-[920px] rounded-2xl bg-white p-3 text-zinc-900 shadow-xl sm:p-4">
             <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
               <DateField label="Start" date={win.startDate} time={win.startTime} min={today} onChange={(d, t) => setWin((w) => ({ ...w, startDate: d, startTime: t, endDate: w.endDate < d ? d : w.endDate }))} />
               <DateField label="Finish" date={win.endDate} time={win.endTime} min={win.startDate} onChange={(d, t) => setWin((w) => ({ ...w, endDate: d, endTime: t }))} />
-              <p className="flex h-11 items-center gap-2 text-[0.8125rem] font-medium text-zinc-500">{checking ? <><Loader2 className="h-4 w-4 animate-spin" />Checking…</> : <><Check className="h-4 w-4 text-emerald-600" />Showing what&apos;s free</>}</p>
+              <a href="#items" className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--ac)] px-5 text-[0.9375rem] font-bold text-[var(--ac-ink)] hover:brightness-105">{checking ? <><Loader2 className="h-4 w-4 animate-spin" />Checking…</> : <>Browse equipment <ArrowRight className="h-4 w-4" /></>}</a>
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {([["tomorrow", "Tomorrow"], ["sat", "This Saturday"], ["weekend", "This weekend"], ["nextweekend", "Next weekend"]] as const).map(([k, l]) => <button key={k} type="button" onClick={() => quick(k)} className="rounded-full bg-zinc-100 px-3 py-1.5 text-[0.8125rem] font-medium text-zinc-700 hover:bg-zinc-200">{l}</button>)}
+              {!checking && <span className="ml-auto hidden items-center gap-1.5 text-[0.8125rem] font-medium text-zinc-500 sm:flex"><Check className="h-4 w-4 text-emerald-600" />Showing what&apos;s free</span>}
             </div>
             {winErr && <p className="mt-2 text-[0.8125rem] text-rose-600">{winErr}</p>}
           </div>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1240px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div id="items" className="mx-auto grid max-w-[1240px] scroll-mt-4 gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           {brands.length > 1 && (
             <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Brands">
@@ -287,22 +294,25 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search: chairs, marquee, popcorn…" aria-label="Search" className={`${input} pl-9`} />
             </div>
             <div className="no-scrollbar mt-2 flex gap-1.5 overflow-x-auto">
-              {["", ...cats].map((c) => <button key={c || "all"} type="button" onClick={() => setCat(c)} className={`shrink-0 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium ${cat === c ? "bg-[var(--bc)] text-white" : "bg-white text-zinc-600 ring-1 ring-zinc-200"}`}>{c || "Everything"}</button>)}
+              {["", ...cats].map((c) => { const I = c ? categoryIcon(c) : LayoutGrid; return <button key={c || "all"} type="button" onClick={() => setCat(c)} className={`flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[0.8125rem] font-semibold transition ${cat === c ? "bg-[var(--bc)] text-white shadow-sm" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-400"}`}><I className="h-4 w-4" strokeWidth={1.75} />{c || "All products"}</button>; })}
             </div>
           </div>
           {!grouped.length && <p className="py-16 text-center text-zinc-500">Nothing matches. Try another search.</p>}
           {grouped.map(([c, list]) => (
             <section key={c} id={c} className="mt-6 scroll-mt-28">
               <h2 className="mb-3 text-[1.25rem] font-bold text-zinc-900">{c}</h2>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
                 {list.map((it) => {
                   const a = avail[it.id]; const free = a?.free ?? it.max; const n = qtyOf(it.id);
                   const out = it.kind !== "sale" && free <= 0;
                   return (
-                    <article key={it.id} className={`flex flex-col rounded-2xl bg-white p-4 ring-1 ring-zinc-200 transition ${out ? "opacity-70" : "hover:shadow-md"}`}>
-                      {it.image && (it.slug
-                        ? <a href={`/hire/${slug}/shop/${it.slug}`} className="mb-3 block overflow-hidden rounded-xl"><img src={it.image} alt={it.name} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]" /></a>
-                        : <img src={it.image} alt={it.name} loading="lazy" className="mb-3 aspect-[4/3] w-full rounded-xl object-cover" />)}
+                    <article key={it.id} className={`flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200 transition ${out ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-lg"}`}>
+                      {(() => {
+                        const pic = it.image ? <img src={it.image} alt={it.name} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]" />
+                          : (() => { const I = categoryIcon(it.category ?? it.name); return <div className="grid aspect-[4/3] w-full place-items-center bg-[var(--bc)] text-white/90"><I className="h-14 w-14" strokeWidth={1.25} /></div>; })();
+                        return it.slug ? <a href={`/hire/${slug}/shop/${it.slug}`} className="block overflow-hidden">{pic}</a> : <div className="overflow-hidden">{pic}</div>;
+                      })()}
+                      <div className="flex flex-1 flex-col p-4">
                       <p className="text-[0.9375rem] font-semibold leading-snug text-zinc-900">{it.slug ? <a href={`/hire/${slug}/shop/${it.slug}`} className="hover:text-[var(--bc)] hover:underline">{it.name}</a> : it.name}</p>
                       {it.description && <p className="mt-1 line-clamp-2 whitespace-pre-line text-[0.8125rem] text-zinc-500">{it.description}</p>}
                       <div className="mt-auto pt-3">
@@ -315,8 +325,9 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <p className="text-[1.0625rem] font-bold text-zinc-900">{money(it.price)}<span className="ml-1 text-[0.75rem] font-medium text-zinc-500">{it.priceNote}</span></p>
                           {n ? <Stepper qty={n} max={it.kind === "sale" ? 999 : free} onChange={(v) => setQty(it.id, v)} />
-                            : <button type="button" disabled={out} onClick={() => add(it.id)} className="flex h-9 items-center gap-1.5 rounded-full bg-[var(--bc)] px-4 text-[0.875rem] font-semibold text-white hover:brightness-110 disabled:bg-zinc-300"><Plus className="h-4 w-4" />Add</button>}
+                            : <button type="button" disabled={out} onClick={() => add(it.id)} className="flex h-9 items-center gap-1.5 rounded-lg bg-[var(--bc)] px-4 text-[0.875rem] font-semibold text-white hover:brightness-125 disabled:bg-zinc-300"><ShoppingCart className="h-4 w-4" />Add</button>}
                         </div>
+                      </div>
                       </div>
                     </article>
                   );
@@ -345,13 +356,16 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
   );
 }
 
+/** black or white text, whichever reads better on the colour */
+export function inkOn(hex: string) { const n = parseInt(hex.slice(1), 16); const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? "#111827" : "#ffffff"; }
+
 const LOGO = { md: "h-12 max-w-[200px]", lg: "h-16 max-w-[240px] sm:h-20 sm:max-w-[300px]", xl: "h-20 max-w-[260px] sm:h-28 sm:max-w-[380px]" } as const;
 
 export type SiteLink = { label: string; href: string };
-export function Frame({ org, colour, logoSize = "lg", home, links = [], children }: { org: Omit<ShopOrgInfo, "colour">; colour: string; logoSize?: Look["logoSize"]; home?: string; /** the business's website pages */ links?: SiteLink[]; children: React.ReactNode }) {
+export function Frame({ org, colour, accent, logoSize = "lg", home, links = [], children }: { org: Omit<ShopOrgInfo, "colour">; colour: string; /** highlight colour for the stand-out buttons */ accent?: string | null; logoSize?: Look["logoSize"]; home?: string; /** the business's website pages */ links?: SiteLink[]; children: React.ReactNode }) {
   const logo = org.logo ? <img src={org.logo} alt={org.name} className={`w-auto object-contain ${LOGO[logoSize]}`} /> : <span className="text-[1.25rem] font-bold">{org.name}</span>;
   return (
-    <div className="min-h-screen bg-[#f7f7f8] font-sans text-zinc-900" style={{ ["--bc" as string]: colour }}>
+    <div className="min-h-screen bg-[#f7f7f8] font-sans text-zinc-900" style={{ ["--bc" as string]: colour, ["--ac" as string]: accent ?? colour, ["--ac-ink" as string]: accent ? inkOn(accent) : "#ffffff" }}>
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1240px] items-center gap-4 px-4 py-3 sm:px-6">
           {home ? <a href={home} aria-label={`${org.name} — home`}>{logo}</a> : logo}

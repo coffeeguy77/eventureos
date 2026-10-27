@@ -45,8 +45,10 @@ export interface ShopLook {
   heroImage: string | null;
   slides: { image: string; heading: string | null; text: string | null; link: string | null }[];
   logoSize: "md" | "lg" | "xl";
+  /** second colour for buttons that should stand out (e.g. "Request a quote"); none = the brand colour */
+  accent: string | null;
 }
-export const DEFAULT_SHOP: ShopLook = { enabled: false, instantBook: false, intro: null, heading: null, heroImage: null, slides: [], logoSize: "lg" };
+export const DEFAULT_SHOP: ShopLook = { enabled: false, instantBook: false, intro: null, heading: null, heroImage: null, slides: [], logoSize: "lg", accent: null };
 const webImage = (v: unknown) => (typeof v === "string" && /^https:\/\/\S+$/i.test(v.trim()) && v.length <= 1000 ? v.trim() : null);
 const line = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
 export function cleanShop(raw: unknown): ShopLook {
@@ -60,6 +62,7 @@ export function cleanShop(raw: unknown): ShopLook {
   return {
     enabled: o.enabled === true, instantBook: o.instantBook === true, intro: line(o.intro, 600), heading: line(o.heading, 80),
     heroImage: webImage(o.heroImage), slides, logoSize: o.logoSize === "md" || o.logoSize === "xl" ? o.logoSize : "lg",
+    accent: typeof o.accent === "string" && /^#[0-9a-f]{6}$/i.test(o.accent) ? o.accent : null,
   };
 }
 export interface Brand { key: string; name: string; email: string | null; phone: string | null }

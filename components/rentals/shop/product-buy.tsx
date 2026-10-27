@@ -134,7 +134,7 @@ export function ProductBuy({ slug, tz, today, currency, item, addons, initialWin
       <p className="text-right text-[0.75rem] text-zinc-500">Final price for your dates shown before you book. Includes GST.</p>
       <div className="mt-4 grid gap-2">
         <a href={out ? undefined : shopUrl(true)} aria-disabled={out} onClick={(e) => { if (out) { e.preventDefault(); return; } writeBasket(slug, readBasket(slug).filter((b) => !lines.some((l) => l.id === b.id))); }}
-          className={`flex h-12 items-center justify-center gap-2 rounded-xl text-[1rem] font-bold text-white ${out ? "pointer-events-none bg-zinc-300" : "bg-[var(--bc)] hover:brightness-110"}`}><Check className="h-5 w-5" />Book now</a>
+          className={`flex h-12 items-center justify-center gap-2 rounded-xl text-[1rem] font-bold ${out ? "pointer-events-none bg-zinc-300 text-white" : "bg-[var(--ac)] text-[var(--ac-ink)] hover:brightness-105"}`}><Check className="h-5 w-5" />Book now</a>
         <button type="button" disabled={out} onClick={() => addToHire(false)} className="flex h-12 items-center justify-center gap-2 rounded-xl bg-white text-[1rem] font-semibold text-zinc-900 ring-1 ring-zinc-300 hover:ring-zinc-500 disabled:opacity-50"><Plus className="h-5 w-5" />Add to my hire</button>
       </div>
       {inBasket > 0 && <a href={shopUrl(false)} className="mt-3 flex items-center justify-center gap-2 text-[0.875rem] font-semibold text-[var(--bc)] hover:underline"><ShoppingBag className="h-4 w-4" />{inBasket} item{inBasket === 1 ? "" : "s"} in your hire — keep shopping or check out</a>}

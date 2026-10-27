@@ -66,7 +66,7 @@ export default async function HireItemPage({ params, searchParams }: Params & { 
   );
 
   return (
-    <Frame org={{ name: org.name, logo: org.logo_url, phone: org.contact_phone, email: org.contact_email, address: org.address }} colour={colour} logoSize={s.shop.logoSize} home={siteLinks(so).home ?? base} links={siteLinks(so).links}>
+    <Frame org={{ name: org.name, logo: org.logo_url, phone: org.contact_phone, email: org.contact_email, address: org.address }} colour={colour} accent={s.shop.accent} logoSize={s.shop.logoSize} home={siteLinks(so).home ?? base} links={siteLinks(so).links}>
       <OwnerEdit slug={org.slug} href={`/rentals/items/${it.id}`} label="Edit item" />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
       <div className="mx-auto max-w-[1240px] px-4 py-6 sm:px-6 sm:py-8">

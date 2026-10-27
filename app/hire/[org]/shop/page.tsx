@@ -47,7 +47,7 @@ export default async function HireShopPage({ params, searchParams }: { params: P
       org={{ name: org.name, logo: org.logo_url, colour: org.brand_colour, phone: org.contact_phone, email: org.contact_email, address: org.address }}
       items={items} brands={s.brands.filter((b) => usedBrands.has(b.key)).map((b) => ({ key: b.key, name: b.name }))}
       settings={{ depositPct: s.depositPct, zone: s.deliveryZone, instant: s.shop.instantBook && org.stripeReady, intro: s.shop.intro, defaultStart: s.defaultStart, defaultEnd: s.defaultEnd,
-        look: { heading: s.shop.heading, heroImage: s.shop.heroImage, slides: s.shop.slides, logoSize: s.shop.logoSize } }}
+        look: { heading: s.shop.heading, heroImage: s.shop.heroImage, slides: s.shop.slides, logoSize: s.shop.logoSize, accent: s.shop.accent } }}
       initialWindow={window} initialAvail={avail} initialAdd={add}
     />
     <OwnerEdit slug={org.slug} href="/rentals/settings" label="Edit shop" />
