@@ -309,7 +309,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
                     <article key={it.id} className={`flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-zinc-200 transition ${out ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-lg"}`}>
                       {(() => {
                         const pic = it.image ? <img src={it.image} alt={it.name} loading="lazy" className="aspect-[4/3] w-full object-cover transition duration-300 hover:scale-[1.03]" />
-                          : (() => { const I = categoryIcon(it.category ?? it.name); return <div className="grid aspect-[4/3] w-full place-items-center bg-[var(--bc)] text-white/90"><I className="h-14 w-14" strokeWidth={1.25} /></div>; })();
+                          : <div className="grid aspect-[4/3] w-full place-items-center bg-zinc-100 text-xs font-medium text-zinc-400">Photo coming soon</div>;
                         return it.slug ? <a href={`/hire/${slug}/shop/${it.slug}`} className="block overflow-hidden">{pic}</a> : <div className="overflow-hidden">{pic}</div>;
                       })()}
                       <div className="flex flex-1 flex-col p-4">
