@@ -285,7 +285,7 @@ export function HireShop({ slug, tz, today, currency, org, items, brands, settin
         <div className="min-w-0">
           {brands.length > 1 && (
             <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Brands">
-              {brands.map((b) => <button key={b.key} role="tab" aria-selected={brand === b.key} type="button" onClick={() => { setBrand(b.key); setCat(""); }} className={`rounded-xl px-4 py-2 text-[0.9375rem] font-bold ${brand === b.key ? "bg-zinc-900 text-white" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-400"}`}>{b.name}</button>)}
+              {brands.map((b) => <button key={b.key} role="tab" aria-selected={brand === b.key} type="button" onClick={() => { setBrand(b.key); setCat(""); }} className={`rounded-xl px-4 py-2 text-[0.9375rem] font-bold ${brand === b.key ? "bg-[var(--bc)] text-white" : "bg-white text-zinc-700 ring-1 ring-zinc-200 hover:ring-zinc-400"}`}>{b.name}</button>)}
             </div>
           )}
           <div className="sticky top-0 z-20 -mx-4 bg-[#f7f7f8]/95 px-4 py-3 backdrop-blur sm:mx-0 sm:px-0">
@@ -372,7 +372,7 @@ export function Frame({ org, colour, accent, logoSize = "lg", home, links = [], 
           {links.length > 0 && <nav aria-label={org.name} className="hidden items-center gap-1 md:flex">{links.map((l) => <a key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-[0.9375rem] font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900">{l.label}</a>)}</nav>}
           <div className="ml-auto flex items-center gap-2">
             {org.email && <a href={`mailto:${org.email}`} className="hidden h-10 items-center gap-2 rounded-full px-3 text-[0.875rem] font-medium text-zinc-600 hover:bg-zinc-100 sm:flex"><Mail className="h-4 w-4" />{org.email}</a>}
-            {org.phone && <a href={`tel:${org.phone.replace(/\s/g, "")}`} className="flex h-10 items-center gap-2 rounded-full bg-zinc-900 px-4 text-[0.875rem] font-semibold text-white"><Phone className="h-4 w-4" />{org.phone}</a>}
+            {org.phone && <a href={`tel:${org.phone.replace(/\s/g, "")}`} className="flex h-10 items-center gap-2 rounded-full bg-[var(--bc)] px-4 text-[0.875rem] font-semibold text-white"><Phone className="h-4 w-4" />{org.phone}</a>}
           </div>
         </div>
       </header>
