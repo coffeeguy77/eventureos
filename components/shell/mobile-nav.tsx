@@ -56,10 +56,10 @@ const isActive = (pathname: string, href: string) => pathname === href || pathna
 /** App-style bottom tab bar for phones and tablets (hidden on desktop, where the sidebar shows). */
 export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId, user, flags = {} }: {
   role: OrgRole;
-  flags?: { franchise?: boolean; hire?: boolean; locked?: string[] };
+  flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null };
   enquiries: number;
   isSuperAdmin: boolean;
-  orgs: { id: string; name: string; role: string }[];
+  orgs: { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean }[];
   currentOrgId: string;
   user: { name: string; email: string };
 }) {
@@ -76,9 +76,10 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
     return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  const tabs = role === "staff" ? [{ href: "/my-jobs", label: "My jobs", icon: Briefcase, badge: false }] : TABS.filter((t) => canOpen(role, t.href));
-  const more = MORE.filter((m) => canOpen(role, m.href) && (!("flag" in m && m.flag) || !!flags[m.flag]) && !(flags.locked ?? []).includes(m.href));
-  const create = role === "staff" ? [] : CREATE.filter((c) => canOpen(role, c.href));
+  const sec = flags.sections ?? null;
+  const tabs = role === "staff" ? [{ href: "/my-jobs", label: "My jobs", icon: Briefcase, badge: false }] : TABS.filter((t) => canOpen(role, t.href, sec));
+  const more = MORE.filter((m) => canOpen(role, m.href, sec) && (!("flag" in m && m.flag) || !!flags[m.flag]) && !(flags.locked ?? []).includes(m.href));
+  const create = role === "staff" ? [] : CREATE.filter((c) => canOpen(role, c.href, sec));
   const moreActive = !open && more.some((m) => isActive(pathname, m.href));
   const current = orgs.find((o) => o.id === currentOrgId);
 
@@ -168,7 +169,7 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
                     className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-zinc-50">
                     <Avatar name={o.name} size={32} className="rounded-lg" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[0.875rem] font-medium text-ink">{o.name}</span>
+                      <span className="flex items-center gap-1.5 truncate text-[0.875rem] font-medium text-ink">{o.name}{o.fresh && o.id !== currentOrgId && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-label="something new" />}</span>
                       <span className="block text-[0.75rem] capitalize text-ink-muted">{o.role}</span>
                     </span>
                     {o.id === currentOrgId && <Check className="h-5 w-5 text-brand-600" />}

@@ -12,9 +12,9 @@ import { APPS, appAllowed, appForPath } from "@/lib/apps";
 import { hireOn, orgAppAccess } from "@/lib/apps-server";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { supabase, org, realProfile: profile, memberships, isSupportSession, current, role } = await requireOrg();
+  const { supabase, org, realProfile: profile, memberships, isSupportSession, current, role, access: sections } = await requireOrg();
   const path = (await headers()).get("x-pathname") ?? "";
-  if (path && !canOpen(role, path)) redirect(homeFor(role));
+  if (path && !canOpen(role, path, sections)) redirect(homeFor(role));
   const admin = await isSuperAdmin();
 
   // apps EventureOS hasn't given this business are hidden and locked
@@ -25,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     franchise: appAllowed(access, "franchise") && readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
     hire: hireOn(access, org.settings),
     locked: APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths),
+    sections,
   };
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
   const [notif, unread, openEnquiries, dueTasks] = await Promise.all([
@@ -49,17 +50,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   if (notif.error) throw new Error(`Could not load notifications: ${notif.error.message}`);
 
+  // the other businesses this person works in: a dot when something's new there (unread notifications or new enquiries)
+  const others = memberships.filter((m) => m.organisation.id !== org.id).map((m) => m.organisation.id);
+  const fresh = new Set<string>();
+  if (others.length) {
+    const [n, e] = await Promise.all([
+      supabase.from("notifications").select("organisation_id").in("organisation_id", others).is("read_at", null).limit(500),
+      supabase.from("enquiries").select("organisation_id").in("organisation_id", others).in("status", ["new", "needs_review"]).limit(500),
+    ]);
+    for (const r of [...(n.data ?? []), ...(e.data ?? [])] as { organisation_id: string }[]) fresh.add(r.organisation_id);
+  }
+  const orgList = memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role, logo: m.organisation.logo_url ?? null, colour: m.organisation.brand_colour ?? null, fresh: fresh.has(m.organisation.id) }));
+
   return (
     <div className="min-h-screen">
       <PrefsSync saved={(profile as { ui_prefs?: unknown }).ui_prefs ?? null} />
       {isSupportSession && <SupportBanner orgId={org.id} orgName={org.name} expiresAt={current?.expires_at} />}
       {/* Printing (run sheets, kitchen lists): only the page itself */}
-      <div className="print:hidden"><Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} flags={flags} /></div>
+      <div className="print:hidden"><Sidebar orgName={org.name} counts={{ enquiries: openEnquiries.count ?? 0, todo: dueTasks.count ?? 0 }} isSuperAdmin={admin} role={role} flags={flags} orgs={orgList} currentOrgId={org.id} /></div>
       <div className="app-column lg:pl-[232px] print:!pl-0">
         <div className="print:hidden"><Topbar
           role={role}
           user={{ name: profile.full_name ?? profile.email, email: profile.email }}
-          orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
+          orgs={orgList}
           currentOrgId={org.id}
           notifications={notif.data ?? []}
           unread={unread.count ?? 0}
@@ -71,7 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         enquiries={openEnquiries.count ?? 0}
         isSuperAdmin={admin}
         flags={flags}
-        orgs={memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role }))}
+        orgs={orgList}
         currentOrgId={org.id}
         user={{ name: profile.full_name ?? profile.email, email: profile.email }}
       /></div>

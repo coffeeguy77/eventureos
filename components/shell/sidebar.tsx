@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
+import { BusinessRail, type OrgChip } from "./business-rail";
 import type { OrgRole } from "@/lib/types";
 
 const NAV = [
@@ -39,14 +40,15 @@ const NAV = [
   { href: "/my-jobs", label: "My jobs", icon: Briefcase, staffOnly: true },
 ];
 
-export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {} }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean; locked?: string[] } }) {
+export function Sidebar({ orgName, counts, isSuperAdmin = false, role, flags = {}, orgs = [], currentOrgId = "" }: { orgName: string; counts: { enquiries: number; todo?: number }; isSuperAdmin?: boolean; role: OrgRole; /** sections only some businesses use */ flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null }; orgs?: OrgChip[]; currentOrgId?: string }) {
   const pathname = usePathname();
-  const items = NAV.filter((i) => canOpen(role, i.href) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]) && !(flags.locked ?? []).includes(i.href));
+  const items = NAV.filter((i) => canOpen(role, i.href, flags.sections) && (!("staffOnly" in i && i.staffOnly) || role === "staff") && (!("flag" in i && i.flag) || !!flags[i.flag]) && !(flags.locked ?? []).includes(i.href));
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-line bg-surface lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
         <Link href={role === "staff" ? "/my-jobs" : "/dashboard"} aria-label="EventureOS home" className="flex items-center gap-2"><Logo size={34} /><Wordmark height={20} /></Link>
       </div>
+      {orgs.length > 1 && <BusinessRail orgs={orgs} currentOrgId={currentOrgId} />}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");

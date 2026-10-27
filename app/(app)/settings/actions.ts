@@ -287,12 +287,12 @@ export async function inviteMember(_prev: ActionState, form: FormData): Promise<
   const members = await getMembers(org.id);
   if (members.some((m) => m.email.toLowerCase() === email)) return { error: `${email} is already on the team.` };
 
-  const { data, error } = await supabase
-    .from("organisation_invitations")
-    .insert({ organisation_id: org.id, email, role: inviteRole, invited_by: user.id,
-      auto_add_to_events: form.get("auto_add") === "on", sees_job_details: form.get("sees_details") === "on" })
-    .select("id")
-    .single();
+  const { ACCESS_PRESETS } = await import("@/lib/access");
+  const preset = ACCESS_PRESETS.find((p) => p.key === str(form.get("access")));
+  const base: Record<string, unknown> = { organisation_id: org.id, email, role: inviteRole, invited_by: user.id,
+    auto_add_to_events: form.get("auto_add") === "on", sees_job_details: form.get("sees_details") === "on" };
+  const { data, error } = await supabase.from("organisation_invitations").insert(preset && inviteRole !== "staff" ? { ...base, access: preset.sections } : base).select("id").single();
+  if (error && preset && /access/.test(error.message)) return { error: "Limiting sections needs the 0072 database update first — invite with Everything for now." };
   if (error) {
     if (error.code === "23505") return { error: `${email} already has a pending invitation. Revoke it first to change the role.` };
     return { error: `Couldn't create the invitation: ${error.message}` };
@@ -336,6 +336,28 @@ export async function resendInvitation(id: string) {
   await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "team.invitation_sent", entityType: "invitation", entityId: id,
     summary: `${actorName(profile)} emailed a team invitation` });
   revalidatePath("/settings/team");
+}
+
+/** Which back-end sections a team member (or pending invitation) is limited to. null / empty = everything their role allows. */
+export async function setMemberAccess(kind: "member" | "invite", id: string, sections: string[] | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, user, profile } = await ownerOrAdmin();
+    const { cleanAccess } = await import("@/lib/access");
+    const access = cleanAccess(sections);
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Refresh and try again.");
+    const table = kind === "member" ? "organisation_users" : "organisation_invitations";
+    if (kind === "member") {
+      const m = await loadMember(supabase, org.id, id);
+      if (m.role === "owner") throw new Error("Owners always see everything.");
+      if (m.user_id === user.id) throw new Error("You can't limit your own access.");
+    }
+    const { error } = await supabase.from(table).update({ access }).eq("id", id).eq("organisation_id", org.id);
+    if (error) throw new Error(/access/.test(error.message) ? "Section access needs the 0072 database update first." : error.message);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "team.access_changed", entityType: kind === "member" ? "user" : "invitation", entityId: id,
+      summary: `${actorName(profile)} set section access: ${access ? access.join(", ") : "everything"}` });
+    revalidatePath("/settings/team");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
 /** Roster defaults for a team member or a pending invitation (owners/admins). */

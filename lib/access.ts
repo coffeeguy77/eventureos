@@ -14,9 +14,40 @@ const under = (path: string, base: string) => path === base || path.startsWith(b
 
 export function isFieldStaff(role: OrgRole) { return role === "staff"; }
 
-export function canOpen(role: OrgRole, path: string): boolean {
+/**
+ * Back-end sections a person can be limited to (Settings → Team). Someone with a list only sees those sections
+ * (plus the dashboard and their own profile); no list = everything their role allows.
+ */
+export const SECTIONS: { key: string; label: string; group: string }[] = [
+  { key: "/enquiries", label: "Enquiries", group: "Sales" }, { key: "/crm", label: "CRM", group: "Sales" }, { key: "/quotes", label: "Quotes", group: "Sales" },
+  { key: "/clients", label: "Clients", group: "Sales" }, { key: "/tasks", label: "To-do", group: "Sales" },
+  { key: "/events", label: "Events", group: "Operations" }, { key: "/calendar", label: "Calendar", group: "Operations" }, { key: "/rentals", label: "Hire", group: "Operations" },
+  { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" },
+  { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
+  { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },
+  { key: "/store", label: "Shop", group: "Selling online" }, { key: "/wholesale", label: "Wholesale", group: "Selling online" }, { key: "/offers", label: "Offers", group: "Selling online" },
+  { key: "/learn", label: "Learn", group: "Selling online" }, { key: "/website", label: "Website", group: "Selling online" }, { key: "/franchise", label: "Franchise", group: "Selling online" },
+  { key: "/portal", label: "Customer Portal", group: "Selling online" }, { key: "/settings", label: "Settings", group: "Admin" },
+];
+/** Ready-made sets of sections for common jobs. */
+export const ACCESS_PRESETS: { key: string; label: string; sections: string[] }[] = [
+  { key: "accounts", label: "Accounts", sections: ["/accounts", "/invoices", "/payments", "/clients"] },
+  { key: "sales", label: "Sales", sections: ["/enquiries", "/crm", "/quotes", "/clients", "/calendar", "/tasks"] },
+  { key: "operations", label: "Operations", sections: ["/events", "/calendar", "/rentals", "/kitchen", "/wages", "/tasks"] },
+];
+const ALWAYS = ["/dashboard", "/my-signature", "/notifications", "/profile"];
+const SECTION_KEYS = new Set(SECTIONS.map((x) => x.key));
+export const cleanAccess = (raw: unknown): string[] | null => {
+  if (!Array.isArray(raw)) return null;
+  const list = [...new Set(raw.filter((x): x is string => typeof x === "string" && SECTION_KEYS.has(x)))];
+  return list.length ? list : null;
+};
+
+export function canOpen(role: OrgRole, path: string, access?: string[] | null): boolean {
   if (role === "staff") return STAFF_ALLOWED.some((b) => under(path, b));
-  if (role === "sales") return !SALES_BLOCKED.some((b) => under(path, b));
+  if (role === "sales" && SALES_BLOCKED.some((b) => under(path, b))) return false;
+  // owners always see everything; anyone else with a section list sees only those sections (and the dashboard)
+  if (role !== "owner" && access?.length) return ALWAYS.some((b) => under(path, b)) || access.some((b) => under(path, b));
   return true;
 }
 

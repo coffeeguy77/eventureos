@@ -86,3 +86,51 @@ export async function openSupportSession(orgId: string) {
   revalidatePath("/", "layout");
   redirect("/dashboard");
 }
+
+const MANAGER_TITLE = "Account manager (EventureOS)";
+
+/** Join a client's business as an admin, so it sits in your business switcher (instead of a timed support session). */
+export async function joinBusiness(orgId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = await admin();
+    if (!UUID_RE.test(orgId)) throw new Error("Unknown organisation.");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Sign in again.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { data: existing } = await db.from("organisation_users").select("id, role, title, expires_at").eq("organisation_id", orgId).eq("user_id", user.id).maybeSingle();
+    if (existing && !existing.expires_at && existing.role !== "customer") throw new Error("You're already on this business's team.");
+    const row = { organisation_id: orgId, user_id: user.id, role: "admin", title: MANAGER_TITLE, status: "active", expires_at: null };
+    const { error } = existing ? await db.from("organisation_users").update(row).eq("id", existing.id) : await db.from("organisation_users").insert(row);
+    if (error) throw new Error(error.message);
+    await db.from("activity_logs").insert({ organisation_id: orgId, actor_id: user.id, action: "team.joined", entity_type: "user", entity_id: user.id, summary: "EventureOS joined the team as account manager (admin)" });
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** Leave a client's business you joined as account manager. */
+export async function leaveBusiness(orgId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = await admin();
+    if (!UUID_RE.test(orgId)) throw new Error("Unknown organisation.");
+    const { data: { user } } = await supabase.auth.getUser();
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { error } = await db.from("organisation_users").delete().eq("organisation_id", orgId).eq("user_id", user?.id ?? "").eq("title", MANAGER_TITLE);
+    if (error) throw new Error(error.message);
+    const jar = await cookies();
+    if (jar.get(ORG_COOKIE)?.value === orgId) jar.delete(ORG_COOKIE);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** Open a business you're on the team of. */
+export async function openBusiness(orgId: string) {
+  await admin();
+  if (!UUID_RE.test(orgId)) throw new Error("Unknown organisation.");
+  (await cookies()).set(ORG_COOKIE, orgId, { path: "/", httpOnly: true, sameSite: "lax", secure: true, maxAge: 60 * 60 * 24 * 365 });
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
+}

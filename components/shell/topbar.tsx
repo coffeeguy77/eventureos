@@ -14,7 +14,7 @@ import { globalSearch, markAllNotificationsRead, signOut, switchOrganisation, ty
 
 export interface TopbarProps {
   user: { name: string; email: string };
-  orgs: { id: string; name: string; role: string }[];
+  orgs: { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean }[];
   currentOrgId: string;
   notifications: { id: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null; type: string }[];
   unread: number;
@@ -293,6 +293,7 @@ function OrgSwitcher({ orgs, currentOrgId }: { orgs: TopbarProps["orgs"]; curren
         <button className="inline-flex h-9 max-w-[220px] items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-[0.8125rem] font-medium text-ink hover:bg-zinc-50">
           <Avatar name={current?.name} size={20} className="rounded-md" />
           <span className="hidden truncate md:inline">{current?.name}</span>
+          {orgs.some((o) => o.fresh && o.id !== currentOrgId) && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" title="Something new in another business" />}
           <ChevronDown className="h-3.5 w-3.5 text-ink-faint" />
         </button>
       )}
@@ -309,14 +310,14 @@ function OrgSwitcher({ orgs, currentOrgId }: { orgs: TopbarProps["orgs"]; curren
             >
               <Avatar name={o.name} size={24} className="rounded-md" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[0.8125rem] font-medium text-ink">{o.name}</span>
+                <span className="flex items-center gap-1.5 truncate text-[0.8125rem] font-medium text-ink">{o.name}{o.fresh && o.id !== currentOrgId && <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-label="something new" />}</span>
                 <span className="block text-[0.7188rem] capitalize text-ink-muted">{o.role}</span>
               </span>
               {o.id === currentOrgId && <Check className="h-4 w-4 text-brand-600" />}
             </button>
           ))}
           <Link href="/onboarding?new=1" onClick={close} className="mt-1 block rounded-lg border-t border-line px-3 py-2 text-[0.7812rem] font-medium text-brand-600 hover:bg-zinc-50">
-            + Create another organisation
+            + Add another business
           </Link>
         </div>
       )}

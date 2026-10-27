@@ -28,3 +28,15 @@ test("plan defaults: unset plans include everything", () => {
   assert.equal(p.scale.length, APP_KEYS.length);
   assert.deepEqual(cleanAppList(["store", "store", 3]), ["store"]);
 });
+
+test("section access", async () => {
+  const { canOpen, cleanAccess } = await import("./access");
+  assert.equal(canOpen("manager", "/invoices/123", ["/accounts", "/invoices"]), true);
+  assert.equal(canOpen("manager", "/quotes", ["/accounts", "/invoices"]), false);
+  assert.equal(canOpen("manager", "/dashboard", ["/accounts"]), true);
+  assert.equal(canOpen("owner", "/quotes", ["/accounts"]), true);
+  assert.equal(canOpen("manager", "/quotes", null), true);
+  assert.equal(canOpen("sales", "/invoices", null), false);
+  assert.deepEqual(cleanAccess(["/accounts", "/nope", "/accounts"]), ["/accounts"]);
+  assert.equal(cleanAccess([]), null);
+});

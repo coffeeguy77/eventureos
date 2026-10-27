@@ -9,6 +9,7 @@ import { ClientApps, ResendWelcome } from "@/components/admin/client-apps";
 import { planApps } from "@/lib/apps-plans";
 import { PLAN_NAMES, readAppAccess, type PlanKey } from "@/lib/apps";
 import { fmtDateTime } from "@/lib/format";
+import { ManageBusiness } from "@/components/admin/manage-business";
 
 export const metadata = { title: "Client" };
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export default async function AdminClientPage({ params }: { params: Promise<{ id
     db.from("organisation_users").select("role, title, user:users(full_name, email)").eq("organisation_id", id).eq("status", "active").neq("role", "customer").limit(50),
   ]);
   const access = readAppAccess(o.app_access);
+  const { data: { user: me } } = await supabase.auth.getUser();
+  const { data: mine } = await db.from("organisation_users").select("id").eq("organisation_id", id).eq("user_id", me?.id ?? "").eq("status", "active").is("expires_at", null).neq("role", "customer").maybeSingle();
   const pendingOwner = ((invites ?? []) as { email: string; role: string; accepted_at: string | null; last_sent_at: string | null; send_count: number }[]).find((i) => i.role === "owner" && !i.accepted_at);
   const team = ((members ?? []) as unknown as { role: string; title: string | null; user: { full_name: string | null; email: string } | null }[]).filter((m) => m.title !== "EventureOS Support");
   return (
@@ -51,6 +54,11 @@ export default async function AdminClientPage({ params }: { params: Promise<{ id
             ))}
             {!team.length && !(invites ?? []).length && <li className="px-5 py-3 text-ink-faint">Nobody yet.</li>}
           </ul>
+        </Card>
+        <Card className="p-5">
+          <p className="text-[0.8438rem] font-semibold text-ink">Manage their account</p>
+          <p className="mb-3 mt-0.5 text-[0.75rem] text-ink-muted">{mine ? `You're on ${o.name}'s team — it's in your business switcher.` : "Join their team as an admin (shown to them as “Account manager (EventureOS)”) to work in their account any time, from your business switcher. Their owner can remove you. For one-off help, a support session is still there."}</p>
+          <ManageBusiness orgId={o.id} joined={!!mine} name={o.name} />
         </Card>
         <Card className="p-5">
           <p className="text-[0.8438rem] font-semibold text-ink">Apps</p>

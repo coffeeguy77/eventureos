@@ -11,6 +11,8 @@ export interface Membership {
   role: OrgRole;
   title: string | null;
   expires_at?: string | null;
+  /** sections this person is limited to (null = everything their role allows) */
+  access?: string[] | null;
   organisation: Organisation;
 }
 
@@ -23,17 +25,16 @@ export const getContext = cache(async () => {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: rows, error }] = await Promise.all([
+  const ORG = "organisation:organisations(id, name, slug, business_type, contact_email, brand_colour, logo_url, timezone, currency, plan, settings)";
+  const mine = (cols: string) => supabase.from("organisation_users").select(cols).eq("user_id", user.id).eq("status", "active")
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+  const [{ data: profile }, first] = await Promise.all([
     supabase.from("users").select("id, email, full_name, ui_prefs").eq("id", user.id).maybeSingle(),
-    supabase
-      .from("organisation_users")
-      .select(
-        "role, title, expires_at, organisation:organisations(id, name, slug, business_type, contact_email, brand_colour, logo_url, timezone, currency, plan, settings)"
-      )
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`),
+    mine(`role, title, expires_at, access, ${ORG}`),
   ]);
+  // before the 0072 database update there's no access column
+  let { data: rows, error } = first;
+  if (error && /access/.test(error.message)) ({ data: rows, error } = await mine(`role, title, expires_at, ${ORG}`));
   if (error) throw new Error(`Could not load your organisations: ${error.message}`);
 
   const all = (rows ?? []) as unknown as (Membership & { title: string | null })[];
@@ -78,9 +79,9 @@ export async function requireOrg() {
     const biz = ((org.settings ?? {}) as { business?: { contact_name?: unknown } }).business;
     const name = typeof biz?.contact_name === "string" && biz.contact_name.trim() ? biz.contact_name.trim() : org.name;
     const profile = { ...ctx.profile, full_name: name, email: org.contact_email || ctx.profile.email, actorLabel: "EventureOS Support" } as Member;
-    return { ...ctx, realProfile: ctx.profile, profile, org, role: ctx.current.role };
+    return { ...ctx, realProfile: ctx.profile, profile, org, role: ctx.current.role, access: null as string[] | null };
   }
-  return { ...ctx, realProfile: ctx.profile, org, role: ctx.current.role };
+  return { ...ctx, realProfile: ctx.profile, org, role: ctx.current.role, access: ctx.current.access ?? null };
 }
 
 /** The staff app this login belongs to, if they're on an organisation's staff list (not an office user). */

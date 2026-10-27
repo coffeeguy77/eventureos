@@ -12,13 +12,15 @@ import { PERMISSIONS, ROLE_HINT, ROLE_LABEL } from "../constants";
 import { RosterToggle } from "./roster-toggle";
 import { CrewList, type CrewMember } from "./crew-list";
 import { staffMinHours } from "@/lib/crew/shifts";
+import { AccessEditor } from "@/components/settings/access-editor";
+import { ACCESS_PRESETS, SECTIONS } from "@/lib/access";
 
 export const metadata = { title: "Team" };
 
 type StaffRole = keyof typeof ROLE_LABEL;
 type Row = {
   id: string; user_id: string; role: OrgRole; title: string | null; created_at: string; expires_at: string | null;
-  auto_add_to_events: boolean; sees_job_details: boolean;
+  auto_add_to_events: boolean; sees_job_details: boolean; access?: string[] | null;
   user: { full_name: string | null; email: string } | null;
 };
 
@@ -62,6 +64,13 @@ export default async function TeamPage() {
   const staffApp = { ready: !crewRes.error, slug: (orgRow as { slug?: string } | null)?.slug ?? "", rate: Number((orgRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30),
     minHours: staffMinHours((orgRow as { settings?: Record<string, unknown> } | null)?.settings), skillsReady, salaryReady };
   if (membersRes.error) throw new Error(`Could not load team: ${membersRes.error.message}`);
+  // section access (after the 0072 database update)
+  const [accM, accI] = await Promise.all([
+    supabase.from("organisation_users").select("id, access").eq("organisation_id", org.id),
+    canAdmin ? supabase.from("organisation_invitations").select("id, access").eq("organisation_id", org.id).is("accepted_at", null) : Promise.resolve({ data: [], error: null }),
+  ]);
+  const accessReady = !accM.error;
+  const accessOf = new Map(([...(accM.data ?? []), ...(accI.data ?? [])] as { id: string; access: string[] | null }[]).map((r) => [r.id, r.access]));
   if (invitesRes.error) throw new Error(`Could not load invitations: ${invitesRes.error.message}`);
 
   const now = Date.now();
@@ -124,6 +133,7 @@ export default async function TeamPage() {
                   )}
                 </div>
                 <div className="mt-2 pl-[44px]">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</div>
+                {accessReady && m.role !== "owner" && m.role !== "staff" && <div className="mt-2 pl-[44px]"><AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} /></div>}
                 {(editable || (canAdmin && !isMe && m.role !== "owner")) && (
                   <div className="mt-2.5 flex items-start gap-2 pl-[44px]">
                     {editable && (
@@ -159,6 +169,7 @@ export default async function TeamPage() {
               <tr className="text-left text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Role</th>
+                <th className="px-3 py-2.5 font-medium">Access</th>
                 <th className="px-3 py-2.5 font-medium">Rostering</th>
                 <th className="px-3 py-2.5 font-medium">Joined</th>
                 <th className="px-5 py-2.5" />
@@ -205,6 +216,7 @@ export default async function TeamPage() {
                         </span>
                       )}
                     </td>
+                    <td className="px-3 py-3">{m.role === "owner" ? <span className="text-[0.75rem] text-ink-muted">Everything</span> : m.role === "staff" ? <span className="text-[0.75rem] text-ink-muted">My jobs</span> : accessReady ? <AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} /> : <span className="text-[0.75rem] text-ink-muted">All sections</span>}</td>
                     <td className="px-3 py-3">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</td>
                     <td className="px-3 py-3 text-ink-muted" title={fmtDateTime(m.created_at, org.timezone)}>{fmtDateTime(m.created_at, org.timezone, "date")}</td>
                     <td className="px-5 py-3 text-right">
@@ -261,6 +273,14 @@ export default async function TeamPage() {
                 </div>
                 <SubmitButton pendingLabel="Inviting…" className="w-full sm:w-auto">Invite</SubmitButton>
               </div>
+              <div className="mt-3 max-w-md">
+                <Label htmlFor="invite_access" hint="admins, managers and sales">Can open</Label>
+                <Select id="invite_access" name="access" defaultValue="">
+                  <option value="">All sections their role allows</option>
+                  {ACCESS_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label} only — {p.sections.map((k) => SECTIONS.find((x) => x.key === k)?.label).join(", ")}</option>)}
+                </Select>
+                <p className="mt-1 text-[0.7188rem] text-ink-faint">Choose exact sections any time after with the key button next to their name.</p>
+              </div>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.7812rem] text-ink">
                 <label className="flex items-center gap-2"><input type="checkbox" name="auto_add" className="h-4 w-4 rounded" />Add to every event (e.g. whoever does the rosters)</label>
                 <label className="flex items-center gap-2"><input type="checkbox" name="sees_details" className="h-4 w-4 rounded" />Can see what's included on their jobs (hours, coffees, catering — never prices)</label>
@@ -282,6 +302,7 @@ export default async function TeamPage() {
                         {" · "}{i.last_sent_at ? `emailed ${relative(i.last_sent_at)}` : <span className="text-amber-700">not emailed yet</span>}
                       </div>
                     </div>
+                    {accessReady && i.role !== "staff" && <AccessEditor kind="invite" id={i.id} initial={accessOf.get(i.id) ?? null} />}
                     <div className="ml-auto mr-2 hidden sm:block">{toggles("invite", i.id, i.auto_add_to_events, i.sees_job_details)}</div>
                     <ActionButton action={resendInvitation.bind(null, i.id)} variant="secondary" className="h-10 sm:h-8">
                       {i.last_sent_at ? "Email again" : "Send email"}
