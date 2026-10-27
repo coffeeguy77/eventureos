@@ -156,6 +156,13 @@ export async function GET(req: NextRequest) {
     kitchen = await runKitchenNotices(db);
   } catch (e) { kitchen = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Recurring invoices due today — raised before the Xero sync so they're pushed to Xero in this same run
+  let recurring: unknown = null;
+  if (!only.length) try {
+    const { raiseDue } = await import("@/lib/recurring/server");
+    recurring = await raiseDue(db);
+  } catch (e) { recurring = { error: e instanceof Error ? e.message : String(e) }; }
+
   const { data, error } = await db.from("integrations").select("organisation_id, provider, status, organisation:organisations!inner(status)")
     .in("provider", providers).in("status", ["connected", "error"])
     .eq("organisation.status", "active"); // suspended organisations are skipped
@@ -191,5 +198,5 @@ export async function GET(req: NextRequest) {
       hosting = out;
     }
   } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
-  return NextResponse.json({ ok: true, ran: results.length, results, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }

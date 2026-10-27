@@ -137,7 +137,11 @@ export async function invoicePrintJob(id: string): Promise<R<string>> {
       }
       await supabase.from("print_jobs").update({ customer_id: customerId }).eq("id", job.id);
     }
-    const lines = price.lines.map((l, k) => ({ description: k === 0 ? `Print job ${job.number}: ${job.title as string}\n${l.description}` : l.description, quantity: 1, unit_amount: l.amount, line_amount: l.amount }));
+    // lines are GST inclusive (as the rest of EventureOS writes them, so they go to Xero line by line); the last absorbs rounding
+    const f = 1 + p.gstPct / 100;
+    const lines = price.lines.map((l, k) => { const inc = Math.round(l.amount * f * 100) / 100; return { description: k === 0 ? `Print job ${job.number}: ${job.title as string}\n${l.description}` : l.description, quantity: 1, unit_amount: inc, line_amount: inc, tax_rate: p.gstPct > 0 ? 10 : 0, inc: true }; });
+    const drift = Math.round((price.total - lines.reduce((a, l) => a + l.line_amount, 0)) * 100) / 100;
+    if (lines.length && drift) { const last = lines[lines.length - 1]; last.unit_amount = last.line_amount = Math.round((last.line_amount + drift) * 100) / 100; }
     const today = todayISO(org.timezone);
     const terms = Math.max(0, Number((org.settings as { default_payment_terms_days?: number }).default_payment_terms_days ?? 14) || 0);
     const { data: inv, error } = await supabase.from("invoices").insert({
