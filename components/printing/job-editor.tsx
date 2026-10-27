@@ -13,7 +13,7 @@ import { PRINT_STATUS } from "@/lib/printing/status";
 import { createPrintJob, deletePrintFile, emailPrintQuote, invoicePrintJob, recordStaffFiles, savePrintJob, type JobInput, type JobStatus } from "@/app/(app)/printing/actions";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
-const blank: PrintItem = { description: "", width_m: 0, length_m: 0, qty: 1 };
+const blank: PrintItem = { description: "", width_m: 0, length_m: 0, qty: 1, cut: false };
 type FileRow = { id: string; name: string; size: number | null; uploaded_by: string; created_at: string; url: string | null };
 
 export function JobEditor({ id, orgId, initial, rates, files = [], invoice = null, quoteSentAt = null, customerHref = null }: {
@@ -21,7 +21,8 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
   invoice?: { id: string; number: string } | null; quoteSentAt?: string | null; customerHref?: string | null;
 }) {
   const router = useRouter();
-  const [f, setF] = useState<JobInput>({ ...initial, items: initial.items?.length ? initial.items : [blank], extras: initial.extras ?? [] });
+  // older jobs had one "cutting" tick for the whole job: carry it onto each print
+  const [f, setF] = useState<JobInput>({ ...initial, cut: false, items: initial.items?.length ? initial.items.map((i) => ({ ...i, cut: i.cut ?? !!initial.cut })) : [blank], extras: initial.extras ?? [] });
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
@@ -32,7 +33,7 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
   const items = f.items ?? [], extras = f.extras ?? [];
   const setItem = (k: number, p: Partial<PrintItem>) => set({ items: items.map((x, j) => (j === k ? { ...x, ...p } : x)) });
   const setExtra = (k: number, p: Partial<Extra>) => set({ extras: extras.map((x, j) => (j === k ? { ...x, ...p } : x)) });
-  const price = useMemo(() => priceJob({ items: items.filter((i) => i.length_m > 0), setup: f.setup !== false, cut: !!f.cut, extras: extras.filter((e) => e.description && e.amount) }, rates), [items, extras, f.setup, f.cut, rates]);
+  const price = useMemo(() => priceJob({ items: items.filter((i) => i.length_m > 0), setup: f.setup !== false, cut: false, extras: extras.filter((e) => e.description && e.amount) }, rates), [items, extras, f.setup, rates]);
 
   const save = (then?: () => Promise<void>) => start(async () => {
     setMsg(null);
@@ -93,22 +94,22 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
         </Card>
 
         <Card>
-          <CardHeader title="Sizes and price" subtitle={`$${rates.firstMetre} first lineal metre, $${rates.perMetre}/m after · roll ${rates.rollWidth} m wide · prices + GST`} />
+          <CardHeader title="Sizes and price" subtitle={`Printing $${rates.printMetre}/m · cutting $${rates.cutFirst} first metre, $${rates.cutMetre}/m after · setup $${rates.setup} · roll ${rates.rollWidth} m · + GST`} />
           <div className="space-y-2 border-t border-line px-5 py-4">
-            <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_64px_32px] gap-2 text-[0.7188rem] font-medium text-ink-muted sm:grid"><span>What</span><span>Width (m)</span><span>Length (m)</span><span>Qty</span><span /></div>
+            <div className="hidden grid-cols-[minmax(0,1fr)_80px_80px_64px_44px_32px] gap-2 text-[0.7188rem] font-medium text-ink-muted sm:grid"><span>What</span><span>Width (m)</span><span>Length (m)</span><span>Qty</span><span>Cut</span><span /></div>
             {items.map((it, k) => (
-              <div key={k} className="grid grid-cols-[minmax(0,1fr)_80px_80px_64px_32px] items-center gap-2">
+              <div key={k} className="grid grid-cols-[minmax(0,1fr)_80px_80px_64px_44px_32px] items-center gap-2">
                 <Input aria-label="What" value={it.description} onChange={(e) => setItem(k, { description: e.target.value })} placeholder="e.g. Vinyl banner" />
                 <Input aria-label="Width in metres" type="number" min={0} step="0.01" value={it.width_m || ""} onChange={(e) => setItem(k, { width_m: Number(e.target.value) })} />
                 <Input aria-label="Length in metres" type="number" min={0} step="0.01" value={it.length_m || ""} onChange={(e) => setItem(k, { length_m: Number(e.target.value) })} />
                 <Input aria-label="Quantity" type="number" min={1} value={it.qty} onChange={(e) => setItem(k, { qty: Math.max(1, Number(e.target.value) || 1) })} />
+                <label className="grid h-9 place-items-center" title="Cut to shape"><input type="checkbox" aria-label="Cut to shape" className="h-4 w-4" checked={!!it.cut} onChange={(e) => setItem(k, { cut: e.target.checked })} /></label>
                 <button type="button" aria-label="Remove size" onClick={() => set({ items: items.length > 1 ? items.filter((_, j) => j !== k) : [blank] })} className="grid h-9 place-items-center text-ink-faint hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
             <button type="button" onClick={() => set({ items: [...items, blank] })} className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600"><Plus className="h-4 w-4" />Add a size</button>
             <div className="flex flex-wrap gap-4 pt-2 text-[0.8125rem]">
               <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" checked={f.setup !== false} onChange={(e) => set({ setup: e.target.checked })} />Setup (${rates.setup})</label>
-              <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" checked={!!f.cut} onChange={(e) => set({ cut: e.target.checked })} />Cutting (${rates.cut})</label>
             </div>
             {price.tooWide.length > 0 && <p className="text-[0.75rem] text-amber-800">{price.tooWide.length === 1 ? "One print is" : `${price.tooWide.length} prints are`} wider than the {rates.rollWidth} m roll — split it into panels (add each panel as its own size).</p>}
             <p className="pt-2 text-[0.75rem] font-medium text-ink-muted">Extra charges (ex GST) — eyelets, laminating, design time, a discount (negative)…</p>
@@ -124,7 +125,7 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
           <div className="border-t border-line px-5 py-4 text-[0.8125rem]">
             {price.lines.length ? <ul className="space-y-1">{price.lines.map((l, k) => <li key={k} className="flex justify-between gap-3"><span className="text-ink-muted">{l.description}</span><span className="tabular-nums">{money(l.amount)}</span></li>)}</ul> : <p className="text-ink-muted">Add a size to see the price.</p>}
             <div className="mt-2 space-y-0.5 border-t border-line pt-2">
-              <p className="flex justify-between"><span>{price.metres ? `${price.metres} lineal m · ` : ""}Subtotal</span><span className="tabular-nums">{money(price.exGst)}</span></p>
+              <p className="flex justify-between"><span>{price.metres ? `${price.metres} lineal m${price.cutMetres ? ` (${price.cutMetres} m cut)` : ""} · ` : ""}Subtotal</span><span className="tabular-nums">{money(price.exGst)}</span></p>
               <p className="flex justify-between"><span>GST</span><span className="tabular-nums">{money(price.gst)}</span></p>
               <p className="flex justify-between text-[0.9375rem] font-semibold"><span>Total</span><span className="tabular-nums">{money(price.total)}</span></p>
             </div>

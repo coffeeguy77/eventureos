@@ -18,13 +18,13 @@ export function PriceGuide({ rates }: { rates: PrintRates }) {
   const [qty, setQty] = useState(1);
   const [cut, setCut] = useState(false);
   const [active, setActive] = useState<number | null>(1);
-  const p = priceJob({ items: [{ description: "", width_m: rates.rollWidth, length_m: len, qty }], setup: true, cut }, rates);
+  const p = priceJob({ items: [{ description: "", width_m: rates.rollWidth, length_m: len, qty, cut }], setup: true, cut: false }, rates);
   const pick = (k: number) => { const x = presets[k]; setLen(x.l); setQty(x.qty); setCut(x.cut); setActive(k); };
   const tiles = [
-    { big: money(rates.firstMetre), small: "first lineal metre" },
-    { big: money(rates.perMetre), small: "each metre after" },
+    { big: money(rates.printMetre), small: "per lineal metre printed" },
     { big: money(rates.setup), small: "setup per job" },
-    { big: money(rates.cut), small: "contour cutting" },
+    { big: money(rates.cutFirst), small: "cut to shape — first metre" },
+    { big: money(rates.cutMetre), small: "each extra metre cut" },
   ];
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-10">
@@ -36,7 +36,7 @@ export function PriceGuide({ rates }: { rates: PrintRates }) {
             <p className={`relative mt-2 text-[0.875rem] ${k === 0 ? "text-white/70" : "text-[#5E5853]"}`}>{t.small}</p>
           </div>
         ))}
-        <p className="col-span-2 text-[0.875rem] text-[#5E5853]">Rolls up to {rates.rollWidth} m wide — wider prints are tiled in panels. All prices plus GST. The more metres, the cheaper each one gets.</p>
+        <p className="col-span-2 text-[0.875rem] text-[#5E5853]">Rolls up to {rates.rollWidth} m wide — wider prints are tiled in panels. All prices plus GST. Cutting gets cheaper the more you cut.</p>
       </div>
 
       <div className="rounded-3xl bg-white p-5 ring-1 ring-[#EFE6DF] sm:p-7">

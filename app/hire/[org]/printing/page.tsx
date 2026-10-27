@@ -52,7 +52,7 @@ export default async function PrintingPage({ params }: { params: Promise<{ org: 
         <div className="relative border-t border-white/10">
           <div className={`${WRAP} grid grid-cols-3 divide-x divide-white/10 py-5 text-center`}>
             <div><p className="text-[1.5rem] font-semibold sm:text-[1.875rem]">{p.rollWidth} m</p><p className="text-[0.75rem] text-white/60 sm:text-[0.875rem]">wide rolls</p></div>
-            <div><p className="text-[1.5rem] font-semibold sm:text-[1.875rem]">${p.perMetre}<span className="text-[1rem] text-white/60">/m</span></p><p className="text-[0.75rem] text-white/60 sm:text-[0.875rem]">after the first metre</p></div>
+            <div><p className="text-[1.5rem] font-semibold sm:text-[1.875rem]">${p.printMetre}<span className="text-[1rem] text-white/60">/m</span></p><p className="text-[0.75rem] text-white/60 sm:text-[0.875rem]">printed, + GST</p></div>
             <div><p className="text-[1.5rem] font-semibold sm:text-[1.875rem]">Any shape</p><p className="text-[0.75rem] text-white/60 sm:text-[0.875rem]">contour cut</p></div>
           </div>
         </div>

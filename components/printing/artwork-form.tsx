@@ -13,14 +13,13 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 export function ArtworkForm({ slug, rates }: { slug: string; rates: PrintRates }) {
   const [me, setMe] = useState({ name: "", email: "", phone: "", company: "", details: "", neededBy: "", website: "" });
   const [items, setItems] = useState<PrintItem[]>([{ description: "", width_m: 0, length_m: 0, qty: 1 }]);
-  const [cut, setCut] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<{ number: string; files: number } | null>(null);
   const loaded = useRef(Date.now());
   const pick = useRef<HTMLInputElement>(null);
-  const priced = useMemo(() => priceJob({ items: items.filter((i) => i.length_m > 0), setup: true, cut }, rates), [items, cut, rates]);
+  const priced = useMemo(() => priceJob({ items: items.filter((i) => i.length_m > 0), setup: true, cut: false }, rates), [items, rates]);
   const setItem = (k: number, p: Partial<PrintItem>) => setItems(items.map((x, j) => (j === k ? { ...x, ...p } : x)));
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -39,7 +38,7 @@ export function ArtworkForm({ slug, rates }: { slug: string; rates: PrintRates }
     setBusy("Sending your job…");
     try {
       const start = await fetch("/api/public/printing", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-        slug, ...me, items: items.filter((i) => i.length_m > 0), cut, t: loaded.current, files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
+        slug, ...me, items: items.filter((i) => i.length_m > 0), cut: false, t: loaded.current, files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
       }) }).then((r) => r.json());
       if (!start.ok) throw new Error(start.error ?? "Couldn't send — please try again.");
       if (!start.jobId) { setDone({ number: "", files: 0 }); return; }
@@ -95,13 +94,13 @@ export function ArtworkForm({ slug, rates }: { slug: string; rates: PrintRates }
                 <label className="block"><span className="mb-1 block text-[0.75rem] font-medium text-[#5E5853]">Length (m)</span><input inputMode="decimal" type="number" min={0} step="0.01" placeholder="2" value={it.length_m || ""} onChange={(e) => setItem(k, { length_m: Number(e.target.value) })} className={`${input} h-11 px-3 text-[1rem]`} /></label>
                 <label className="block"><span className="mb-1 block text-[0.75rem] font-medium text-[#5E5853]">How many</span><input inputMode="numeric" type="number" min={1} value={it.qty} onChange={(e) => setItem(k, { qty: Math.max(1, Number(e.target.value) || 1) })} className={`${input} h-11 px-3 text-[1rem]`} /></label>
               </div>
+              <label className="mt-2 flex items-center gap-2 text-[0.9375rem]"><input type="checkbox" className="h-5 w-5 accent-[var(--pk)]" checked={!!it.cut} onChange={(e) => setItem(k, { cut: e.target.checked })} />Cut to shape <span className="text-[#8C847D]">(stickers, decals, lettering)</span></label>
             </div>
           ))}
           <button type="button" onClick={() => setItems([...items, { description: "", width_m: 0, length_m: 0, qty: 1 }])} className="inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[var(--pk)]"><Plus className="h-4 w-4" />Another size</button>
         </div>
-        <label className="mt-3 flex items-center gap-2 text-[0.9375rem]"><input type="checkbox" className="h-4 w-4" checked={cut} onChange={(e) => setCut(e.target.checked)} />Cut to shape (stickers, decals, lettering)</label>
         {priced.tooWide.length > 0 && <p className="mt-2 text-[0.875rem] text-amber-800">Wider than our {rates.rollWidth} m roll — we&apos;ll print it in panels and include that in the quote.</p>}
-        {priced.metres > 0 && <p className="mt-2 text-[0.9375rem] text-[#3A3431]">Estimate: <strong>{money(priced.total)}</strong> inc GST <span className="text-[#8C847D]">({priced.metres} lineal metre{priced.metres === 1 ? "" : "s"} · {money(priced.exGst)} + GST)</span>. We&apos;ll confirm after checking your artwork.</p>}
+        {priced.metres > 0 && <p className="mt-2 text-[0.9375rem] text-[#3A3431]">Estimate: <strong>{money(priced.total)}</strong> inc GST <span className="text-[#8C847D]">({priced.metres} lineal metre{priced.metres === 1 ? "" : "s"}{priced.cutMetres ? `, ${priced.cutMetres} m cut` : ""} · {money(priced.exGst)} + GST)</span>. We&apos;ll confirm after checking your artwork.</p>}
       </div>
 
       <div>

@@ -19,7 +19,7 @@ export function PrintSettingsForm({ initial, pageUrl }: { initial: PrintSettings
     <div><Label htmlFor={`ps-${k}`} hint={hint}>{label}</Label><Input id={`ps-${k}`} type="number" min={0} step={step} value={String(s[k] ?? "")} onChange={(e) => set({ [k]: Number(e.target.value) } as Partial<PrintSettings>)} /></div>
   );
   const ex1 = priceJob({ items: [{ description: "", width_m: 1.2, length_m: 1, qty: 1 }], setup: true, cut: false }, s);
-  const ex3 = priceJob({ items: [{ description: "", width_m: 1.2, length_m: 3, qty: 1 }], setup: true, cut: true }, s);
+  const ex3 = priceJob({ items: [{ description: "", width_m: 1.2, length_m: 3, qty: 1, cut: true }], setup: true, cut: false }, s);
   const save = () => start(async () => {
     setMsg(null);
     const r = await savePrintSettings({ ...s, intro: s.intro ?? null, equipment: s.equipment.map((x) => x.trim()).filter(Boolean) });
@@ -40,17 +40,17 @@ export function PrintSettingsForm({ initial, pageUrl }: { initial: PrintSettings
       <Card>
         <CardHeader title="Rates" subtitle="Before GST. Lineal metres are added up across all the prints in a job." />
         <div className="grid gap-3 border-t border-line px-5 py-4 sm:grid-cols-2">
-          {n("firstMetre", "First lineal metre ($)", "0.01")}
-          {n("perMetre", "Each metre after ($)", "0.01")}
+          {n("printMetre", "Printing per lineal metre ($)", "0.01")}
           {n("setup", "Setup per job ($)", "0.01")}
-          {n("cut", "Cutting per job ($)", "0.01")}
+          {n("cutFirst", "Cutting — first metre ($)", "0.01")}
+          {n("cutMetre", "Cutting — each metre after ($)", "0.01")}
           {n("rollWidth", "Roll width (m)", "0.01", "wider prints are flagged")}
           {n("gstPct", "GST (%)", "0.1")}
           <div><Label htmlFor="ps-round">Round metres</Label><Select id="ps-round" value={s.rounding} onChange={(e) => set({ rounding: e.target.value as PrintSettings["rounding"] })}><option value="exact">Exactly (to the cm)</option><option value="0.1">Up to the next 10 cm</option><option value="1">Up to the next whole metre</option></Select></div>
         </div>
         <div className="border-t border-line px-5 py-3 text-[0.75rem] text-ink-muted">
           <p>1 m print + setup: ${ex1.exGst.toFixed(2)} + GST = <strong className="text-ink">${ex1.total.toFixed(2)}</strong></p>
-          <p>3 m print + setup + cutting: ${ex3.exGst.toFixed(2)} + GST = <strong className="text-ink">${ex3.total.toFixed(2)}</strong></p>
+          <p>3 m print + setup + 3 m cut: ${ex3.exGst.toFixed(2)} + GST = <strong className="text-ink">${ex3.total.toFixed(2)}</strong></p>
         </div>
       </Card>
       <div className="flex items-center gap-3">
