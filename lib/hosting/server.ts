@@ -227,7 +227,7 @@ export async function sendNotice(db: SupabaseClient, orgId: string, id: string, 
     if (!emailConfigured()) throw new Error("EventureOS email isn't set up.");
     const { hostingNoticeEmail } = await import("@/lib/email/templates");
     const m = hostingNoticeEmail({ brandName: p.brand, subject, message, payUrl: p.payUrl, brand: p.org.brand_colour, logoUrl: p.s.brand ? null : p.org.logo_url });
-    for (const to of [p.to, ...p.cc].filter((x, k, arr) => x && arr.indexOf(x) === k)) await sendEmail({ to, subject, html: m.html, text: m.text, replyTo: p.s.replyTo ?? p.org.contact_email, fromName: p.brand });
+    for (const to of [p.to, ...p.cc].filter((x, k, arr) => x && arr.indexOf(x) === k)) await sendEmail({ to, subject, html: m.html, text: m.text, replyTo: p.s.replyTo ?? p.org.contact_email, fromName: p.brand, orgId });
     await logEvent(db, { orgId, accountId: p.a.id, action: "notice", detail: `"${subject}" sent to ${[p.to, ...p.cc].join(", ")}`, actor });
   }
   // only a notice that really went counts towards the notice period

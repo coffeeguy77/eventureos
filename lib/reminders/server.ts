@@ -73,7 +73,7 @@ export async function runReminders(db: SupabaseClient, now = new Date()) {
         after: [`Don't want these reminders? Stop them here: ${stop}`],
       });
       try {
-        await sendEmail({ to: c.email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, headers: { "List-Unsubscribe": `<${stop}>` } });
+        await sendEmail({ to: c.email, subject: m.subject, html: m.html, text: m.text, replyTo: org.settings.reply_to ?? org.contact_email, fromName: org.name, orgId: o.id, headers: { "List-Unsubscribe": `<${stop}>` } });
         await db.from("site_carts").update({ reminders_sent: c.reminders_sent + 1, last_reminded_at: now.toISOString() }).eq("id", c.id);
         out.sent++;
       } catch (e) { console.error("[carts] send", e); }

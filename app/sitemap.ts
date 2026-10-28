@@ -4,6 +4,8 @@ import { hirePageSlug, offered, readEvents } from "@/lib/events/core";
 import { cafePages, readCafe } from "@/lib/cafe/core";
 import { readSite } from "@/lib/site/site";
 import { readHireSettings } from "@/lib/hire/core";
+import { isAgencyAccess } from "@/lib/site/agency/support";
+import { AGENCY_PAGES } from "@/lib/site/agency/content";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
@@ -21,6 +23,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const { data: all } = await db.from("organisations").select("id, slug, settings, app_access").eq("status", "active");
     // A business on its own domain lists its pages in its own sitemap (www.its-domain/sitemap.xml), not here
     const orgs = (all ?? []).filter((o) => !readSite(o.settings).live);
+    // web/IT agencies (Nerd Herd): their home page plus the service, quote and support pages
+    for (const o of orgs as { slug: string; app_access: unknown }[]) {
+      if (!isAgencyAccess(o.app_access)) continue;
+      out.push({ url: `${BASE}/site/${o.slug}`, changeFrequency: "weekly", priority: 0.9 });
+      for (const p of AGENCY_PAGES) out.push({ url: `${BASE}/site/${o.slug}/${p}`, changeFrequency: "monthly", priority: p === "support" || p === "quote" ? 0.5 : 0.8 });
+    }
     for (const o of (orgs ?? []) as { slug: string; settings: Record<string, unknown> | null }[]) {
       const cp = cafePages(readCafe(o.settings));
       const cb = `${BASE}/cafe/${o.slug}`;

@@ -33,6 +33,7 @@ export default async function NerdSettingsPage() {
             {gmail?.status === "connected"
               ? <p>Connected to <strong className="text-ink">{gmail.account_label}</strong>. {s.emailTickets ? "New emails from clients become tickets, and their replies are added to the ticket." : "Emails are not turned into tickets (switched off on the left)."}</p>
               : <p><strong className="text-ink">Not connected yet.</strong> Connect your support mailbox (e.g. {s.supportEmail ?? "hello@yourdomain"}) in <Link href="/settings/integrations" className="text-brand-600 underline">Settings → Integrations → Gmail</Link> and every new client email becomes a ticket.</p>}
+            <p>Other mailboxes (another Google Workspace, Outlook, cPanel): forward them — or just the mail a filter picks — to your <Link href="/settings/email" className="text-brand-600 underline">forwarding address</Link>. Those emails open tickets too.</p>
           </div>
         </Card>
         <Card>

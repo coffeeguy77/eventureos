@@ -362,7 +362,7 @@ export async function sendQuoteEmail(quoteId: string, input: SendQuoteInput): Pr
           }
           await supabase.from("email_send_recipients").update({ gmail_message_id: res.id, gmail_thread_id: res.threadId, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
         } else {
-          const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${sendSubject}` : sendSubject, html: m.html, text: m.text, replyTo, fromName: org.name });
+          const res = await sendEmail({ to: r.email, subject: r.role === "copy" ? `[Copy] ${sendSubject}` : sendSubject, html: m.html, text: m.text, replyTo, fromName: org.name, orgId: org.id });
           await supabase.from("email_send_recipients").update({ resend_id: res.id, status: "sent", status_at: new Date().toISOString() }).eq("id", r.id);
         }
         if (r.role === "to") sent.push(r.email);

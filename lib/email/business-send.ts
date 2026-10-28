@@ -20,7 +20,7 @@ export async function sendAsBusiness(db: SupabaseClient, orgId: string, m: { to:
     return { via: "gmail" };
   } catch {
     if (!emailConfigured()) throw new Error("Gmail isn't connected and EventureOS email isn't set up.");
-    for (const to of m.to) await sendEmail({ to, subject: m.subject, html: m.html, text: m.text, replyTo: (org?.contact_email as string) ?? undefined, fromName: name });
+    for (const to of m.to) await sendEmail({ to, subject: m.subject, html: m.html, text: m.text, replyTo: (org?.contact_email as string) ?? undefined, fromName: name, orgId });
     return { via: "email" };
   }
 }

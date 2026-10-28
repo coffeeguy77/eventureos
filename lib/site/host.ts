@@ -1,6 +1,7 @@
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { readSite, routeFor, withTracking } from "./site";
 import { newPages } from "./pages";
+import { AGENCY_PAGES } from "./agency/content";
 
 /**
  * A business's own domain (e.g. www.beanculture.com.au) pointed at EventureOS: find the business, then send each
@@ -9,7 +10,7 @@ import { newPages } from "./pages";
 const PLATFORM = /^(localhost|127\.0\.0\.1|\[::1\]|([a-z0-9-]+\.)*eventureos\.com\.au|[a-z0-9-]+\.vercel\.app)$/;
 export const isPlatformHost = (host: string) => !host || PLATFORM.test(host);
 
-type Hit = { id: string; slug: string; name: string; settings: Record<string, unknown> } | null;
+type Hit = { id: string; slug: string; name: string; settings: Record<string, unknown>; app_access?: string[] | null } | null;
 const cache = new Map<string, { at: number; org: Hit }>();
 
 async function lookup(host: string): Promise<Hit> {
@@ -18,7 +19,7 @@ async function lookup(host: string): Promise<Hit> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) return null;
   const bare = host.replace(/^www\./, "");
-  const q = `select=id,slug,name,settings&status=eq.active&or=(settings->site->>domain.eq.${encodeURIComponent(host)},settings->site->>domain.eq.${encodeURIComponent(bare)},settings->site->>domain.eq.www.${encodeURIComponent(bare)})&limit=1`;
+  const q = `select=id,slug,name,settings,app_access&status=eq.active&or=(settings->site->>domain.eq.${encodeURIComponent(host)},settings->site->>domain.eq.${encodeURIComponent(bare)},settings->site->>domain.eq.www.${encodeURIComponent(bare)})&limit=1`;
   let org: Hit = null;
   try {
     const r = await fetch(`${url}/rest/v1/organisations?${q}`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
@@ -50,7 +51,8 @@ export async function customDomain(request: NextRequest, event: NextFetchEvent):
     const to = new URL(request.url); to.host = site.domain; to.protocol = "https:"; to.port = "";
     return NextResponse.redirect(to, 301);
   }
-  const r = routeFor(site, org.slug, path, site.fallback ? newPages(org.settings, org.name) : []);
+  const agency = Array.isArray(org.app_access) && org.app_access.includes("nerdherd") ? { pages: AGENCY_PAGES } : null;
+  const r = routeFor(site, org.slug, path, site.fallback ? newPages(org.settings, org.name) : [], agency);
   const ref = request.headers.get("referer");
   const headers = new Headers(request.headers);
   headers.set("x-site-host", host);

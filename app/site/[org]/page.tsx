@@ -13,10 +13,16 @@ import { readJobSettings } from "@/lib/jobs/core";
 import { readLearnSettings } from "@/lib/learn/core";
 import { readSettings } from "@/lib/bookings/core";
 import { readHireSettings } from "@/lib/hire/core";
-import { siteMeta } from "@/lib/site/meta";
+import { canonicalFor, siteMeta } from "@/lib/site/meta";
 import { SiteFrame, internalHref } from "@/components/site/site-frame";
 import { ContactForm } from "@/components/events/contact-form";
 import { WRAP } from "@/components/shop/frame";
+import { agencyMode } from "@/lib/site/agency/server";
+import { businessLd } from "@/lib/site/agency/ld";
+import { AgencyFrame } from "@/components/site/agency/frame";
+import { AgencyHome } from "@/components/site/agency/home";
+import { JsonLd, faqLd } from "@/components/site/agency/ui";
+import { HOME_FAQS } from "@/lib/site/agency/content";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
@@ -30,6 +36,11 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
   const org = await publicOrg((await params).org);
   if (!org) return {};
   const c = copyOf(org.rawSettings, "home");
+  // Web/IT agencies (Nerd Herd) get the agency home page — its own title unless the business wrote one
+  if (await agencyMode(org.slug)) return siteMeta(org, `/site/${org.slug}`, {
+    title: { absolute: c("meta.title", `Web Design, Hosting & IT Support Canberra | ${org.name}`) },
+    description: c("meta.description", `${org.name} designs, hosts and supports fast websites for Canberra businesses — WordPress and LeadPages sites, web hosting, maintenance, Google Ads, SEO, and custom AI apps. Mitchell, ACT.`).slice(0, 300),
+  });
   return siteMeta(org, `/site/${org.slug}`, { title: { absolute: c("meta.title", org.name) }, description: c("meta.description", c("hero.text", "")).slice(0, 300) || undefined });
 }
 
@@ -37,6 +48,15 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
 export default async function SiteHome({ params }: P) {
   const org = await publicOrg((await params).org);
   if (!org) notFound();
+  if (await agencyMode(org.slug)) {
+    return (
+      <AgencyFrame org={org}>
+        <JsonLd data={businessLd(org, canonicalFor(org, `/site/${org.slug}`))} />
+        <JsonLd data={faqLd(HOME_FAQS)} />
+        <AgencyHome org={org} />
+      </AgencyFrame>
+    );
+  }
   const raw = org.rawSettings;
   const site = readSite(raw);
   const c = copyOf(raw, "home");

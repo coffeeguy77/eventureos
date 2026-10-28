@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { publicOrg } from "@/lib/bookings/server";
 import { readSite } from "@/lib/site/site";
 import { newPages } from "@/lib/site/pages";
+import { agencyMode } from "@/lib/site/agency/server";
+import { AGENCY_PAGES } from "@/lib/site/agency/content";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,7 @@ export async function GET(req: NextRequest) {
     db.from("shop_products").select("slug").eq("organisation_id", org.id).eq("status", "active").then((r) => r, () => ({ data: null })),
   ]);
   if (paths.includes("/classes")) for (const c of (courses ?? []) as { slug: string }[]) paths.push(`/book/${c.slug}`);
+  if (await agencyMode(org.slug)) paths.push("/", ...AGENCY_PAGES.map((p) => `/${p}`)); // web/IT agency pages
   if (paths.includes("/shop")) for (const p of (products ?? []) as { slug: string | null }[]) if (p.slug) paths.push(`/shop/p/${p.slug}`);
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...new Set(paths)].map((p) => `  <url><loc>${esc(base + p)}</loc></url>`).join("\n")}\n</urlset>\n`;
   return new NextResponse(xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" } });

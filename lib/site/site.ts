@@ -175,7 +175,9 @@ const FILE = /\.[a-z0-9]{2,5}$/i;
  * Clean addresses: "/" home · "/about-us" a page · "/hire/coffee-cart-hire" · "/shop/…" · "/classes" (the classes page).
  * EventureOS's own addresses with the business in them (/hire/<business>/…) still work, so links inside the pages keep working.
  */
-export function routeFor(site: SiteSettings, slug: string, rawPath: string, extra: { path: string; title: string }[] = []): Route {
+export function routeFor(site: SiteSettings, slug: string, rawPath: string, extra: { path: string; title: string }[] = [],
+  /** agency sites (Nerd Herd businesses): their built-in service pages, and the home page is always the agency home */
+  agency: { pages: readonly string[] } | null = null): Route {
   const path = rawPath || "/";
   if (/^\/(_next|api|auth|media|fonts|brand|downloads)(\/|$)/.test(path) || path === "/favicon.ico" || path === "/manifest.webmanifest" || path === "/embed.js") return { kind: "pass" };
   if (path === "/sitemap.xml") return { kind: "rewrite", to: `/api/site/sitemap?org=${slug}` };
@@ -183,7 +185,7 @@ export function routeFor(site: SiteSettings, slug: string, rawPath: string, extr
   const segs = path.split("/").filter(Boolean);
   const first = (segs[0] ?? "").toLowerCase();
   // Our own pages first (so an old rule can't hide a live page)
-  if (!segs.length) return site.home ? { kind: "rewrite", to: `/site/${slug}` } : { kind: "rewrite", to: `/${slug}` };
+  if (!segs.length) return site.home || agency ? { kind: "rewrite", to: `/site/${slug}` } : { kind: "rewrite", to: `/${slug}` };
   if ((SECTIONS as readonly string[]).includes(first)) {
     if (segs[1] === slug) return { kind: "pass" };
     return { kind: "rewrite", to: `/${first}/${slug}${segs.length > 1 ? "/" + segs.slice(1).join("/") : ""}` };
@@ -191,6 +193,7 @@ export function routeFor(site: SiteSettings, slug: string, rawPath: string, extr
   if (first === slug) return { kind: "pass" };
   if (first === "classes" && segs.length === 1) return { kind: "rewrite", to: `/${slug}` };
   if (segs.length === 1 && site.pages.some((p) => p.slug === first)) return { kind: "rewrite", to: `/site/${slug}/${first}` };
+  if (agency && segs.length === 1 && agency.pages.includes(first)) return { kind: "rewrite", to: `/site/${slug}/${first}` };
   if (/^\/(p|q|pay|order|print)(\/|$)/.test(path)) return { kind: "pass" };
   // Old addresses
   const m = matchRule(site.rules, path);

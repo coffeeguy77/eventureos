@@ -148,7 +148,7 @@ export async function deliverInvoice(db: SupabaseClient, invoiceId: string, inpu
   } catch {
     if (!emailConfigured()) return { ok: false, error: "Gmail isn't connected and EventureOS email isn't set up." };
     try {
-      for (const r of to) await sendEmail({ to: r.email, subject: input.subject, html: m.html, text: m.text, replyTo: o.contact_email, fromName: o.name });
+      for (const r of to) await sendEmail({ to: r.email, subject: input.subject, html: m.html, text: m.text, replyTo: o.contact_email, fromName: o.name, orgId: inv.organisation_id });
       via = "email";
     } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
   }

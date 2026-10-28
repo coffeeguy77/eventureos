@@ -16,14 +16,33 @@ function fromAddress(displayName?: string) {
   return `${displayName.replace(/[<>"\r\n]/g, "").slice(0, 70)} <${addr}>`;
 }
 
-export async function sendEmail(m: { to: string; subject: string; html: string; text: string; replyTo?: string | null; fromName?: string; attachments?: { filename: string; content: string }[]; headers?: Record<string, string> }) {
+/** The business's own verified address (Settings → Email), when it has one. */
+async function businessFrom(orgId: string | undefined, fromName: string | undefined) {
+  if (!orgId) return null;
+  try {
+    const { createServiceClient, serviceRoleConfigured } = await import("@/lib/integrations/runtime");
+    if (!serviceRoleConfigured()) return null;
+    const { brandedSender } = await import("@/lib/email/domains");
+    const b = await brandedSender(createServiceClient(), orgId);
+    if (!b) return null;
+    const name = (b.name || fromName || "").replace(/[<>"\r\n]/g, "").slice(0, 70);
+    return name ? `${name} <${b.address}>` : b.address;
+  } catch { return null; }
+}
+
+export async function sendEmail(m: {
+  to: string; subject: string; html: string; text: string; replyTo?: string | null; fromName?: string; attachments?: { filename: string; content: string }[]; headers?: Record<string, string>;
+  /** the business sending it — its own verified domain is used as the From address when it has one */
+  orgId?: string;
+}) {
   const key = process.env.RESEND_API_KEY?.trim();
   if (!key) throw new Error("Email isn't set up — RESEND_API_KEY is missing in Vercel.");
+  const own = await businessFrom(m.orgId, m.fromName);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify({
-      from: fromAddress(m.fromName), to: [m.to], subject: m.subject.slice(0, 200), html: m.html, text: m.text,
+      from: own ?? fromAddress(m.fromName), to: [m.to], subject: m.subject.slice(0, 200), html: m.html, text: m.text,
       ...(m.replyTo ? { reply_to: m.replyTo } : {}),
       // base64 file contents (e.g. a certificate PDF)
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),

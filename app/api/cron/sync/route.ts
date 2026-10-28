@@ -49,6 +49,14 @@ export async function GET(req: NextRequest) {
     console.error("[cron/sync] service client:", msg);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
+  // Email: forwarding addresses (Resend receiving + webhook) and businesses' own sending domains waiting for DNS
+  let emailSetup: unknown = null;
+  try {
+    const { ensureInboundSetup } = await import("@/lib/email/inbound");
+    const { checkPendingDomains } = await import("@/lib/email/domains");
+    emailSetup = { inbound: await ensureInboundSetup(db), domains: await checkPendingDomains(db) };
+  } catch (e) { emailSetup = { error: e instanceof Error ? e.message : String(e) }; }
+  if (req.nextUrl.searchParams.get("providers") === "email_setup") return NextResponse.json({ ok: true, emailSetup });
   // Regular staff shifts: keep them filled 8 weeks ahead (and on the staff member's calendar)
   try {
     const { fillSeries } = await import("@/lib/crew/custom-shifts");
@@ -198,5 +206,5 @@ export async function GET(req: NextRequest) {
       hosting = out;
     }
   } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
-  return NextResponse.json({ ok: true, ran: results.length, results, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, wholesale, kitchen, shopEmails, classbento, learn });
 }

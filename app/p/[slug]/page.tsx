@@ -9,6 +9,8 @@ import { loadLibrary } from "@/lib/documents/library";
 import { readEvents } from "@/lib/events/core";
 import { DocList } from "@/components/portal/doc-list";
 import { cn } from "@/lib/cn";
+import { WebHome } from "@/components/portal/web-home";
+import { loadWebHome } from "@/lib/nerdherd/portal";
 import { firstName, fmtDate, money, relativeDay, timeRange, todayISO } from "@/lib/format";
 import {
   CUSTOMER_EVENT_STATUS, customerEventStatus, CUSTOMER_QUOTE_STATUS, EVENT_COLUMNS, INVOICE_COLUMNS, QUOTE_COLUMNS, VERSION_COLUMNS,
@@ -28,6 +30,14 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
     supabase.from("support_tickets").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).in("customer_id", customerIds).not("status", "in", "(resolved,closed)").then((r) => r.count ?? 0, () => 0),
   ]);
   const support = siteCount > 0 || openTickets > 0;
+  // A web agency's client (Nerd Herd business): their own dashboard — sites, requests, maintenance, plans, invoices
+  const svc = createServiceClient();
+  const { data: orgApps } = await svc.from("organisations").select("app_access").eq("id", org.id).maybeSingle();
+  const agency = Array.isArray(orgApps?.app_access) && (orgApps!.app_access as string[]).includes("nerdherd");
+  if (agency) {
+    const { data: evCount } = await supabase.from("portal_events").select("id").eq("organisation_id", org.id).in("customer_id", customerIds).limit(1);
+    if (!evCount?.length) return <WebHome d={await loadWebHome(svc, { slug, orgId: org.id, customerIds, business: branding.name, name: firstName(contactName, user.email), currency: org.currency, tz: org.timezone })} />;
+  }
   const [evRes, qRes, invRes, reqRes] = await Promise.all([
     supabase.from("portal_events").select(EVENT_COLUMNS).eq("organisation_id", org.id).in("customer_id", customerIds)
       .order("event_date", { ascending: true, nullsFirst: false }),

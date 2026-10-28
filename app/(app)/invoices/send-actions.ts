@@ -288,7 +288,7 @@ export async function sendInvoiceEmail(invoiceId: string, input: SendInvoiceInpu
       const list = [...recipients, ...(input.copyMe && !seen.has(profile.email.toLowerCase()) ? [{ email: profile.email.toLowerCase(), name: profile.full_name, copy: true }] : [])];
       for (const r of list) {
         try {
-          await sendEmail({ to: r.email, subject: "copy" in r ? `[Copy] ${sendSubject}` : sendSubject, html: m.html, text: m.text, replyTo, fromName: org.name });
+          await sendEmail({ to: r.email, subject: "copy" in r ? `[Copy] ${sendSubject}` : sendSubject, html: m.html, text: m.text, replyTo, fromName: org.name, orgId: org.id });
           if (!("copy" in r)) sent.push(r.email);
         } catch (e) { failed.push({ email: r.email, error: (e instanceof Error ? e.message : String(e)).slice(0, 500) }); }
       }
@@ -393,7 +393,7 @@ export async function sendInvoiceDoc(invoiceId: string, input: SendDocInput): Pr
     } else {
       if (!emailConfigured()) throw new Error("Email sending isn't set up (RESEND_API_KEY is missing in Vercel).");
       const content = Buffer.from(pdf.bytes).toString("base64");
-      for (const e of recipients) await sendEmail({ to: e, subject, html, text: m.text, replyTo: profile.email || orgRow?.contact_email || null, fromName: org.name, attachments: [{ filename: pdf.file, content }] });
+      for (const e of recipients) await sendEmail({ to: e, subject, html, text: m.text, replyTo: profile.email || orgRow?.contact_email || null, fromName: org.name, orgId: org.id, attachments: [{ filename: pdf.file, content }] });
     }
     await logActivity(supabase, {
       orgId: org.id, actorId: user.id, action: input.doc === "receipt" ? "invoice.receipt_emailed" : "invoice.tax_invoice_emailed", entityType: "invoice", entityId: inv.id,

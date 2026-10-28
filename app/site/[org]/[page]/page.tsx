@@ -5,13 +5,37 @@ import { Mail, MapPin, Phone } from "lucide-react";
 import { publicOrg } from "@/lib/bookings/server";
 import { blocks, inline, matchRule, readSite, type InfoPage, type PageSection } from "@/lib/site/site";
 import { ed, edImg } from "@/lib/site/copy";
-import { siteMeta } from "@/lib/site/meta";
+import { canonicalFor, siteMeta } from "@/lib/site/meta";
 import { SiteFrame, internalHref } from "@/components/site/site-frame";
 import { ContactForm } from "@/components/events/contact-form";
 import { FranchiseLanding } from "@/components/site/franchise-landing";
+import { agencyMode } from "@/lib/site/agency/server";
+import { isAgencyPage, serviceBySlug } from "@/lib/site/agency/content";
+import { serviceLd } from "@/lib/site/agency/ld";
+import { AgencyFrame } from "@/components/site/agency/frame";
+import { AgencyLanding } from "@/components/site/agency/landing";
+import { AgencyQuote, AgencySupport, QUOTE_FAQS, SUPPORT_FAQS } from "@/components/site/agency/pages";
+import { JsonLd, faqLd } from "@/components/site/agency/ui";
 
 export const dynamic = "force-dynamic";
-type P = { params: Promise<{ org: string; page: string }> };
+type P = { params: Promise<{ org: string; page: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> };
+
+/**
+ * A web/IT agency (Nerd Herd) also has service, quote and support pages written in code. A page the business made
+ * itself with the same address always wins.
+ */
+async function loadAgency(p: P) {
+  const { org: slug, page } = await p.params;
+  if (!isAgencyPage(page) || !(await agencyMode(slug))) return null;
+  const org = await publicOrg(slug);
+  if (!org || readSite(org.rawSettings).pages.some((x) => x.slug === page)) return null;
+  return { org, page };
+}
+
+const AGENCY_META: Record<string, { title: string; description: string }> = {
+  quote: { title: "Get a Quote | Website Design, Hosting & Apps", description: "Request a quote for a new website, LeadPages or WordPress site, hosting, maintenance, Google Ads, SEO or a custom app. Canberra-based, clear prices." },
+  support: { title: "Lodge a Support Ticket | Website, Email & Server Help", description: "Lodge a support request for your website, email or server. Get a ticket number straight away and track progress in the client portal." },
+};
 
 async function load(p: P) {
   const { org: slug, page } = await p.params;
@@ -23,7 +47,14 @@ async function load(p: P) {
 
 export async function generateMetadata(p: P): Promise<Metadata> {
   const x = await load(p);
-  if (!x) return {};
+  if (!x) {
+    const a = await loadAgency(p);
+    if (!a) return {};
+    const s = serviceBySlug(a.page), m = AGENCY_META[a.page];
+    return siteMeta(a.org, `/site/${a.org.slug}/${a.page}`, s
+      ? { title: { absolute: s.metaTitle.replace(/\| Web Culture$/, `| ${a.org.name}`) }, description: s.metaDescription }
+      : { title: { absolute: `${m.title} | ${a.org.name}` }, description: m.description });
+  }
   return siteMeta(x.org, `/site/${x.org.slug}/${x.pg.slug}`, {
     title: { absolute: x.pg.metaTitle || `${x.pg.title} | ${x.org.name}` },
     description: (x.pg.metaDescription || x.pg.intro || x.pg.body.replace(/[#*\-\n[\]()]+/g, " ")).replace(/\s+/g, " ").trim().slice(0, 300) || undefined,
@@ -118,6 +149,8 @@ function Sections({ sections, slug }: { sections: PageSection[]; slug: string })
 export default async function InfoPageView(p: P) {
   const x = await load(p);
   if (!x) {
+    const a = await loadAgency(p);
+    if (a) return agencyPage(a.org, a.page, p);
     // A page that's been replaced: follow the SEO Saver's redirect for its old address
     const { org: slug, page } = await p.params;
     const org = await publicOrg(slug).catch(() => null);
@@ -169,5 +202,24 @@ export default async function InfoPageView(p: P) {
       </div>
       {pg.sections.length > 0 && <Sections sections={pg.sections} slug={org.slug} />}
     </SiteFrame>
+  );
+}
+
+async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>>, page: string, p: P) {
+  if (page === "support") return <AgencyFrame org={org}><JsonLd data={faqLd(SUPPORT_FAQS)} /><AgencySupport org={org} /></AgencyFrame>;
+  if (page === "quote") {
+    const sp = (await p.searchParams) ?? {};
+    const pre = typeof sp.service === "string" ? sp.service.slice(0, 60) : undefined;
+    return <AgencyFrame org={org}><JsonLd data={faqLd(QUOTE_FAQS)} /><AgencyQuote org={org} preselect={pre} /></AgencyFrame>;
+  }
+  const s = serviceBySlug(page);
+  if (!s) notFound();
+  const path = `/site/${org.slug}/${s.slug}`;
+  return (
+    <AgencyFrame org={org}>
+      <JsonLd data={serviceLd(org, s, canonicalFor(org, path), canonicalFor(org, `/site/${org.slug}`))} />
+      <JsonLd data={faqLd(s.faqs)} />
+      <AgencyLanding org={org} s={s} />
+    </AgencyFrame>
   );
 }

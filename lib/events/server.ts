@@ -106,7 +106,7 @@ async function mailBoth(org: PublicOrg, customer: { to: string; firstName: strin
   try {
     const m = shell(brand, { title: customer.heading, heading: customer.heading, intro: customer.intro, rows: customer.rows,
       after: [`Questions? Just reply to this email${org.contact_phone ? ` or call ${org.contact_phone}` : ""}.`] });
-    await sendEmail({ to: customer.to, subject: m.subject, html: m.html, text: m.text, replyTo, fromName: org.name });
+    await sendEmail({ to: customer.to, subject: m.subject, html: m.html, text: m.text, replyTo, fromName: org.name, orgId: org.id });
   } catch (e) { console.error("[events] customer email", e); }
   const to = org.settings.notify_email ?? org.contact_email;
   if (to) {
