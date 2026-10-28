@@ -1,4 +1,5 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { publicOrg } from "@/lib/bookings/server";
 import type { Metadata } from "next";
 import BookHome, { generateMetadata as bookMetadata } from "../book/[org]/page";
 import { RESERVED } from "@/lib/short-links";
@@ -17,5 +18,8 @@ export async function generateMetadata(props: P): Promise<Metadata> {
 export default async function ShortLink(props: P) {
   const { org } = await props.params;
   if (RESERVED.includes(org) || !/^[a-z0-9-]{2,80}$/.test(org)) notFound();
+  // A business without classes: its short address is its website's home page, never an empty "Book a class" page
+  const o = await publicOrg(org).catch(() => null);
+  if (o && !o.settings.enabled) redirect(`/site/${o.slug}`);
   return BookHome(props as never);
 }

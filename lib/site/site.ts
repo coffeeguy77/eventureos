@@ -177,7 +177,9 @@ const FILE = /\.[a-z0-9]{2,5}$/i;
  */
 export function routeFor(site: SiteSettings, slug: string, rawPath: string, extra: { path: string; title: string }[] = [],
   /** agency sites (Nerd Herd businesses): their built-in service pages, and the home page is always the agency home */
-  agency: { pages: readonly string[] } | null = null): Route {
+  agency: { pages: readonly string[] } | null = null,
+  /** the business takes class bookings (otherwise "/" is always the website home) */
+  classes = true): Route {
   const path = rawPath || "/";
   if (/^\/(_next|api|auth|media|fonts|brand|downloads)(\/|$)/.test(path) || path === "/favicon.ico" || path === "/manifest.webmanifest" || path === "/embed.js") return { kind: "pass" };
   if (path === "/sitemap.xml") return { kind: "rewrite", to: `/api/site/sitemap?org=${slug}` };
@@ -185,7 +187,7 @@ export function routeFor(site: SiteSettings, slug: string, rawPath: string, extr
   const segs = path.split("/").filter(Boolean);
   const first = (segs[0] ?? "").toLowerCase();
   // Our own pages first (so an old rule can't hide a live page)
-  if (!segs.length) return site.home || agency ? { kind: "rewrite", to: `/site/${slug}` } : { kind: "rewrite", to: `/${slug}` };
+  if (!segs.length) return site.home || agency || !classes ? { kind: "rewrite", to: `/site/${slug}` } : { kind: "rewrite", to: `/${slug}` };
   if ((SECTIONS as readonly string[]).includes(first)) {
     if (segs[1] === slug) return { kind: "pass" };
     return { kind: "rewrite", to: `/${first}/${slug}${segs.length > 1 ? "/" + segs.slice(1).join("/") : ""}` };

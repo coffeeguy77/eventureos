@@ -25,6 +25,9 @@ import { arrangeMenu, footerMenuAuto, readMenus, topMenuAuto } from "@/lib/site/
 import { footerModel } from "@/lib/site/footer";
 import { MenuEditor } from "@/components/website/menu-editor";
 import { siteMenuTone } from "@/lib/site/page-menu";
+import { ThemeForm } from "@/components/website/theme-form";
+import { readTheme } from "@/lib/site/theme";
+import { safeColour } from "@/components/book/shell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Website" };
@@ -37,7 +40,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const { supabase, org, role } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const sp = await searchParams;
-  const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone, app_access").eq("id", org.id).single();
+  const { data: o } = await supabase.from("organisations").select("settings, slug, name, timezone, app_access, brand_colour").eq("id", org.id).single();
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
   // The events and café pages belong to the events and café side of things; businesses on chosen apps only see what's theirs
   const allApps = !Array.isArray((o as { app_access?: unknown } | null)?.app_access);
@@ -45,7 +48,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const showCafe = allApps || readCafe(settings).enabled;
   const showReminders = allApps || showEvents || showCafe;
   const want = sp.tab;
-  const tab = (want === "events" && showEvents) || (want === "reminders" && showReminders) || (want === "cafe" && showCafe) || want === "site" || want === "menus" ? want! : want === undefined && !allApps ? "site" : "analytics";
+  const tab = (want === "events" && showEvents) || (want === "reminders" && showReminders) || (want === "cafe" && showCafe) || want === "site" || want === "menus" || want === "look" ? want! : want === undefined && !allApps ? "site" : "analytics";
 
   let body: React.ReactNode;
   if (tab === "events") {
@@ -68,6 +71,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
       initial={{ logoSize: site.logoSize, home: site.home, domain: site.domain, live: site.live, oldSite: site.oldSite, fallback: site.fallback, pages: site.pages.map(({ index: _i, ...p }) => p), rules: site.rules.map(({ from, to, status, note }) => ({ from, to, status, note })), discovered: site.discovered.length }}
       pages={allTargets} suggestions={suggest(site, site.discovered, allTargets, { products })} checks={launchCheck(site, site.discovered, allTargets).checks}
       hits={(hitsR.data ?? []) as { path: string; kind: string; target: string | null; hits: number; last_at: string }[]} hitsReady={!hitsR.error} />;
+  } else if (tab === "look") {
+    body = <ThemeForm initial={readTheme(settings, allApps)} brand={safeColour((o as { brand_colour?: string | null } | null)?.brand_colour).toUpperCase()} name={o?.name as string} siteUrl={`${appBaseUrl()}/site/${o?.slug as string}`} />;
   } else if (tab === "menus") {
     const pub = await publicOrg(o?.slug as string);
     if (!pub) body = <p className="text-[0.875rem] text-ink-muted">Your public pages aren&apos;t switched on yet.</p>;
@@ -194,7 +199,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader eyebrow="Marketing" title="Website" subtitle={allApps ? "How people use your public pages, your events and café pages, and the come-back-and-finish reminders." : "Your home page and pages, menus, your own domain, and how people use your site."} />
-      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, ...(showEvents ? [{ key: "events", label: "Events pages" }] : []), ...(showCafe ? [{ key: "cafe", label: "Café pages" }] : []), { key: "site", label: "Pages, domain & SEO" }, { key: "menus", label: "Menus" }, ...(showReminders ? [{ key: "reminders", label: "Reminders" }] : [])]} /></div>
+      <div className="mb-5"><Tabs baseHref="/website" active={tab} tabs={[{ key: "analytics", label: "Analytics" }, ...(showEvents ? [{ key: "events", label: "Events pages" }] : []), ...(showCafe ? [{ key: "cafe", label: "Café pages" }] : []), { key: "look", label: "Look & feel" }, { key: "site", label: "Pages, domain & SEO" }, { key: "menus", label: "Menus" }, ...(showReminders ? [{ key: "reminders", label: "Reminders" }] : [])]} /></div>
       {body}
     </>
   );

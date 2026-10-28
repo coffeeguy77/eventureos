@@ -78,6 +78,9 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
 }) {
   const L = org.settings.landing;
   const C = (k: string) => landingCopy(L, k);
+  // coffee cups and beans are part of the classic look; other website themes get neutral icons
+  const themed = !!org.theme && org.theme.preset !== "classic";
+  const Cup = themed ? Sparkles : Coffee;
   const courses = data.courses;
   const many = courses.length > 1;
   const byCourse = (id: string) => data.sessions.filter((s) => s.course_id === id);
@@ -251,14 +254,14 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
               );
             })}
             <aside data-reveal className="relative flex flex-col overflow-hidden rounded-[26px] bg-[color-mix(in_srgb,var(--b)_10%,#FFFDFC)] p-7 sm:p-8 md:col-span-2 xl:col-span-1">
-              <Coffee className="h-9 w-9 text-[var(--b)]" strokeWidth={1.6} />
+              <Cup className="h-9 w-9 text-[var(--b)]" strokeWidth={1.6} />
               <h3 {...ed("booking.landing.copy.helpTitle", C("helpTitle"))} className="lp-serif mt-5 text-[1.625rem] font-semibold leading-tight">{C("helpTitle")}</h3>
               <p {...ed("booking.landing.copy.helpText", C("helpText"))} className="mt-3 text-[1rem] leading-relaxed text-[#5b5955]">{C("helpText")}</p>
               <div className="mt-6 flex flex-wrap gap-3">
                 {many && <a href="#compare" className="lp-btn inline-flex h-12 items-center gap-2 rounded-xl bg-[#FFFDFC] px-5 text-[0.9375rem] font-semibold text-[#171714] ring-1 ring-[#2b2925]/25">Compare courses<ArrowRight className="lp-arrow h-4 w-4" /></a>}
                 {phone && <a href={telHref(phone)} className="inline-flex h-12 items-center gap-2 rounded-xl px-2 text-[0.9375rem] font-semibold text-[#171714]"><Phone className="h-4 w-4 text-[var(--b)]" />{phone}</a>}
               </div>
-              <CupArt className="mt-auto hidden w-40 self-end pt-8 text-[#2b2925]/70 xl:block" />
+              {!themed && <CupArt className="mt-auto hidden w-40 self-end pt-8 text-[#2b2925]/70 xl:block" />}
             </aside>
           </div>
         </div>
@@ -320,7 +323,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
         <section aria-label="Why people choose us" className="border-y border-[#E9DFD5] bg-[#FFFDFC]">
           <ul className={`${PAGE} grid grid-cols-2 gap-y-8 py-10 sm:py-12 md:grid-cols-3 ${({ 4: "xl:grid-cols-4", 5: "xl:grid-cols-5", 6: "xl:grid-cols-6" } as Record<number, string>)[L.stats.length] ?? ""}`}>
             {L.stats.map((s, i) => {
-              const I = STAT_ICONS[i % STAT_ICONS.length];
+              const I = themed && STAT_ICONS[i % STAT_ICONS.length] === Coffee ? CalendarDays : STAT_ICONS[i % STAT_ICONS.length];
               return (
                 <li key={i} data-reveal className="flex items-center gap-4 px-2">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full ring-1 sm:h-14 sm:w-14 ring-[color-mix(in_srgb,var(--b)_45%,#FFFDFC)]"><I className="h-6 w-6 text-[var(--b)]" strokeWidth={1.6} /></span>
@@ -374,7 +377,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                   <p {...ed("booking.landing.copy.giftText", C("giftText"))} className="mt-4 max-w-[30rem] text-[1.0625rem] leading-relaxed text-[#E6D9CC]">{C("giftText")}</p>
                   <ul className="mt-6 grid max-w-[30rem] grid-cols-2 gap-x-6 gap-y-3 text-[0.9688rem] font-medium">
                     <li className="flex items-center gap-2.5"><CalendarDays className="h-5 w-5 text-[var(--b)]" />Valid for {org.settings.gift_expiry_months} months</li>
-                    <li className="flex items-center gap-2.5"><Coffee className="h-5 w-5 text-[var(--b)]" />Use towards any course</li>
+                    <li className="flex items-center gap-2.5"><Cup className="h-5 w-5 text-[var(--b)]" />Use towards any course</li>
                     <li className="flex items-center gap-2.5"><Gift className="h-5 w-5 text-[var(--b)]" />Emailed now or on a set day</li>
                     <li className="flex items-center gap-2.5"><Sparkles className="h-5 w-5 text-[var(--b)]" />They choose their date</li>
                   </ul>
@@ -472,7 +475,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                 <h2 {...ed("booking.landing.copy.whyTitle", C("whyTitle"))} className={`${h2Cls} max-w-[40rem]`} data-reveal>{accent(C("whyTitle"))}</h2>
                 <ul className="mt-12 grid gap-px overflow-hidden rounded-[26px] bg-[#E9DFD5] ring-1 ring-[#E9DFD5] sm:grid-cols-2 xl:grid-cols-3">
                   {L.benefits.map((b, i) => {
-                    const I = ICONS[i % ICONS.length];
+                    const I = themed && ICONS[i % ICONS.length] === Coffee ? CalendarDays : ICONS[i % ICONS.length];
                     return (
                       <li key={i} data-reveal className="bg-[#FFFDFC] p-7 transition-colors hover:bg-[#FBF6F1] sm:p-8">
                         <I className="h-8 w-8 text-[var(--b)]" strokeWidth={1.6} />
@@ -614,7 +617,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
 
       {/* ───────── Final call ───────── */}
       <section className="relative isolate overflow-hidden bg-[#15251F] py-20 text-[#F4EDE4] sm:py-28">
-        <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full opacity-[0.05]"><defs><pattern id="lp-beans" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(18)"><g fill="none" stroke="#F4EDE4" strokeWidth="2"><ellipse cx="30" cy="30" rx="14" ry="20" /><path d="M30 10c-6 10 6 30 0 40" /><ellipse cx="90" cy="90" rx="14" ry="20" /><path d="M90 70c-6 10 6 30 0 40" /></g></pattern></defs><rect width="100%" height="100%" fill="url(#lp-beans)" /></svg>
+        {!themed && <svg aria-hidden className="absolute inset-0 -z-10 h-full w-full opacity-[0.05]"><defs><pattern id="lp-beans" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(18)"><g fill="none" stroke="#F4EDE4" strokeWidth="2"><ellipse cx="30" cy="30" rx="14" ry="20" /><path d="M30 10c-6 10 6 30 0 40" /><ellipse cx="90" cy="90" rx="14" ry="20" /><path d="M90 70c-6 10 6 30 0 40" /></g></pattern></defs><rect width="100%" height="100%" fill="url(#lp-beans)" /></svg>}
         <div className={`${PAGE} flex flex-col items-start justify-between gap-10 lg:flex-row lg:items-end`}>
           <div className="max-w-[46rem]" data-reveal>
             <p {...ed("booking.landing.copy.ctaEyebrow", C("ctaEyebrow"))} className="lp-hand text-[1.875rem] leading-none text-[var(--b)]">{C("ctaEyebrow")}</p>

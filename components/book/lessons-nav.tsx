@@ -19,7 +19,7 @@ export function LessonsNav({ org, links, phone, onLanding = false }: { org: Publ
   const tel = phone ?? org.contact_phone;
   const items: SectionLink[] = list.map((l) => ({ key: l.href, href: l.href.startsWith("#") ? at(l.href) : l.href, label: l.label }));
   return (
-    <SectionNav org={org} label="Barista lessons" title={readSiteNav(org.rawSettings).lessons} titleHref={onLanding ? "#top" : base} links={items}
+    <SectionNav org={org} label={readSiteNav(org.rawSettings).lessons} title={readSiteNav(org.rawSettings).lessons} titleHref={onLanding ? "#top" : base} links={items}
       floatable={onLanding} defaultStyle={onLanding ? "float" : "bar"}
       actions={tel ? (
         <a href={`tel:${tel.replace(/[^\d+]/g, "")}`} aria-label={`Call ${tel}`} className="inline-flex h-10 items-center gap-2 rounded-full px-2.5 text-[15px] font-semibold hover:bg-black/5">

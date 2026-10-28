@@ -2,6 +2,7 @@ import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server
 import { readSite, routeFor, withTracking } from "./site";
 import { newPages } from "./pages";
 import { AGENCY_PAGES } from "./agency/content";
+import { readSettings } from "../bookings/core";
 
 /**
  * A business's own domain (e.g. www.beanculture.com.au) pointed at EventureOS: find the business, then send each
@@ -52,7 +53,9 @@ export async function customDomain(request: NextRequest, event: NextFetchEvent):
     return NextResponse.redirect(to, 301);
   }
   const agency = Array.isArray(org.app_access) && org.app_access.includes("nerdherd") ? { pages: AGENCY_PAGES } : null;
-  const r = routeFor(site, org.slug, path, site.fallback ? newPages(org.settings, org.name) : [], agency);
+  // Same rule as the public pages: a business on chosen apps has classes only with Classes & courses switched on and set up
+  const classesOn = (!Array.isArray(org.app_access) || (org.app_access.includes("bookings") && !!org.settings.booking)) && readSettings(org.settings).enabled;
+  const r = routeFor(site, org.slug, path, site.fallback ? newPages(org.settings, org.name) : [], agency, classesOn);
   const ref = request.headers.get("referer");
   const headers = new Headers(request.headers);
   headers.set("x-site-host", host);

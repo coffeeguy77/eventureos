@@ -13,9 +13,11 @@ export function onColour(hex: string) {
   const L = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
   return 1.05 / (L + 0.05) >= (L + 0.05) / 0.0556 ? "#ffffff" : "#111111";
 }
-export function brandStyle(org: Pick<PublicOrg, "brand_colour"> & { pureBrand?: boolean }): React.CSSProperties {
-  const b = safeColour(org.brand_colour);
-  return { ["--b" as string]: b, ["--on-b" as string]: onColour(b), ...(org.pureBrand ? { ["--pk" as string]: b } : {}) };
+export function brandStyle(org: Pick<PublicOrg, "brand_colour"> & { pureBrand?: boolean; theme?: { preset: string; accent: string | null } }): React.CSSProperties {
+  // A website theme can pick its own colour (Website → Look & feel); otherwise the brand colour
+  const b = safeColour(org.theme?.accent ?? org.brand_colour);
+  const pure = org.pureBrand || (!!org.theme && org.theme.preset !== "classic");
+  return { ["--b" as string]: b, ["--on-b" as string]: onColour(b), ...(pure ? { ["--pk" as string]: b } : {}) };
 }
 
 /** Desktop page width for public pages (phones and tablets get the full width with side padding). */
@@ -28,7 +30,7 @@ export function BookShell({ org, embed, children, back, wide, bare, section = "l
     <div data-book-root style={brandStyle(org)} className={embed ? "bg-transparent px-1 py-2" : "min-h-screen bg-canvas"}>
       {embed && <><EmbedBridge /><style>{"html,body{background:transparent!important;min-height:0!important;height:auto!important}"}</style></>}
       {!embed && <MasterNav org={org} active={section} />}
-      {!embed && section === "lessons" && <LessonsNav org={org} />}
+      {!embed && section === "lessons" && org.settings.enabled && <LessonsNav org={org} />}
       <main className={bare && !embed ? "" : embed ? (wide ? "" : "mx-auto max-w-3xl") : `${PAGE} py-6 sm:py-10`}>
         {back && <Link href={back.href + q} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← {back.label}</Link>}
         {children}

@@ -6,6 +6,7 @@ import { readEvents, type EventsSettings } from "@/lib/events/core";
 import { readReminders, type ReminderSettings } from "@/lib/reminders/core";
 import { readCafe, type CafeSettings } from "@/lib/cafe/core";
 import { IG_PROVIDER } from "@/lib/cafe/instagram";
+import { cleanTheme, PRESETS, type SiteTheme } from "@/lib/site/theme";
 
 export type Result<T = string> = { ok: true; data: T } | { ok: false; error: string };
 const run = async <T,>(fn: () => Promise<T>): Promise<Result<T>> => { try { return { ok: true, data: await fn() }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } };
@@ -16,7 +17,7 @@ async function manager() {
   return ctx;
 }
 
-async function saveKey(key: "events" | "reminders" | "cafe", value: unknown) {
+async function saveKey(key: "events" | "reminders" | "cafe" | "site_theme", value: unknown) {
   const { supabase, org } = await manager();
   const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
   if (e1) throw new Error(e1.message);
@@ -213,5 +214,15 @@ export async function saveMenuTone(tone: "light" | "dark", resetPages = false): 
     await patchSite(resetPages ? { menuTone: t, pageMenu: {} } : { menuTone: t });
     revalidatePath("/", "layout");
     return resetPages ? `Every page now has a ${t} menu.` : `Site menu is ${t} on every page that hasn't chosen its own.`;
+  });
+}
+
+/** Website → Look & feel: the theme of the public pages. */
+export async function saveSiteTheme(input: SiteTheme): Promise<Result> {
+  return run(async () => {
+    const clean = cleanTheme(input);
+    const slug = await saveKey("site_theme", clean);
+    revalidatePath(`/site/${slug}`);
+    return `Saved — your website now uses the ${PRESETS[clean.preset].name} look.`;
   });
 }

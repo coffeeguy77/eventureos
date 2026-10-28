@@ -1,4 +1,5 @@
 import "server-only";
+import { readTheme, type SiteTheme } from "@/lib/site/theme";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
@@ -25,6 +26,7 @@ export interface PublicOrg {
   id: string; name: string; slug: string; logo_url: string | null; brand_colour: string | null; contact_email: string | null; contact_phone: string | null;
   website: string | null; address: string | null; timezone: string; currency: string; settings: BookingSettings; rawSettings: Record<string, unknown>; stripeReady: boolean;
   /** accents in the business's own colour (businesses on chosen apps), not blended with the EventureOS pink */ pureBrand?: boolean;
+  /** how the public pages look (Website → Look & feel) */ theme?: SiteTheme;
 }
 
 const ORG_COLS = "id, name, slug, logo_url, brand_colour, contact_email, contact_phone, website, address, timezone, currency, settings, status, app_access";
@@ -59,6 +61,7 @@ function toOrg(o: Record<string, unknown>, stripeReady: boolean): PublicOrg {
     timezone: (o.timezone as string) || "Australia/Sydney", currency: (o.currency as string) || "AUD",
     settings: readSettings(raw), rawSettings: raw, stripeReady,
     pureBrand: Array.isArray(o.app_access),
+    theme: readTheme(o.settings, !Array.isArray(o.app_access)),
   };
 }
 

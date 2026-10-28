@@ -65,33 +65,85 @@ export default async function SiteHome({ params }: P) {
   const ev = readEvents(raw), cafe = readCafe(raw), shop = readShop(raw), jobs = readJobSettings(raw, org.name), learn = readLearnSettings(raw), booking = readSettings(raw);
   const hire = readHireSettings(raw);
   // Coffee businesses keep their wording; everyone else gets plain, general words until they write their own
-  const coffee = ev.enabled || cafe.enabled || shop.enabled || booking.enabled;
+  const coffee = !org.pureBrand && (ev.enabled || cafe.enabled || shop.enabled || booking.enabled);
   const W = coffee
     ? { cardsTitle: "Everything coffee, in one place.", contactTitle: "Come in for a coffee." }
     : { cardsTitle: "How we can help.", contactTitle: "We'd love to hear from you." };
   const extraPages = site.pages.filter((p) => p.menu && !/^(about|contact)/.test(p.slug) && p.layout === "standard");
   const cards = [
     { k: "hireshop", on: hire.shop.enabled, title: "Hire", text: "See what's free for your dates and book online in a couple of minutes.", link: "Browse & book", img: site.images.hireshop ?? hire.shop.heroImage ?? hire.shop.slides[0]?.image ?? null },
-    { k: "hire", on: all.has("/hire"), title: "Event hire", text: "Coffee carts, vans and catering for your next event.", link: "Plan your event", img: site.images.hire ?? ev.images.hero ?? null },
-    { k: "classes", on: all.has("/classes"), title: "Barista classes", text: "Hands-on barista courses for home and for work.", link: "See classes", img: site.images.classes ?? booking.landing.heroImage ?? null },
+    { k: "hire", on: all.has("/hire"), title: "Event hire", text: coffee ? "Coffee carts, vans and catering for your next event." : "Everything you need for your next event.", link: "Plan your event", img: site.images.hire ?? ev.images.hero ?? null },
+    { k: "classes", on: all.has("/classes"), title: coffee ? "Barista classes" : "Classes & courses", text: coffee ? "Hands-on barista courses for home and for work." : "See what's on and book your place online in a minute.", link: coffee ? "See classes" : "See classes & dates", img: site.images.classes ?? booking.landing.heroImage ?? null },
     { k: "academy", on: all.has("/academy"), title: learn.name, text: "Learn online, at your own pace.", link: "Start learning", img: site.images.academy ?? learn.heroImage ?? null },
-    { k: "cafe", on: all.has("/cafe"), title: "Our café", text: "Coffee, kitchen and opening hours.", link: "Visit the café", img: site.images.cafe ?? cafe.heroImage ?? null },
-    { k: "shop", on: all.has("/shop"), title: "Shop coffee", text: "Freshly roasted beans, delivered.", link: "Shop now", img: site.images.shop ?? shop.heroImage ?? null },
-    { k: "jobs", on: all.has("/jobs"), title: "Barista jobs", text: "Find barista work, or find staff.", link: "Job board", img: site.images.jobs ?? jobs.heroImage ?? null },
+    { k: "cafe", on: all.has("/cafe"), title: "Our café", text: "Menu, kitchen and opening hours.", link: "Visit the café", img: site.images.cafe ?? cafe.heroImage ?? null },
+    { k: "shop", on: all.has("/shop"), title: coffee ? "Shop coffee" : "Shop", text: coffee ? "Freshly roasted beans, delivered." : "Order online, delivered to your door.", link: "Shop now", img: site.images.shop ?? shop.heroImage ?? null },
+    { k: "jobs", on: all.has("/jobs"), title: coffee ? "Barista jobs" : "Jobs", text: coffee ? "Find barista work, or find staff." : "Work with us, or find staff.", link: "Job board", img: site.images.jobs ?? jobs.heroImage ?? null },
     ...extraPages.map((p) => ({ k: `page-${p.slug}`, on: true, title: p.title, text: p.intro || p.metaDescription || "", link: "Find out more", img: p.heroImage })),
   ].filter((x) => x.on);
   const href = (k: string) => k === "hireshop" ? `/hire/${org.slug}/shop` : k.startsWith("page-") ? `/site/${org.slug}/${k.slice(5)}` : internalHref(org.slug, k === "classes" ? "/classes" : `/${k}`);
   const about = site.pages.find((p) => p.slug.startsWith("about"));
   const contact = site.pages.find((p) => p.slug.startsWith("contact"));
 
+  const themed = !!org.theme && org.theme.preset !== "classic";
+  const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
+  const initials = org.name.split(/\s+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+
   return (
     <SiteFrame org={org}>
-      {/* Hero */}
+      {/* Hero — themed sites without a photo get a designed panel instead of an empty half page */}
+      {themed && !site.images.hero ? (
+        <section className="relative isolate overflow-hidden">
+          <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(60%_70%_at_85%_10%,color-mix(in_srgb,var(--b)_16%,transparent),transparent_70%),radial-gradient(45%_55%_at_0%_100%,color-mix(in_srgb,var(--b)_9%,transparent),transparent_70%)]" />
+          <div aria-hidden className="absolute inset-0 -z-10 opacity-[0.35] [background-image:linear-gradient(to_right,color-mix(in_srgb,var(--b)_10%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_srgb,var(--b)_10%,transparent)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:radial-gradient(70%_60%_at_60%_30%,black,transparent)]" />
+          <div className={`${WRAP} grid items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:py-24`}>
+            <div>
+              <p className={`${eyebrow} inline-flex items-center gap-2 rounded-full bg-[color-mix(in_srgb,var(--b)_10%,transparent)] px-3.5 py-1.5 !text-[0.75rem]`} {...T("hero.eyebrow", org.name)} />
+              <h1 className="shop-serif mt-5 whitespace-pre-line text-balance text-[2.75rem] font-medium leading-[1.02] tracking-[-0.02em] sm:text-[4rem]" {...T("hero.title", org.name)} />
+              <p className="mt-6 max-w-[520px] whitespace-pre-line text-[1.125rem] leading-[1.65] text-[#5E5853]" {...T("hero.text", "")} />
+              <div className="mt-9 flex flex-wrap gap-3">
+                {cards[0] && <Link href={href(cards[0].k)} className={btnPk}><span {...T("hero.button1", cards[0].link)} /><ArrowRight className="h-4 w-4" /></Link>}
+                {cards[1] ? <Link href={href(cards[1].k)} className={btnLine}><span {...T("hero.button2", cards[1].link)} /></Link>
+                  : <a href="#contact" className={btnLine}><span {...T("hero.button2", "Get in touch")} /></a>}
+              </div>
+              <ul className="mt-9 flex flex-wrap gap-x-6 gap-y-2 text-[0.9063rem] text-[#5E5853]">
+                {org.address && <li className="flex items-center gap-2"><MapPin className="h-[18px] w-[18px] text-[var(--b)]" />{org.address}</li>}
+                {org.contact_phone && <li className="flex items-center gap-2"><Phone className="h-[18px] w-[18px] text-[var(--b)]" /><a href={`tel:${org.contact_phone.replace(/[^\d+]/g, "")}`} className="hover:underline">{org.contact_phone}</a></li>}
+              </ul>
+            </div>
+            <div className="relative mx-auto w-full max-w-[520px]" aria-hidden={!cards.length}>
+              <div className="absolute -inset-6 -z-10 rounded-[40px] bg-[color-mix(in_srgb,var(--b)_14%,transparent)] blur-3xl" />
+              <div className="shop-card overflow-hidden rounded-2xl bg-white shadow-[0_40px_80px_-40px_rgba(15,23,42,.45)] ring-1 ring-black/5">
+                <div className="relative flex items-center gap-4 bg-[linear-gradient(135deg,var(--b),color-mix(in_srgb,var(--b)_62%,#000))] px-7 py-8 text-[var(--on-b)]">
+                  <div aria-hidden className="absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/10" />
+                  <div aria-hidden className="absolute -bottom-16 right-16 h-32 w-32 rounded-full bg-white/10" />
+                  <span className="relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white text-[1.375rem] font-bold text-[var(--b)] shadow-lg">
+                    {logo ? <img src={logo} alt="" className="h-full w-full object-contain p-1.5" /> : initials || "★"}
+                  </span>
+                  <div className="relative min-w-0">
+                    <p className="truncate text-[1.25rem] font-semibold leading-tight">{org.name}</p>
+                    <p className="mt-1 text-[0.875rem] opacity-80">Book online · Pay securely · Instant confirmation</p>
+                  </div>
+                </div>
+                <ul className="divide-y divide-[#EFE6DF]">
+                  {(cards.length ? cards.slice(0, 4) : [{ k: "contact", title: "Get in touch", text: "Questions, quotes and bookings — we reply fast.", link: "" }]).map((x) => (
+                    <li key={x.k}>
+                      <Link href={x.k === "contact" ? "#contact" : href(x.k)} className="group flex items-center gap-4 px-7 py-4 transition hover:bg-[color-mix(in_srgb,var(--b)_5%,transparent)]">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--b)_12%,white)] text-[var(--b)]"><ArrowRight className="h-[18px] w-[18px] transition group-hover:translate-x-0.5" /></span>
+                        <span className="min-w-0 flex-1"><span className="block truncate text-[0.9688rem] font-semibold">{x.title}</span>{x.text && <span className="block truncate text-[0.8125rem] text-[#8C847D]">{x.text}</span>}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
       <section className="relative overflow-hidden">
         {site.images.hero && (
           <div className="relative h-[280px] sm:h-[380px] lg:absolute lg:inset-y-0 lg:right-0 lg:h-auto lg:w-[54%]">
             <img {...edImg("site.images.hero")} src={site.images.hero} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-y-0 left-0 hidden w-56 bg-gradient-to-r from-[#FCFAF7] via-[#FCFAF7]/60 to-transparent lg:block" />
+            <div className="absolute inset-y-0 left-0 hidden w-56 bg-gradient-to-r from-[var(--t-bg,#FCFAF7)] via-[color-mix(in_srgb,var(--t-bg,#FCFAF7)_60%,transparent)] to-transparent lg:block" />
           </div>
         )}
         <div className="relative mx-auto w-full max-w-[1240px] px-5 sm:px-6">
@@ -108,6 +160,7 @@ export default async function SiteHome({ params }: P) {
           </div>
         </div>
       </section>
+      )}
 
       {/* What we do */}
       {cards.length > 0 && (
@@ -117,7 +170,7 @@ export default async function SiteHome({ params }: P) {
           <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {cards.map((x) => (
               <Link key={x.k} href={href(x.k)} className="shop-card flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_10px_30px_-24px_rgba(60,30,20,.45)] ring-1 ring-[#EFE6DF]">
-                <div className="h-[200px] overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,#FFF6F1),#F6EDE6)]">
+                <div className="h-[200px] overflow-hidden bg-[linear-gradient(135deg,color-mix(in_srgb,var(--pk)_10%,var(--t-tint,#FFF6F1)),var(--t-tint2,#F6EDE6))]">
                   {x.img ? <img {...(x.k.startsWith("page-") ? {} : edImg(`site.images.${x.k}`))} src={x.img} alt="" className="shop-zoom h-full w-full object-cover" /> : <div {...(x.k.startsWith("page-") ? {} : edImg(`site.images.${x.k}`))} className="h-full w-full" />}
                 </div>
                 <div className="flex flex-1 flex-col p-5">
@@ -132,7 +185,7 @@ export default async function SiteHome({ params }: P) {
       )}
 
       {/* About (left out until there's something to say) */}
-      {(site.images.about || c("about.text", "") || about) && <section className="bg-[color-mix(in_srgb,var(--pk)_6%,#FFF8F5)] py-16 sm:py-20">
+      {(site.images.about || c("about.text", "") || about) && <section className="bg-[color-mix(in_srgb,var(--pk)_6%,var(--t-tint,#FFF8F5))] py-16 sm:py-20">
         <div className={`${WRAP} grid items-center gap-10 lg:grid-cols-2`}>
           {site.images.about
             ? <img {...edImg("site.images.about")} src={site.images.about} alt="" className="aspect-[4/3] w-full rounded-xl object-cover" />
