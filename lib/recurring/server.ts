@@ -18,7 +18,9 @@ export async function importRepeatingFromXero(ctx: SyncContext) {
     const m = e instanceof Error ? e.message : String(e);
     throw new Error(/401|403|scope|unauthori[sz]ed/i.test(m) ? `Xero didn't allow reading repeating invoices (${m}). Reconnect Xero in Settings → Integrations and try again.` : m);
   }
-  const list = (r.RepeatingInvoices ?? []).filter((x) => (x.Type ?? "ACCREC") === "ACCREC" && x.Status !== "DELETED" && x.Contact?.ContactID);
+  const { inScope, readScope } = await import("@/lib/integrations/xero-scope");
+  const scope = readScope(ctx.integration.settings);
+  const list = (r.RepeatingInvoices ?? []).filter((x) => (x.Type ?? "ACCREC") === "ACCREC" && x.Status !== "DELETED" && x.Contact?.ContactID && inScope(x.LineItems, scope));
   const contactIds = [...new Set(list.map((x) => x.Contact!.ContactID))];
   const cust = new Map<string, string>();
   for (let k = 0; k < contactIds.length; k += 100) {

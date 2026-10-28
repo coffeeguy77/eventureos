@@ -11,6 +11,8 @@ test("access: null means everything; a list means exactly those", () => {
   const a = readAppAccess(["rentals", "nope", "store"]);
   assert.deepEqual([...a!].sort(), ["rentals", "store"]);
   assert.equal(appAllowed(null, "wholesale"), true);
+  assert.equal(appAllowed(null, "nerdherd"), false);
+  assert.equal(appAllowed(new Set(["nerdherd"] as const), "nerdherd"), true);
   assert.equal(appAllowed(a, "wholesale"), false);
   assert.equal(appAllowed(a, "rentals"), true);
 });

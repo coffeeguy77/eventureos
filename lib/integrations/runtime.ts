@@ -84,9 +84,19 @@ function serverKey(): string | null {
   return process.env.INTEGRATION_SERVER_KEY?.trim() || null;
 }
 
+/**
+ * Whose tokens this connection uses. Two businesses on one Xero file (one trading as the other) share a single
+ * connection: the borrower's settings.shared_from names the lender's integration (the database only allows it while
+ * the lender lists the borrower in settings.shared_with). Xero rotates refresh tokens, so there must be one copy.
+ */
+export function tokenSourceId(integration: Pick<IntegrationRow, "id" | "settings">): string {
+  const from = (integration.settings as { shared_from?: unknown } | null)?.shared_from;
+  return typeof from === "string" && /^[0-9a-f-]{36}$/i.test(from) ? from : integration.id;
+}
+
 async function readTokens(ctx: SyncContext) {
   const fn = ctx.mode === "service" ? "service_get_integration_tokens" : "get_integration_tokens";
-  const args: Record<string, unknown> = { p_integration_id: ctx.integration.id };
+  const args: Record<string, unknown> = { p_integration_id: tokenSourceId(ctx.integration) };
   if (ctx.mode === "user") args.p_server_key = serverKey();
   const { data, error } = await ctx.db.rpc(fn, args);
   if (error) throw new Error(`Could not read ${ctx.integration.provider} credentials: ${error.message}`);
@@ -97,7 +107,7 @@ async function readTokens(ctx: SyncContext) {
 
 async function storeToken(ctx: SyncContext, access: string, exp: string, refresh?: string) {
   const fn = ctx.mode === "service" ? "service_update_integration_access_token" : "update_integration_access_token";
-  const args: Record<string, unknown> = { p_integration_id: ctx.integration.id, p_access_token: access, p_expires_at: exp, p_refresh_token: refresh ?? null };
+  const args: Record<string, unknown> = { p_integration_id: tokenSourceId(ctx.integration), p_access_token: access, p_expires_at: exp, p_refresh_token: refresh ?? null };
   if (ctx.mode === "user") args.p_server_key = serverKey();
   const { error } = await ctx.db.rpc(fn, args);
   if (error) throw new Error(`Could not save refreshed token: ${error.message}`);

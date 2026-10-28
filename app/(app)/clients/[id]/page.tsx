@@ -25,10 +25,14 @@ import { CLASSIFICATION, ENQUIRY_SOURCE, ENQUIRY_STATUS, EVENT_STATUS, INVOICE_S
 import { daysBetween, fmtDate, fmtDateTime, money, relative, relativeDay, todayISO } from "@/lib/format";
 import type { ActivityLog, EmailMessage, EmailThread, EnquirySource, EnquiryStatus, EventStatus, InvoiceStatus, QuoteStatus } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { orgAppAccess } from "@/lib/apps-server";
+import { appAllowed } from "@/lib/apps";
+import { loadClientAccount } from "@/lib/nerdherd/account";
+import { ClientWebAccount } from "@/components/nerdherd/client-account";
 
 export const metadata = { title: "Client" };
 
-const TABS = ["overview", "history", "events", "emails", "quotes", "invoices", "payments", "documents", "notes", "activity"] as const;
+const TABS = ["overview", "web", "history", "events", "emails", "quotes", "invoices", "payments", "documents", "notes", "activity"] as const;
 type TabKey = (typeof TABS)[number];
 
 interface CustomerRow {
@@ -221,8 +225,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     na = { label: "No action needed", detail: "No overdue invoices, open quotes, upcoming events or open enquiries.", urgency: "done" };
   }
 
+  // Nerd Herd: the client's web account (sites, hosting, plans, maintenance, tickets, payment record)
+  const nerd = appAllowed(await orgAppAccess(org.id), "nerdherd");
+  const webAccount = nerd && tab === "web" ? await loadClientAccount(supabase, org.id, id, todayISO(tz)) : null;
   const tabs = [
     { key: "overview", label: "Overview" },
+    ...(nerd ? [{ key: "web", label: "Web account" }] : []),
     { key: "history", label: "Job history", count: invoices.filter((i) => i.status !== "void").length + xeroQuotes.length + bookings.length },
     { key: "events", label: "Events", count: events.length },
     { key: "emails", label: "Emails", count: threads.length },
@@ -290,6 +298,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       <div className="mt-6"><Tabs tabs={tabs} active={tab} baseHref={`/clients/${c.id}`} /></div>
 
       <div className="mt-6">
+        {tab === "web" && (webAccount ? <ClientWebAccount a={webAccount} customerId={c.id} currency={cur} tz={tz} /> : <Card><EmptyState title="Nerd Herd isn't switched on for this business" /></Card>)}
         {tab === "overview" && (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             <div className="min-w-0 space-y-6">

@@ -487,6 +487,15 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
       customerId: thread.customer_id ?? (patch.customer_id as string | undefined) ?? null, eventId: thread.event_id, enquiryId: thread.enquiry_id,
     });
   }
+  // Nerd Herd: client emails become support tickets (never stops the email sync if it fails)
+  try {
+    const { ticketFromEmail } = await import("@/lib/nerdherd/email");
+    await ticketFromEmail(ctx, {
+      threadId: thread.id, gmailMessageId: pm.gmailId, outbound, bulk: !!bulk, classification: thread.classification,
+      customerId: (patch.customer_id as string | undefined) ?? thread.customer_id ?? null, enquiryCreated: res.enquiryCreated,
+      subject: pm.subject, body: bodyClean, fromName: pm.from.name, fromEmail: pm.from.email, sentAt: pm.sentAt,
+    });
+  } catch (e) { console.error("[gmail] ticket from email:", e instanceof Error ? e.message : e); }
   return res;
 }
 

@@ -62,6 +62,16 @@ export async function disconnect(provider: string): Promise<ActionState> {
     const { supabase, org, user } = await manager();
     const { data: integ } = await supabase.from("integrations").select("id, settings").eq("organisation_id", org.id).eq("provider", provider).maybeSingle();
     if (!integ) return { error: "Not connected." };
+    // A connection borrowed from another business (one Xero file, two businesses): just stop using it here —
+    // revoking it at Xero would cut off the business that owns it.
+    if ((integ.settings as { shared_from?: string } | null)?.shared_from) {
+      const rest = { ...(integ.settings as Record<string, unknown>) };
+      delete rest.shared_from;
+      const { error } = await supabase.from("integrations").update({ status: "not_connected", settings: rest, last_error: null }).eq("id", integ.id);
+      if (error) return { error: `Couldn't disconnect: ${error.message}` };
+      revalidateAll(provider);
+      return { ok: `${getProvider(provider)!.name} is no longer shared with this business. The other business's connection is untouched.` };
+    }
     // Best effort: revoke at the provider too, so EventureOS disappears from the account's connected apps.
     try {
       const { data: tok } = await supabase.rpc("get_integration_tokens", { p_integration_id: integ.id });

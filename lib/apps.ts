@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "hosting"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "hosting", "nerdherd"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset";
 
 export interface AppInfo {
   key: AppKey;
@@ -132,6 +132,20 @@ export const APPS: AppInfo[] = [
     for: "Web designers and agencies hosting client sites",
   },
   {
+    key: "nerdherd", name: "Nerd Herd", paths: ["/nerd-herd"], icon: "headset",
+    tagline: "The IT help desk for web agencies.",
+    description: "Support tickets from email and your clients' portal, maintenance plans that bill first and open the job when paid, and every client's websites, hosting, plans and payment record on one page.",
+    features: [
+      "Tickets from your support inbox, the client portal or a phone call",
+      "Maintenance plans: invoice raised, job opened, work starts when it's paid",
+      "Maintenance checklists and a history of what was done on each site",
+      "Every client's websites, hosting, Ads and maintenance plans in one place",
+      "Who owes what, and how reliably each client pays",
+      "Clients see their tickets, sites and invoices in their portal",
+    ],
+    for: "Web designers, agencies and IT support businesses",
+  },
+  {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",
     tagline: "Win and onboard franchisees and licensees.",
     description: "A franchise page that sells the opportunity, and a pipeline from enquiry to approved application.",
@@ -154,13 +168,18 @@ export const CORE: { name: string; text: string }[] = [
 export const isAppKey = (k: unknown): k is AppKey => typeof k === "string" && (APP_KEYS as readonly string[]).includes(k);
 export const appInfo = (k: AppKey) => APPS.find((a) => a.key === k)!;
 
-/** null = everything (businesses set up before app access existed); otherwise exactly these apps. */
+/**
+ * null = every app except the ones only given on request (businesses set up before app access existed);
+ * otherwise exactly these apps.
+ */
 export type AppAccess = Set<AppKey> | null;
+/** Apps a business only gets when EventureOS gives them (never by default, even with no app list). */
+export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd"];
 export function readAppAccess(raw: unknown): AppAccess {
   if (!Array.isArray(raw)) return null;
   return new Set(raw.filter(isAppKey));
 }
-export const appAllowed = (access: AppAccess, k: AppKey) => access === null || access.has(k);
+export const appAllowed = (access: AppAccess, k: AppKey) => (access === null ? !ON_REQUEST.includes(k) : access.has(k));
 
 /** The app a back-end page belongs to (null = core). */
 export function appForPath(path: string): AppKey | null {

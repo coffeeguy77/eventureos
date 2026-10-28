@@ -4,6 +4,7 @@ import { applyContactFill, planContactFill, type ContactNow, type CustomerNow, t
 import { localDate } from "@/lib/ai/classify";
 import { customerRecord, loadCustomersForMatching, upsertCandidate, type CustomerForMatch } from "@/lib/integrations/gmail-import";
 import { bestMatch } from "@/lib/integrations/matching";
+import { inScope, readScope } from "@/lib/integrations/xero-scope";
 import {
   RateLimited, errMessage, finishSyncLog, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
 } from "@/lib/integrations/runtime";
@@ -36,6 +37,12 @@ export interface XeroSettings {
   payments_synced_at?: string | null;
   cursors?: Partial<Record<Phase, XeroCursor | null>>;
   push_invoices?: "off" | "draft" | "authorised";
+  /** two businesses on one Xero file: which documents are this business's (see xero-scope.ts) */
+  scope?: unknown;
+  /** this connection borrows another business's Xero tokens (that integration's id) */
+  shared_from?: string;
+  /** org ids allowed to borrow this connection's tokens */
+  shared_with?: string[];
   sales_account_code?: string;
   tax_type?: string;
 }
@@ -171,6 +178,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
   const deadline = Date.now() + TIME_BUDGET_MS;
   if (opts.full) await saveIntegrationSettings(ctx, { invoices_synced_at: null, quotes_synced_at: null, payments_synced_at: null, cursors: {} });
   const s = xeroSettings(ctx);
+  const scope = readScope(s);
   const counts = { invoices: 0, quotes: 0, payments: 0, pushed: 0, waiting: 0, details: 0 };
   const notes: string[] = [];
   let done = false, rateLimited = false;
@@ -184,7 +192,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
       async (page, since) => (await xeroGet<{ Invoices?: XeroInvoice[] }>(ctx, "/Invoices",
         { page: String(page), pageSize: "100", where: 'Type=="ACCREC"', order: "UpdatedDateUTC ASC" }, since)).Invoices ?? [],
       async (list) => {
-        const keep = list.filter((i) => i.Status !== "DELETED" && i.Contact?.ContactID);
+        const keep = list.filter((i) => i.Status !== "DELETED" && i.Contact?.ContactID && inScope(i.LineItems, scope));
         await resolveContacts(ctx, R!, keep.map((i) => i.Contact!.ContactID));
         counts.invoices += await upsertInvoices(ctx, keep, R!.linked, today);
       });
@@ -193,7 +201,7 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     if (complete) complete = await pagedPhase<XeroQuote>(ctx, "quotes", deadline,
       async (page, since) => (await xeroGet<{ Quotes?: XeroQuote[] }>(ctx, "/Quotes", { page: String(page), order: "UpdatedDateUTC ASC" }, since)).Quotes ?? [],
       async (list) => {
-        const keep = list.filter((q) => q.Status !== "DELETED" && q.Contact?.ContactID);
+        const keep = list.filter((q) => q.Status !== "DELETED" && q.Contact?.ContactID && inScope(q.LineItems, scope));
         await resolveContacts(ctx, R!, keep.map((q) => q.Contact!.ContactID));
         counts.quotes += await upsertQuotes(ctx, keep, R!.linked);
       });
@@ -457,16 +465,17 @@ async function quoteLines(ctx: SyncContext, quoteId: string, invoiceTotal: numbe
 export async function importHistoryForContact(ctx: SyncContext, xeroContactId: string, customerId: string) {
   const linked = new Map([[xeroContactId, customerId]]);
   const today = localDate(new Date().toISOString(), ctx.org.timezone);
+  const scope = readScope(xeroSettings(ctx));
   let invoices = 0, quotes = 0;
   for (let page = 1; page <= 20; page++) {
     const r = await xeroGet<{ Invoices?: XeroInvoice[] }>(ctx, "/Invoices", { page: String(page), pageSize: "100", where: 'Type=="ACCREC"', ContactIDs: xeroContactId });
-    const list = (r.Invoices ?? []).filter((i) => i.Status !== "DELETED" && i.Contact?.ContactID);
+    const list = (r.Invoices ?? []).filter((i) => i.Status !== "DELETED" && i.Contact?.ContactID && inScope(i.LineItems, scope));
     invoices += await upsertInvoices(ctx, list, linked, today);
     if ((r.Invoices ?? []).length < 100) break;
   }
   for (let page = 1; page <= 20; page++) {
     const r = await xeroGet<{ Quotes?: XeroQuote[] }>(ctx, "/Quotes", { page: String(page), ContactID: xeroContactId });
-    const list = (r.Quotes ?? []).filter((q) => q.Status !== "DELETED" && q.Contact?.ContactID);
+    const list = (r.Quotes ?? []).filter((q) => q.Status !== "DELETED" && q.Contact?.ContactID && inScope(q.LineItems, scope));
     quotes += await upsertQuotes(ctx, list, linked);
     if ((r.Quotes ?? []).length < 100) break;
   }

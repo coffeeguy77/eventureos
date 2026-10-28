@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Coffee, FileText, GraduationCap, Gift, MapPin, PartyPopper, Receipt, Sparkles, UtensilsCrossed } from "lucide-react";
+import { ArrowRight, CalendarDays, Coffee, FileText, GraduationCap, Gift, LifeBuoy, MapPin, PartyPopper, Receipt, Sparkles, UtensilsCrossed } from "lucide-react";
 import { publicOrg } from "@/lib/bookings/server";
 import { readShop } from "@/lib/shop/core";
 import { readSiteNav } from "@/lib/site-nav";
@@ -22,6 +22,12 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
   const tz = org.timezone;
   const today = todayISO(tz);
 
+  // Nerd Herd: websites and support requests (quietly none for businesses without it)
+  const [siteCount, openTickets] = await Promise.all([
+    supabase.from("websites").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).in("customer_id", customerIds).then((r) => r.count ?? 0, () => 0),
+    supabase.from("support_tickets").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).in("customer_id", customerIds).not("status", "in", "(resolved,closed)").then((r) => r.count ?? 0, () => 0),
+  ]);
+  const support = siteCount > 0 || openTickets > 0;
   const [evRes, qRes, invRes, reqRes] = await Promise.all([
     supabase.from("portal_events").select(EVENT_COLUMNS).eq("organisation_id", org.id).in("customer_id", customerIds)
       .order("event_date", { ascending: true, nullsFirst: false }),
@@ -125,8 +131,16 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
         <div className={tile}><Sparkles className="h-5 w-5 text-[var(--portal-brand)]" /><p className="portal-serif mt-3 text-[2.25rem] font-semibold leading-none">{requests.length}</p><p className="mt-1 text-[0.875rem] text-[#5E5853]">{requests.length === 1 ? "Document" : "Documents"} we need</p></div>
       </section>
 
+      {support && (
+        <Link href={`/p/${slug}/support`} className="portal-lift group flex items-center gap-4 rounded-[22px] bg-white p-5 ring-1 ring-[#EDE3DB]">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--portal-brand-soft)] text-[var(--portal-brand-ink)]"><LifeBuoy className="h-[22px] w-[22px]" /></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold">Websites &amp; support</span><span className="block truncate text-[0.875rem] text-[#5E5853]">{siteCount} website{siteCount === 1 ? "" : "s"} · {openTickets ? `${openTickets} open request${openTickets === 1 ? "" : "s"}` : "ask us for help"}</span></span>
+          <ArrowRight className="h-5 w-5 shrink-0 text-[#B9AEA6] transition group-hover:translate-x-1 group-hover:text-[var(--portal-brand)]" />
+        </Link>
+      )}
+
       {/* Events */}
-      <section id="events">
+      {(!support || events.length > 0) && <section id="events">
         <div className="mb-4 flex items-end justify-between gap-4">
           <h2 className="portal-serif text-[2rem] font-semibold leading-tight">My events</h2>
           {ev.enabled && <Link href={`/hire/${slug}/quote`} className="hidden items-center gap-1.5 text-[0.9375rem] font-semibold text-[var(--portal-brand-ink)] hover:underline sm:inline-flex">New quote<ArrowRight className="h-4 w-4" /></Link>}
@@ -140,7 +154,7 @@ export default async function PortalHome({ params }: { params: Promise<{ slug: s
         <div className="space-y-4">
           {upcoming.map((c) => <EventCard key={c.e.id} slug={slug} card={c} today={today} currency={org.currency} />)}
         </div>
-      </section>
+      </section>}
 
       {/* Quick actions */}
       {actions.length > 0 && (
