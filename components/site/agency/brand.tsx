@@ -7,7 +7,7 @@ export function darkLogo(org: { logo_url: string | null; rawSettings: Record<str
 
 /** The business's logo, or — when it hasn't uploaded one — a wordmark: a small browser-window mark and its name. */
 export function Wordmark({ name, logo, className = "" }: { name: string; logo: string | null; className?: string }) {
-  if (logo) return <img src={logo} alt={name} className={`h-9 max-w-[210px] object-contain object-left ${className}`} />;
+  if (logo) return <img src={logo} alt={name} className={`h-11 max-w-[250px] object-contain object-left ${className}`} />;
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
       <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0" aria-hidden>
