@@ -8,7 +8,7 @@ import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
-import { chargeMinutes, dayLabel, minutesText, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, travelLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails, type TravelDetails } from "@/lib/quotes/line-helpers";
+import { dayLabel, minutesText, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, travelLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails, type TravelDetails } from "@/lib/quotes/line-helpers";
 import { shortTime } from "@/lib/calendar/job-invite";
 import type { StaffRule } from "@/lib/pricing/engine";
 
@@ -351,10 +351,11 @@ function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHe
   const hrs = Math.floor(d.drive_minutes / 60), min = d.drive_minutes % 60;
   const setDrive = (H: number, M: number) => {
     const drive = Math.max(0, Math.round(H) * 60 + Math.round(M));
-    // Charged time follows the driving time (rounded up to the half hour) unless it's been set by hand
-    const auto = d.charge_minutes === chargeMinutes(d.drive_minutes);
-    commit({ ...d, drive_minutes: drive, charge_minutes: auto ? chargeMinutes(drive) : d.charge_minutes });
+    // Charged to the minute: 32 min driving is 32 min on the barista hours (no rounding up)
+    commit({ ...d, drive_minutes: drive, charge_minutes: drive });
   };
+  const hoursOnly = d.mode === "hours";
+  const rounded = d.charge_minutes !== d.drive_minutes && d.drive_minutes > 0;
   const lab = "mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint";
   const r = travelLine(d, helper.from);
   return (
@@ -372,15 +373,21 @@ function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHe
         <label className="w-16"><span className={lab}>Hours</span>
           <input type="number" min={0} max={24} inputMode="numeric" value={hrs} onChange={(e) => setDrive(Number(e.target.value) || 0, min)} className={cn(helperInput, "tabular text-right")} aria-label="Driving hours each way" /></label>
         <label className="w-16"><span className={lab}>Min</span>
-          <input type="number" min={0} max={59} step={5} inputMode="numeric" value={min} onChange={(e) => setDrive(hrs, Math.min(59, Number(e.target.value) || 0))} className={cn(helperInput, "tabular text-right")} aria-label="Driving minutes each way" /></label>
-        <label className="w-28"><span className={lab}>Charged each way</span>
-          <select value={d.charge_minutes} onChange={(e) => commit({ ...d, charge_minutes: Number(e.target.value) })} className={helperInput} aria-label="Travel time charged each way">
-            {[...new Set([0, d.charge_minutes, ...Array.from({ length: 17 }, (_, i) => i * 30)])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m ? minutesText(m) : "None"}</option>)}
-          </select></label>
+          <input type="number" min={0} max={59} step={1} inputMode="numeric" value={min} onChange={(e) => setDrive(hrs, Math.min(59, Number(e.target.value) || 0))} className={cn(helperInput, "tabular text-right")} aria-label="Driving minutes each way" /></label>
         <span className="pb-2 text-[0.75rem] text-ink-muted">
-          = <b className="text-ink">{r.quantity} km</b>{d.charge_minutes > 0 ? <> · {minutesText(d.charge_minutes * 2)} driving per trip{helper.hasStaff ? " added to the barista hours, the shift and the calendar" : " — add a barista line to charge it"}</> : null}
+          {hoursOnly ? <b className="text-ink">No km charge</b> : <>= <b className="text-ink">{r.quantity} km</b></>}{d.charge_minutes > 0 ? <> · {minutesText(d.charge_minutes * 2)} driving per trip{helper.hasStaff ? " added to the barista hours, the shift and the calendar" : " — add a barista line to charge it"}</> : null}
         </span>
       </div>
+      {rounded && (
+        <p className="mt-2 text-[0.75rem] text-amber-800">This quote charges {minutesText(d.charge_minutes)} each way (rounded up from {minutesText(d.drive_minutes)}).{" "}
+          <button type="button" className="font-semibold underline underline-offset-2" onClick={() => commit({ ...d, charge_minutes: d.drive_minutes })}>Charge {minutesText(d.drive_minutes)} exactly</button></p>
+      )}
+      <fieldset className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem]">
+        <legend className="sr-only">What to charge for travel</legend>
+        <span className="text-[0.6875rem] font-medium text-ink-muted">Charge for travel</span>
+        <label className="inline-flex items-center gap-1.5"><input type="radio" name={`travel-mode-${it.id}`} checked={!hoursOnly} onChange={() => commit({ ...d, mode: undefined })} className="h-4 w-4" />Km + hours</label>
+        <label className="inline-flex items-center gap-1.5"><input type="radio" name={`travel-mode-${it.id}`} checked={hoursOnly} onChange={() => commit({ ...d, mode: "hours" })} className="h-4 w-4" />Just hours</label>
+      </fieldset>
     </div>
   );
 }

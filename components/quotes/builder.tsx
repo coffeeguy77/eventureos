@@ -308,6 +308,35 @@ export function QuoteBuilder(p: BuilderProps) {
     return null;
   };
 
+  /** Put the travel time (each way) on every barista line and work their hours out again. 0 takes travel off. */
+  function syncStaffTravel(minutes: number, list: ItemDraft[]) {
+    for (const st of list.filter((x) => x.details?.kind === "staff")) {
+      const sd = st.details as StaffDetails;
+      if ((sd.travel_minutes ?? 0) === minutes) continue;
+      const next: StaffDetails = { ...sd, travel_minutes: minutes || undefined };
+      if (!minutes) delete next.travel_minutes;
+      const rule = staffRuleFor(st);
+      const calc = staffLine(next, rule?.rule ?? null, rule?.label ?? "staff");
+      if (!calc) continue;
+      setItems((all) => all.map((i) => (i.id === st.id ? { ...i, details: next, quantity: numStr(calc.quantity), description: calc.description } : i)));
+      queue(`i:${st.id}`, { details: next, quantity: calc.quantity, description: calc.description }, sendItem(st.id), SAVE_DELAY);
+    }
+  }
+  /** The travel time the barista lines should carry: the (first) travel line's, or none when there isn't one. */
+  const travelMinutesOf = (list: ItemDraft[]) => {
+    const tr = list.find((x) => x.details?.kind === "travel");
+    return tr ? (tr.details as TravelDetails).charge_minutes : 0;
+  };
+  // Opening a quote: barista lines left with travel from a travel line that was since removed are put right
+  const travelChecked = useRef(false);
+  useEffect(() => {
+    if (travelChecked.current) return;
+    travelChecked.current = true;
+    const want = travelMinutesOf(items);
+    if (items.some((x) => x.details?.kind === "staff" && ((x.details as StaffDetails).travel_minutes ?? 0) !== want)) syncStaffTravel(want, items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const h: SectionHandlers = {
     helperFor,
     onDetails(id, details, derived) {
@@ -315,18 +344,7 @@ export function QuoteBuilder(p: BuilderProps) {
       setItems((all) => all.map((i) => (i.id === id ? { ...i, details, quantity: q, description: derived.description } : i)));
       queue(`i:${id}`, { details, quantity: derived.quantity, description: derived.description }, sendItem(id), SAVE_DELAY);
       // Travel: the driving time (each way) goes on every barista line, which works its hours out again
-      if (details.kind === "travel") {
-        for (const st of items.filter((x) => x.details?.kind === "staff")) {
-          const sd = st.details as StaffDetails;
-          if ((sd.travel_minutes ?? 0) === details.charge_minutes) continue;
-          const next: StaffDetails = { ...sd, travel_minutes: details.charge_minutes || undefined };
-          const rule = staffRuleFor(st);
-          const calc = staffLine(next, rule?.rule ?? null, rule?.label ?? "staff");
-          if (!calc) continue;
-          setItems((all) => all.map((i) => (i.id === st.id ? { ...i, details: next, quantity: numStr(calc.quantity), description: calc.description } : i)));
-          queue(`i:${st.id}`, { details: next, quantity: calc.quantity, description: calc.description }, sendItem(st.id), SAVE_DELAY);
-        }
-      }
+      if (details.kind === "travel") syncStaffTravel(details.charge_minutes, items);
       // Barista days changed: a travel line that had one trip per day keeps one trip per day
       if (details.kind === "staff") {
         const before = items.find((i) => i.id === id)?.details as StaffDetails | undefined;
@@ -391,6 +409,11 @@ export function QuoteBuilder(p: BuilderProps) {
       const s = sections.find((x) => x.id === id);
       setSections((all) => all.filter((x) => x.id !== id));
       setItems((all) => all.filter((i) => i.section_id !== id));
+      // Removing the travel line takes its driving time off the barista hours
+      if (items.some((i) => i.section_id === id && i.details?.kind === "travel")) {
+        const rest = items.filter((i) => i.section_id !== id);
+        syncStaffTravel(travelMinutesOf(rest), rest);
+      }
       void structuralOp(() => deleteSection(id)).then((r) => { if (r.ok && s) showToast({ message: `Removed section ‘${s.title}’`, tone: "ok" }); });
     },
     onField(id, field, value) {
@@ -489,6 +512,11 @@ export function QuoteBuilder(p: BuilderProps) {
       const it = items.find((i) => i.id === id);
       if (!it) return;
       setItems((all) => all.filter((i) => i.id !== id));
+      // Removing the travel line takes its driving time off the barista hours
+      if (it.details?.kind === "travel") {
+        const rest = items.filter((i) => i.id !== id);
+        syncStaffTravel(travelMinutesOf(rest), rest);
+      }
       void structuralOp(() => deleteItem(id)).then((r) => {
         if (!r.ok) return;
         const nums = draftNums(it);

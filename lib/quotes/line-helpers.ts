@@ -43,8 +43,10 @@ export interface TravelDetails {
   address: string;
   km: number;               // one way
   drive_minutes: number;    // one way, as driven
-  charge_minutes: number;   // one way, as charged (e.g. 1 hr 45 → 2 hrs)
+  charge_minutes: number;   // one way, as charged — the driving time to the minute (older quotes may hold a rounded-up time)
   trips: number;            // return trips (usually one per day)
+  /** What's charged: kilometres and driving time (default), or the driving time only (the km line comes to $0) */
+  mode?: "km_hours" | "hours";
 }
 export type LineDetails = StaffDetails | ServesDetails | TravelDetails;
 
@@ -162,7 +164,8 @@ export function cleanDetails(raw: unknown): LineDetails | null {
   }
   if (r.kind === "travel") {
     return { kind: "travel", address: typeof r.address === "string" ? r.address.trim().slice(0, 300) : "", km: Math.round(n(r.km, 5000) * 10) / 10,
-      drive_minutes: Math.round(n(r.drive_minutes, 24 * 60)), charge_minutes: Math.round(n(r.charge_minutes, 24 * 60)), trips: Math.max(1, Math.round(n(r.trips ?? 1, 62))) };
+      drive_minutes: Math.round(n(r.drive_minutes, 24 * 60)), charge_minutes: Math.round(n(r.charge_minutes, 24 * 60)), trips: Math.max(1, Math.round(n(r.trips ?? 1, 62))),
+      ...(r.mode === "hours" ? { mode: "hours" as const } : {}) };
   }
   if (r.kind === "serves") return { kind: "serves", hot: Math.round(n(r.hot, 1_000_000)), cold: Math.round(n(r.cold, 1_000_000)) };
   return null;
@@ -180,11 +183,14 @@ export const chargeMinutes = (drive: number) => Math.ceil(Math.max(0, drive) / 3
 /** The travel line: return kilometres for every trip, and its description. */
 export function travelLine(d: TravelDetails, from: string | null) {
   const trips = Math.max(1, Math.round(d.trips || 1));
-  const quantity = Math.round(d.km * 2 * trips * 10) / 10;
+  const hoursOnly = d.mode === "hours";
+  const kmTotal = Math.round(d.km * 2 * trips * 10) / 10;
+  const quantity = hoursOnly ? 0 : kmTotal;
   const km = (x: number) => `${Number.isInteger(x) ? x : x.toFixed(1)} km`;
   const lines = [
     `${from?.trim() || "Our base"} → ${d.address.trim() || "the venue"}`,
-    `${km(d.km)} each way · ${km(d.km * 2)} return${trips > 1 ? ` × ${trips} trips = ${km(quantity)}` : ""}`,
+    hoursOnly ? (d.km > 0 ? `${km(d.km)} each way — no kilometre charge` : "No kilometre charge")
+      : `${km(d.km)} each way · ${km(d.km * 2)} return${trips > 1 ? ` × ${trips} trips = ${km(kmTotal)}` : ""}`,
     d.charge_minutes > 0 ? `Driving ${minutesText(d.drive_minutes || d.charge_minutes)} each way${d.charge_minutes !== d.drive_minutes ? ` (charged as ${minutesText(d.charge_minutes)})` : ""} — on the barista hours` : null,
   ].filter(Boolean);
   return { quantity, description: lines.join("\n") };

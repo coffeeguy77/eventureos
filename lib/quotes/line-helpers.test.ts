@@ -69,3 +69,15 @@ eq("minimum shift 3: 3 + 3 hrs", school({ min_shift: 3 }).days[0].hours, 6);
 eq("minimum shift 3, one barista", staffLine({ kind: "staff", min_shift: 3, days: [day({ start: "07:30", end: "09:00", setup_minutes: 30 })] }, van3, "barista")!.quantity, 3);
 eq("minimum shift kept by cleanDetails", (cleanDetails({ kind: "staff", days: [], min_shift: 3 }) as StaffDetails).min_shift, 3);
 if (fail) { console.error(`${fail} failed`); process.exit(1); }
+
+// Travel by the minute, hours only: 45 min each way is 1.5 hrs on the barista line, 32 min is 32 min — no rounding up
+const hoursOnly = travelLine({ kind: "travel", address: "Goulburn", km: 90, drive_minutes: 45, charge_minutes: 45, trips: 1, mode: "hours" }, "Bean Culture");
+eq("hours only: no km charged", hoursOnly.quantity, 0);
+eq("hours only text", hoursOnly.description, "Bean Culture → Goulburn\n90 km each way — no kilometre charge\nDriving 45 min each way — on the barista hours");
+eq("clean keeps hours only", cleanDetails({ kind: "travel", address: "x", km: 1, drive_minutes: 32, charge_minutes: 32, trips: 1, mode: "hours" }), { kind: "travel", address: "x", km: 1, drive_minutes: 32, charge_minutes: 32, trips: 1, mode: "hours" });
+const noRule = { service_id: "x" };
+const t45 = staffLine({ kind: "staff", days: [day({ start: "09:00", end: "12:00", setup_minutes: 0 })], travel_minutes: 45 }, noRule, "barista")!;
+const t0 = staffLine({ kind: "staff", days: [day({ start: "09:00", end: "12:00", setup_minutes: 0 })] }, noRule, "barista")!;
+eq("45 min each way adds exactly 1.5 hrs", Math.round((t45.quantity - t0.quantity) * 100) / 100, 1.5);
+const t32 = staffLine({ kind: "staff", days: [day({ start: "09:00", end: "12:00", setup_minutes: 0 })], travel_minutes: 32 }, noRule, "barista")!;
+eq("32 min each way adds 64 min", Math.round((t32.quantity - t0.quantity) * 100) / 100, 1.07);
