@@ -9,7 +9,7 @@ const FALLBACK = "#6D28D9";
 export const accentOf = (c: string | null | undefined) => (c && /^#[0-9a-f]{6}$/i.test(c.trim()) ? c.trim() : FALLBACK);
 
 /** Page-level styles: focus rings, the one orchestrated hero entrance, grid backdrop, reduced motion. */
-const CSS = `
+export const AGENCY_CSS = `
 .agency{--ink:#0F0B1E;--ink2:#1A1530;--paper:#F5F4FA;--line:#E2DFEC;--muted:#575270;--lime:#C8F560;--ac-hi:color-mix(in srgb,var(--ac) 55%,#fff);--ac-ink:color-mix(in srgb,var(--ac) 82%,#000);-webkit-font-smoothing:antialiased}
 .agency ::selection{background:var(--lime);color:var(--ink)}
 .agency a:focus-visible,.agency button:focus-visible,.agency summary:focus-visible,.agency input:focus-visible,.agency select:focus-visible,.agency textarea:focus-visible{outline:2px solid var(--lime);outline-offset:3px;box-shadow:0 0 0 5px var(--ink)}
@@ -33,7 +33,7 @@ export function AgencyFrame({ org, children }: { org: PublicOrg; children: React
   const ac = accentOf(org.brand_colour);
   return (
     <div style={{ ["--ac" as string]: ac, ["--on-ac" as string]: onColour(ac) }} className="agency min-h-screen bg-[var(--paper)] font-sans text-[var(--ink)]">
-      <style>{CSS}</style>
+      <style>{AGENCY_CSS}</style>
       <a href="#main" className="sr-only z-[100] rounded-full bg-[var(--lime)] px-5 py-3 font-semibold text-[var(--ink)] focus:not-sr-only focus:fixed focus:left-4 focus:top-4">Skip to content</a>
       <SiteTracker slug={org.slug} section="other" />
       <AgencyHeader org={org} />

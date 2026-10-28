@@ -2,14 +2,14 @@ import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { AGENCY, GROUPS, SERVICES } from "@/lib/site/agency/content";
-import { Wordmark } from "./brand";
+import { Wordmark, darkLogo } from "./brand";
 import { WRAP } from "./ui";
 
 /** Every service, how to reach us, and the client links. */
 export function AgencyFooter({ org }: { org: PublicOrg }) {
   const base = `/site/${org.slug}`;
   const phone = org.contact_phone || AGENCY.phone, email = org.contact_email || AGENCY.email, address = org.address || AGENCY.address;
-  const logo = org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
+  const logo = darkLogo(org);
   const link = "text-[0.9375rem] text-white/70 transition hover:text-white";
   return (
     <footer className="bg-[var(--ink)] text-white">

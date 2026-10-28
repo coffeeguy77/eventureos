@@ -13,6 +13,11 @@ import { createClient } from "@/lib/supabase/server";
 import { brandVars, getBranding } from "./portal-data";
 import { portalSignOut } from "./actions";
 import { BrandMark } from "./ui";
+import { agencyMode } from "@/lib/site/agency/server";
+import { AGENCY_CSS, accentOf } from "@/components/site/agency/frame";
+import { AgencyHeader } from "@/components/site/agency/header";
+import { AgencyFooter } from "@/components/site/agency/footer";
+import { onColour } from "@/components/book/shell";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -36,6 +41,44 @@ export default async function PortalLayout({ children, params }: { children: Rea
     data: { user },
   } = await supabase.auth.getUser();
   const brand = site ? brandStyle(site) : {};
+
+  // Web and IT agencies: the portal sits inside their website — same header, footer and colours — not a plain white page
+  if (site && (await agencyMode(slug))) {
+    const ac = accentOf(site.brand_colour);
+    return (
+      <div style={{ ...brandVars(b.brand_colour), ...brand, ["--ac" as string]: ac, ["--on-ac" as string]: onColour(ac) }} className="portal-light agency flex min-h-screen flex-col overflow-x-clip bg-[var(--paper)] font-sans text-[var(--ink)]">
+        <style>{AGENCY_CSS}</style>
+        <PageBg color="#0F0B1E" />
+        <AgencyHeader org={site} />
+        <section className="relative isolate overflow-hidden bg-[var(--ink)] text-white">
+          <div aria-hidden className="ag-grid absolute inset-0 -z-10" />
+          <div aria-hidden className="ag-glow absolute inset-0 -z-10" />
+          <div className={`mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-6 px-4 sm:px-6 ${user ? "pb-24 pt-8 sm:pb-24 sm:pt-10" : "pb-24 pt-12 sm:pb-28 sm:pt-16"}`}>
+            <div className="ag-in">
+              <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-[0.8125rem] text-white/80"><span className="h-1.5 w-1.5 rounded-full bg-[var(--lime)]" />{b.name} client portal</p>
+              {!user && <h1 className="mt-5 text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-[3rem]">
+                <Link href={`/p/${slug}`} className="hover:opacity-90">Your account.</Link>
+              </h1>}
+              {!user && <p className="mt-3 max-w-[560px] text-[1.0313rem] leading-relaxed text-white/70">Your websites, hosting, invoices and support tickets with {b.name} — all in one place.</p>}
+            </div>
+            {user && (
+              <div className="ag-in ag-d1 flex min-w-0 items-center gap-3">
+                <span className="hidden max-w-[240px] truncate text-[0.875rem] text-white/60 md:inline">{user.email}</span>
+                <form action={portalSignOut}>
+                  <input type="hidden" name="slug" value={slug} />
+                  <button className="inline-flex h-11 items-center gap-2 rounded-full border border-white/20 px-5 text-[0.875rem] font-semibold text-white transition hover:bg-white/10">
+                    <LogOut className="h-4 w-4" />Sign out
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </section>
+        <main className="relative z-10 mx-auto -mt-16 w-full min-w-0 max-w-6xl flex-1 px-4 pb-16 sm:px-6 sm:pb-20">{children}</main>
+        <AgencyFooter org={site} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...brandVars(b.brand_colour), ...brand }} className="portal-light flex min-h-screen flex-col overflow-x-clip bg-[#FBF8F5]">

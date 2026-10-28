@@ -147,12 +147,13 @@ export async function updateOrganisation(_prev: ActionState, form: FormData): Pr
 // Branding
 // ---------------------------------------------------------------------------
 /** Called after the browser has uploaded the file to the public `branding` bucket. */
-export async function saveLogo(path: string) {
+export async function saveLogo(path: string, which: "main" | "dark" = "main") {
   const { supabase, org, user, profile } = await ownerOrAdmin();
   if (!path.startsWith(`${org.id}/`) || path.includes("..") || !/\.(png|jpe?g|webp|gif)$/i.test(path)) {
     throw new Error("That upload location isn't valid for your organisation.");
   }
   const { data: pub } = supabase.storage.from("branding").getPublicUrl(path);
+  if (which === "dark") return saveDarkLogo(supabase, org.id, pub.publicUrl);
   const { data: before } = await supabase.from("organisations").select("logo_url").eq("id", org.id).single();
   const { error } = await supabase.from("organisations").update({ logo_url: pub.publicUrl }).eq("id", org.id);
   if (error) throw new Error(`Couldn't save the logo: ${error.message}`);
@@ -165,8 +166,22 @@ export async function saveLogo(path: string) {
   revalidatePath("/", "layout");
 }
 
-export async function removeLogo() {
+/** The version of the logo for dark backgrounds (white or light artwork) — website headers, footers and dark bands. */
+async function saveDarkLogo(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], orgId: string, url: string | null) {
+  const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", orgId).single();
+  if (e1) throw new Error(e1.message);
+  const settings = { ...((data?.settings ?? {}) as Record<string, unknown>) };
+  const before = typeof settings.logo_on_dark === "string" ? settings.logo_on_dark : null;
+  if (url) settings.logo_on_dark = url; else delete settings.logo_on_dark;
+  const { error } = await supabase.from("organisations").update({ settings }).eq("id", orgId);
+  if (error) throw new Error(`Couldn't save the logo: ${error.message}`);
+  await removeOldLogo(supabase, orgId, before);
+  revalidatePath("/", "layout");
+}
+
+export async function removeLogo(which: "main" | "dark" = "main") {
   const { supabase, org, user, profile } = await ownerOrAdmin();
+  if (which === "dark") return saveDarkLogo(supabase, org.id, null);
   const { data: before } = await supabase.from("organisations").select("logo_url").eq("id", org.id).single();
   if (!before?.logo_url) return;
   const { error } = await supabase.from("organisations").update({ logo_url: null }).eq("id", org.id);

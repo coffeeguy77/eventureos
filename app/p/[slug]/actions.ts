@@ -60,7 +60,7 @@ export async function portalSignIn(prev: SignInState, form: FormData): Promise<S
       return {
         step: "email",
         email,
-        error: `We couldn't find any bookings for ${email}. Please contact ${b?.name ?? "us"}${contact ? ` (${contact})` : ""} and check which email your booking is under.`,
+        error: `We couldn't find an account or any bookings for ${email}. Please contact ${b?.name ?? "us"}${contact ? ` (${contact})` : ""} and check which email we have on file for you.`,
       };
     }
     const next = String(form.get("next") ?? "");

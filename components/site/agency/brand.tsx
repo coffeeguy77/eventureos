@@ -1,6 +1,13 @@
+/** The logo for dark backgrounds (Settings → Branding → "Logo on dark backgrounds"), falling back to the main logo. */
+export function darkLogo(org: { logo_url: string | null; rawSettings: Record<string, unknown> }): string | null {
+  const d = org.rawSettings.logo_on_dark;
+  if (typeof d === "string" && /^(https:\/\/|\/media\/)/.test(d)) return d;
+  return org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null;
+}
+
 /** The business's logo, or — when it hasn't uploaded one — a wordmark: a small browser-window mark and its name. */
 export function Wordmark({ name, logo, className = "" }: { name: string; logo: string | null; className?: string }) {
-  if (logo) return <img src={logo} alt={name} className={`h-9 max-w-[200px] object-contain ${className}`} />;
+  if (logo) return <img src={logo} alt={name} className={`h-9 max-w-[210px] object-contain object-left ${className}`} />;
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
       <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0" aria-hidden>

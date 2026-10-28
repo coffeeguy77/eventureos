@@ -15,6 +15,8 @@ export interface BrandingOrg {
   id: string;
   name: string;
   logoUrl: string | null;
+  /** white/light version of the logo for dark website headers and footers */
+  darkLogoUrl?: string | null;
   brandColour: string;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -53,6 +55,11 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
           <p className="mt-0.5 text-[0.7812rem] text-ink-muted">PNG, JPG, WebP or GIF up to 2 MB. A wide logo on a transparent background works best.</p>
           <div className="mt-3">
             <LogoUploader org={org} canEdit={canEdit} />
+          </div>
+          <h4 className="mt-5 text-[0.8125rem] font-semibold text-ink">Logo on dark backgrounds <span className="font-normal text-ink-faint">(optional)</span></h4>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">A white or light version for dark website headers and footers. Without one, your main logo is used there.</p>
+          <div className="mt-3">
+            <LogoUploader org={org} canEdit={canEdit} dark />
           </div>
         </section>
 
@@ -144,7 +151,9 @@ function LogoMark({ org, size = 36 }: { org: BrandingOrg; size?: number }) {
   );
 }
 
-function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) {
+function LogoUploader({ org, canEdit, dark = false }: { org: BrandingOrg; canEdit: boolean; dark?: boolean }) {
+  const which = dark ? "dark" : "main";
+  const current = dark ? org.darkLogoUrl ?? null : org.logoUrl;
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -158,12 +167,12 @@ function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) 
     start(async () => {
       try {
         const supabase = createClient();
-        const path = `${org.id}/logo-${Date.now()}.${ext}`;
+        const path = `${org.id}/logo${dark ? "-dark" : ""}-${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("branding").upload(path, file, {
           contentType: file.type, cacheControl: "31536000", upsert: false,
         });
         if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
-        await saveLogo(path);
+        await saveLogo(path, which);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
@@ -176,23 +185,23 @@ function LogoUploader({ org, canEdit }: { org: BrandingOrg; canEdit: boolean }) 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex h-16 min-w-[64px] items-center justify-center rounded-lg border border-dashed border-line-strong bg-canvas px-3">
-          <LogoMark org={org} size={40} />
+        <div className={`flex h-16 min-w-[64px] items-center justify-center rounded-lg border border-dashed px-3 ${dark ? "border-zinc-600 bg-[#0F0B1E]" : "border-line-strong bg-canvas"}`}>
+          {dark ? (current ? <img src={current} alt="" style={{ height: 40, maxWidth: 160 }} className="w-auto object-contain" /> : <span className="text-[0.75rem] text-zinc-400">None yet</span>) : <LogoMark org={org} size={40} />}
         </div>
         {canEdit && (
           <div className="flex gap-2">
-            <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" id="logo-file"
+            <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" id={dark ? "logo-dark-file" : "logo-file"}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
             <Button type="button" size="sm" disabled={pending} onClick={() => input.current?.click()} className="h-10 sm:h-8">
-              <ImageUp className="h-3.5 w-3.5" /> {pending ? "Uploading…" : org.logoUrl ? "Replace logo" : "Upload logo"}
+              <ImageUp className="h-3.5 w-3.5" /> {pending ? "Uploading…" : current ? "Replace logo" : "Upload logo"}
             </Button>
-            {org.logoUrl && (
+            {current && (
               <Button type="button" size="sm" variant="ghost" disabled={pending} className="h-10 sm:h-8"
                 onClick={() => {
-                  if (!window.confirm("Remove your logo? Your business name will show instead.")) return;
+                  if (!window.confirm(dark ? "Remove the logo for dark backgrounds? Your main logo will be used instead." : "Remove your logo? Your business name will show instead.")) return;
                   setError(null);
                   start(async () => {
-                    try { await removeLogo(); router.refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't remove the logo"); }
+                    try { await removeLogo(which); router.refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't remove the logo"); }
                   });
                 }}>
                 <Trash2 className="h-3.5 w-3.5" /> Remove
