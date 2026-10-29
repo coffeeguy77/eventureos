@@ -36,7 +36,8 @@ export async function cardOnFile(db: SupabaseClient, orgId: string, customerId: 
 }
 
 /** Stripe's secure card page for the chosen invoices. Returns its address to open. */
-export async function startPhoneCheckout(db: SupabaseClient, orgId: string, cfg: StripeConfig, o: { customerId: string; invoiceIds: string[]; saveCard: boolean; staffId: string; staffName: string; currency: string; email: string | null }) {
+export async function startPhoneCheckout(db: SupabaseClient, orgId: string, cfg: StripeConfig, o: { customerId: string; invoiceIds: string[]; saveCard: boolean; staffId: string | null; staffName: string; currency: string; email: string | null;
+  /** the customer paying from their account statement (not the team over the phone) */ statement?: { successUrl: string; cancelUrl: string } }) {
   const list = await owingInvoices(db, orgId, o.customerId, o.invoiceIds);
   const existing = o.saveCard ? await cardOnFile(db, orgId, o.customerId) : null;
   const [first, ...rest] = list;
@@ -46,10 +47,10 @@ export async function startPhoneCheckout(db: SupabaseClient, orgId: string, cfg:
     amountCents: toCents(first.balance), currency: o.currency, name: `Invoice ${first.number}`,
     extraLines: rest.map((i) => ({ name: `Invoice ${i.number}`, amountCents: toCents(i.balance) })),
     email: o.email,
-    successUrl: `${base}/accounts/${o.customerId}?paid=1`, cancelUrl: `${base}/accounts/${o.customerId}`,
+    successUrl: o.statement?.successUrl ?? `${base}/accounts/${o.customerId}?paid=1`, cancelUrl: o.statement?.cancelUrl ?? `${base}/accounts/${o.customerId}`,
     metadata: {
       eventureos_org_id: orgId, eventureos_invoice_ids: list.map((i) => i.id).join(","), eventureos_alloc: list.map((i) => toCents(i.balance)).join(","),
-      eventureos_customer: o.customerId, eventureos_phone: "1", eventureos_staff: o.staffId, ...(o.saveCard ? { eventureos_save_card: "1", eventureos_consent: consent.slice(0, 480) } : {}),
+      eventureos_customer: o.customerId, ...(o.statement ? { eventureos_statement: "1" } : { eventureos_phone: "1" }), ...(o.staffId ? { eventureos_staff: o.staffId } : {}), ...(o.saveCard ? { eventureos_save_card: "1", eventureos_consent: consent.slice(0, 480) } : {}),
       invoice_numbers: list.map((i) => i.number).join(", ").slice(0, 480),
     },
     idempotencyKey: `phone-${o.customerId}-${list.map((i) => `${i.id.slice(0, 8)}${toCents(i.balance)}`).join("")}-${o.saveCard ? 1 : 0}-${Math.floor(Date.now() / 60000)}`,
@@ -73,10 +74,13 @@ export async function saveCardFromPayment(db: SupabaseClient, orgId: string, cfg
 }
 
 /** Charge the card on file for the chosen invoices, and record the payment on each (and in Xero). */
-export async function chargeCardOnFile(db: SupabaseClient, orgId: string, cfg: StripeConfig, o: { customerId: string; invoiceIds: string[]; currency: string; reason: string; email: string | null }) {
+export async function chargeCardOnFile(db: SupabaseClient, orgId: string, cfg: StripeConfig, o: { customerId: string; invoiceIds: string[]; currency: string; reason: string; email: string | null;
+  /** part payments (a payment plan instalment): how much goes on each invoice — instead of paying them in full */ amounts?: { id: string; amount: number }[] }) {
   const card = await cardOnFile(db, orgId, o.customerId);
   if (!card) throw new Error("There's no card on file for this customer.");
-  const list = await owingInvoices(db, orgId, o.customerId, o.invoiceIds);
+  let list = await owingInvoices(db, orgId, o.customerId, o.amounts ? o.amounts.map((a) => a.id) : o.invoiceIds);
+  if (o.amounts) list = list.map((i) => ({ ...i, balance: Math.min(i.balance, Math.round((o.amounts!.find((a) => a.id === i.id)?.amount ?? 0) * 100) / 100) })).filter((i) => i.balance > 0);
+  if (!list.length) throw new Error("Nothing left to charge on those invoices.");
   const total = Math.round(list.reduce((a, i) => a + i.balance, 0) * 100) / 100;
   let pi;
   try {
@@ -94,5 +98,5 @@ export async function chargeCardOnFile(db: SupabaseClient, orgId: string, cfg: S
   if (pi.status !== "succeeded") throw new Error(pi.status === "requires_action" ? "The card's bank wants the cardholder to approve this payment — send them the pay link instead." : `The payment didn't go through (${pi.status}).`);
   const now = Math.floor(Date.now() / 1000);
   for (const [k, i] of list.entries()) await recordCardPayment(db, orgId, cfg, { invoiceId: i.id, amount: i.balance, createdSec: now, key: k ? `${pi.id}#${k}` : pi.id, payer: null });
-  return { total, invoices: list.map((i) => i.number), card };
+  return { total, invoices: list.map((i) => i.number), card, paymentId: pi.id };
 }

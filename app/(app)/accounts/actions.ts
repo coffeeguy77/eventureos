@@ -316,3 +316,105 @@ export async function removeSavedCard(customerId: string): Promise<R> {
     return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/* ------------------------------------------------------------------ account statements */
+
+/** A link to the customer's statement (to text or paste into an email). */
+export async function statementLink(customerId: string): Promise<R<string>> {
+  try {
+    const { org } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { statementUrl } = await import("@/lib/accounts/statement");
+    return { ok: true, data: statementUrl(org.id, customerId) };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Email the customer their account statement — every invoice owing, pay all or some — tracked like a chasing email. */
+export async function sendStatement(customerId: string, message: string): Promise<R<string>> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const [{ data: c }, { data: o }] = await Promise.all([
+      db.from("customers").select("name, email").eq("id", customerId).eq("organisation_id", org.id).maybeSingle(),
+      db.from("organisations").select("name, logo_url, brand_colour, contact_email").eq("id", org.id).single(),
+    ]);
+    if (!c) throw new Error("Customer not found.");
+    const { data: people } = await db.from("contacts").select("email, is_primary").eq("organisation_id", org.id).eq("customer_id", customerId).not("email", "is", null).order("is_primary", { ascending: false }).limit(1);
+    const to = (c.email as string | null) || ((people?.[0] as { email: string } | undefined)?.email ?? null);
+    if (!to) throw new Error("There's no email address for this customer.");
+    const { loadOwing } = await import("@/lib/accounts/server");
+    const today = todayISO(org.timezone);
+    const owing = await loadOwing(db, org.id, customerId);
+    if (!owing.length) throw new Error("Nothing is owing — there's no statement to send.");
+    const { data: row, error } = await db.from("collection_emails").insert({ organisation_id: org.id, customer_id: customerId, invoice_id: null, kind: "manual", template: "statement",
+      subject: `Your account statement — ${o?.name ?? org.name}`, to_emails: [to], balance_at_send: owing.reduce((a, i) => a + i.balance, 0), sent_by: user.id }).select("id").single();
+    if (error) throw new Error(error.message);
+    const { statementUrl } = await import("@/lib/accounts/statement");
+    const url = statementUrl(org.id, customerId, row.id as string);
+    const { statementEmail } = await import("@/lib/email/templates");
+    const { daysBetween } = await import("@/lib/accounts/core");
+    const first = String(c.name).split(/\s+/)[0];
+    const msg = t(message, 4000) ?? `Hi ${first},\n\nHere's your account statement. You can open each invoice, and pay them all — or just some for now — with the button below.`;
+    const m = statementEmail({ businessName: o?.name ?? org.name, customerName: c.name as string, message: msg, total: money(owing.reduce((a, i) => a + i.balance, 0), org.currency), url, brand: o?.brand_colour as string | null, logoUrl: o?.logo_url as string | null,
+      lines: owing.map((i) => ({ number: i.number, amount: money(i.balance, org.currency), due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${i.due_date}`) : "no due date" })) });
+    const { appBaseUrl } = await import("@/lib/integrations/registry");
+    const html = m.html.replace(/<\/body>/i, `<img src="${appBaseUrl()}/api/t/o/${row.id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" /></body>`);
+    const { sendEmail } = await import("@/lib/email/send");
+    try {
+      await sendEmail({ to, subject: `Your account statement — ${o?.name ?? org.name}`, html, text: m.text, replyTo: (o?.contact_email as string | null) ?? null, fromName: o?.name as string, orgId: org.id });
+    } catch (e) { await db.from("collection_emails").delete().eq("id", row.id); throw e; }
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "email", created_by: user.id, body: `Emailed the account statement (${owing.length} invoice${owing.length === 1 ? "" : "s"}) to ${to}.` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: `Statement sent to ${to}. You'll see here when they open it.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ------------------------------------------------------------------ payment plans */
+
+/** Pay off the chosen invoices weekly or fortnightly from the card on file. */
+export async function startPaymentPlan(customerId: string, invoiceIds: string[], frequency: "weekly" | "fortnightly", start: string, by: { count: number } | { amount: number }, emailIt: boolean): Promise<R<string>> {
+  try {
+    const { org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    if (frequency !== "weekly" && frequency !== "fortnightly") throw new Error("Choose weekly or fortnightly.");
+    if (!DATE.test(start) || start < todayISO(org.timezone)) throw new Error("Choose a first payment date from today on.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { cardOnFile } = await import("@/lib/payments/phone");
+    const card = await cardOnFile(db, org.id, customerId);
+    if (!card) throw new Error("A payment plan needs a card on file — take a payment over the phone with \"Keep the card on file\" ticked first.");
+    const { data: inv, error: e1 } = await db.from("invoices").select("id, number, balance, customer_id, status").eq("organisation_id", org.id).in("id", invoiceIds.filter((x) => UUID.test(x)).slice(0, 30));
+    if (e1) throw new Error(e1.message);
+    const list = ((inv ?? []) as { id: string; number: string; balance: number; customer_id: string; status: string }[]).filter((i) => i.customer_id === customerId && Number(i.balance) > 0 && !["void", "draft", "paid"].includes(i.status));
+    if (!list.length) throw new Error("Choose at least one unpaid invoice.");
+    const total = Math.round(list.reduce((a, i) => a + Number(i.balance), 0) * 100) / 100;
+    const { planSchedule } = await import("@/lib/accounts/plan");
+    const schedule = planSchedule(total, frequency, start, by);
+    if (!schedule.length) throw new Error("Choose how many payments, or how much each.");
+    const { createPlan } = await import("@/lib/accounts/plans");
+    await createPlan(db, { orgId: org.id, customerId, invoiceIds: list.map((i) => i.id), frequency, schedule, note: null, userId: user.id });
+    const summary = `${schedule.length} ${frequency} payments of ${money(schedule[0].amount, org.currency)}${schedule.at(-1)!.amount !== schedule[0].amount ? ` (last ${money(schedule.at(-1)!.amount, org.currency)})` : ""} from ${start}, to the ${card.brand ?? "card"} ending ${card.last4 ?? ""}`;
+    await db.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "plan", created_by: user.id, body: `Payment plan for ${list.map((i) => i.number).join(", ")} (${money(total, org.currency)}): ${summary}.` });
+    let sent = "";
+    if (emailIt) {
+      const r = await sendStatement(customerId, `Hi,\n\nAs agreed, here's your payment plan: ${summary}. Each payment is charged automatically on its day — the full schedule is on your statement below.\n\nThanks for sorting this out with us.`);
+      sent = r.ok ? " The schedule has been emailed to them." : ` (Couldn't email it: ${r.error})`;
+    }
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: `Payment plan set up: ${summary}.${sent}` };
+  } catch (e) { return { ok: false, error: /payment_plan/.test(String((e as Error)?.message)) && /does not exist|could not find/i.test(String((e as Error)?.message)) ? "Payment plans need the 0080 database update first: run supabase/migrations/0080_payment_plans.sql in Supabase (SQL editor)." : err(e) }; }
+}
+
+export async function cancelPaymentPlan(customerId: string): Promise<R> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { error } = await supabase.from("payment_plans").update({ status: "cancelled" }).eq("organisation_id", org.id).eq("customer_id", customerId).eq("status", "active");
+    if (error) throw new Error(error.message);
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "note", created_by: user.id, body: "Payment plan cancelled — no more automatic payments." });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

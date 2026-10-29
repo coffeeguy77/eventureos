@@ -8,6 +8,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { advance, describeSchedule, dueDate, linesTotal, type Line } from "@/lib/recurring/core";
 import { saveRecurring, type RecurringInput } from "@/app/(app)/hosting/recurring-actions";
+import { periodPrices } from "@/lib/accounts/plan";
 
 const blank: Line = { description: "", quantity: 1, unit_amount: 0, tax_rate: 10, item_code: null, account_code: null, inc: true };
 const money = (n: number) => `$${n.toFixed(2)}`;
@@ -63,6 +64,10 @@ export function RecurringEditor({ id, initial, clients, hosting, today }: { id: 
             <div className="flex items-center justify-between"><button type="button" onClick={() => set({ line_items: [...lines, blank] })} className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600"><Plus className="h-4 w-4" />Add a line</button><p className="text-[0.9375rem] font-semibold tabular-nums">{money(total)} <span className="text-[0.75rem] font-normal text-ink-muted">inc GST</span></p></div>
           </div>
         </Card>
+        <PeriodPricing currentEvery={f.every} currentUnit={f.unit} firstLine={lines[0]} onApply={(amount, every, label) => set({
+          every, unit: "month",
+          line_items: lines.map((l, j) => (j === 0 ? { ...l, unit_amount: amount, quantity: 1, description: l.description.replace(/\s*\((yearly|quarterly|monthly)[^)]*\)\s*$/i, "").trim() ? `${l.description.replace(/\s*\((yearly|quarterly|monthly)[^)]*\)\s*$/i, "").trim()} (${label})` : `Hosting (${label})` } : l)),
+        })} />
         <Card>
           <CardHeader title="Notes" />
           <div className="border-t border-line px-5 py-4"><Textarea aria-label="Notes" rows={2} value={f.notes ?? ""} onChange={(e) => set({ notes: e.target.value })} /></div>
@@ -98,5 +103,39 @@ export function RecurringEditor({ id, initial, clients, hosting, today }: { id: 
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * Billing period calculator: start from the yearly price; quarterly (and monthly) cost a set % more, so paying
+ * yearly is the saving. Applies the price to the first line and sets how often it's invoiced.
+ */
+function PeriodPricing({ currentEvery, currentUnit, firstLine, onApply }: { currentEvery: number; currentUnit: string; firstLine?: Line; onApply: (amount: number, every: number, label: string) => void }) {
+  const [yearly, setYearly] = useState(() => (firstLine && currentUnit === "month" && currentEvery === 12 && firstLine.unit_amount ? firstLine.unit_amount : 440));
+  const [loading, setLoading] = useState(20);
+  const p = periodPrices(yearly, loading);
+  const on = (every: number) => currentUnit === "month" && currentEvery === every;
+  const opt = (every: number, label: string, amount: number, note: string) => (
+    <button type="button" onClick={() => onApply(amount, every, label)} className={`rounded-lg p-3 text-left ring-1 ring-inset transition ${on(every) ? "bg-brand-50/60 ring-2 ring-brand-400" : "ring-line hover:ring-line-strong"}`}>
+      <span className="block text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{label}</span>
+      <span className="block text-[1.125rem] font-semibold tabular-nums text-ink">{money(amount)}</span>
+      <span className="block text-[0.75rem] text-ink-muted">{note}</span>
+    </button>
+  );
+  return (
+    <Card>
+      <CardHeader title="Price by billing period" subtitle="Yearly is the best price; quarterly and monthly cost more. Tap one to put it on this invoice." />
+      <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
+          <div><Label htmlFor="pp-y">Yearly price (inc GST)</Label><Input id="pp-y" type="number" min={0} step="0.01" value={yearly || ""} onChange={(e) => setYearly(Number(e.target.value) || 0)} /></div>
+          <div><Label htmlFor="pp-l" hint="more than yearly">Quarterly / monthly loading %</Label><Input id="pp-l" type="number" min={0} max={100} step="1" value={loading} onChange={(e) => setLoading(Number(e.target.value) || 0)} /></div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {opt(12, "Yearly", p.yearly, p.yearlySaves > 0 ? `Saves ${money(p.yearlySaves)} a year (${p.yearlySavesPct}%)` : "Best price")}
+          {opt(3, "Quarterly", p.quarterly, `${money(p.quarterlyPerYear)} a year`)}
+          {opt(1, "Monthly", p.monthly, `${money(p.monthly * 12)} a year`)}
+        </div>
+      </div>
+    </Card>
   );
 }

@@ -57,7 +57,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const step = (cid: string) => N.find((n) => n.customer_id === cid && n.next_step && !n.done_at) ?? null;
   const promise = (cid: string) => N.find((n) => n.customer_id === cid && n.kind === "promise" && n.promise_date && n.promise_date >= addDays(today, -7)) ?? null;
   const disputed = (cid: string) => { const last = N.find((n) => n.customer_id === cid && ["dispute", "plan", "promise", "call", "note"].includes(n.kind)); return last?.kind === "dispute"; };
-  const lastTouch = (cid: string) => [N.find((n) => n.customer_id === cid)?.created_at, E.find((e) => e.customer_id === cid)?.sent_at].filter(Boolean).sort().pop() ?? null;
+  const lastTouch = (cid: string) => [N.find((n) => n.customer_id === cid && n.body !== "Opened their account statement")?.created_at, E.find((e) => e.customer_id === cid)?.sent_at].filter(Boolean).sort().pop() ?? null;
   /** The last promise date that has passed with no payment since (and the money's still overdue) */
   const brokenPromise = (cid: string) => {
     const p = N.find((n) => n.customer_id === cid && n.kind === "promise" && n.promise_date);

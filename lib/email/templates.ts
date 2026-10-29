@@ -194,3 +194,16 @@ export function hostingNoticeEmail(o: { brandName: string; subject: string; mess
     button: o.payUrl ? { label: "Pay the invoice", url: o.payUrl } : null, footer: `Sent by ${o.brandName}.` });
   return { html, text: o.message };
 }
+
+/** An account statement: what's owing, invoice by invoice, with one button to view and pay (all or some). */
+export function statementEmail(o: { businessName: string; customerName: string; message: string; lines: { number: string; due: string; amount: string }[]; total: string; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = [
+    ...o.message.split(/\n{2,}/).map((p) => p.replace(/\n/g, " ").trim()).filter(Boolean),
+    ...o.lines.map((l) => `Invoice ${l.number} — ${l.amount} (${l.due})`),
+    `Total owing: ${o.total}`,
+  ];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: `Your account statement`, paragraphs,
+    button: { label: "View statement & pay", url: o.url }, footer: `Sent by ${o.businessName}. Open any invoice from your statement, and pay all or just some of them.` });
+  const text = `${o.message}\n\n${o.lines.map((l) => `Invoice ${l.number} — ${l.amount} (${l.due})`).join("\n")}\nTotal owing: ${o.total}\n\nView your statement and pay: ${o.url}`;
+  return { html, text };
+}

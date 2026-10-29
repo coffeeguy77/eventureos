@@ -9,6 +9,7 @@ import { daysBetween, feeDue, feeRateFor, readFees, readTemplates } from "@/lib/
 import { loadOwing } from "@/lib/accounts/server";
 import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { CallPanel } from "@/components/accounts/call-panel";
+import { PlanPanel, StatementPanel } from "@/components/accounts/statement-plan";
 import { lastAttempts } from "@/lib/accounts/phones";
 import { loadPhones } from "@/lib/accounts/phones-server";
 import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, PayPanel, StepDone } from "@/components/accounts/customer-tools";
@@ -80,6 +81,13 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     return { label: `${brand} ending ${c.last4 ?? "????"}`, expiry: c.exp_month && c.exp_year ? `${String(c.exp_month).padStart(2, "0")}/${String(c.exp_year).slice(-2)}` : null, expired };
   })() : null;
   const phoneData = await loadPhones(supabase, org.id, id, user.id);
+  // Payment plan (0080)
+  let plan: { frequency: string; instalments: { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] } | null = null;
+  const { data: pl, error: plErr } = await supabase.from("payment_plans").select("id, frequency").eq("organisation_id", org.id).eq("customer_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!plErr && pl) {
+    const { data: ins } = await supabase.from("payment_plan_instalments").select("n, due_date, amount, status, last_error").eq("plan_id", pl.id).order("n");
+    plan = { frequency: pl.frequency as string, instalments: (ins ?? []) as { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] };
+  }
   const people = (contacts ?? []) as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null; is_primary: boolean }[];
 
   return (
@@ -129,6 +137,9 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
           )}
           <PayPanel customerId={cust.id} currency={cur} card={cardInfo} stripeReady={stripeInteg?.status === "connected"} justPaid={justPaid}
             invoices={owing.map((i) => ({ id: i.id, number: i.number, balance: i.balance, overdue: !!(i.due_date && i.due_date < today), label: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "" }))} />
+          <StatementPanel customerId={cust.id} email={cust.email ?? people.find((p) => p.email)?.email ?? null} owing={owing.length} />
+          <PlanPanel customerId={cust.id} currency={cur} today={today} card={cardInfo && !cardInfo.expired ? cardInfo.label : null} plan={plan}
+            invoices={owing.map((i) => ({ id: i.id, number: i.number, balance: i.balance, overdue: !!(i.due_date && i.due_date < today), label: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "" }))} />
           <ChaseComposer invoices={invOpts} templates={templates} />
           <Card>
             <CardHeader title="History" subtitle="Conversations, chasing emails and payments" />
@@ -142,11 +153,11 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
                     {x.n.next_step && <p className={`mt-1 ${x.n.done_at ? "text-ink-faint line-through" : "text-ink-muted"}`}>Next: {x.n.next_step}{x.n.next_step_due ? ` (by ${fmtDate(x.n.next_step_due, "short")})` : ""}</p>}
                   </>}
                   {x.kind === "email" && <>
-                    <p className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-brand-800"><Mail className="h-3 w-3" />{x.e.kind === "promise" ? "Promise-day email" : "Email"}</span><span className="text-[0.75rem] text-ink-faint">{fmtDateTime(x.e.sent_at, org.timezone)} · {x.e.kind === "promise" ? "automatic" : who(x.e.sent_by)}{invNo(x.e.invoice_id) ? ` · ${invNo(x.e.invoice_id)}` : ""}</span></p>
+                    <p className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-brand-800"><Mail className="h-3 w-3" />{x.e.kind === "promise" ? "Promise-day email" : x.e.template === "statement" ? "Statement" : "Email"}</span><span className="text-[0.75rem] text-ink-faint">{fmtDateTime(x.e.sent_at, org.timezone)} · {x.e.kind === "promise" ? "automatic" : who(x.e.sent_by)}{invNo(x.e.invoice_id) ? ` · ${invNo(x.e.invoice_id)}` : ""}</span></p>
                     <p className="mt-1 text-ink">{x.e.subject}</p>
                     <p className="mt-1 flex flex-wrap gap-3 text-[0.75rem]">
                       <span className={x.e.opened_at ? "text-emerald-700" : "text-ink-faint"}><Eye className="mr-1 inline h-3.5 w-3.5" />{x.e.opened_at ? `Opened ${x.e.open_count > 1 ? `${x.e.open_count}×` : ""} · ${fmtDateTime(x.e.opened_at, org.timezone)}` : "Not opened yet"}</span>
-                      <span className={x.e.clicked_at ? "text-emerald-700" : "text-ink-faint"}><MousePointerClick className="mr-1 inline h-3.5 w-3.5" />{x.e.clicked_at ? `Pay link clicked · ${fmtDateTime(x.e.clicked_at, org.timezone)}` : "Pay link not clicked"}</span>
+                      <span className={x.e.clicked_at ? "text-emerald-700" : "text-ink-faint"}><MousePointerClick className="mr-1 inline h-3.5 w-3.5" />{x.e.template === "statement" ? (x.e.clicked_at ? `Statement opened ${x.e.click_count > 1 ? `${x.e.click_count}× ` : ""}· ${fmtDateTime(x.e.clicked_at, org.timezone)}` : "Statement not opened yet") : x.e.clicked_at ? `Pay link clicked · ${fmtDateTime(x.e.clicked_at, org.timezone)}` : "Pay link not clicked"}</span>
                     </p>
                   </>}
                   {x.kind === "pay" && <p className="font-medium text-emerald-700">Paid {money(Number(x.p.amount), cur)}{x.p.invoice ? ` on ${x.p.invoice.number}` : ""} · {fmtDateTime(x.p.paid_at, org.timezone)}{x.p.method ? ` · ${x.p.method}` : ""}</p>}
