@@ -641,3 +641,32 @@ export async function savePaymentSettings(input: { autoEmail: boolean; reminders
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * Set a new password for a team member (e.g. their phone saved a password they can't see). Owners and admins only;
+ * an admin can't set an owner's password, and nobody can set the password of someone who also belongs to another
+ * business (they use "Forgot your password?" on the sign-in page instead).
+ */
+export async function setMemberPassword(memberId: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, user, profile, role } = await ownerOrAdmin();
+    const m = await loadMember(supabase, org.id, memberId);
+    if (m.user_id === user.id) throw new Error("Change your own password from the sign-in page (Forgot your password?).");
+    if (m.role === "owner" && role !== "owner") throw new Error("Only an owner can set an owner's password.");
+    if (m.expires_at) throw new Error("That's temporary support access — it has no password to set.");
+    const pw = typeof password === "string" ? password : "";
+    if (pw.length < 8) throw new Error("Use at least 8 characters.");
+    if (pw.length > 72) throw new Error("Use 72 characters or fewer.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { count } = await db.from("organisation_users").select("id", { count: "exact", head: true }).eq("user_id", m.user_id).neq("organisation_id", org.id);
+    if (count) throw new Error(`${m.name} also signs in to another business, so only they can change their password — ask them to use "Forgot your password?" on the sign-in page.`);
+    const { error } = await db.auth.admin.updateUserById(m.user_id, { password: pw });
+    if (error) throw new Error(/weak|pwned|leaked/i.test(error.message) ? "That password is too easy to guess (it's on a list of leaked passwords) — choose another." : `Couldn't set the password: ${error.message}`);
+    await logActivity(supabase, {
+      orgId: org.id, actorId: user.id, action: "team.password_set", entityType: "user", entityId: m.user_id,
+      summary: `${actorName(profile)} set a new password for ${m.name}`,
+    });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
