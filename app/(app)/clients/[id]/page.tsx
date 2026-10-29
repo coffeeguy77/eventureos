@@ -1,4 +1,5 @@
 import { HostingPills, hostingByClient } from "@/components/hosting/pills";
+import { AccountPanel } from "@/components/accounts/account-panel";
 import Link from "next/link";
 import { NotConnected } from "@/components/ui/connect-link";
 import { notFound } from "next/navigation";
@@ -74,7 +75,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const tab: TabKey = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as TabKey) : "overview";
-  const { supabase, org, role } = await requireOrg();
+  const { supabase, org, role, user } = await requireOrg();
   const hostingPills = await hostingByClient(supabase, org.id, [id]);
   const tz = org.timezone;
   const cur = org.currency;
@@ -651,6 +652,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               </div>
             </>)}
           </Card>
+        )}
+        {/* Money owing: call and log it here too — the same records as Accounts */}
+        {tab === "invoices" && outstanding > 0 && canManage(role) && (
+          <div className="mt-5 grid gap-5 lg:grid-cols-2"><AccountPanel db={supabase} orgId={org.id} customerId={c.id} today={todayISO(tz)} timezone={tz} currency={cur} actorId={user.id} /></div>
         )}
 
         {tab === "payments" && (

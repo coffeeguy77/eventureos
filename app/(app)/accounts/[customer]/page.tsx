@@ -8,6 +8,9 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { daysBetween, feeDue, feeRateFor, readFees, readTemplates } from "@/lib/accounts/core";
 import { loadOwing } from "@/lib/accounts/server";
 import { SiteDoctor } from "@/components/hosting/site-doctor";
+import { CallPanel } from "@/components/accounts/call-panel";
+import { lastAttempts } from "@/lib/accounts/phones";
+import { loadPhones } from "@/lib/accounts/phones-server";
 import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, PayPanel, StepDone } from "@/components/accounts/customer-tools";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +22,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
   const { customer: id } = await params;
   const justPaid = (await searchParams).paid === "1";
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, user } = await requireOrg();
   const { data: cust } = await supabase.from("customers").select("id, name, email, phone, company").eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (!cust) notFound();
   const today = todayISO(org.timezone);
@@ -76,6 +79,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     const expired = !!(c.exp_year && c.exp_month && (c.exp_year * 100 + c.exp_month) < Number(today.slice(0, 4)) * 100 + Number(today.slice(5, 7)));
     return { label: `${brand} ending ${c.last4 ?? "????"}`, expiry: c.exp_month && c.exp_year ? `${String(c.exp_month).padStart(2, "0")}/${String(c.exp_year).slice(-2)}` : null, expired };
   })() : null;
+  const phoneData = await loadPhones(supabase, org.id, id, user.id);
   const people = (contacts ?? []) as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null; is_primary: boolean }[];
 
   return (
@@ -153,6 +157,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
           </Card>
         </div>
         <aside className="space-y-5">
+          <CallPanel customerId={cust.id} phones={phoneData.phones} attempts={lastAttempts(N)} xero={phoneData.xero} />
           <Card className="p-4 text-[0.8125rem]">
             <p className="font-semibold text-ink">Contact</p>
             {people.length ? people.map((p, i) => (

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AccountPanel } from "@/components/accounts/account-panel";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { CopyField } from "@/app/(app)/settings/integrations/stripe/copy-field";
 import { notFound } from "next/navigation";
@@ -46,7 +47,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const sp = await searchParams;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org, role } = await requireOrg();
+  const { supabase, org, role, user } = await requireOrg();
   const tz = org.timezone;
   const today = todayISO(tz);
 
@@ -278,6 +279,11 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <InvoiceActions id={inv.id} number={inv.number} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
               paid={Number(inv.amount_paid)} paidLabel={money(inv.amount_paid, cur)} today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>
+
+          {/* Owing: call the customer and log it here — the same records as Accounts */}
+          {canManage(role) && inv.status !== "void" && inv.status !== "draft" && Number(inv.balance) > 0 && inv.customer && (
+            <AccountPanel db={supabase} orgId={org.id} customerId={inv.customer.id} invoiceId={inv.id} today={today} timezone={tz} currency={cur} actorId={user.id} />
+          )}
 
           {open && Number(inv.balance) > 0 && (
             <Card>

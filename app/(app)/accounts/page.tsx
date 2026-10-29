@@ -6,6 +6,7 @@ import { SyncNowButton } from "@/app/(app)/settings/integrations/controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
 import { bucket, callNext, daysBetween } from "@/lib/accounts/core";
+import { lastAttempts } from "@/lib/accounts/phones";
 import { loadOwing } from "@/lib/accounts/server";
 import { cn } from "@/lib/cn";
 import { HostingPills, hostingByClient } from "@/components/hosting/pills";
@@ -19,7 +20,7 @@ const VIEWS = [
 ] as const;
 
 /** Who owes money (EventureOS and Xero invoices), how overdue, what was last said and what happens next. */
-export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ v?: string; q?: string }> }) {
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ v?: string; q?: string; h?: string }> }) {
   const { supabase, org } = await requireOrg();
   const sp = await searchParams;
   const view = VIEWS.find((x) => x.key === sp.v)?.key ?? "next";
@@ -71,7 +72,10 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
   const hostingPills = await hostingByClient(supabase, org.id, [...byCust.keys()]);
   let rows = [...byCust.values()];
   const q = (sp.q ?? "").trim().toLowerCase();
-  if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q));
+  if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || (r.phone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, "") || "~"));
+  // Hosting clients only (Web Culture): those with a hosting account
+  const hostingOnly = sp.h === "1";
+  if (hostingOnly) rows = rows.filter((r) => hostingPills.has(r.id));
   if (view === "next") rows = callNext(rows.map((r) => ({ ...r, lastTouch: touchedToday(r.id) ? `${today}T12:00:00Z` : lastTouch(r.id), brokenPromise: brokenPromise(r.id), stepDue: stepDue(r.id), flagged: flaggedIds.has(r.id) })), today);
   if (view === "broken") rows = rows.filter((r) => r.overdue > 0 && !!brokenPromise(r.id));
   if (view === "not_contacted") rows = rows.filter((r) => r.overdue > 0 && !lastTouch(r.id));
@@ -124,8 +128,9 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         </div>
       </Card>
       <div className="no-scrollbar mb-3 mt-5 flex items-center gap-1.5 overflow-x-auto">
-        {VIEWS.map((x) => <Link key={x.key} href={`/accounts?v=${x.key}`} className={cn("shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium", view === x.key ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{x.label}{x.key in counts ? <span className={cn("ml-1.5 tabular-nums", view === x.key ? "opacity-70" : x.key === "broken" && counts[x.key] ? "font-semibold text-rose-700" : "text-ink-faint")}>{counts[x.key]}</span> : null}</Link>)}
-        <form action="/accounts" className="ml-auto"><input type="hidden" name="v" value={view} /><input name="q" defaultValue={sp.q ?? ""} placeholder="Find a customer" aria-label="Find a customer" className="h-8 w-44 rounded-full border border-line-strong bg-surface px-3 text-[0.7812rem] outline-none focus:border-brand-500" /></form>
+        {VIEWS.map((x) => <Link key={x.key} href={`/accounts?v=${x.key}${hostingOnly ? "&h=1" : ""}`} className={cn("shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium", view === x.key ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{x.label}{x.key in counts ? <span className={cn("ml-1.5 tabular-nums", view === x.key ? "opacity-70" : x.key === "broken" && counts[x.key] ? "font-semibold text-rose-700" : "text-ink-faint")}>{counts[x.key]}</span> : null}</Link>)}
+        {hostingPills.size > 0 && <Link href={`/accounts?v=${view}${hostingOnly ? "" : "&h=1"}`} className={cn("ml-2 shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium ring-1", hostingOnly ? "bg-emerald-600 text-white ring-emerald-600" : "bg-surface text-ink-muted ring-line hover:text-ink")}>{hostingOnly ? "✓ " : ""}Hosting clients</Link>}
+        <form action="/accounts" className="ml-auto"><input type="hidden" name="v" value={view} />{hostingOnly && <input type="hidden" name="h" value="1" />}<input name="q" defaultValue={sp.q ?? ""} placeholder="Find a customer or number" aria-label="Find a customer or phone number" className="h-8 w-44 rounded-full border border-line-strong bg-surface px-3 text-[0.7812rem] outline-none focus:border-brand-500" /></form>
       </div>
       <Card>
         {view === "next" && rows.length > 0 && <p className="border-b border-line px-5 py-2.5 text-[0.75rem] text-ink-muted">Overdue customers you haven&apos;t contacted today, in order: broken promises, next steps due, never contacted, then the longest since you last spoke. Log a call or send an email and they drop off until tomorrow. Flagged accounts wait in the resolution centre.</p>}
@@ -142,9 +147,10 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
                       {hostingPills.has(r.id) && <div className="mt-1"><HostingPills list={hostingPills.get(r.id)} link={false} /></div>}
                       <p className="text-[0.75rem] text-ink-faint">{r.invoices} invoice{r.invoices === 1 ? "" : "s"}{r.oldestDays ? ` · oldest ${r.oldestDays} days overdue` : ""} · {touched ? `last contact ${relative(touched)}` : <span className="text-amber-700">not contacted yet</span>}</p>
                       {s && <p className={cn("mt-0.5 truncate text-[0.75rem]", late ? "font-medium text-rose-700" : "text-ink-muted")}>Next: {s.next_step}{s.next_step_due ? ` · ${late ? "was due" : "due"} ${fmtDate(s.next_step_due, "short")}` : ""}</p>}
+                      {(() => { const a = lastAttempts(N.filter((n) => n.customer_id === r.id))[0]; return a ? <p className="mt-0.5 text-[0.75rem] text-ink-muted">Last try: <span className="font-semibold text-ink">{a.code}</span>{a.number ? ` on ${a.number}` : ""} · {relative(a.at)}</p> : null; })()}
                       {p && <p className="mt-0.5 text-[0.75rem] text-emerald-700">Promised {p.promise_amount ? money(Number(p.promise_amount), cur) : "payment"} on {fmtDate(p.promise_date, "short")}{p.remind && !p.reminded_at ? " · invoice emails that morning" : p.reminded_at ? " · reminder sent" : ""}</p>}
                     </div>
-                    {r.phone && <span className="hidden items-center gap-1 text-[0.75rem] text-ink-muted sm:flex"><Phone className="h-3.5 w-3.5" />{r.phone}</span>}
+                    {r.phone ? <span className="flex items-center gap-1 text-[0.75rem] tabular-nums text-ink-muted"><Phone className="h-3.5 w-3.5" />{r.phone}</span> : <span className="text-[0.75rem] text-ink-faint">no number</span>}
                     <div className="text-right">
                       <p className="text-[1rem] font-semibold tabular-nums text-ink">{money(r.owing, cur)}</p>
                       {r.overdue > 0 && <p className="text-[0.75rem] font-medium tabular-nums text-rose-700">{money(r.overdue, cur)} overdue</p>}
