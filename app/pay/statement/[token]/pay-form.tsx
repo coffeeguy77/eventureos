@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { ExternalLink, Loader2, Lock } from "lucide-react";
-import { payStatement, statementViewed } from "./actions";
+import { payIn4, payStatement, statementViewed } from "./actions";
 
 type Row = { id: string; number: string; due: string; overdue: boolean; balance: number; href: string | null };
 
@@ -31,7 +31,7 @@ export function StatementPay({ token, rows, currency, canPay, brand }: { token: 
           <li key={r.id} className="flex items-center gap-3 py-3">
             {canPay && <input type="checkbox" aria-label={`Pay invoice ${r.number}`} className="h-5 w-5 shrink-0" checked={pick.includes(r.id)} onChange={() => setPick((p) => (p.includes(r.id) ? p.filter((x) => x !== r.id) : [...p, r.id]))} />}
             <div className="min-w-0 flex-1">
-              {r.href ? <a href={r.href} className="inline-flex items-center gap-1 font-semibold text-ink hover:underline">Invoice {r.number}<ExternalLink className="h-3.5 w-3.5 text-ink-faint" /></a> : <p className="font-semibold text-ink">Invoice {r.number}</p>}
+              {r.href ? <a href={r.href} className="inline-flex items-center gap-1 font-semibold text-ink hover:underline">Invoice {r.number}<span className="text-[0.75rem] font-medium text-ink-muted">· see what it&apos;s for</span><ExternalLink className="h-3.5 w-3.5 text-ink-faint" /></a> : <p className="font-semibold text-ink">Invoice {r.number}</p>}
               <p className={`text-[0.8125rem] ${r.overdue ? "font-medium text-rose-700" : "text-ink-muted"}`}>{r.due}</p>
             </div>
             <p className="font-semibold tabular-nums">{fmt(r.balance)}</p>
@@ -52,6 +52,22 @@ export function StatementPay({ token, rows, currency, canPay, brand }: { token: 
           {err && <p role="alert" className="mt-2 text-center text-[0.8125rem] font-medium text-rose-700">{err}</p>}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Pay in 4: four equal payments every two weeks — the first today, the card kept for the other three. */
+export function PayIn4({ token, total, each, dates, currency, brand }: { token: string; total: number; each: number[]; dates: string[]; currency: string; brand: string }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n);
+  return (
+    <div className="mt-6 rounded-xl p-4 ring-1 ring-inset ring-line" style={{ background: `color-mix(in srgb, ${brand} 6%, white)` }}>
+      <p className="font-semibold text-ink">Can&apos;t pay the overdue amount all at once?</p>
+      <p className="mt-1 text-[0.875rem] text-ink-muted">Pay {fmt(total)} in 4 payments of {fmt(each[0])}, every two weeks — the first today, then on {dates.slice(1).join(", ")}. Your card is kept on file for the other three and charged automatically on each day.</p>
+      <button type="button" disabled={pending} onClick={() => start(async () => { setErr(null); const r = await payIn4(token); if (r?.error) setErr(r.error); })}
+        className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line-strong hover:bg-white disabled:opacity-50">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Pay in 4 — {fmt(each[0])} today</button>
+      {err && <p role="alert" className="mt-2 text-[0.8125rem] font-medium text-rose-700">{err}</p>}
     </div>
   );
 }

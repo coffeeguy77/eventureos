@@ -329,45 +329,94 @@ export async function statementLink(customerId: string): Promise<R<string>> {
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
-/** Email the customer their account statement — every invoice owing, pay all or some — tracked like a chasing email. */
-export async function sendStatement(customerId: string, message: string): Promise<R<string>> {
+/** Everyone we could send a customer's statement to, and the statement email filled in from its template. */
+export async function draftStatement(customerId: string): Promise<R<{ recipients: { email: string; label: string; primary: boolean }[]; subject: string; message: string; total: string; count: number }>> {
   try {
-    const { supabase, org, user } = await accounts();
+    const { org } = await accounts();
     if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
     const { createServiceClient } = await import("@/lib/integrations/runtime");
     const db = createServiceClient();
-    const [{ data: c }, { data: o }] = await Promise.all([
+    const [{ data: c }, { data: people }, { data: o }] = await Promise.all([
       db.from("customers").select("name, email").eq("id", customerId).eq("organisation_id", org.id).maybeSingle(),
-      db.from("organisations").select("name, logo_url, brand_colour, contact_email").eq("id", org.id).single(),
+      db.from("contacts").select("first_name, last_name, email, is_primary, position").eq("organisation_id", org.id).eq("customer_id", customerId).not("email", "is", null).order("is_primary", { ascending: false }).limit(20),
+      db.from("organisations").select("name, settings").eq("id", org.id).single(),
     ]);
     if (!c) throw new Error("Customer not found.");
-    const { data: people } = await db.from("contacts").select("email, is_primary").eq("organisation_id", org.id).eq("customer_id", customerId).not("email", "is", null).order("is_primary", { ascending: false }).limit(1);
-    const to = (c.email as string | null) || ((people?.[0] as { email: string } | undefined)?.email ?? null);
-    if (!to) throw new Error("There's no email address for this customer.");
+    const recipients: { email: string; label: string; primary: boolean }[] = [];
+    const add = (email: string | null, label: string, primary: boolean) => { const e = (email ?? "").trim().toLowerCase(); if (e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && !recipients.some((r) => r.email === e)) recipients.push({ email: e, label, primary }); };
+    const ppl = (people ?? []) as { first_name: string | null; last_name: string | null; email: string; is_primary: boolean; position: string | null }[];
+    for (const p of ppl) add(p.email, [[p.first_name, p.last_name].filter(Boolean).join(" ") || "Contact", p.position].filter(Boolean).join(" · "), p.is_primary);
+    add(c.email as string | null, "Client record", !recipients.some((r) => r.primary));
+    if (recipients.length && !recipients.some((r) => r.primary)) recipients[0].primary = true;
+    const { loadOwing } = await import("@/lib/accounts/server");
+    const { daysBetween, fill, readTemplates } = await import("@/lib/accounts/core");
+    const today = todayISO(org.timezone);
+    const owing = await loadOwing(db, org.id, customerId);
+    const total = owing.reduce((a, i) => a + i.balance, 0);
+    const overdue = owing.filter((i) => i.due_date && i.due_date < today);
+    const oldest = overdue.reduce((m, i) => Math.max(m, daysBetween(i.due_date!, today)), 0);
+    const primary = ppl.find((p) => p.is_primary) ?? ppl[0];
+    const words: Record<string, string> = {
+      first_name: (primary?.first_name || String(c.name).split(/\s+/)[0]).trim(), business: (o?.name as string) ?? org.name,
+      count: String(owing.length), invoices_word: owing.length === 1 ? "invoice" : "invoices", total: money(total, org.currency),
+      overdue_note: overdue.length ? `, ${money(overdue.reduce((a, i) => a + i.balance, 0), org.currency)} of which is overdue (the oldest by ${oldest} days)` : "",
+    };
+    const t = readTemplates(o?.settings).find((x) => x.key === "statement")!;
+    return { ok: true, data: { recipients, subject: fill(t.subject, words), message: fill(t.message, words), total: words.total, count: owing.length } };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Email the customer their account statement — every invoice owing, pay all or some — tracked like a chasing email. */
+export async function sendStatement(customerId: string, input: { to?: string[]; subject?: string; message?: string } | string = {}): Promise<R<string>> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const opts = typeof input === "string" ? { message: input } : input;
+    const d = await draftStatement(customerId);
+    if (!d.ok) throw new Error(d.error);
+    const to = [...new Set((opts.to?.length ? opts.to : d.data.recipients.filter((r) => r.primary).map((r) => r.email)).map((e) => e.trim().toLowerCase()))].filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).slice(0, 10);
+    if (!to.length) throw new Error("Choose who to send it to (or add an email address).");
+    const subject = t(opts.subject, 200) ?? d.data.subject;
+    const msg = t(opts.message, 6000) ?? d.data.message;
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { data: o } = await db.from("organisations").select("name, logo_url, brand_colour, contact_email, settings").eq("id", org.id).single();
     const { loadOwing } = await import("@/lib/accounts/server");
     const today = todayISO(org.timezone);
     const owing = await loadOwing(db, org.id, customerId);
     if (!owing.length) throw new Error("Nothing is owing — there's no statement to send.");
+    // offer "pay in 4" in the email when the statement will offer it
+    let body = msg;
+    {
+      const { readPayIn4, daysBetween: dB } = await import("@/lib/accounts/core");
+      const p4 = readPayIn4(o?.settings);
+      const { error: plErr } = await db.from("payment_plans").select("id").limit(1);
+      const { data: active } = plErr ? { data: null } : await db.from("payment_plans").select("id").eq("organisation_id", org.id).eq("customer_id", customerId).eq("status", "active").limit(1);
+      if (p4.enabled && !plErr && !active?.length && owing.some((i) => i.due_date && dB(i.due_date, today) >= p4.days)) body = `${msg}\n\nCan't pay the overdue amount all at once? From your statement you can split it into 4 payments, two weeks apart.`;
+    }
     const { data: row, error } = await db.from("collection_emails").insert({ organisation_id: org.id, customer_id: customerId, invoice_id: null, kind: "manual", template: "statement",
-      subject: `Your account statement — ${o?.name ?? org.name}`, to_emails: [to], balance_at_send: owing.reduce((a, i) => a + i.balance, 0), sent_by: user.id }).select("id").single();
+      subject, to_emails: to, balance_at_send: owing.reduce((a, i) => a + i.balance, 0), sent_by: user.id }).select("id").single();
     if (error) throw new Error(error.message);
     const { statementUrl } = await import("@/lib/accounts/statement");
     const url = statementUrl(org.id, customerId, row.id as string);
     const { statementEmail } = await import("@/lib/email/templates");
     const { daysBetween } = await import("@/lib/accounts/core");
-    const first = String(c.name).split(/\s+/)[0];
-    const msg = t(message, 4000) ?? `Hi ${first},\n\nHere's your account statement. You can open each invoice, and pay them all — or just some for now — with the button below.`;
-    const m = statementEmail({ businessName: o?.name ?? org.name, customerName: c.name as string, message: msg, total: money(owing.reduce((a, i) => a + i.balance, 0), org.currency), url, brand: o?.brand_colour as string | null, logoUrl: o?.logo_url as string | null,
+    const m = statementEmail({ businessName: (o?.name as string) ?? org.name, customerName: "", message: body, total: money(owing.reduce((a, i) => a + i.balance, 0), org.currency), url, brand: o?.brand_colour as string | null, logoUrl: o?.logo_url as string | null,
       lines: owing.map((i) => ({ number: i.number, amount: money(i.balance, org.currency), due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${i.due_date}`) : "no due date" })) });
     const { appBaseUrl } = await import("@/lib/integrations/registry");
     const html = m.html.replace(/<\/body>/i, `<img src="${appBaseUrl()}/api/t/o/${row.id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" /></body>`);
     const { sendEmail } = await import("@/lib/email/send");
-    try {
-      await sendEmail({ to, subject: `Your account statement — ${o?.name ?? org.name}`, html, text: m.text, replyTo: (o?.contact_email as string | null) ?? null, fromName: o?.name as string, orgId: org.id });
-    } catch (e) { await db.from("collection_emails").delete().eq("id", row.id); throw e; }
-    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "email", created_by: user.id, body: `Emailed the account statement (${owing.length} invoice${owing.length === 1 ? "" : "s"}) to ${to}.` });
+    const sent: string[] = [];
+    let lastErr: unknown = null;
+    for (const addr of to) {
+      try { await sendEmail({ to: addr, subject, html, text: m.text, replyTo: (o?.contact_email as string | null) ?? null, fromName: o?.name as string, orgId: org.id }); sent.push(addr); }
+      catch (e) { lastErr = e; }
+    }
+    if (!sent.length) { await db.from("collection_emails").delete().eq("id", row.id); throw lastErr instanceof Error ? lastErr : new Error("Couldn't send the email."); }
+    if (sent.length < to.length) await db.from("collection_emails").update({ to_emails: sent }).eq("id", row.id);
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "email", created_by: user.id, body: `Emailed the account statement (${owing.length} invoice${owing.length === 1 ? "" : "s"}) to ${sent.join(", ")}.` });
     revalidatePath("/accounts", "layout");
-    return { ok: true, data: `Statement sent to ${to}. You'll see here when they open it.` };
+    return { ok: true, data: `Statement sent to ${sent.join(", ")}${sent.length < to.length ? ` (couldn't send to ${to.filter((x) => !sent.includes(x)).join(", ")})` : ""}. You'll see here when they open it.` };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
@@ -500,5 +549,48 @@ export async function sendSmsToCustomer(customerId: string, number: string, body
     await db.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "sms", created_by: user.id, body: `${attemptText("SMS", number)}\n${text}${withStatement ? "\n(with their statement link)" : ""}` });
     revalidatePath("/accounts", "layout");
     return { ok: true, data: `Text sent to ${number}.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/**
+ * Payment plan with the card taken now on Stripe's page: either the first payment today (and the card kept for the
+ * rest), or just the card saved, with the first payment on the chosen day (e.g. their payday).
+ */
+export async function takePlanCard(customerId: string, invoiceIds: string[], frequency: "weekly" | "fortnightly", start: string, by: { count: number } | { amount: number }, firstNow: boolean): Promise<R<string>> {
+  try {
+    const { org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const today = todayISO(org.timezone);
+    const first = firstNow ? today : start;
+    if (!DATE.test(first) || first < today) throw new Error("Choose a first payment date from today on.");
+    if (!firstNow && first === today) throw new Error("To take the first payment today, choose \"First payment now\".");
+    const { db, cfg } = await stripeFor(org.id);
+    const { error: tErr } = await db.from("payment_plans").select("id").limit(1);
+    if (tErr) throw new Error("Payment plans need the 0079 and 0080 database updates first (supabase/migrations).");
+    const { data: inv } = await db.from("invoices").select("id, balance, customer_id, status").eq("organisation_id", org.id).in("id", invoiceIds.filter((x) => UUID.test(x)).slice(0, 30));
+    const list = ((inv ?? []) as { id: string; balance: number; customer_id: string; status: string }[]).filter((i) => i.customer_id === customerId && Number(i.balance) > 0 && !["void", "draft", "paid"].includes(i.status));
+    if (!list.length) throw new Error("Choose at least one unpaid invoice.");
+    const total = Math.round(list.reduce((a, i) => a + Number(i.balance), 0) * 100) / 100;
+    const { planSchedule } = await import("@/lib/accounts/plan");
+    const schedule = planSchedule(total, frequency, first, by);
+    if (!schedule.length) throw new Error("Choose how many payments, or how much each.");
+    const { data: c } = await db.from("customers").select("name, email").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    const { appBaseUrl } = await import("@/lib/integrations/registry");
+    const { startPlanCheckout } = await import("@/lib/payments/plan-checkout");
+    const url = await startPlanCheckout(db, org.id, cfg, {
+      spec: { customerId, invoiceIds: list.map((i) => i.id), frequency, start: first, amounts: schedule.map((x) => x.amount), firstNow, staffId: user.id, source: "phone" },
+      currency: org.currency, customerName: (c?.name as string) ?? "Customer", email: (c?.email as string | null) ?? null,
+      successUrl: `${appBaseUrl()}/accounts/${customerId}?plan=1`, cancelUrl: `${appBaseUrl()}/accounts/${customerId}`,
+    });
+    return { ok: true, data: url };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** "Pay in 4" for invoices this many days overdue — offered on the customer's statement. Settings: collections.pay_in_4. */
+export async function savePayIn4(enabled: boolean, days: number): Promise<R> {
+  try {
+    if (!Number.isInteger(days) || days < 0 || days > 365) throw new Error("Choose a number of days from 0 to 365.");
+    await saveCollections((col) => ({ ...col, pay_in_4: { enabled, days } }));
+    return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

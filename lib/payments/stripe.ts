@@ -150,3 +150,19 @@ export function verifyWebhook<T = unknown>(rawBody: string, header: string | nul
 
 /** Amount in cents for Stripe, from a dollars value with at most 2 decimals. */
 export const toCents = (n: number) => Math.round(Number(n) * 100);
+
+/** A Stripe customer (to keep a card on file without taking a payment). */
+export const createStripeCustomer = (key: string, o: { name: string; email?: string | null; metadata: Record<string, string>; idempotencyKey: string; account?: string | null }) =>
+  call<{ id: string }>(key, "POST", "/customers", { name: o.name.slice(0, 250), email: o.email || undefined, metadata: o.metadata }, o.idempotencyKey, o.account);
+
+/** Stripe's card page in "save the card" mode — no payment now (e.g. a payment plan that starts on payday). */
+export function createSetupCheckout(key: string, o: { customer: string; currency: string; successUrl: string; cancelUrl: string; metadata: Record<string, string>; idempotencyKey: string; account?: string | null }) {
+  return call<CheckoutSession & { setup_intent?: string | null }>(key, "POST", "/checkout/sessions", {
+    mode: "setup", customer: o.customer, currency: o.currency.toLowerCase(), payment_method_types: ["card"],
+    success_url: o.successUrl, cancel_url: o.cancelUrl, metadata: o.metadata, setup_intent_data: { metadata: o.metadata },
+  }, o.idempotencyKey, o.account);
+}
+
+export interface SetupIntent { id: string; customer: string | null; payment_method: string | { id: string; card?: { brand?: string; last4?: string; exp_month?: number; exp_year?: number } | null } | null; status: string }
+export const getSetupIntent = (key: string, id: string, account?: string | null) =>
+  call<SetupIntent>(key, "GET", `/setup_intents/${encodeURIComponent(id)}?expand[]=payment_method`, undefined, undefined, account);

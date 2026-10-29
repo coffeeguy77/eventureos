@@ -40,23 +40,7 @@ export async function invoicePdf(invoiceId: string): Promise<{ bytes: Uint8Array
     logoBytes(org.logo_url as string | null),
   ]);
 
-  // What was bought: the invoice's own lines (GST inclusive) or, for one brought in from Xero, Xero's lines
-  const fromXero = inv.origin ? inv.origin === "xero" : !!inv.xero_invoice_id && !inv.quote_id && !inv.created_by && inv.kind === "other";
-  const label = `${KIND[inv.kind as string] ?? "Invoice"}${ev?.name ? ` - ${ev.name}` : ""}`;
-  let lines: DocLine[];
-  if (!fromXero) {
-    const own = startLines({ kind: inv.kind as string, total: Number(inv.total), line_items: inv.line_items, xero_invoice_id: inv.xero_invoice_id as string | null, label },
-      await quoteItemsForInvoice(db, inv.organisation_id, inv.quote_id as string | null).catch(() => null));
-    lines = own.map((l) => ({ description: l.description, quantity: Number(l.quantity), unit: Number(l.unit_amount), amount: lineAmount(l) }));
-  } else {
-    const raw = Array.isArray(inv.line_items) ? (inv.line_items as Record<string, unknown>[]) : [];
-    lines = raw.map((l) => {
-      const q = l.quantity == null ? null : Number(l.quantity), u = l.unit_amount == null ? null : Number(l.unit_amount);
-      const a = l.line_amount != null ? Number(l.line_amount) : q != null && u != null ? Math.round(q * u * 100) / 100 : null;
-      return { description: String(l.description ?? "").trim() || label, quantity: q, unit: u, amount: a };
-    });
-    if (!lines.length) lines = [{ description: label, quantity: 1, unit: null, amount: null }];
-  }
+  const lines = await invoiceLines(db, inv as InvForLines, ev?.name ?? null);
   const lineTax = lineTaxMode(lines, Number(inv.subtotal), Number(inv.total));
 
   const settings = (org.settings ?? {}) as { business?: { abn?: unknown } };
@@ -74,4 +58,27 @@ export async function invoicePdf(invoiceId: string): Promise<{ bytes: Uint8Array
     lines, lineTax, payments, credits, payUrl: paid ? null : `${appBaseUrl()}/pay/${inv.pay_token}`,
   });
   return { bytes, paid, file: `${paid ? "Paid tax invoice" : "Tax invoice"} ${inv.number ?? ""}.pdf`.replace(/\s+\.pdf$/, ".pdf") };
+}
+
+type InvForLines = { organisation_id: string; kind: string; total: number; line_items: unknown; xero_invoice_id: string | null; quote_id: string | null; created_by: string | null; origin?: string | null };
+
+/** What was bought: the invoice's own lines (GST inclusive) or, for one brought in from Xero, Xero's lines. */
+export async function invoiceLines(db: ReturnType<typeof createServiceClient>, inv: InvForLines, eventName: string | null): Promise<DocLine[]> {
+  const fromXero = inv.origin ? inv.origin === "xero" : !!inv.xero_invoice_id && !inv.quote_id && !inv.created_by && inv.kind === "other";
+  const label = `${KIND[inv.kind as string] ?? "Invoice"}${eventName ? ` - ${eventName}` : ""}`;
+  let lines: DocLine[];
+  if (!fromXero) {
+    const own = startLines({ kind: inv.kind as string, total: Number(inv.total), line_items: inv.line_items, xero_invoice_id: inv.xero_invoice_id as string | null, label },
+      await quoteItemsForInvoice(db, inv.organisation_id, inv.quote_id as string | null).catch(() => null));
+    lines = own.map((l) => ({ description: l.description, quantity: Number(l.quantity), unit: Number(l.unit_amount), amount: lineAmount(l) }));
+  } else {
+    const raw = Array.isArray(inv.line_items) ? (inv.line_items as Record<string, unknown>[]) : [];
+    lines = raw.map((l) => {
+      const q = l.quantity == null ? null : Number(l.quantity), u = l.unit_amount == null ? null : Number(l.unit_amount);
+      const a = l.line_amount != null ? Number(l.line_amount) : q != null && u != null ? Math.round(q * u * 100) / 100 : null;
+      return { description: String(l.description ?? "").trim() || label, quantity: q, unit: u, amount: a };
+    });
+    if (!lines.length) lines = [{ description: label, quantity: 1, unit: null, amount: null }];
+  }
+  return lines;
 }

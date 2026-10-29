@@ -4,7 +4,7 @@
  */
 export interface Template { key: string; name: string; subject: string; message: string }
 
-/** Words: {first_name} {invoice} {amount} {due_date} {days_overdue} {promise_date} {business} */
+/** Words: {first_name} {invoice} {amount} {due_date} {days_overdue} {promise_date} {business} — statement: {count} {invoices_word} {total} {overdue_note} */
 export const DEFAULT_TEMPLATES: Template[] = [
   { key: "friendly", name: "Friendly reminder", subject: "Invoice {invoice} — a quick reminder",
     message: "Hi {first_name},\n\nJust a friendly reminder that invoice {invoice} for {amount} was due on {due_date}. You can pay it online in a minute with the button below.\n\nIf it's already on its way, thank you — please ignore this.\n\nKind regards,\n{business}" },
@@ -14,6 +14,8 @@ export const DEFAULT_TEMPLATES: Template[] = [
     message: "Hi {first_name},\n\nWe haven't been able to reach you about invoice {invoice} for {amount}, which is {days_overdue} days overdue.\n\nPlease pay it within 7 days or contact us to arrange a payment plan. If we don't hear from you, we'll need to take further steps to recover the amount.\n\nRegards,\n{business}" },
   { key: "promise", name: "Payment due today (as agreed)", subject: "As agreed — invoice {invoice} is due today",
     message: "Hi {first_name},\n\nAs we discussed, here's invoice {invoice} for {amount}, which you said you'd pay today ({promise_date}). The button below lets you pay it by card in a minute.\n\nThanks very much,\n{business}" },
+  { key: "statement", name: "Account statement", subject: "Your account statement — {business}",
+    message: "Hi {first_name},\n\nHere's your account statement from {business}. You have {count} open {invoices_word} totalling {total}{overdue_note}.\n\nYou can open each invoice to see exactly what it's for, and pay them all at once — or just some of them for now — with the button below.\n\nIf anything doesn't look right, just reply to this email and we'll sort it out.\n\nKind regards,\n{business}" },
   { key: "plan", name: "Payment plan", subject: "Your payment plan for invoice {invoice}",
     message: "Hi {first_name},\n\nThanks for talking with us. As agreed, here's invoice {invoice} — the balance is {amount}. You can pay each instalment from the link below.\n\nKind regards,\n{business}" },
 ];
@@ -202,4 +204,14 @@ export function callNext<T extends ChaseRow>(rows: T[], today: string): T[] {
   const quiet = (r: ChaseRow) => (r.lastTouch ? daysBetween(r.lastTouch.slice(0, 10), today) : 9999);
   return rows.filter((r) => r.overdue > 0 && !touchedToday(r) && !r.flagged)
     .sort((a, b) => rank(a) - rank(b) || quiet(b) - quiet(a) || b.oldestDays - a.oldestDays || b.overdue - a.overdue);
+}
+
+/* ------------------------------------------------------------------ pay in 4 */
+
+/** Customers can spread invoices this overdue over 4 fortnightly payments from their statement (on unless switched off). */
+export function readPayIn4(settings: unknown): { enabled: boolean; days: number } {
+  const c = (settings && typeof settings === "object" ? (settings as Record<string, unknown>).collections : null) as Record<string, unknown> | null;
+  const p = (c?.pay_in_4 && typeof c.pay_in_4 === "object" ? c.pay_in_4 : {}) as Record<string, unknown>;
+  const d = Number(p.days);
+  return { enabled: p.enabled !== false, days: Number.isInteger(d) && d >= 0 && d <= 365 ? d : 60 };
 }

@@ -20,9 +20,10 @@ export const dynamic = "force-dynamic";
 const KIND: Record<string, string> = { note: "Note", call: "Phone call", email: "Email", sms: "Text", promise: "Promise to pay", dispute: "Dispute", plan: "Payment plan" };
 
 /** One customer who owes money: their unpaid invoices, every conversation and email, and what happens next. */
-export default async function AccountsCustomerPage({ params, searchParams }: { params: Promise<{ customer: string }>; searchParams: Promise<{ paid?: string }> }) {
+export default async function AccountsCustomerPage({ params, searchParams }: { params: Promise<{ customer: string }>; searchParams: Promise<{ paid?: string; plan?: string }> }) {
   const { customer: id } = await params;
-  const justPaid = (await searchParams).paid === "1";
+  const spx = await searchParams;
+  const justPaid = spx.paid === "1" || spx.plan === "1";
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { supabase, org, user } = await requireOrg();
   const { data: cust } = await supabase.from("customers").select("id, name, email, phone, company").eq("id", id).eq("organisation_id", org.id).maybeSingle();
@@ -55,7 +56,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     ...P.map((p) => ({ at: p.paid_at, kind: "pay" as const, p })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const invOpts = owing.map((i) => ({ id: i.id, number: i.number, balance: money(i.balance, cur), due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "no due date" }));
-  const templates = readTemplates(o?.settings).map((t) => ({ key: t.key, name: t.name }));
+  const templates = readTemplates(o?.settings).filter((t) => t.key !== "statement").map((t) => ({ key: t.key, name: t.name }));
   // Account-keeping fees owing now (months not charged yet, at this customer's rate)
   const fees = readFees(o?.settings);
   const feeRate = feeRateFor(fees, id);
@@ -145,7 +146,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
           )}
           <PayPanel customerId={cust.id} currency={cur} card={cardInfo} stripeReady={stripeInteg?.status === "connected"} justPaid={justPaid}
             invoices={owing.map((i) => ({ id: i.id, number: i.number, balance: i.balance, overdue: !!(i.due_date && i.due_date < today), label: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "" }))} />
-          <StatementPanel customerId={cust.id} email={cust.email ?? people.find((p) => p.email)?.email ?? null} owing={owing.length} />
+          <StatementPanel customerId={cust.id} owing={owing.length} lines={owing.map((i) => ({ number: i.number, amount: money(i.balance, cur), due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${i.due_date}`) : "no due date" }))} />
           <PlanPanel customerId={cust.id} currency={cur} today={today} card={cardInfo && !cardInfo.expired ? cardInfo.label : null} plan={plan}
             invoices={owing.map((i) => ({ id: i.id, number: i.number, balance: i.balance, overdue: !!(i.due_date && i.due_date < today), label: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "" }))} />
           <ChaseComposer invoices={invOpts} templates={templates} />

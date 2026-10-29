@@ -14,7 +14,7 @@ export const metadata = { title: "Pay invoice", robots: { index: false, follow: 
 
 const safeColour = (c?: string | null) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : "#6028EC");
 
-export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ paid?: string; ce?: string }> }) {
+export default async function PayPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ paid?: string; ce?: string; st?: string }> }) {
   const { token } = await params;
   const sp = await searchParams;
   const found = await invoiceByToken(token);
@@ -40,6 +40,12 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   // The business's terms and conditions (Accounts → Fees & terms), linked when they've published them
   const { data: termsOrg } = await svc.from("organisations").select("slug, settings").eq("id", inv.organisation_id).maybeSingle();
   const termsHref = termsOrg && readTerms(termsOrg.settings) ? `/p/${termsOrg.slug as string}/terms` : null;
+  // What they're paying for: the invoice's lines (from EventureOS or Xero)
+  const { data: lineInv } = await svc.from("invoices").select("organisation_id, kind, total, subtotal, tax_total, line_items, xero_invoice_id, quote_id, created_by, origin, reference, issue_date").eq("id", inv.id).maybeSingle();
+  const { invoiceLines } = await import("@/lib/invoices/document");
+  const { lineTaxMode } = await import("@/lib/invoices/document-pdf");
+  const docLines = lineInv ? await invoiceLines(svc, lineInv as Parameters<typeof invoiceLines>[1], inv.event?.name ?? null).catch(() => []) : [];
+  const taxMode = lineInv ? lineTaxMode(docLines, Number(lineInv.subtotal), Number(lineInv.total)) : null;
   const kind = inv.kind === "deposit" ? "Deposit invoice" : inv.kind === "final" ? "Final invoice" : "Invoice";
   // Receipts: one per payment on this invoice
   const { data: pays } = await svc.from("payments").select("id, amount, paid_at, method, reference").eq("invoice_id", inv.id).order("paid_at", { ascending: true }).order("created_at", { ascending: true });
@@ -49,7 +55,8 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   return (
     <main className="min-h-screen bg-canvas px-4 py-10 sm:py-16">
       {!justPaid && <InvoiceViewBeacon token={token} />}
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-lg">
+        {sp.st && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(sp.st) && <a href={`/pay/statement/${sp.st}`} className="mb-4 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-ink-muted hover:text-ink">← Back to your statement</a>}
         <div className="mb-6 flex items-center justify-center">
           {inv.org.logo_url && /^https:\/\//.test(inv.org.logo_url)
             ? <img src={inv.org.logo_url} alt={inv.org.name} className="h-12 max-w-[200px] object-contain" />
@@ -67,6 +74,20 @@ export default async function PayPage({ params, searchParams }: { params: Promis
             ) : <p className="mt-1 text-[0.9375rem] text-ink">{inv.customer?.name ?? ""}</p>}
             {inv.event && <p className="text-[0.8125rem] text-ink-muted">{inv.event.name}{inv.event.event_date ? ` · ${fmtDate(inv.event.event_date, "long")}` : ""}</p>}
 
+            {docLines.length > 0 && (
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="text-[0.6875rem] font-medium uppercase tracking-wide text-ink-faint">What it&apos;s for{lineInv?.issue_date ? ` · issued ${fmtDate(lineInv.issue_date as string, "long")}` : ""}{lineInv?.reference ? ` · ${lineInv.reference}` : ""}</p>
+                <ul className="mt-2 space-y-2 text-[0.875rem]">
+                  {docLines.map((l, i) => (
+                    <li key={i} className="flex justify-between gap-3">
+                      <span className="min-w-0 whitespace-pre-line text-ink">{l.description}{l.quantity != null && l.quantity !== 1 ? <span className="block text-[0.75rem] text-ink-muted">{l.quantity} × {l.unit != null ? money(l.unit, cur, { cents: true }) : ""}</span> : null}</span>
+                      {l.amount != null && <span className="shrink-0 tabular-nums text-ink">{money(l.amount, cur, { cents: true })}</span>}
+                    </li>
+                  ))}
+                </ul>
+                {lineInv && Number(lineInv.tax_total) > 0 && <p className="mt-2 text-right text-[0.75rem] text-ink-muted">{taxMode === "ex" ? `Prices ex GST · subtotal ${money(Number(lineInv.subtotal), cur, { cents: true })} + GST ${money(Number(lineInv.tax_total), cur, { cents: true })}` : `Includes GST of ${money(Number(lineInv.tax_total), cur, { cents: true })}`}</p>}
+              </div>
+            )}
             <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[0.875rem]">
               <div className="flex justify-between"><dt className="text-ink-muted">Invoice total</dt><dd className="text-ink">{money(inv.total, cur, { cents: true })}</dd></div>
               {received > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="text-ink">{money(received, cur, { cents: true })}</dd></div>}

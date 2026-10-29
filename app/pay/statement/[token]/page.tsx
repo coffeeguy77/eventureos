@@ -4,7 +4,8 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { loadStatement, readStatement } from "@/lib/accounts/statement";
 import { daysBetween } from "@/lib/accounts/core";
 import { fmtDate, money, todayISO } from "@/lib/format";
-import { StatementBeacon, StatementPay } from "./pay-form";
+import { PayIn4, StatementBeacon, StatementPay } from "./pay-form";
+import { planSchedule } from "@/lib/accounts/plan";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Account statement", robots: { index: false, follow: false } };
@@ -23,7 +24,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
   const total = d.owing.reduce((a, i) => a + i.balance, 0);
   const overdue = d.owing.filter((i) => i.due_date && i.due_date < today).reduce((a, i) => a + i.balance, 0);
   const rows = d.owing.map((i) => ({
-    id: i.id, number: i.number, balance: i.balance, href: i.pay_token ? `/pay/${i.pay_token}` : null, overdue: !!(i.due_date && i.due_date < today),
+    id: i.id, number: i.number, balance: i.balance, href: i.pay_token ? `/pay/${i.pay_token}?st=${token}` : null, overdue: !!(i.due_date && i.due_date < today),
     due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue (due ${fmtDate(i.due_date, "short")})` : `Due ${fmtDate(i.due_date, "short")}`) : `Issued ${fmtDate(i.issue_date, "short")}`,
   }));
   return (
@@ -46,6 +47,15 @@ export default async function StatementPage({ params, searchParams }: { params: 
             <h2 className="mt-7 text-[0.9375rem] font-semibold text-ink">Invoices to pay</h2>
             {rows.length ? <StatementPay token={token} rows={rows} currency={cur} canPay={d.stripe && !s.expired} brand={brand} />
               : <p className="mt-2 text-[0.875rem] text-emerald-700">Nothing owing — thank you!</p>}
+            {(() => {
+              // Pay in 4: on invoices overdue long enough, when there's no plan already
+              if (!d.payIn4.enabled || !d.plansReady || d.plan || !d.stripe || s.expired) return null;
+              const due = d.owing.filter((i) => i.due_date && daysBetween(i.due_date, today) >= d.payIn4.days);
+              const amount = due.reduce((a, i) => a + i.balance, 0);
+              if (!due.length || amount < 40) return null;
+              const sch = planSchedule(amount, "fortnightly", today, { count: 4 });
+              return <PayIn4 token={token} total={amount} each={sch.map((x) => x.amount)} dates={sch.map((x) => fmtDate(x.date, "short"))} currency={cur} brand={brand} />;
+            })()}
             {d.plan && (
               <>
                 <h2 className="mt-8 text-[0.9375rem] font-semibold text-ink">Your payment plan ({d.plan.frequency})</h2>
@@ -60,7 +70,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
                 <h2 className="mt-8 text-[0.9375rem] font-semibold text-ink">Account history</h2>
                 <ul className="mt-2 divide-y divide-line text-[0.875rem]">
                   {d.payments.map((p, i) => <li key={`p${i}`} className="flex justify-between py-2"><span className="text-ink-muted">{fmtDate(p.paid_at.slice(0, 10), "short")} · Payment{p.number ? ` on ${p.number}` : ""}</span><span className="font-medium tabular-nums text-emerald-700">{money(p.amount, cur)}</span></li>)}
-                  {d.paid.map((p, i) => <li key={`i${i}`} className="flex justify-between py-2"><span className="text-ink-muted">{fmtDate(p.issue_date, "short")} · {p.pay_token ? <a href={`/pay/${p.pay_token}`} className="underline hover:text-ink">Invoice {p.number}</a> : `Invoice ${p.number}`}</span><span className="tabular-nums">{money(p.total, cur)} · paid</span></li>)}
+                  {d.paid.map((p, i) => <li key={`i${i}`} className="flex justify-between py-2"><span className="text-ink-muted">{fmtDate(p.issue_date, "short")} · {p.pay_token ? <a href={`/pay/${p.pay_token}?st=${token}`} className="underline hover:text-ink">Invoice {p.number}</a> : `Invoice ${p.number}`}</span><span className="tabular-nums">{money(p.total, cur)} · paid</span></li>)}
                 </ul>
               </>
             )}

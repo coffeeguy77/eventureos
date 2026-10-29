@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { stateSecret } from "@/lib/integrations/oauth";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { OWING } from "./server";
+import { readPayIn4 } from "./core";
 
 /**
  * Account statements: one link per customer showing everything they owe (each invoice openable, pay all or some at
@@ -44,12 +45,15 @@ export interface StatementData {
   payments: { amount: number; paid_at: string; number: string | null }[];
   plan: { frequency: string; instalments: { n: number; due_date: string; amount: number; status: string }[] } | null;
   stripe: boolean;
+  /** payment plans are available (database updated) */
+  plansReady: boolean;
+  payIn4: { enabled: boolean; days: number };
 }
 
 export async function loadStatement(db: SupabaseClient, orgId: string, customerId: string): Promise<StatementData | null> {
   const since = new Date(Date.now() - 400 * 86_400_000).toISOString().slice(0, 10);
   const [{ data: org }, { data: cust }, { data: inv }, { data: pays }, { data: integ }] = await Promise.all([
-    db.from("organisations").select("name, logo_url, brand_colour, contact_email, contact_phone, currency, slug, timezone, status").eq("id", orgId).maybeSingle(),
+    db.from("organisations").select("name, logo_url, brand_colour, contact_email, contact_phone, currency, slug, timezone, status, settings").eq("id", orgId).maybeSingle(),
     db.from("customers").select("name, email").eq("id", customerId).eq("organisation_id", orgId).maybeSingle(),
     db.from("invoices").select("id, number, issue_date, due_date, total, balance, status, pay_token, reference").eq("organisation_id", orgId).eq("customer_id", customerId).neq("status", "void").neq("status", "draft").order("due_date", { ascending: true, nullsFirst: false }).limit(300),
     db.from("payments").select("amount, paid_at, invoice:invoices!inner(number, customer_id)").eq("organisation_id", orgId).eq("invoice.customer_id", customerId).gte("paid_at", since).order("paid_at", { ascending: false }).limit(100),
@@ -73,6 +77,7 @@ export async function loadStatement(db: SupabaseClient, orgId: string, customerI
     owing, paid,
     payments: ((pays ?? []) as unknown as { amount: number; paid_at: string; invoice: { number: string } | null }[]).map((p) => ({ amount: Number(p.amount), paid_at: p.paid_at, number: p.invoice?.number ?? null })),
     plan, stripe: (integ as { status?: string } | null)?.status === "connected",
+    plansReady: !plErr, payIn4: readPayIn4(org.settings),
   };
 }
 

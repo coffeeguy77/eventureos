@@ -7,10 +7,10 @@ import { allocate, type Frequency, type Instalment } from "./plan";
  * time), each shared across the plan's invoices oldest first. A declined payment is retried once the next day;
  * then it's marked failed for the accounts person, with a note on the account.
  */
-export async function createPlan(db: SupabaseClient, o: { orgId: string; customerId: string; invoiceIds: string[]; frequency: Frequency; schedule: Instalment[]; note: string | null; userId: string }) {
+export async function createPlan(db: SupabaseClient, o: { orgId: string; customerId: string; invoiceIds: string[]; frequency: Frequency; schedule: Instalment[]; note: string | null; userId: string | null }) {
   const total = Math.round(o.schedule.reduce((a, x) => a + x.amount, 0) * 100) / 100;
   await db.from("payment_plans").update({ status: "cancelled" }).eq("organisation_id", o.orgId).eq("customer_id", o.customerId).eq("status", "active");
-  const { data: plan, error } = await db.from("payment_plans").insert({ organisation_id: o.orgId, customer_id: o.customerId, invoice_ids: o.invoiceIds, total, frequency: o.frequency, note: o.note, created_by: o.userId }).select("id").single();
+  const { data: plan, error } = await db.from("payment_plans").insert({ organisation_id: o.orgId, customer_id: o.customerId, invoice_ids: o.invoiceIds, total, frequency: o.frequency, note: o.note, ...(o.userId ? { created_by: o.userId } : {}) }).select("id").single();
   if (error) throw new Error(error.message);
   const { error: e2 } = await db.from("payment_plan_instalments").insert(o.schedule.map((x) => ({ organisation_id: o.orgId, plan_id: plan.id, n: x.n, due_date: x.date, amount: x.amount })));
   if (e2) { await db.from("payment_plans").delete().eq("id", plan.id); throw new Error(e2.message); }

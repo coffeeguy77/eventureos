@@ -132,6 +132,12 @@ export async function handlePlatformWebhook(rawBody: string, signature: string |
 async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig, event: StripeEvent): Promise<string> {
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") return `ignored ${event.type}`;
   const s = event.data.object;
+  // A card saved for a payment plan that starts later (no payment now)
+  if ((s as { mode?: string }).mode === "setup") {
+    if (s.metadata?.eventureos_org_id !== orgId || s.metadata?.eventureos_plan !== "1") return "not an EventureOS card setup";
+    const { finishPlanCheckout } = await import("./plan-checkout");
+    return finishPlanCheckout(db, orgId, cfg, s as CheckoutSession & { id: string; mode?: string; setup_intent?: string | null });
+  }
   if (s.payment_status !== "paid") return "not paid yet";
   if (s.metadata?.eventureos_org_id === orgId && (s.metadata?.eventureos_booking_id || s.metadata?.eventureos_gift_id)) {
     // Course bookings and gift certificates (lib/bookings)
@@ -173,6 +179,11 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     if (s.metadata.eventureos_save_card === "1" && s.metadata.eventureos_customer && s.payment_intent) {
       const { saveCardFromPayment } = await import("./phone");
       await saveCardFromPayment(db, orgId, cfg, s.metadata.eventureos_customer, s.payment_intent, s.metadata.eventureos_consent ?? null, s.metadata.eventureos_staff ?? null).catch(() => undefined);
+    }
+    // the first payment of a payment plan: set up the rest of the plan
+    if (s.metadata.eventureos_plan === "1") {
+      const { finishPlanCheckout } = await import("./plan-checkout");
+      out.push(await finishPlanCheckout(db, orgId, cfg, s as CheckoutSession & { id: string }).catch((e) => `plan not set up: ${e instanceof Error ? e.message : String(e)}`));
     }
     return out.join("; ") || "nothing to record";
   }

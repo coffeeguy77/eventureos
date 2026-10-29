@@ -93,3 +93,27 @@ export function TidyPhones() {
     </Card>
   );
 }
+
+/** "Pay in 4" on statements: customers split long-overdue invoices into 4 fortnightly payments themselves. */
+export function PayIn4Form({ initial }: { initial: { enabled: boolean; days: number } }) {
+  const router = useRouter();
+  const [f, setF] = useState(initial);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const save = () => start(async () => {
+    const { savePayIn4 } = await import("@/app/(app)/accounts/actions");
+    const r = await savePayIn4(f.enabled, f.days);
+    setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error }); if (r.ok) router.refresh();
+  });
+  return (
+    <Card>
+      <CardHeader title="Pay in 4 (customers set it up themselves)" subtitle="On their account statement, customers with invoices this overdue can split them into 4 equal payments, two weeks apart: the first straight away, the rest charged to their card automatically. It's mentioned in the statement email too." />
+      <div className="flex flex-wrap items-end gap-4 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <label className="flex items-center gap-2 pb-2 font-medium"><input type="checkbox" className="h-4 w-4" checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} />Offer Pay in 4</label>
+        <div className="w-44"><Label htmlFor="p4-d">On invoices overdue by (days)</Label><Input id="p4-d" type="number" min={0} max={365} value={f.days} onChange={(e) => setF({ ...f, days: Math.round(Number(e.target.value) || 0) })} /></div>
+        <Button variant="primary" disabled={pending} onClick={save}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save</Button>
+        {msg && <p role="status" className={`pb-2 ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</p>}
+      </div>
+    </Card>
+  );
+}

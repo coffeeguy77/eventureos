@@ -49,3 +49,35 @@ export async function statementViewed(token: string): Promise<void> {
     await recordStatementView(db, s.orgId, s.customerId, s.emailId);
   } catch { /* best effort */ }
 }
+
+/** "Pay in 4": the customer spreads their long-overdue invoices over 4 fortnightly payments — the first now, the card kept for the rest. */
+export async function payIn4(token: string): Promise<{ error: string }> {
+  let url: string;
+  try {
+    const { readStatement, loadStatement } = await import("@/lib/accounts/statement");
+    const s = readStatement(token);
+    if (!s || s.expired) throw new Error("This statement link has expired — ask us for a new one.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const { loadStripe } = await import("@/lib/payments/service");
+    const db = createServiceClient();
+    const d = await loadStatement(db, s.orgId, s.customerId);
+    if (!d || !d.payIn4.enabled || !d.plansReady || d.plan) throw new Error("Paying in 4 isn't available on this account — please contact us.");
+    const cfg = await loadStripe(db, s.orgId);
+    if (!cfg) throw new Error("Card payments aren't available — please contact us.");
+    const { daysBetween } = await import("@/lib/accounts/core");
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: d.org.timezone }).format(new Date());
+    const due = d.owing.filter((i) => i.due_date && daysBetween(i.due_date, today) >= d.payIn4.days);
+    if (!due.length) throw new Error("Nothing on your account can be split into payments yet.");
+    const { planSchedule } = await import("@/lib/accounts/plan");
+    const schedule = planSchedule(due.reduce((a, i) => a + i.balance, 0), "fortnightly", today, { count: 4 });
+    const { startPlanCheckout } = await import("@/lib/payments/plan-checkout");
+    const back = `${appBaseUrl()}/pay/statement/${token}`;
+    url = await startPlanCheckout(db, s.orgId, cfg, {
+      spec: { customerId: s.customerId, invoiceIds: due.map((i) => i.id), frequency: "fortnightly", start: today, amounts: schedule.map((x) => x.amount), firstNow: true, staffId: null, source: "customer" },
+      currency: d.org.currency, customerName: d.customer.name, email: d.customer.email, successUrl: `${back}?paid=1`, cancelUrl: back,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't start the payment plan. Please try again." };
+  }
+  redirect(url);
+}
