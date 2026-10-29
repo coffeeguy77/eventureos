@@ -1,4 +1,5 @@
 import { billToLines, loadBillTo } from "@/lib/customers/bill-to";
+import { readTerms } from "@/lib/accounts/core";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Download } from "lucide-react";
@@ -36,6 +37,9 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   const credited = crErr ? 0 : (cr ?? []).reduce((t, c) => t + Number(c.amount), 0);
   const received = Math.max(0, Number(inv.amount_paid) - credited);
   const bill = billToLines(await loadBillTo(svc, inv.organisation_id, inv.customer_id, evc?.primary_contact_id ?? null).catch(() => null));
+  // The business's terms and conditions (Accounts → Fees & terms), linked when they've published them
+  const { data: termsOrg } = await svc.from("organisations").select("slug, settings").eq("id", inv.organisation_id).maybeSingle();
+  const termsHref = termsOrg && readTerms(termsOrg.settings) ? `/p/${termsOrg.slug as string}/terms` : null;
   const kind = inv.kind === "deposit" ? "Deposit invoice" : inv.kind === "final" ? "Final invoice" : "Invoice";
   // Receipts: one per payment on this invoice
   const { data: pays } = await svc.from("payments").select("id, amount, paid_at, method, reference").eq("invoice_id", inv.id).order("paid_at", { ascending: true }).order("created_at", { ascending: true });
@@ -104,6 +108,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
         <p className="mt-4 text-center"><a href={`/pay/${token}/invoice?download=1`} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-muted hover:text-ink"><Download className="h-4 w-4" />{Number(inv.balance) <= 0 ? "Download the paid tax invoice (PDF)" : "Download the invoice (PDF)"}</a></p>
         <p className="mt-6 text-center text-[0.75rem] text-ink-faint">
           Questions? Contact {inv.org.name}{inv.org.contact_email ? ` · ${inv.org.contact_email}` : ""}{inv.org.contact_phone ? ` · ${inv.org.contact_phone}` : ""}
+          {termsHref && <> · <a href={termsHref} target="_blank" rel="noreferrer" className="underline hover:text-ink">Terms and conditions</a></>}
         </p>
       </div>
     </main>

@@ -5,9 +5,9 @@ import { requireOrg, getMembers } from "@/lib/context";
 import { fmtDate, fmtDateTime, money, todayISO } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
-import { daysBetween, readTemplates } from "@/lib/accounts/core";
+import { daysBetween, feeDue, feeRateFor, readFees, readTemplates } from "@/lib/accounts/core";
 import { loadOwing } from "@/lib/accounts/server";
-import { CancelReminder, ChaseComposer, LogForm, StepDone } from "@/components/accounts/customer-tools";
+import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, StepDone } from "@/components/accounts/customer-tools";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +49,14 @@ export default async function AccountsCustomerPage({ params }: { params: Promise
   ].sort((a, b) => b.at.localeCompare(a.at));
   const invOpts = owing.map((i) => ({ id: i.id, number: i.number, balance: money(i.balance, cur), due: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "no due date" }));
   const templates = readTemplates(o?.settings).map((t) => ({ key: t.key, name: t.name }));
+  // Account-keeping fees owing now (months not charged yet, at this customer's rate)
+  const fees = readFees(o?.settings);
+  const feeRate = feeRateFor(fees, id);
+  const chargedR = await supabase.from("account_fees").select("invoice_id, months").eq("organisation_id", org.id).eq("customer_id", id);
+  const charged = new Map<string, number>();
+  for (const c of (chargedR.data ?? []) as { invoice_id: string; months: number }[]) charged.set(c.invoice_id, (charged.get(c.invoice_id) ?? 0) + c.months);
+  const feeLines = fees.enabled ? owing.map((i) => ({ i, f: feeDue(i, today, feeRate, fees.grace_days, charged.get(i.id) ?? 0) })).filter((x) => x.f.amount > 0) : [];
+  const { data: issues } = await supabase.from("account_issues").select("id, status, reason, invoice_id, created_at").eq("organisation_id", org.id).eq("customer_id", id).in("status", ["open", "investigating", "write_off"]).order("created_at", { ascending: false });
   const people = (contacts ?? []) as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null; is_primary: boolean }[];
 
   return (
@@ -130,6 +138,17 @@ export default async function AccountsCustomerPage({ params }: { params: Promise
             </>}
           </Card>
           <LogForm customerId={cust.id} invoices={invOpts} today={today} />
+          {(issues ?? []).length > 0 && (
+            <Card className="p-4 text-[0.8125rem]">
+              <p className="font-semibold text-ink">In the resolution centre</p>
+              {(issues ?? []).map((x) => <p key={x.id} className="mt-1.5 text-ink-muted"><span className="font-medium text-violet-800">{x.status === "write_off" ? "To write off" : x.status === "investigating" ? "Investigating" : "Waiting for a decision"}</span>{invNo(x.invoice_id) ? ` · ${invNo(x.invoice_id)}` : ""} — {x.reason}</p>)}
+              <Link href="/accounts/resolution" className="mt-2 inline-block font-medium text-brand-700 hover:underline">Open the resolution centre</Link>
+            </Card>
+          )}
+          <FlagForm customerId={cust.id} invoices={invOpts} />
+          <FeePanel customerId={cust.id} enabled={fees.enabled} standard={fees.percent} own={id in fees.overrides ? fees.overrides[id] : null} needsDb={!!chargedR.error}
+            lines={feeLines.map(({ i, f }) => ({ number: i.number, text: `${f.months} month${f.months === 1 ? "" : "s"} × ${feeRate}%`, amount: money(f.amount, cur) }))}
+            total={feeLines.length ? money(feeLines.reduce((a, x) => a + x.f.amount, 0), cur) : null} />
         </aside>
       </div>
     </>

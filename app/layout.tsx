@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cookies, headers } from "next/headers";
 import { DEFAULT_PREFS, htmlAttrs, parsePrefs, PREFS_COOKIE } from "@/lib/theme/prefs";
+import { APP_ROOTS } from "@/lib/app-roots";
 import "./theme.css";
 import "./globals.css";
 
@@ -29,10 +30,6 @@ export const viewport: Viewport = {
 };
 
 const CUSTOMER_PAGES = ["/p/", "/pay/", "/q/", "/order/", "/hire/", "/shop/", "/cafe/", "/jobs/", "/print/", "/academy/", "/book/", "/site/"];
-// The business app's own top-level pages (everything else at /<one-word> is a business's booking page or short link)
-const APP_ROOTS = new Set(["dashboard", "tasks", "enquiries", "crm", "quotes", "events", "calendar", "kitchen", "bookings", "learn", "store", "wholesale", "offers", "website",
-  "clients", "invoices", "payments", "wages", "portal", "reports", "settings", "my-jobs", "my-signature", "history", "xero-quotes", "franchise", "rentals", "login", "signup", "auth",
-  "admin", "onboarding", "crew", "suspended", "api"]);
 function isPublicPath(path: string) {
   if (path === "/" || CUSTOMER_PAGES.some((p) => path.startsWith(p))) return true;
   const first = path.split("/")[1] ?? "";

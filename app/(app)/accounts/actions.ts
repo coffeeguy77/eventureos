@@ -2,12 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
-import { readTemplates, type Template } from "@/lib/accounts/core";
+import { DEFAULT_FEES, feeDue, feeRateFor, readFees, readTemplates, type FeeSettings, type Template } from "@/lib/accounts/core";
+import { money, todayISO } from "@/lib/format";
+import { actorName, logActivity } from "@/lib/activity";
 
 /** Accounts: notes, calls, promises and next steps for customers who owe money; chasing emails; templates. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 const err = (e: unknown) => {
   const m = e instanceof Error ? e.message : String(e);
+  if (/account_issues|account_fees/.test(m) && /does not exist|could not find/i.test(m)) return "This needs the 0078 database update first: run supabase/migrations/0078_accounts_resolution.sql in Supabase (SQL editor).";
   return /collection_notes|collection_emails/.test(m) && /does not exist|could not find/i.test(m) ? "Accounts needs the 0072 database update first." : m;
 };
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -108,5 +111,146 @@ export async function saveTemplates(list: Template[]): Promise<R> {
     if (error) throw new Error(error.message);
     revalidatePath("/accounts", "layout");
     return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ------------------------------------------------------------------ settings helpers */
+
+async function saveCollections(patch: (col: Record<string, unknown>) => Record<string, unknown>) {
+  const { supabase, org } = await accounts();
+  const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+  if (e1) throw new Error(e1.message);
+  const settings = (data?.settings ?? {}) as Record<string, unknown>;
+  const col = (settings.collections && typeof settings.collections === "object" ? settings.collections : {}) as Record<string, unknown>;
+  const { error } = await supabase.from("organisations").update({ settings: { ...settings, collections: patch(col) } }).eq("id", org.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/accounts", "layout");
+}
+
+/* ------------------------------------------------------------------ resolution centre */
+
+/** Flag an invoice for a decision: write it off, investigate, or keep chasing. */
+export async function flagInvoice(customerId: string, invoiceId: string | null, reason: string): Promise<R> {
+  try {
+    const { supabase, org } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const why = t(reason, 2000);
+    if (!why) throw new Error("Say why it needs a decision (e.g. business closed, no response in 90 days, disputes the work).");
+    let amount: number | null = null;
+    if (invoiceId) {
+      if (!UUID.test(invoiceId)) throw new Error("Choose an invoice.");
+      const { data: inv } = await supabase.from("invoices").select("balance, customer_id").eq("id", invoiceId).eq("organisation_id", org.id).maybeSingle();
+      if (!inv || inv.customer_id !== customerId) throw new Error("That invoice isn't this customer's.");
+      amount = Number(inv.balance);
+    }
+    const { error } = await supabase.from("account_issues").insert({ organisation_id: org.id, customer_id: customerId, invoice_id: invoiceId || null, reason: why, amount });
+    if (error) throw new Error(error.message);
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, invoice_id: invoiceId || null, kind: "note", body: `Flagged for a decision: ${why}` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+const DECISION: Record<string, string> = { investigating: "Investigating", write_off: "Write off", keep_chasing: "Keep chasing", resolved: "Resolved" };
+
+/** Decide what happens to a flagged invoice. */
+export async function decideIssue(issueId: string, status: string, note: string): Promise<R> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(issueId)) throw new Error("Refresh and try again.");
+    if (!(status in DECISION)) throw new Error("Choose a decision.");
+    const n = t(note, 2000);
+    if (status === "write_off" && !n) throw new Error("Add a short note on why it's being written off — it's kept with the account.");
+    const { data: row, error } = await supabase.from("account_issues").update({ status, decision_note: n, decided_by: user.id, decided_at: new Date().toISOString() })
+      .eq("id", issueId).eq("organisation_id", org.id).select("customer_id, invoice_id").single();
+    if (error) throw new Error(error.message);
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: row.customer_id, invoice_id: row.invoice_id, kind: "note", body: `Decision: ${DECISION[status]}${n ? ` — ${n}` : ""}` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ------------------------------------------------------------------ account-keeping fees and terms */
+
+export async function saveFeeSettings(input: Omit<FeeSettings, "overrides">): Promise<R> {
+  try {
+    await saveCollections((col) => {
+      const prev = readFees({ collections: col });
+      const clean = readFees({ collections: { fees: { ...input, overrides: prev.overrides } } });
+      return { ...col, fees: clean };
+    });
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** A customer's own monthly rate (null = the standard rate, 0 = never charge them). */
+export async function setCustomerFeeRate(customerId: string, rate: number | null): Promise<R> {
+  try {
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    if (rate != null && (!Number.isFinite(rate) || rate < 0 || rate > 20)) throw new Error("Enter a rate from 0 to 20%.");
+    await saveCollections((col) => {
+      const f = readFees({ collections: col });
+      const overrides = { ...f.overrides };
+      if (rate == null) delete overrides[customerId]; else overrides[customerId] = Math.round(rate * 1000) / 1000;
+      return { ...col, fees: { ...f, overrides } };
+    });
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+export async function saveTerms(text: string): Promise<R> {
+  try {
+    const clean = typeof text === "string" ? text.replace(/\r\n/g, "\n").trim().slice(0, 30000) : "";
+    await saveCollections((col) => ({ ...col, terms: clean }));
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/**
+ * Raise the account-keeping fees owing on a customer's overdue invoices as one draft invoice (checked and sent by you),
+ * and record which months were charged so they're never charged twice.
+ */
+export async function raiseFeeInvoice(customerId: string): Promise<R<{ id: string; number: string; total: number }>> {
+  try {
+    const { supabase, org, user, profile } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { data: o, error: e1 } = await supabase.from("organisations").select("settings, default_payment_terms_days").eq("id", org.id).single();
+    if (e1) throw new Error(e1.message);
+    const fees = readFees(o?.settings ?? { collections: { fees: DEFAULT_FEES } });
+    if (!fees.enabled) throw new Error("Account-keeping fees are switched off — turn them on in Accounts → Fees & terms.");
+    const rate = feeRateFor(fees, customerId);
+    if (rate <= 0) throw new Error("This customer is set to no account-keeping fee.");
+    const today = todayISO(org.timezone);
+    const { loadOwing } = await import("@/lib/accounts/server");
+    const owing = (await loadOwing(supabase, org.id, customerId)).filter((i) => i.due_date && i.due_date < today);
+    const { data: charged, error: e2 } = await supabase.from("account_fees").select("invoice_id, months").eq("organisation_id", org.id).eq("customer_id", customerId);
+    if (e2) throw new Error(e2.message);
+    const done = new Map<string, number>();
+    for (const c of (charged ?? []) as { invoice_id: string; months: number }[]) done.set(c.invoice_id, (done.get(c.invoice_id) ?? 0) + c.months);
+    const due = owing.map((i) => ({ i, f: feeDue(i, today, rate, fees.grace_days, done.get(i.id) ?? 0) })).filter((x) => x.f.amount > 0);
+    if (!due.length) throw new Error("No account-keeping fees are owing right now.");
+    const lines = due.map(({ i, f }) => ({
+      description: `Account-keeping fee — invoice ${i.number} overdue (${money(i.balance, org.currency)} owing): ${rate}% × ${f.months} month${f.months === 1 ? "" : "s"}`,
+      quantity: 1, unit_amount: f.amount, tax_rate: fees.gst ? 10 : 0, inc: true as const, ...(fees.account_code ? { account_code: fees.account_code } : {}),
+    }));
+    const total = Math.round(lines.reduce((a, l) => a + l.unit_amount, 0) * 100) / 100;
+    const subtotal = fees.gst ? Math.round((total / 1.1) * 100) / 100 : total;
+    const terms = Number(o?.default_payment_terms_days ?? 14) || 14;
+    const dueDate = new Date(`${today}T00:00:00Z`); dueDate.setUTCDate(dueDate.getUTCDate() + terms);
+    const { data: inv, error } = await supabase.from("invoices").insert({
+      organisation_id: org.id, customer_id: customerId, kind: "other", issue_date: today, due_date: dueDate.toISOString().slice(0, 10),
+      subtotal, tax_total: Math.round((total - subtotal) * 100) / 100, total, status: "draft", currency: org.currency, created_by: user.id, line_items: lines,
+    }).select("id, number").single();
+    if (error) throw new Error(`Couldn't create the fee invoice: ${error.message}`);
+    const { error: e3 } = await supabase.from("account_fees").insert(due.map(({ i, f }) => ({
+      organisation_id: org.id, customer_id: customerId, invoice_id: i.id, fee_invoice_id: inv.id, months: f.months, percent: rate, balance: i.balance, amount: f.amount,
+    })));
+    if (e3) { await supabase.from("invoices").delete().eq("id", inv.id).eq("organisation_id", org.id); throw new Error(e3.message); }
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "note", body: `Account-keeping fee of ${money(total, org.currency)} raised on ${inv.number} (draft).` });
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "invoice.created", entityType: "invoice", entityId: inv.id, customerId,
+      summary: `${actorName(profile)} raised account-keeping fees of ${money(total, org.currency)} on ${inv.number} (draft)`, metadata: { kind: "account_fee", total } });
+    revalidatePath("/accounts", "layout");
+    revalidatePath("/invoices");
+    return { ok: true, data: { id: inv.id as string, number: inv.number as string, total } };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
