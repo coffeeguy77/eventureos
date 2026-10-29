@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_PRINT, priceJob, readPrinting } from "./core";
+import { DEFAULT_PRINT, cleanItems, priceJob, readPrinting } from "./core";
 
 const r = DEFAULT_PRINT;
 test("printing is a flat $120 a metre", () => {
@@ -25,4 +25,15 @@ test("wide prints flagged; rounding; settings", () => {
   assert.equal(priceJob({ items: [{ description: "", width_m: 1.5, length_m: 1, qty: 1 }], setup: true, cut: false }, r).tooWide.length, 1);
   assert.equal(priceJob({ items: [{ description: "", width_m: 1, length_m: 1.23, qty: 1 }], setup: false, cut: false }, { ...r, rounding: "0.1" }).exGst, 156);
   assert.equal(readPrinting({ printing: { printMetre: "100" } }).printMetre, 100);
+});
+
+test("a job's special price per metre replaces the standard rate", () => {
+  const r = { ...DEFAULT_PRINT };
+  const p = priceJob({ items: [{ description: "", width_m: 1.2, length_m: 3, qty: 1, rate: 100 }], setup: false, cut: false }, r);
+  assert.equal(p.lines[0].amount, 300);
+  assert.match(p.lines[0].description, /\$100\/m/);
+  const mixed = priceJob({ items: [{ description: "", width_m: 1, length_m: 1, qty: 1, rate: 100 }, { description: "", width_m: 1, length_m: 2, qty: 1 }], setup: false, cut: false }, r);
+  assert.deepEqual(mixed.lines.map((l) => l.amount), [100, 240]);
+  assert.equal(cleanItems([{ length_m: 1, rate: "100" }])[0].rate, 100);
+  assert.equal(cleanItems([{ length_m: 1, rate: "" }])[0].rate, undefined);
 });

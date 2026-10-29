@@ -44,7 +44,7 @@ export async function startPrintJob(i: StartInput) {
   // one online job per email every two minutes (double clicks, bots)
   const { count } = await db.from("print_jobs").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).ilike("contact_email", email.replace(/[%_]/g, "")).gte("created_at", new Date(Date.now() - 120_000).toISOString());
   if ((count ?? 0) > 0) throw new Error("We've just received a job from you — check your email, or contact us.");
-  const items = cleanItems(i.items);
+  const items = cleanItems(i.items).map((x) => { const y = { ...x }; delete y.rate; return y; }); // customers never set their own price
   const price = priceJob({ items, setup: true, cut: i.cut === true }, p);
   const { data: cust } = await db.from("customers").select("id").eq("organisation_id", org.id).ilike("email", email).limit(1).maybeSingle();
   const neededBy = i.neededBy && /^\d{4}-\d{2}-\d{2}$/.test(i.neededBy) ? i.neededBy : null;

@@ -33,6 +33,9 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
   const items = f.items ?? [], extras = f.extras ?? [];
   const setItem = (k: number, p: Partial<PrintItem>) => set({ items: items.map((x, j) => (j === k ? { ...x, ...p } : x)) });
   const setExtra = (k: number, p: Partial<Extra>) => set({ extras: extras.map((x, j) => (j === k ? { ...x, ...p } : x)) });
+  // a special price per metre for this job (blank = the standard rate); kept on every print size
+  const special = items.find((i) => typeof i.rate === "number")?.rate;
+  const setSpecial = (v: string) => { const n = v === "" ? undefined : Math.max(0, Number(v)); set({ items: items.map((x) => { const rest = { ...x }; delete rest.rate; return n === undefined || !Number.isFinite(n) ? rest : { ...rest, rate: n }; }) }); };
   const price = useMemo(() => priceJob({ items: items.filter((i) => i.length_m > 0), setup: f.setup !== false, cut: false, extras: extras.filter((e) => e.description && e.amount) }, rates), [items, extras, f.setup, rates]);
 
   const save = (then?: () => Promise<void>) => start(async () => {
@@ -104,12 +107,18 @@ export function JobEditor({ id, orgId, initial, rates, files = [], invoice = nul
                 <Input aria-label="Length in metres" type="number" min={0} step="0.01" value={it.length_m || ""} onChange={(e) => setItem(k, { length_m: Number(e.target.value) })} />
                 <Input aria-label="Quantity" type="number" min={1} value={it.qty} onChange={(e) => setItem(k, { qty: Math.max(1, Number(e.target.value) || 1) })} />
                 <label className="grid h-9 place-items-center" title="Cut to shape"><input type="checkbox" aria-label="Cut to shape" className="h-4 w-4" checked={!!it.cut} onChange={(e) => setItem(k, { cut: e.target.checked })} /></label>
-                <button type="button" aria-label="Remove size" onClick={() => set({ items: items.length > 1 ? items.filter((_, j) => j !== k) : [blank] })} className="grid h-9 place-items-center text-ink-faint hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                <button type="button" aria-label="Remove size" onClick={() => set({ items: items.length > 1 ? items.filter((_, j) => j !== k) : [special === undefined ? blank : { ...blank, rate: special }] })} className="grid h-9 place-items-center text-ink-faint hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
-            <button type="button" onClick={() => set({ items: [...items, blank] })} className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600"><Plus className="h-4 w-4" />Add a size</button>
+            <button type="button" onClick={() => set({ items: [...items, special === undefined ? blank : { ...blank, rate: special }] })} className="inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-brand-600"><Plus className="h-4 w-4" />Add a size</button>
             <div className="flex flex-wrap gap-4 pt-2 text-[0.8125rem]">
               <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" checked={f.setup !== false} onChange={(e) => set({ setup: e.target.checked })} />Setup (${rates.setup})</label>
+              <label className="flex items-center gap-2">Price per metre $
+                <Input aria-label="Price per metre for this job" type="number" min={0} step="0.01" className="h-8 w-24" value={special ?? ""} placeholder={String(rates.printMetre)} onChange={(e) => setSpecial(e.target.value)} />
+                {special !== undefined && special !== rates.printMetre
+                  ? <span className="text-[0.75rem] font-medium text-amber-700">Special price (standard ${rates.printMetre}) · <button type="button" className="underline" onClick={() => setSpecial("")}>reset</button></span>
+                  : <span className="text-[0.75rem] text-ink-muted">blank = standard</span>}
+              </label>
             </div>
             {price.tooWide.length > 0 && <p className="text-[0.75rem] text-amber-800">{price.tooWide.length === 1 ? "One print is" : `${price.tooWide.length} prints are`} wider than the {rates.rollWidth} m roll — split it into panels (add each panel as its own size).</p>}
             <p className="pt-2 text-[0.75rem] font-medium text-ink-muted">Extra charges (ex GST) — eyelets, laminating, design time, a discount (negative)…</p>

@@ -21,7 +21,7 @@ export function readPrinting(settings: unknown): PrintSettings {
   };
 }
 
-export interface PrintItem { description: string; width_m: number; length_m: number; qty: number; /** cut to shape on the plotter */ cut?: boolean }
+export interface PrintItem { description: string; width_m: number; length_m: number; qty: number; /** cut to shape on the plotter */ cut?: boolean; /** special printing price per metre (ex GST) for this job, instead of the standard rate */ rate?: number }
 export interface Extra { description: string; amount: number }
 
 export function cleanItems(raw: unknown): PrintItem[] {
@@ -31,7 +31,8 @@ export function cleanItems(raw: unknown): PrintItem[] {
     const width_m = Math.round(num(o.width_m, 0, 100, 0) * 1000) / 1000, length_m = Math.round(num(o.length_m, 0, 1000, 0) * 1000) / 1000;
     const qty = Math.round(num(o.qty, 1, 10_000, 1));
     const description = typeof o.description === "string" ? o.description.trim().slice(0, 200) : "";
-    return length_m > 0 ? [{ description, width_m, length_m, qty, ...(typeof o.cut === "boolean" ? { cut: o.cut } : {}) }] : [];
+    const rate = o.rate === null || o.rate === undefined || o.rate === "" ? NaN : Number(o.rate);
+    return length_m > 0 ? [{ description, width_m, length_m, qty, ...(typeof o.cut === "boolean" ? { cut: o.cut } : {}), ...(Number.isFinite(rate) && rate >= 0 ? { rate: Math.round(Math.min(rate, 100_000) * 100) / 100 } : {}) }] : [];
   });
 }
 export function cleanExtras(raw: unknown): Extra[] {
@@ -61,7 +62,13 @@ export function priceJob(job: { items: PrintItem[]; setup: boolean; cut: boolean
   const metres = round(job.items.reduce((a, i) => a + i.length_m * i.qty, 0));
   const cutMetres = round(job.items.filter((i) => i.cut ?? job.cut).reduce((a, i) => a + i.length_m * i.qty, 0));
   const lines: PriceLine[] = [];
-  if (metres > 0) lines.push({ description: `Printing — ${fmtM(metres)} lineal metre${metres === 1 ? "" : "s"} at $${r.printMetre}/m`, amount: r2(metres * r.printMetre) });
+  // printing, one line per price per metre (a job can carry a special price instead of the standard rate)
+  const byRate = new Map<number, number>();
+  for (const i of job.items) { const k = i.rate ?? r.printMetre; byRate.set(k, (byRate.get(k) ?? 0) + i.length_m * i.qty); }
+  for (const [rate, raw] of byRate) {
+    const m = byRate.size === 1 ? metres : round(raw);
+    if (m > 0) lines.push({ description: `Printing — ${fmtM(m)} lineal metre${m === 1 ? "" : "s"} at $${rate}/m`, amount: r2(m * rate) });
+  }
   if (job.setup && metres > 0) lines.push({ description: "Setup", amount: r.setup });
   if (cutMetres > 0) {
     lines.push({ description: `Cutting — first metre`, amount: r.cutFirst });
