@@ -1,3 +1,4 @@
+import { fromXeroParts } from "@/lib/phone-format";
 /** Pure Xero contact helpers (no server imports, so they can be tested with tsx). */
 export interface XeroPhone { PhoneType?: string; PhoneNumber?: string; PhoneAreaCode?: string; PhoneCountryCode?: string }
 export interface XeroContact {
@@ -12,7 +13,8 @@ export function contactPhone(c: XeroContact): string | null {
   phones.sort((a, b) => order.indexOf(a.PhoneType ?? "") - order.indexOf(b.PhoneType ?? ""));
   const p = phones[0];
   if (!p) return null;
-  return [p.PhoneCountryCode ? `+${p.PhoneCountryCode.replace(/^\+/, "")}` : "", p.PhoneAreaCode ?? "", p.PhoneNumber ?? ""].filter(Boolean).join(" ").trim();
+  // Xero's three boxes are often filled in oddly (the full number in one, part of it in another) — pick the real number
+  return fromXeroParts(p);
 }
 
 export function contactPerson(c: XeroContact): string | null {

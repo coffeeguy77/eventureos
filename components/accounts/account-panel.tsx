@@ -18,10 +18,13 @@ const KIND: Record<string, string> = { note: "Note", call: "Call", email: "Email
 export async function AccountPanel({ db, orgId, customerId, invoiceId, today, timezone, currency, actorId }: {
   db: SupabaseClient; orgId: string; customerId: string; invoiceId?: string | null; today: string; timezone: string; currency: string; actorId: string | null;
 }) {
-  const [{ phones, xero }, owing, notesR] = await Promise.all([
+  const [{ phones, xero }, owing, notesR, { data: tw }, { data: cust }, { data: org }] = await Promise.all([
     loadPhones(db, orgId, customerId, actorId),
     loadOwing(db, orgId, customerId).catch(() => []),
     db.from("collection_notes").select("id, kind, body, promise_date, promise_amount, next_step, next_step_due, done_at, created_at").eq("organisation_id", orgId).eq("customer_id", customerId).order("created_at", { ascending: false }).limit(60),
+    db.from("integrations").select("status").eq("organisation_id", orgId).eq("provider", "twilio").maybeSingle(),
+    db.from("customers").select("name").eq("id", customerId).maybeSingle(),
+    db.from("organisations").select("name").eq("id", orgId).maybeSingle(),
   ]);
   if (notesR.error && /does not exist|could not find/i.test(notesR.error.message)) return null;
   const notes = (notesR.data ?? []) as { id: string; kind: string; body: string | null; promise_date: string | null; promise_amount: number | null; next_step: string | null; next_step_due: string | null; done_at: string | null; created_at: string }[];
@@ -30,7 +33,8 @@ export async function AccountPanel({ db, orgId, customerId, invoiceId, today, ti
   const step = notes.find((n) => n.next_step && !n.done_at);
   return (
     <div className="space-y-5">
-      <CallPanel customerId={customerId} invoiceId={invoiceId} phones={phones} attempts={lastAttempts(notes)} xero={xero} />
+      <CallPanel customerId={customerId} invoiceId={invoiceId} phones={phones} attempts={lastAttempts(notes)} xero={xero}
+        sms={tw?.status === "connected" ? { business: String(org?.name ?? ""), firstName: String(cust?.name ?? "there").split(/\s+/)[0], owing: money(owing.reduce((a, i) => a + i.balance, 0), currency) } : null} />
       <LogForm customerId={customerId} invoices={ordered} today={today} />
       <Card>
         <CardHeader title="Account history" subtitle={step ? `Next: ${step.next_step}${step.next_step_due ? ` · by ${fmtDate(step.next_step_due, "short")}` : ""}` : undefined}

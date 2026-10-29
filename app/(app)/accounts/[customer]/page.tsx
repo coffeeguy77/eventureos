@@ -9,6 +9,7 @@ import { daysBetween, feeDue, feeRateFor, readFees, readTemplates } from "@/lib/
 import { loadOwing } from "@/lib/accounts/server";
 import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { CallPanel } from "@/components/accounts/call-panel";
+import { ContactsManager, type ContactRow } from "@/app/(app)/clients/[id]/controls";
 import { PlanPanel, StatementPanel } from "@/components/accounts/statement-plan";
 import { lastAttempts } from "@/lib/accounts/phones";
 import { loadPhones } from "@/lib/accounts/phones-server";
@@ -33,7 +34,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     supabase.from("collection_notes").select("id, kind, body, invoice_id, promise_date, promise_amount, remind, reminded_at, next_step, next_step_due, done_at, created_by, created_at").eq("organisation_id", org.id).eq("customer_id", id).order("created_at", { ascending: false }).limit(300),
     supabase.from("collection_emails").select("id, invoice_id, kind, template, subject, to_emails, sent_at, opened_at, open_count, clicked_at, click_count, sent_by").eq("organisation_id", org.id).eq("customer_id", id).order("sent_at", { ascending: false }).limit(300),
     supabase.from("payments").select("amount, paid_at, method, invoice:invoices!inner(number, customer_id)").eq("organisation_id", org.id).eq("invoice.customer_id", id).gte("paid_at", yearAgo).order("paid_at", { ascending: false }).limit(200),
-    supabase.from("contacts").select("first_name, last_name, email, phone, is_primary").eq("organisation_id", org.id).eq("customer_id", id).order("is_primary", { ascending: false }).limit(10),
+    supabase.from("contacts").select("id, first_name, last_name, email, phone, position, is_primary, portal_user_id").eq("organisation_id", org.id).eq("customer_id", id).order("is_primary", { ascending: false }).limit(30),
     supabase.from("organisations").select("settings").eq("id", org.id).single(),
     getMembers(org.id),
   ]);
@@ -81,6 +82,8 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     return { label: `${brand} ending ${c.last4 ?? "????"}`, expiry: c.exp_month && c.exp_year ? `${String(c.exp_month).padStart(2, "0")}/${String(c.exp_year).slice(-2)}` : null, expired };
   })() : null;
   const phoneData = await loadPhones(supabase, org.id, id, user.id);
+  const { data: twilioRow } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "twilio").maybeSingle();
+  const smsOn = twilioRow?.status === "connected";
   // Payment plan (0080)
   let plan: { frequency: string; instalments: { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] } | null = null;
   const { data: pl, error: plErr } = await supabase.from("payment_plans").select("id, frequency").eq("organisation_id", org.id).eq("customer_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -88,7 +91,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     const { data: ins } = await supabase.from("payment_plan_instalments").select("n, due_date, amount, status, last_error").eq("plan_id", pl.id).order("n");
     plan = { frequency: pl.frequency as string, instalments: (ins ?? []) as { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] };
   }
-  const people = (contacts ?? []) as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null; is_primary: boolean }[];
+  const people = (contacts ?? []) as ContactRow[];
 
   return (
     <>
@@ -168,19 +171,12 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
           </Card>
         </div>
         <aside className="space-y-5">
-          <CallPanel customerId={cust.id} phones={phoneData.phones} attempts={lastAttempts(N)} xero={phoneData.xero} />
+          <CallPanel customerId={cust.id} phones={phoneData.phones} attempts={lastAttempts(N)} xero={phoneData.xero}
+            sms={smsOn ? { business: org.name, firstName: (people.find((p) => p.is_primary)?.first_name ?? cust.name).split(/\s+/)[0], owing: money(total, cur) } : null} />
           <Card className="p-4 text-[0.8125rem]">
-            <p className="font-semibold text-ink">Contact</p>
-            {people.length ? people.map((p, i) => (
-              <div key={i} className="mt-2">
-                <p className="text-ink">{[p.first_name, p.last_name].filter(Boolean).join(" ") || "Contact"}{p.is_primary && <span className="ml-1 text-[0.6875rem] text-ink-faint">main</span>}</p>
-                {p.phone && <a href={`tel:${p.phone.replace(/\s/g, "")}`} className="flex items-center gap-1 text-brand-700"><Phone className="h-3.5 w-3.5" />{p.phone}</a>}
-                {p.email && <a href={`mailto:${p.email}`} className="block break-all text-ink-muted">{p.email}</a>}
-              </div>
-            )) : <>
-              {cust.phone && <a href={`tel:${cust.phone.replace(/\s/g, "")}`} className="mt-2 flex items-center gap-1 text-brand-700"><Phone className="h-3.5 w-3.5" />{cust.phone}</a>}
-              {cust.email && <a href={`mailto:${cust.email}`} className="block break-all text-ink-muted">{cust.email}</a>}
-            </>}
+            <p className="font-semibold text-ink">Contacts</p>
+            <p className="mb-2 text-[0.75rem] text-ink-muted">Someone left? Edit or remove them here, and make the right person the main contact.</p>
+            <ContactsManager customerId={cust.id} contacts={people} canRemove />
           </Card>
           <LogForm customerId={cust.id} invoices={invOpts} today={today} card={cardInfo && !cardInfo.expired ? cardInfo.label : null} />
           {(issues ?? []).length > 0 && (

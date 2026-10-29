@@ -4,15 +4,16 @@
  * try a different number when calls are being screened.
  */
 import type { XeroPhone } from "@/lib/integrations/xero-format";
+import { fromXeroParts } from "@/lib/phone-format";
 
 export interface PhoneOption { number: string; label: string; source: "client" | "contact" | "xero" }
 
-export const digits = (s: string) => s.replace(/[^\d]/g, "").replace(/^61/, "0");
+export const digits = (s: string) => { const d = s.replace(/[^\d]/g, ""); return /^61\d{9}$/.test(d) ? `0${d.slice(2)}` : d; };
 
 const XERO_LABEL: Record<string, string> = { MOBILE: "Mobile", DEFAULT: "Office", DDI: "Direct line", OFFICE: "Office", FAX: "Fax" };
 export function xeroNumbers(phones: XeroPhone[] | undefined): PhoneOption[] {
   return (phones ?? []).filter((p) => p.PhoneNumber?.trim() && p.PhoneType !== "FAX").map((p) => ({
-    number: [p.PhoneCountryCode && p.PhoneCountryCode !== "61" ? `+${p.PhoneCountryCode.replace(/^\+/, "")}` : "", p.PhoneAreaCode ?? "", p.PhoneNumber ?? ""].filter(Boolean).join(" ").trim(),
+    number: fromXeroParts(p) ?? (p.PhoneNumber ?? "").trim(),
     label: `${XERO_LABEL[p.PhoneType ?? ""] ?? "Phone"} (Xero)`, source: "xero" as const,
   }));
 }
@@ -41,9 +42,9 @@ export const attemptText = (code: string, number: string | null, extra?: string 
 export function lastAttempts(notes: { body: string | null; kind: string; created_at: string }[], codes = ATTEMPT_CODES) {
   const out: { code: string; number: string | null; at: string }[] = [];
   for (const n of notes) {
-    if (n.kind !== "call" || !n.body) continue;
+    if ((n.kind !== "call" && n.kind !== "sms") || !n.body) continue;
     const m = /^([^\n·]+?)(?: · ([+\d][\d\s()+-]{5,}))?(?:\n|$)/.exec(n.body);
-    if (!m || !codes.includes(m[1].trim())) continue;
+    if (!m || ![...codes, "SMS"].includes(m[1].trim())) continue;
     out.push({ code: m[1].trim(), number: m[2]?.trim() ?? null, at: n.created_at });
   }
   return out;
@@ -54,4 +55,12 @@ export function nextNumber(options: PhoneOption[], lastNumber: string | null): s
   if (!options.length) return null;
   if (!lastNumber) return options[0].number;
   return options.find((o) => digits(o.number) !== digits(lastNumber))?.number ?? options[0].number;
+}
+
+/** Numbers the team removed for a customer (settings.collections.hidden_numbers[customerId] = digits). */
+export function hiddenNumbers(settings: unknown, customerId: string): string[] {
+  const c = (settings && typeof settings === "object" ? (settings as Record<string, unknown>).collections : null) as Record<string, unknown> | null;
+  const h = (c?.hidden_numbers && typeof c.hidden_numbers === "object" ? c.hidden_numbers : {}) as Record<string, unknown>;
+  const list = h[customerId];
+  return Array.isArray(list) ? list.filter((x): x is string => typeof x === "string" && /^\d{6,15}$/.test(x)) : [];
 }

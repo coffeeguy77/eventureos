@@ -418,3 +418,87 @@ export async function cancelPaymentPlan(customerId: string): Promise<R> {
     return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/* ------------------------------------------------------------------ phone numbers */
+
+/** Take a number off a customer (e.g. the person has left): cleared from the client record / contact, hidden if it's Xero's. */
+export async function removeNumber(customerId: string, number: string, source: "client" | "contact" | "xero"): Promise<R<string>> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { digits } = await import("@/lib/accounts/phones");
+    const { cleanStored } = await import("@/lib/phone-format");
+    const d = digits(number);
+    if (d.length < 6) throw new Error("That isn't a phone number.");
+    const same = (raw: string | null) => !!raw && cleanStored(raw).some((n) => digits(n) === d);
+    const { data: c } = await supabase.from("customers").select("phone").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    if (same((c?.phone as string | null) ?? null)) await supabase.from("customers").update({ phone: null }).eq("id", customerId).eq("organisation_id", org.id);
+    const { data: people } = await supabase.from("contacts").select("id, phone").eq("organisation_id", org.id).eq("customer_id", customerId).not("phone", "is", null);
+    for (const p of (people ?? []) as { id: string; phone: string }[]) if (same(p.phone)) await supabase.from("contacts").update({ phone: null }).eq("id", p.id).eq("organisation_id", org.id);
+    // hidden from now on, so Xero (which still has it) doesn't bring it back
+    await saveCollections((col) => {
+      const h = { ...((col.hidden_numbers && typeof col.hidden_numbers === "object" ? col.hidden_numbers : {}) as Record<string, string[]>) };
+      h[customerId] = [...new Set([...(h[customerId] ?? []), d])].slice(0, 30);
+      return { ...col, hidden_numbers: h };
+    });
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "note", created_by: user.id, body: `Removed ${number} from their numbers.` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: source === "xero" ? `Removed ${number}. It's still in Xero — update their contact in Xero too.` : `Removed ${number}.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/**
+ * Tidy every client's and contact's phone number: numbers Xero's boxes joined together ("+0476 804 0476804565"),
+ * "Phone: … Mobile: …" in one field, +61 duplicates. Owners and admins; numbers we can't read are left alone.
+ */
+export async function tidyAllPhones(): Promise<R<string>> {
+  try {
+    const { supabase, org, role } = await accounts();
+    if (role !== "owner" && role !== "admin") throw new Error("Only owners and admins can tidy every number.");
+    const { cleanStored } = await import("@/lib/phone-format");
+    const broken = (p: string) => p.replace(/\D/g, "").length > 10 || /[\r\n|]|(phone|mobile)\s*:/i.test(p);
+    let n = 0;
+    for (const table of ["customers", "contacts"] as const) {
+      const { data, error } = await supabase.from(table).select("id, phone").eq("organisation_id", org.id).not("phone", "is", null).limit(10000);
+      if (error) throw new Error(error.message);
+      for (const r of (data ?? []) as { id: string; phone: string }[]) {
+        if (!broken(r.phone)) continue;
+        const list = cleanStored(r.phone).filter((x) => !x.startsWith("+"));
+        // a contact keeps the mobile when there are two; the client record keeps the first
+        const pick = table === "contacts" && list.length > 1 ? (list.find((x) => /^04/.test(x)) ?? list[0]) : list[0];
+        if (!pick || pick === r.phone || pick.replace(/\D/g, "").length < 8) continue;
+        const { error: e } = await supabase.from(table).update({ phone: pick }).eq("id", r.id).eq("organisation_id", org.id);
+        if (!e) n++;
+      }
+    }
+    revalidatePath("/accounts", "layout");
+    revalidatePath("/clients");
+    return { ok: true, data: n ? `Tidied ${n} phone number${n === 1 ? "" : "s"}.` : "All phone numbers already look right." };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ------------------------------------------------------------------ text messages */
+
+/** Text a customer (from the business's Twilio, as its approved sender), logged on the account. */
+export async function sendSmsToCustomer(customerId: string, number: string, body: string, withStatement: boolean): Promise<R<string>> {
+  try {
+    const { org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { smsNumber, loadTwilio, sendSms } = await import("@/lib/sms/twilio");
+    const to = smsNumber(number);
+    if (!to) throw new Error(`${number} can't get texts — choose a mobile number.`);
+    const text = t(body, 1200);
+    if (!text) throw new Error("Write the message.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const cfg = await loadTwilio(db, org.id);
+    if (!cfg) throw new Error("Text messages aren't set up — connect Twilio in Settings → Integrations.");
+    let msg = text;
+    if (withStatement) { const { statementUrl } = await import("@/lib/accounts/statement"); msg = `${text}\n${statementUrl(org.id, customerId)}`; }
+    await sendSms(cfg, to, msg);
+    const { attemptText } = await import("@/lib/accounts/phones");
+    await db.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "sms", created_by: user.id, body: `${attemptText("SMS", number)}\n${text}${withStatement ? "\n(with their statement link)" : ""}` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: `Text sent to ${number}.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

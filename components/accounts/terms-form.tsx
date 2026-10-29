@@ -71,3 +71,25 @@ export function TermsForm({ initial, standard, preview, publicUrl }: { initial: 
     </Card>
   );
 }
+
+/** Owners and admins: fix phone numbers that came from Xero joined together or several to a box. */
+export function TidyPhones() {
+  const router = useRouter();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const go = () => start(async () => {
+    const { tidyAllPhones } = await import("@/app/(app)/accounts/actions");
+    const r = await tidyAllPhones();
+    setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error });
+    if (r.ok) router.refresh();
+  });
+  return (
+    <Card>
+      <CardHeader title="Tidy phone numbers" subtitle={'Fixes numbers that came from Xero joined together (e.g. "+0476 804 0476804565" becomes "0476 804 565") and boxes holding two numbers ("Phone: … Mobile: …"). Numbers it can’t read are left alone.'} />
+      <div className="flex flex-wrap items-center gap-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <Button disabled={pending} onClick={go}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Tidy every client&apos;s numbers</Button>
+        {msg && <p role="status" className={msg.ok ? "text-emerald-700" : "text-rose-700"}>{msg.text}</p>}
+      </div>
+    </Card>
+  );
+}

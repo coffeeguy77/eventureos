@@ -19,6 +19,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function refresh(customerId: string) {
   revalidatePath(`/clients/${customerId}`);
   revalidatePath("/clients");
+  revalidatePath("/accounts", "layout");
 }
 
 type Kind = "text" | "long" | "list" | "kind";

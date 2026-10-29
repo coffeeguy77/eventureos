@@ -48,7 +48,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const pending = pendingRes.count ?? 0;
   const suggestions = suggestRes.count ?? 0;
   const logs = (logsRes.data ?? []) as unknown as { id: string; entity: string | null; direction: string; status: string; records_processed: number; message: string | null; started_at: string; finished_at: string | null; integration: { provider: string } | null }[];
-  const soon = PROVIDERS.filter((p) => p.availability === "coming_soon" && p.id !== "stripe");
+  const soon = PROVIDERS.filter((p) => p.availability === "coming_soon" && p.id !== "stripe" && p.id !== "twilio");
+  const twilioDef = PROVIDERS.find((p) => p.id === "twilio")!;
+  const twilio = rows.get("twilio") ?? null;
   const stripeDef = PROVIDERS.find((p) => p.id === "stripe")!;
   const stripe = rows.get("stripe") ?? null;
   const aiRow = rows.get("anthropic") ?? null;
@@ -93,6 +95,19 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Customers pay invoices by card from a payment link or their portal. Payments are marked on the invoice and added to Xero.</p>
           {stripe?.status === "connected" && stripe.account_label && <p className="mt-2 text-[0.75rem] text-ink">{stripe.account_label}</p>}
           <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/stripe" variant={stripe?.status === "connected" ? "secondary" : "primary"}>{stripe?.status === "connected" ? "Manage" : "Set up card payments"}</ButtonLink></div>
+        </Card>
+        <Card className="flex flex-col p-5">
+          <div className="flex items-start gap-3">
+            <Mark p={twilioDef} />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] font-semibold text-ink">Twilio SMS
+                <Badge tone={twilio?.status === "connected" ? "green" : "neutral"} dot>{twilio?.status === "connected" ? "Connected" : "Not connected"}</Badge></p>
+              <p className="text-[0.75rem] text-ink-faint">Messaging</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[0.8125rem] text-ink-muted">Text customers from Accounts — reminders, statement links and payment plans — from your approved sender name.</p>
+          {twilio?.status === "connected" && twilio.account_label && <p className="mt-2 text-[0.75rem] text-ink">{twilio.account_label}</p>}
+          <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/twilio" variant={twilio?.status === "connected" ? "secondary" : "primary"}>{twilio?.status === "connected" ? "Manage" : "Set up text messages"}</ButtonLink></div>
         </Card>
         <Card className="flex flex-col p-5">
           <div className="flex items-start gap-3">

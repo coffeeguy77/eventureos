@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, EmptyState } from "@/components/ui/card";
 import { bucket, callNext, daysBetween } from "@/lib/accounts/core";
 import { lastAttempts } from "@/lib/accounts/phones";
+import { cleanStored } from "@/lib/phone-format";
 import { loadOwing } from "@/lib/accounts/server";
 import { cn } from "@/lib/cn";
 import { HostingPills, hostingByClient } from "@/components/hosting/pills";
@@ -150,7 +151,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
                       {(() => { const a = lastAttempts(N.filter((n) => n.customer_id === r.id))[0]; return a ? <p className="mt-0.5 text-[0.75rem] text-ink-muted">Last try: <span className="font-semibold text-ink">{a.code}</span>{a.number ? ` on ${a.number}` : ""} · {relative(a.at)}</p> : null; })()}
                       {p && <p className="mt-0.5 text-[0.75rem] text-emerald-700">Promised {p.promise_amount ? money(Number(p.promise_amount), cur) : "payment"} on {fmtDate(p.promise_date, "short")}{p.remind && !p.reminded_at ? " · invoice emails that morning" : p.reminded_at ? " · reminder sent" : ""}</p>}
                     </div>
-                    {r.phone ? <span className="flex items-center gap-1 text-[0.75rem] tabular-nums text-ink-muted"><Phone className="h-3.5 w-3.5" />{r.phone}</span> : <span className="text-[0.75rem] text-ink-faint">no number</span>}
+                    {r.phone ? <span className="flex items-center gap-1 text-[0.75rem] tabular-nums text-ink-muted"><Phone className="h-3.5 w-3.5" />{cleanStored(r.phone)[0] ?? r.phone}</span> : <span className="text-[0.75rem] text-ink-faint">no number</span>}
                     <div className="text-right">
                       <p className="text-[1rem] font-semibold tabular-nums text-ink">{money(r.owing, cur)}</p>
                       {r.overdue > 0 && <p className="text-[0.75rem] font-medium tabular-nums text-rose-700">{money(r.overdue, cur)} overdue</p>}
