@@ -159,18 +159,43 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     const ws = await import("@/lib/wholesale/orders");
     return ws.settleWholesaleCheckout(db, orgId, s.metadata.eventureos_wholesale_order, s as CheckoutSession & { id: string });
   }
+  // Several invoices paid at once (taken over the phone from Accounts)
+  if (s.metadata?.eventureos_org_id === orgId && s.metadata?.eventureos_invoice_ids) {
+    const ids = s.metadata.eventureos_invoice_ids.split(",").filter((x) => UUID.test(x));
+    const cents = (s.metadata.eventureos_alloc ?? "").split(",").map((x) => Number(x));
+    const pi = s.payment_intent ?? s.id;
+    const out: string[] = [];
+    for (const [k, id] of ids.entries()) {
+      const amt = (Number.isFinite(cents[k]) ? cents[k] : 0) / 100;
+      if (amt <= 0) continue;
+      out.push(await recordCardPayment(db, orgId, cfg, { invoiceId: id, amount: amt, createdSec: s.created, key: k ? `${pi}#${k}` : pi, payer: s.customer_details?.name ?? null }));
+    }
+    if (s.metadata.eventureos_save_card === "1" && s.metadata.eventureos_customer && s.payment_intent) {
+      const { saveCardFromPayment } = await import("./phone");
+      await saveCardFromPayment(db, orgId, cfg, s.metadata.eventureos_customer, s.payment_intent, s.metadata.eventureos_consent ?? null, s.metadata.eventureos_staff ?? null).catch(() => undefined);
+    }
+    return out.join("; ") || "nothing to record";
+  }
   const invoiceId = s.metadata?.eventureos_invoice_id;
   if (!invoiceId || s.metadata?.eventureos_org_id !== orgId) return "not an EventureOS payment";
   const pi = s.payment_intent ?? s.id;
+  return recordCardPayment(db, orgId, cfg, { invoiceId, amount: (s.amount_total ?? 0) / 100, createdSec: s.created, key: pi, payer: s.customer_details?.name ?? null });
+}
 
+/**
+ * Record a card payment on an invoice (once — `key` is the Stripe payment id) and send it to Xero when the invoice
+ * is in Xero. Used by Stripe Checkout (webhook) and by charging a card on file from Accounts.
+ */
+export async function recordCardPayment(db: SupabaseClient, orgId: string, cfg: StripeConfig, p: { invoiceId: string; amount: number; createdSec: number; key: string; payer: string | null }): Promise<string> {
+  const pi = p.key;
   const { data: dupe } = await db.from("payments").select("id").eq("organisation_id", orgId).eq("stripe_payment_intent", pi).maybeSingle();
   if (dupe) return "already recorded";
-  const { data: inv } = await db.from("invoices").select("id, number, xero_invoice_id, organisation_id").eq("id", invoiceId).eq("organisation_id", orgId).maybeSingle();
+  const { data: inv } = await db.from("invoices").select("id, number, xero_invoice_id, organisation_id").eq("id", p.invoiceId).eq("organisation_id", orgId).maybeSingle();
   if (!inv) throw new Error("Invoice not found");
 
-  const amount = (s.amount_total ?? 0) / 100;
+  const amount = p.amount;
   const { data: org } = await db.from("organisations").select("timezone").eq("id", orgId).single();
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: (org?.timezone as string) || "Australia/Sydney" }).format(new Date(s.created * 1000));
+  const date = new Intl.DateTimeFormat("en-CA", { timeZone: (org?.timezone as string) || "Australia/Sydney" }).format(new Date(p.createdSec * 1000));
   let xeroId: string | null = null, xeroErr: string | null = null;
   if (inv.xero_invoice_id && cfg.settings.mode === "test") {
     xeroErr = "Stripe is in test mode, so this test payment was not sent to Xero";
@@ -178,13 +203,13 @@ async function processEvent(db: SupabaseClient, orgId: string, cfg: StripeConfig
     const account = cfg.settings.xero_account?.trim();
     if (!account) xeroErr = "no Xero account chosen for Stripe payments";
     else {
-      try { xeroId = await pushToXero(db, orgId, inv.xero_invoice_id as string, amount, date, `Stripe ${pi}`, account); }
+      try { xeroId = await pushToXero(db, orgId, inv.xero_invoice_id as string, amount, date, `Stripe ${pi.replace(/#\d+$/, "")}`, account); }
       catch (e) { xeroErr = e instanceof Error ? e.message : String(e); }
     }
   }
   const { error } = await db.rpc("record_stripe_payment", {
-    p_invoice_id: inv.id, p_amount: amount, p_paid_at: new Date(s.created * 1000).toISOString(), p_payment_intent: pi,
-    p_payer: s.customer_details?.name ?? null, p_xero_payment_id: xeroId, p_xero_error: xeroErr,
+    p_invoice_id: inv.id, p_amount: amount, p_paid_at: new Date(p.createdSec * 1000).toISOString(), p_payment_intent: pi,
+    p_payer: p.payer, p_xero_payment_id: xeroId, p_xero_error: xeroErr,
   });
   if (error) throw new Error(`Couldn't record the payment: ${error.message}`);
   // An online hire held while the customer paid its deposit is now booked

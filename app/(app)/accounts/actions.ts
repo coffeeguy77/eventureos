@@ -10,6 +10,7 @@ import { actorName, logActivity } from "@/lib/activity";
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 const err = (e: unknown) => {
   const m = e instanceof Error ? e.message : String(e);
+  if (/customer_cards|charge_card/.test(m) && /does not exist|could not find/i.test(m)) return "This needs the 0079 database update first: run supabase/migrations/0079_saved_cards.sql in Supabase (SQL editor).";
   if (/account_issues|account_fees/.test(m) && /does not exist|could not find/i.test(m)) return "This needs the 0078 database update first: run supabase/migrations/0078_accounts_resolution.sql in Supabase (SQL editor).";
   return /collection_notes|collection_emails/.test(m) && /does not exist|could not find/i.test(m) ? "Accounts needs the 0072 database update first." : m;
 };
@@ -28,6 +29,8 @@ export interface NoteInput {
   body?: string | null; invoiceId?: string | null;
   promiseDate?: string | null; promiseAmount?: number | string | null; remind?: boolean;
   nextStep?: string | null; nextStepDue?: string | null;
+  /** promise: charge the card on file that morning instead of emailing */
+  chargeCard?: boolean;
 }
 
 export async function addCollectionNote(customerId: string, n: NoteInput): Promise<R> {
@@ -42,6 +45,7 @@ export async function addCollectionNote(customerId: string, n: NoteInput): Promi
       organisation_id: org.id, customer_id: customerId, invoice_id: n.invoiceId && UUID.test(n.invoiceId) ? n.invoiceId : null, kind, body: t(n.body, 4000),
       promise_date: promiseDate, promise_amount: amount != null && Number.isFinite(amount) && amount > 0 ? amount : null, remind: kind === "promise" && n.remind !== false,
       next_step: t(n.nextStep, 300), next_step_due: n.nextStepDue && DATE.test(n.nextStepDue) ? n.nextStepDue : null, created_by: user.id,
+      ...(kind === "promise" && n.chargeCard ? { charge_card: true, remind: true } : {}),
     };
     if (!row.body && !row.next_step && kind !== "promise") throw new Error("Write what happened or the next step.");
     // a new next step replaces the open one
@@ -252,5 +256,63 @@ export async function raiseFeeInvoice(customerId: string): Promise<R<{ id: strin
     revalidatePath("/accounts", "layout");
     revalidatePath("/invoices");
     return { ok: true, data: { id: inv.id as string, number: inv.number as string, total } };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/* ------------------------------------------------------------------ card payments over the phone */
+
+async function stripeFor(orgId: string) {
+  const { createServiceClient } = await import("@/lib/integrations/runtime");
+  const { loadStripe } = await import("@/lib/payments/service");
+  const db = createServiceClient();
+  const cfg = await loadStripe(db, orgId);
+  if (!cfg) throw new Error("Stripe isn't connected — connect it in Settings → Integrations to take card payments.");
+  return { db, cfg };
+}
+
+/** Stripe's secure card page for the chosen invoices, to fill in while the customer reads out their card. */
+export async function takePhonePayment(customerId: string, invoiceIds: string[], saveCard: boolean): Promise<R<{ url: string; total: number; invoices: string[] }>> {
+  try {
+    const { org, user, profile } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { db, cfg } = await stripeFor(org.id);
+    if (saveCard) {
+      const { error } = await db.from("customer_cards").select("id").limit(1);
+      if (error) throw new Error("Saving cards needs the 0079 database update first: run supabase/migrations/0079_saved_cards.sql in Supabase (SQL editor). You can still take the payment without saving the card.");
+    }
+    const { data: c } = await db.from("customers").select("email").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    const { startPhoneCheckout } = await import("@/lib/payments/phone");
+    const r = await startPhoneCheckout(db, org.id, cfg, { customerId, invoiceIds, saveCard, staffId: user.id, staffName: profile?.full_name ?? user.email ?? "the team", currency: org.currency, email: (c?.email as string | null) ?? null });
+    await db.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "call", created_by: user.id,
+      body: `Opened the card payment page over the phone for ${r.invoices.join(", ")}${saveCard ? " (customer agreed to keep the card on file)" : ""}.` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: r };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+export async function chargeSavedCardNow(customerId: string, invoiceIds: string[]): Promise<R<string>> {
+  try {
+    const { org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { db, cfg } = await stripeFor(org.id);
+    const { data: c } = await db.from("customers").select("email").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    const { chargeCardOnFile } = await import("@/lib/payments/phone");
+    const r = await chargeCardOnFile(db, org.id, cfg, { customerId, invoiceIds, currency: org.currency, reason: "Charged from Accounts", email: (c?.email as string | null) ?? null });
+    await db.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "note", created_by: user.id,
+      body: `Charged ${money(r.total, org.currency)} to the card on file (${r.card.brand ?? "card"} ending ${r.card.last4 ?? "????"}) for ${r.invoices.join(", ")}.` });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: `Paid — ${money(r.total, org.currency)} charged to the ${r.card.brand ?? "card"} ending ${r.card.last4 ?? ""} for ${r.invoices.join(", ")}.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+export async function removeSavedCard(customerId: string): Promise<R> {
+  try {
+    const { supabase, org, user } = await accounts();
+    if (!UUID.test(customerId)) throw new Error("Refresh and try again.");
+    const { error } = await supabase.from("customer_cards").update({ active: false }).eq("organisation_id", org.id).eq("customer_id", customerId).eq("active", true);
+    if (error) throw new Error(error.message);
+    await supabase.from("collection_notes").insert({ organisation_id: org.id, customer_id: customerId, kind: "note", created_by: user.id, body: "Removed the card on file." });
+    revalidatePath("/accounts", "layout");
+    return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

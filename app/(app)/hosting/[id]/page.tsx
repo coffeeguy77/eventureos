@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { billingReference, readHosting, STATUS_TONE, stripMarker } from "@/lib/hosting/core";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { AccountDetails, DeleteWebsite, NoticeComposer, SuspendControls } from "@/components/hosting/account-tools";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,10 @@ export default async function HostingAccountPage({ params }: { params: Promise<{
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
+          <Card>
+            <CardHeader title="Website & email check" subtitle="Is it still pointing at our server, does email work, when do the domain and SSL run out" />
+            <div className="border-t border-line px-5 py-4"><SiteDoctor domain={a.domain as string} /></div>
+          </Card>
           <Card>
             <CardHeader title="Invoice" subtitle={a.match_reason as string ?? undefined} />
             <div className="border-t border-line px-5 py-4 text-[0.8125rem]">

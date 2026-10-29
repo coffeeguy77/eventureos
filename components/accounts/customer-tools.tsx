@@ -63,7 +63,7 @@ const KINDS: { key: NoteInput["kind"]; label: string }[] = [
 ];
 
 /** Log what happened (a call, a promise to pay, a dispute…) and set the next step. */
-export function LogForm({ customerId, invoices, today }: { customerId: string; invoices: Inv[]; today: string }) {
+export function LogForm({ customerId, invoices, today, card }: { customerId: string; invoices: Inv[]; today: string; /** the card on file, e.g. "Visa ending 4242" */ card?: string | null }) {
   const router = useRouter();
   const [f, setF] = useState<NoteInput>({ kind: "call", body: "", invoiceId: invoices[0]?.id ?? null, promiseDate: "", promiseAmount: "", remind: true, nextStep: "", nextStepDue: "" });
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -73,7 +73,7 @@ export function LogForm({ customerId, invoices, today }: { customerId: string; i
     setMsg(null);
     const r = await addCollectionNote(customerId, f);
     if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
-    setMsg({ ok: true, text: f.kind === "promise" && f.remind ? `Saved. The invoice will be emailed with a pay link on the morning of ${f.promiseDate}.` : "Saved." });
+    setMsg({ ok: true, text: f.kind === "promise" && f.chargeCard ? `Saved. Their ${card} will be charged on the morning of ${f.promiseDate}.` : f.kind === "promise" && f.remind ? `Saved. The invoice will be emailed with a pay link on the morning of ${f.promiseDate}.` : "Saved." });
     setF({ ...f, body: "", promiseDate: "", promiseAmount: "", nextStep: "", nextStepDue: "" }); router.refresh();
   });
   return (
@@ -89,7 +89,8 @@ export function LogForm({ customerId, invoices, today }: { customerId: string; i
           <div className="grid gap-3 rounded-lg bg-emerald-50/60 p-3 sm:grid-cols-2">
             <div><Label htmlFor="lg-pd">They'll pay on</Label><Input id="lg-pd" type="date" min={today} value={f.promiseDate ?? ""} onChange={(e) => set({ promiseDate: e.target.value })} /></div>
             <div><Label htmlFor="lg-pa" hint="optional">Amount</Label><Input id="lg-pa" type="number" min={0} step="0.01" value={f.promiseAmount ?? ""} onChange={(e) => set({ promiseAmount: e.target.value })} /></div>
-            <label className="flex items-start gap-2 text-[0.8125rem] text-ink sm:col-span-2"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.remind !== false} onChange={(e) => set({ remind: e.target.checked })} />Email them the invoice with a pay link on that morning, as a reminder of what they agreed</label>
+            {card && <label className="flex items-start gap-2 text-[0.8125rem] font-medium text-ink sm:col-span-2"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={!!f.chargeCard} onChange={(e) => set({ chargeCard: e.target.checked, remind: e.target.checked ? true : f.remind })} />Charge their {card} that morning (they agreed) — if it&apos;s declined, the invoice is emailed with a pay link instead</label>}
+            {!f.chargeCard && <label className="flex items-start gap-2 text-[0.8125rem] text-ink sm:col-span-2"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.remind !== false} onChange={(e) => set({ remind: e.target.checked })} />Email them the invoice with a pay link on that morning, as a reminder of what they agreed</label>}
           </div>
         )}
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px]">
@@ -191,6 +192,77 @@ export function FeePanel({ customerId, enabled, standard, own, lines, total, nee
         </>
       )}
       {msg && <p role="status" className={`mt-2 text-[0.75rem] font-medium ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}{msg.href && <> <a href={msg.href} className="underline">Open it</a></>}</p>}
+    </Card>
+  );
+}
+
+type PayInv = { id: string; number: string; balance: number; label: string; overdue: boolean };
+
+/** Take a payment for the customer: tick invoices, then charge the card on file or open Stripe's secure card page. */
+export function PayPanel({ customerId, invoices, card, currency, stripeReady, justPaid }: {
+  customerId: string; invoices: PayInv[]; card: { label: string; expiry: string | null; expired: boolean } | null; currency: string; stripeReady: boolean; justPaid: boolean;
+}) {
+  const router = useRouter();
+  const [pick, setPick] = useState<string[]>(() => { const o = invoices.filter((i) => i.overdue).map((i) => i.id); return o.length ? o : invoices.map((i) => i.id); });
+  const [save, setSave] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  if (!invoices.length) return null;
+  const total = invoices.filter((i) => pick.includes(i.id)).reduce((a, i) => a + i.balance, 0);
+  const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(n);
+  const toggle = (id: string) => setPick((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const phone = () => start(async () => {
+    setMsg(null);
+    const { takePhonePayment } = await import("@/app/(app)/accounts/actions");
+    const r = await takePhonePayment(customerId, pick, save);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setUrl(r.data.url);
+    setMsg({ ok: true, text: `Ready: ${fmt(r.data.total)} for ${r.data.invoices.join(", ")}. Open Stripe's card page and type in the card as they read it out. The payment shows here and in Xero once it goes through.` });
+  });
+  const charge = () => {
+    if (!card || !window.confirm(`Charge ${fmt(total)} to the ${card.label} now?`)) return;
+    start(async () => {
+      setMsg(null);
+      const { chargeSavedCardNow } = await import("@/app/(app)/accounts/actions");
+      const r = await chargeSavedCardNow(customerId, pick);
+      setMsg(r.ok ? { ok: true, text: r.data } : { ok: false, text: r.error });
+      if (r.ok) router.refresh();
+    });
+  };
+  const remove = () => {
+    if (!window.confirm("Remove the card on file? You can save a new one next time you take a payment.")) return;
+    start(async () => { const { removeSavedCard } = await import("@/app/(app)/accounts/actions"); const r = await removeSavedCard(customerId); if (!r.ok) setMsg({ ok: false, text: r.error }); else router.refresh(); });
+  };
+  return (
+    <Card>
+      <CardHeader title="Take a payment" subtitle="Tick the invoices they're paying — charge their card on file, or type their card into Stripe's secure page while they're on the phone." />
+      <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+        {justPaid && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-900 ring-1 ring-inset ring-emerald-100">Payment taken — it&apos;s being recorded on the invoices now. Refresh in a few seconds if it isn&apos;t showing yet.</p>}
+        {!stripeReady && <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-inset ring-amber-100">Connect Stripe in Settings → Integrations to take card payments.</p>}
+        <ul className="space-y-1">
+          {invoices.map((i) => (
+            <li key={i.id}><label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-zinc-50">
+              <input type="checkbox" className="h-4 w-4" checked={pick.includes(i.id)} onChange={() => toggle(i.id)} />
+              <span className="font-medium text-ink">{i.number}</span><span className={i.overdue ? "text-rose-700" : "text-ink-muted"}>{i.label}</span>
+              <span className="ml-auto font-semibold tabular-nums">{fmt(i.balance)}</span>
+            </label></li>
+          ))}
+        </ul>
+        <p className="flex justify-between border-t border-line pt-2 text-[0.875rem] font-semibold"><span>Paying now</span><span className="tabular-nums">{fmt(total)}</span></p>
+        {card && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 ring-1 ring-inset ring-line">
+            <span className="text-ink">Card on file: <strong>{card.label}</strong>{card.expiry ? <span className={card.expired ? "text-rose-700" : "text-ink-muted"}> · {card.expired ? "expired" : "expires"} {card.expiry}</span> : null}</span>
+            <Button size="sm" variant="primary" className="ml-auto" disabled={pending || !pick.length || !stripeReady || card.expired} onClick={charge}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Charge {fmt(total)}</Button>
+            <button type="button" onClick={remove} className="text-[0.75rem] text-ink-muted underline hover:text-ink">Remove card</button>
+          </div>
+        )}
+        <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={save} onChange={(e) => setSave(e.target.checked)} />
+          <span>Keep the card on file for future invoices <span className="block text-[0.75rem] text-ink-faint">Only with the customer&apos;s OK — ask them, and it&apos;s noted on their account. Stripe keeps the card; we only see the last 4 digits.</span></span></label>
+        <Button variant={card ? "secondary" : "primary"} disabled={pending || !pick.length || !stripeReady} onClick={phone}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Take card over the phone — {fmt(total)}</Button>
+        {msg && <p role="status" className={`font-medium ${msg.ok ? "text-emerald-700" : "text-rose-700"}`}>{msg.text}</p>}
+        {url && <a href={url} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(() => setUrl(null), 500)} className="inline-flex h-10 items-center rounded-md bg-emerald-600 px-4 font-semibold text-white hover:bg-emerald-700">Open Stripe&apos;s card page →</a>}
+      </div>
     </Card>
   );
 }

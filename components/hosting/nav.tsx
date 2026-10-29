@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 
 const ITEMS = [
   { href: "/hosting", label: "Accounts" },
+  { href: "/hosting/checks", label: "Site checks" },
   { href: "/hosting/billing", label: "Billing check" },
   { href: "/hosting/recurring", label: "Recurring invoices" },
   { href: "/hosting/servers", label: "Servers" },

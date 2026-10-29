@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react";
 import { requireOrg } from "@/lib/context";
@@ -61,6 +62,10 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-5">
+          <Card>
+            <CardHeader title="Website & email check" subtitle="Is it still pointing at us, does email work, when do the domain and SSL run out" />
+            <div className="border-t border-line px-5 py-4"><SiteDoctor domain={w.domain} /></div>
+          </Card>
           <Card>
             <CardHeader title="Plans on this site" subtitle="Hosting, maintenance, Ads — the recurring invoices tied to it" />
             {(plans ?? []).length ? (

@@ -59,11 +59,13 @@ export async function sendChase(db: SupabaseClient, o: { orgId: string; invoiceI
  * (between 8am and 5pm the business's time; each promise once).
  */
 export async function runPromiseReminders(db: SupabaseClient) {
-  const { data: due, error } = await db.from("collection_notes").select("id, organisation_id, customer_id, invoice_id, promise_date, org:organisations(timezone, status)")
-    .eq("remind", true).is("reminded_at", null).not("promise_date", "is", null).limit(200);
+  const cols = "id, organisation_id, customer_id, invoice_id, promise_date, org:organisations(timezone, status, currency)";
+  const pick = (c: string) => db.from("collection_notes").select(c).eq("remind", true).is("reminded_at", null).not("promise_date", "is", null).limit(200);
+  let { data: due, error } = await pick(`${cols}, charge_card`);
+  if (error && /charge_card/.test(error.message)) ({ data: due, error } = await pick(cols));
   if (error) return { skipped: error.message };
   let sent = 0, failed = 0;
-  for (const n of (due ?? []) as unknown as { id: string; organisation_id: string; customer_id: string; invoice_id: string | null; promise_date: string; org: { timezone: string | null; status: string } | null }[]) {
+  for (const n of (due ?? []) as unknown as { id: string; organisation_id: string; customer_id: string; invoice_id: string | null; promise_date: string; charge_card?: boolean; org: { timezone: string | null; status: string; currency: string | null } | null }[]) {
     if (n.org?.status !== "active") continue;
     const tz = n.org?.timezone || "Australia/Sydney";
     const now = new Date();
@@ -78,6 +80,25 @@ export async function runPromiseReminders(db: SupabaseClient) {
       if (!invoiceId) { await db.from("collection_notes").update({ reminded_at: now.toISOString() }).eq("id", n.id); continue; }
       const { data: inv } = await db.from("invoices").select("balance, status").eq("id", invoiceId).maybeSingle();
       if (!inv || Number(inv.balance) <= 0 || !OWING.includes(inv.status as string)) { await db.from("collection_notes").update({ reminded_at: now.toISOString() }).eq("id", n.id); continue; }
+      // They agreed to have their card on file charged on the day
+      if (n.charge_card) {
+        try {
+          const { loadStripe } = await import("@/lib/payments/service");
+          const { chargeCardOnFile } = await import("@/lib/payments/phone");
+          const cfg = await loadStripe(db, n.organisation_id);
+          if (!cfg) throw new Error("Stripe isn't connected");
+          const r = await chargeCardOnFile(db, n.organisation_id, cfg, { customerId: n.customer_id, invoiceIds: [invoiceId], currency: n.org?.currency || "AUD", reason: "Promised payment day", email: null });
+          await db.from("collection_notes").insert({ organisation_id: n.organisation_id, customer_id: n.customer_id, invoice_id: invoiceId, kind: "note", created_by: null,
+            body: `Promise day: charged ${r.total.toFixed(2)} to the card on file (${r.card.brand ?? "card"} ending ${r.card.last4 ?? "????"}) for ${r.invoices.join(", ")}.` });
+          await db.from("collection_notes").update({ reminded_at: now.toISOString() }).eq("id", n.id);
+          sent++;
+          continue;
+        } catch (e) {
+          // Couldn't charge: email the invoice with its pay link instead, and say why on the account
+          await db.from("collection_notes").insert({ organisation_id: n.organisation_id, customer_id: n.customer_id, invoice_id: invoiceId, kind: "note", created_by: null,
+            body: `Promise day: couldn't charge the card on file (${e instanceof Error ? e.message : String(e)}) — emailed the invoice with a pay link instead.` }).then(() => undefined, () => undefined);
+        }
+      }
       const d = await draftFor(db, n.organisation_id, invoiceId, "promise", { promise_date: n.promise_date });
       await sendChase(db, { orgId: n.organisation_id, invoiceId, template: "promise", subject: d.subject, message: d.message, kind: "promise", sentBy: null });
       await db.from("collection_notes").update({ reminded_at: now.toISOString() }).eq("id", n.id);

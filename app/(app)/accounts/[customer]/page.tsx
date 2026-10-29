@@ -7,15 +7,17 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
 import { daysBetween, feeDue, feeRateFor, readFees, readTemplates } from "@/lib/accounts/core";
 import { loadOwing } from "@/lib/accounts/server";
-import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, StepDone } from "@/components/accounts/customer-tools";
+import { SiteDoctor } from "@/components/hosting/site-doctor";
+import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, PayPanel, StepDone } from "@/components/accounts/customer-tools";
 
 export const dynamic = "force-dynamic";
 
 const KIND: Record<string, string> = { note: "Note", call: "Phone call", email: "Email", sms: "Text", promise: "Promise to pay", dispute: "Dispute", plan: "Payment plan" };
 
 /** One customer who owes money: their unpaid invoices, every conversation and email, and what happens next. */
-export default async function AccountsCustomerPage({ params }: { params: Promise<{ customer: string }> }) {
+export default async function AccountsCustomerPage({ params, searchParams }: { params: Promise<{ customer: string }>; searchParams: Promise<{ paid?: string }> }) {
   const { customer: id } = await params;
+  const justPaid = (await searchParams).paid === "1";
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { supabase, org } = await requireOrg();
   const { data: cust } = await supabase.from("customers").select("id, name, email, phone, company").eq("id", id).eq("organisation_id", org.id).maybeSingle();
@@ -57,6 +59,23 @@ export default async function AccountsCustomerPage({ params }: { params: Promise
   for (const c of (chargedR.data ?? []) as { invoice_id: string; months: number }[]) charged.set(c.invoice_id, (charged.get(c.invoice_id) ?? 0) + c.months);
   const feeLines = fees.enabled ? owing.map((i) => ({ i, f: feeDue(i, today, feeRate, fees.grace_days, charged.get(i.id) ?? 0) })).filter((x) => x.f.amount > 0) : [];
   const { data: issues } = await supabase.from("account_issues").select("id, status, reason, invoice_id, created_at").eq("organisation_id", org.id).eq("customer_id", id).in("status", ["open", "investigating", "write_off"]).order("created_at", { ascending: false });
+  // Their websites and hosting (Web Culture): open and check them while you're on the phone
+  const [{ data: hostRows }, { data: siteRows }] = await Promise.all([
+    supabase.from("hosting_accounts").select("domain").eq("organisation_id", org.id).eq("customer_id", id).limit(20),
+    supabase.from("websites").select("domain").eq("organisation_id", org.id).eq("customer_id", id).limit(20),
+  ]);
+  const domains = [...new Set([...(hostRows ?? []), ...(siteRows ?? [])].map((x) => String((x as { domain: string }).domain ?? "").replace(/^www\./, "").toLowerCase()).filter(Boolean))];
+  // Card on file (0079) and whether Stripe is connected
+  const [{ data: cardRow }, { data: stripeInteg }] = await Promise.all([
+    supabase.from("customer_cards").select("brand, last4, exp_month, exp_year").eq("organisation_id", org.id).eq("customer_id", id).eq("active", true).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle(),
+  ]);
+  const cardInfo = cardRow ? (() => {
+    const c = cardRow as { brand: string | null; last4: string | null; exp_month: number | null; exp_year: number | null };
+    const brand = c.brand ? c.brand[0].toUpperCase() + c.brand.slice(1) : "Card";
+    const expired = !!(c.exp_year && c.exp_month && (c.exp_year * 100 + c.exp_month) < Number(today.slice(0, 4)) * 100 + Number(today.slice(5, 7)));
+    return { label: `${brand} ending ${c.last4 ?? "????"}`, expiry: c.exp_month && c.exp_year ? `${String(c.exp_month).padStart(2, "0")}/${String(c.exp_year).slice(-2)}` : null, expired };
+  })() : null;
   const people = (contacts ?? []) as { first_name: string | null; last_name: string | null; email: string | null; phone: string | null; is_primary: boolean }[];
 
   return (
@@ -96,6 +115,16 @@ export default async function AccountsCustomerPage({ params }: { params: Promise
               </table>
             </div>
           </Card>
+          {domains.length > 0 && (
+            <Card>
+              <CardHeader title="Their websites" subtitle="Check a site is still with us and that their email works — often why they've gone quiet" />
+              <ul className="divide-y divide-line border-t border-line">
+                {domains.map((d) => <li key={d} className="px-5 py-3"><p className="mb-2 font-semibold text-ink">{d}</p><SiteDoctor domain={d} compact /></li>)}
+              </ul>
+            </Card>
+          )}
+          <PayPanel customerId={cust.id} currency={cur} card={cardInfo} stripeReady={stripeInteg?.status === "connected"} justPaid={justPaid}
+            invoices={owing.map((i) => ({ id: i.id, number: i.number, balance: i.balance, overdue: !!(i.due_date && i.due_date < today), label: i.due_date ? (i.due_date < today ? `${daysBetween(i.due_date, today)} days overdue` : `due ${fmtDate(i.due_date, "short")}`) : "" }))} />
           <ChaseComposer invoices={invOpts} templates={templates} />
           <Card>
             <CardHeader title="History" subtitle="Conversations, chasing emails and payments" />
@@ -137,7 +166,7 @@ export default async function AccountsCustomerPage({ params }: { params: Promise
               {cust.email && <a href={`mailto:${cust.email}`} className="block break-all text-ink-muted">{cust.email}</a>}
             </>}
           </Card>
-          <LogForm customerId={cust.id} invoices={invOpts} today={today} />
+          <LogForm customerId={cust.id} invoices={invOpts} today={today} card={cardInfo && !cardInfo.expired ? cardInfo.label : null} />
           {(issues ?? []).length > 0 && (
             <Card className="p-4 text-[0.8125rem]">
               <p className="font-semibold text-ink">In the resolution centre</p>
