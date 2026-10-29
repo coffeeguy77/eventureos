@@ -5,4 +5,4 @@
  */
 export const APP_ROOTS = new Set(["dashboard", "tasks", "enquiries", "crm", "quotes", "events", "calendar", "kitchen", "bookings", "learn", "store", "wholesale", "offers", "website",
   "clients", "invoices", "payments", "wages", "portal", "reports", "settings", "my-jobs", "my-signature", "history", "xero-quotes", "franchise", "rentals", "login", "signup", "auth",
-  "admin", "onboarding", "crew", "suspended", "api", "accounts", "hosting", "nerd-herd", "pricing", "printing"]);
+  "admin", "onboarding", "crew", "suspended", "api", "accounts", "hosting", "nerd-herd", "pricing", "printing", "my-bonuses"]);

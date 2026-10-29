@@ -132,11 +132,14 @@ export async function GET(req: NextRequest) {
   // Accounts: on the day a customer promised to pay, email them the invoice with its pay link (8am–5pm their time)
   let promiseReminders: unknown = null;
   let planCharges: unknown = null;
+  let paidFollowUps: unknown = null;
   try {
     const { runPromiseReminders } = await import("@/lib/accounts/server");
     promiseReminders = await runPromiseReminders(db);
     // payment plan instalments due today, charged to the card on file
     try { const { runPlanCharges } = await import("@/lib/accounts/plans"); planCharges = await runPlanCharges(db); } catch (e) { planCharges = { error: e instanceof Error ? e.message : String(e) }; }
+    // invoice follow-up reminders close themselves when the invoice has been paid
+    try { const { closePaidInvoiceTasks } = await import("@/lib/tasks/auto-close"); paidFollowUps = await closePaidInvoiceTasks(db); } catch (e) { paidFollowUps = { error: e instanceof Error ? e.message : String(e) }; }
   } catch (e) { promiseReminders = { error: e instanceof Error ? e.message : String(e) }; }
 
   // Wholesale orders from another system's order emails (e.g. Ordermentum) — with the frequent Gmail sync; only businesses that switched it on
@@ -209,5 +212,5 @@ export async function GET(req: NextRequest) {
       hosting = out;
     }
   } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
-  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, classbento, learn });
 }

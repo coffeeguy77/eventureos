@@ -210,6 +210,8 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
     if (complete) complete = await pagedPhase<XeroPayment>(ctx, "payments", deadline,
       async (page, since) => (await xeroGet<{ Payments?: XeroPayment[] }>(ctx, "/Payments", { page: String(page), pageSize: "100" }, since)).Payments ?? [],
       async (list) => { counts.payments += await upsertPayments(ctx, list); });
+    // invoices paid in Xero: their "follow up" reminders close themselves
+    if (counts.payments) { try { const { closePaidInvoiceTasks } = await import("@/lib/tasks/auto-close"); await closePaidInvoiceTasks(ctx.db, ctx.org.id); } catch { /* next sync */ } }
 
     // 3b. Contact details (address, phone, extra people) — fills blanks on linked customers
     if (complete) complete = await pagedPhase<XeroContactFull>(ctx, "contacts", deadline,

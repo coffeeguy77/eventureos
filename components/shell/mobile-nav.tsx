@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Award } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -160,6 +160,9 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
             <div className="border-t border-line px-3 py-2">
               <Link href="/my-signature" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
                 <PenLine className="h-5 w-5 text-ink-muted" /> My email signature
+              </Link>
+              <Link href="/my-bonuses" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
+                <Award className="h-5 w-5 text-ink-muted" /> My bonuses
               </Link>
               <Personalise variant="row" />
             </div>

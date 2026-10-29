@@ -215,6 +215,8 @@ export async function recordCardPayment(db: SupabaseClient, orgId: string, cfg: 
   // An online hire held while the customer paid its deposit is now booked
   await db.from("hire_bookings").update({ status: "booked", updated_at: new Date().toISOString() }).eq("organisation_id", orgId).eq("invoice_id", inv.id).eq("status", "reservation")
     .then(() => undefined, () => undefined);
+  // a follow-up reminder for this invoice closes itself once it's paid
+  try { const { closePaidInvoiceTasks } = await import("@/lib/tasks/auto-close"); await closePaidInvoiceTasks(db, orgId, [inv.id as string]); } catch { /* the next sync does it */ }
   return `recorded ${amount} on ${inv.number ?? inv.id}${xeroId ? " (Xero)" : xeroErr ? ` (Xero failed: ${xeroErr})` : ""}`;
 }
 

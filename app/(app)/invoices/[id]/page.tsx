@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { InvoiceBonus } from "@/components/bonuses/invoice-bonus";
+import { readBonusRates, type BonusKind } from "@/lib/bonuses/core";
 import { AccountPanel } from "@/components/accounts/account-panel";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { CopyField } from "@/app/(app)/settings/integrations/stripe/copy-field";
@@ -107,6 +109,13 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const s = INVOICE_STATUS[inv.status];
   const xeroManaged = !!inv.xero_invoice_id;
   const open = ["awaiting_payment", "part_paid", "overdue"].includes(inv.status);
+  // Sales bonuses (0081): people with rates, and who this invoice is credited to
+  const { data: bonusOrg } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+  const rateMap = readBonusRates(bonusOrg?.settings);
+  const bonusMembers = Object.keys(rateMap).length ? await getMembers(org.id) : [];
+  const bonusPeople = Object.entries(rateMap).map(([id, r]) => ({ id, name: bonusMembers.find((m) => m.id === id)?.full_name ?? "Team member", ...r }));
+  const { data: bonusRow } = bonusPeople.length ? await supabase.from("sales_bonuses").select("user_id, kind, rate, status").eq("organisation_id", org.id).eq("invoice_id", inv.id).neq("status", "cancelled").maybeSingle() : { data: null };
+  const bonusNow = bonusRow ? { userId: bonusRow.user_id as string, kind: bonusRow.kind as BonusKind, rate: Number(bonusRow.rate), status: bonusRow.status as string } : null;
   const late = open && !!inv.due_date && inv.due_date < today && Number(inv.balance) > 0;
   const lateDays = late && inv.due_date ? daysBetween(inv.due_date, today) : 0;
 
@@ -279,6 +288,11 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
             <InvoiceActions id={inv.id} number={inv.number} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
               paid={Number(inv.amount_paid)} paidLabel={money(inv.amount_paid, cur)} today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>
+
+          {/* Sales bonus: who made the sale (new build / maintenance) */}
+          {canManage(role) && inv.status !== "void" && bonusPeople.length > 0 && (
+            <InvoiceBonus invoiceId={inv.id} people={bonusPeople} current={bonusNow} exGst={Number(inv.subtotal)} currency={cur} locked={bonusNow?.status === "paid"} />
+          )}
 
           {/* Owing: call the customer and log it here — the same records as Accounts */}
           {canManage(role) && inv.status !== "void" && inv.status !== "draft" && Number(inv.balance) > 0 && inv.customer && (

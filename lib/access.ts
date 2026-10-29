@@ -37,7 +37,7 @@ export const ACCESS_PRESETS: { key: string; label: string; sections: string[] }[
   { key: "operations", label: "Operations", sections: ["/events", "/calendar", "/rentals", "/kitchen", "/wages", "/tasks"] },
   { key: "web_designer", label: "Web designer", sections: ["/nerd-herd", "/quotes", "/invoices", "/clients", "/tasks", "/calendar"] },
 ];
-const ALWAYS = ["/dashboard", "/my-signature", "/notifications", "/profile"];
+const ALWAYS = ["/dashboard", "/my-signature", "/my-bonuses", "/notifications", "/profile"];
 const SECTION_KEYS = new Set(SECTIONS.map((x) => x.key));
 export const cleanAccess = (raw: unknown): string[] | null => {
   if (!Array.isArray(raw)) return null;

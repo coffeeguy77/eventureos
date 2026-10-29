@@ -84,6 +84,8 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
   const phoneData = await loadPhones(supabase, org.id, id, user.id);
   const { data: twilioRow } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "twilio").maybeSingle();
   const smsOn = twilioRow?.status === "connected";
+  const { data: appRow } = await supabase.from("organisations").select("app_access").eq("id", org.id).single();
+  const nerdHerd = !Array.isArray(appRow?.app_access) || (appRow!.app_access as string[]).includes("nerdherd");
   // Payment plan (0080)
   let plan: { frequency: string; instalments: { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] } | null = null;
   const { data: pl, error: plErr } = await supabase.from("payment_plans").select("id, frequency").eq("organisation_id", org.id).eq("customer_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -97,7 +99,10 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     <>
       <Link href="/accounts" className="mb-3 inline-flex items-center gap-1 text-[0.7812rem] text-ink-muted hover:text-ink"><ArrowLeft className="h-3.5 w-3.5" />Money owing</Link>
       <PageHeader title={cust.name} subtitle={`${money(total, cur)} owing${overdue ? ` · ${money(overdue, cur)} overdue` : ""}`}
-        actions={<Link href={`/clients/${cust.id}`} className="text-[0.8125rem] font-medium text-brand-700 hover:underline">Client record</Link>} />
+        actions={<div className="flex flex-wrap items-center gap-2">
+          {nerdHerd && <Link href={`/nerd-herd/tickets/new?client=${cust.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-[0.8125rem] font-semibold text-white hover:bg-brand-700">+ New job (Nerd Herd)</Link>}
+          <Link href={`/clients/${cust.id}`} className="text-[0.8125rem] font-medium text-brand-700 hover:underline">Client record</Link>
+        </div>} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-5">
