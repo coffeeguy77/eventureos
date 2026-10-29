@@ -48,6 +48,10 @@ export interface SectionHandlers {
   onDetails: (itemId: string, details: LineDetails, derived: { quantity: number; description: string }) => void;
   /** Which helper (if any) applies to a line. */
   helperFor: (it: ItemDraft) => LineHelper | null;
+  /** Hire lines with more than one rate (e.g. the coffee van: short hire, or event rate): the choices */
+  rateFor?: (it: ItemDraft) => { current: string; options: { id: string; name: string; summary: string | null }[] } | null;
+  /** Switch a hire line to another rate: the hire, drinks and barista lines are repriced */
+  onRate?: (itemId: string, packageId: string) => void;
 }
 
 export type LineHelper =
@@ -219,6 +223,21 @@ function ItemRow({ it, first, last, currency, h, optionalSection, catalogue }: {
             </select>
           </div>
         )}
+        {(() => {
+          const rate = h.rateFor?.(it);
+          if (!rate) return null;
+          const cur = rate.options.find((o) => o.id === rate.current);
+          return (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-brand-50/50 px-2 py-1.5 ring-1 ring-inset ring-brand-100">
+              <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-brand-700">Rate</span>
+              <select aria-label={`Rate for ${it.name}`} value={rate.current} onChange={(e) => h.onRate?.(it.id, e.target.value)}
+                className="h-8 max-w-full rounded-md border border-line bg-surface px-2 text-[0.8125rem] text-ink focus:border-brand-400 focus:outline-none qrow:h-7">
+                {rate.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              {cur?.summary && <span className="text-[0.75rem] text-ink-muted">{cur.summary}</span>}
+            </div>
+          );
+        })()}
         {helper && <LineHelperPanel it={it} helper={helper} h={h} />}
         {(showImage || it.image_url) && (
           <div className="mt-1.5 flex items-center gap-2 px-1">

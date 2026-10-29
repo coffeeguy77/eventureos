@@ -337,7 +337,57 @@ export function QuoteBuilder(p: BuilderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Packages that are rates of the same thing (same calendar name, e.g. "Coffee Van"): short hire, event rate… */
+  const ratesFor = (pk: PricingPackage) => p.pricing.packages.filter((x) => x.rules.hire?.service_id && (x.rules.calendar_label ?? x.name) === (pk.rules.calendar_label ?? pk.name));
+  const rateFor = (it: ItemDraft) => {
+    if (!it.service_id) return null;
+    const pk = p.pricing.packages.find((x) => x.rules.hire?.service_id === it.service_id);
+    if (!pk) return null;
+    const options = ratesFor(pk);
+    return options.length > 1 ? { current: pk.id, options: options.map((o) => ({ id: o.id, name: o.name, summary: o.summary })) } : null;
+  };
+  function switchRate(itemId: string, packageId: string) {
+    const line = items.find((i) => i.id === itemId);
+    const from = p.pricing.packages.find((x) => x.rules.hire?.service_id === line?.service_id);
+    const to = p.pricing.packages.find((x) => x.id === packageId);
+    if (!line || !from || !to || from.id === to.id) return;
+    const svc = (id: string | undefined | null) => (id ? p.pricing.services.find((x) => x.id === id) : undefined);
+    const apply = (id: string, local: Partial<ItemDraft>, patch: Record<string, unknown>) => {
+      setItems((all) => all.map((i) => (i.id === id ? { ...i, ...local } : i)));
+      queue(`i:${id}`, patch, sendItem(id), 0);
+    };
+    // The hire line: the other rate's hire item (quantity kept)
+    const hire = svc(to.rules.hire?.service_id);
+    if (!hire) return;
+    apply(line.id, { service_id: hire.id, name: hire.name, description: hire.description ?? "", unit: hire.unit, unit_price: numStr(hire.unit_price), tax_rate: numStr(hire.tax_rate) },
+      { service_id: hire.id, name: hire.name, description: hire.description, unit: hire.unit, unit_price: hire.unit_price, tax_rate: hire.tax_rate });
+    // Lines in the same section (or anywhere on the quote when the section has none)
+    const near = (pred: (i: ItemDraft) => boolean) => { const same = items.filter((i) => i.section_id === line.section_id && pred(i)); return same.length ? same : items.filter(pred); };
+    // Drinks: the other rate's price per cup, same number of drinks
+    const cup = svc(to.rules.per_serve?.service_id);
+    if (cup && from.rules.per_serve?.service_id) {
+      for (const dr of near((i) => i.service_id === from.rules.per_serve!.service_id)) {
+        const d = dr.details?.kind === "serves" ? dr.details : null;
+        const description = d ? servesLine(d, cup.description).description : cup.description ?? dr.description;
+        apply(dr.id, { service_id: cup.id, name: cup.name, unit: cup.unit, unit_price: numStr(cup.unit_price), tax_rate: numStr(cup.tax_rate), description: description ?? "" },
+          { service_id: cup.id, name: cup.name, unit: cup.unit, unit_price: cup.unit_price, tax_rate: cup.tax_rate, description });
+      }
+    }
+    // Barista hours: worked out again with the other rate's rules (included hour, minimum shift)
+    const staffSvc = to.rules.staff?.service_id;
+    for (const st of near((i) => i.details?.kind === "staff")) {
+      const rule = to.rules.staff && (!staffSvc || st.service_id === staffSvc || st.service_id === from.rules.staff?.service_id) ? to.rules.staff : null;
+      if (!rule) continue;
+      const calc = staffLine(st.details as StaffDetails, rule, rule.label ?? "staff");
+      if (!calc) continue;
+      apply(st.id, { quantity: numStr(calc.quantity), description: calc.description }, { quantity: calc.quantity, description: calc.description, details: st.details });
+    }
+    showToast({ message: `Switched to ${to.name}.`, tone: "ok" });
+  }
+
   const h: SectionHandlers = {
+    rateFor,
+    onRate: switchRate,
     helperFor,
     onDetails(id, details, derived) {
       const q = numStr(derived.quantity);

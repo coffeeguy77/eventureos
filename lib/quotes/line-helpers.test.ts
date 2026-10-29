@@ -81,3 +81,10 @@ const t0 = staffLine({ kind: "staff", days: [day({ start: "09:00", end: "12:00",
 eq("45 min each way adds exactly 1.5 hrs", Math.round((t45.quantity - t0.quantity) * 100) / 100, 1.5);
 const t32 = staffLine({ kind: "staff", days: [day({ start: "09:00", end: "12:00", setup_minutes: 0 })], travel_minutes: 32 }, noRule, "barista")!;
 eq("32 min each way adds 64 min", Math.round((t32.quantity - t0.quantity) * 100) / 100, 1.07);
+
+// Coffee van event rate: no included hour, 3 hr minimum — 9 to 11:30 is 3 hrs; the short-hire rate charges 1.5 (first hour in the $475)
+const evRule = { service_id: "x", min_hours: 3, min_hours_extra: 3, round_to_hours: 0.5 };
+const shortRule = { service_id: "x", included_hours: 1, round_to_hours: 0.5, min_hours_extra: 3, included_applies_to: "first" as const };
+const ev = [day({ start: "09:00", end: "11:30", setup_minutes: 0 })];
+eq("event rate: minimum shift", staffLine({ kind: "staff", days: ev }, evRule, "barista")!.quantity, 3);
+eq("short hire: first hour included", staffLine({ kind: "staff", days: ev }, shortRule, "barista")!.quantity, 1.5);
