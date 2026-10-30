@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "hosting", "nerdherd"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "hosting", "nerdherd"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench";
 
 export interface AppInfo {
   key: AppKey;
@@ -144,6 +144,19 @@ export const APPS: AppInfo[] = [
       "Clients see their tickets, sites and invoices in their portal",
     ],
     for: "Web designers, agencies and IT support businesses",
+  },
+  {
+    key: "machines", name: "Coffee machines", paths: ["/machines"], icon: "wrench",
+    tagline: "Sell coffee machines and run your service callouts.",
+    description: "Machines for sale with a chooser that matches customers to the right one, a repairs page with an enquiry form, service jobs priced by callout and hourly rate, and quick invoices from your price list.",
+    features: [
+      "Machine chooser on your website: coffees a day, milk, water, budget",
+      "Repairs page with an enquiry form, and the brands you don't service made clear",
+      "Service jobs: callout and first hour, then hourly, parts from your price list",
+      "Quick sale: choose or add the client, tap items, draft invoice",
+      "Invoices go to Xero line by line",
+    ],
+    for: "Coffee machine dealers, agents and technicians",
   },
   {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",

@@ -9,6 +9,8 @@ import { ShopFrame, serif, hand } from "@/components/shop/frame";
 import { ProductCard, ShopClosed, scheduleChips } from "@/components/shop/bits";
 import { BuyBox } from "@/components/shop/buy-box";
 import { PAGE } from "@/components/book/shell";
+import { readMachines } from "@/lib/machines/core";
+import { MachineEnquireBox } from "@/components/machines/public/enquire-box";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string; slug: string }> };
@@ -37,7 +39,10 @@ export default async function ProductPage({ params }: P) {
   if (!p) notFound();
   const top = await activeBanners(db, org, ["top"]);
   const chips = scheduleChips(org.shop);
-  const others = products.filter((x) => x.id !== p.id && x.kind === "coffee").slice(0, 3);
+  const mach = readMachines(org.rawSettings);
+  const isMachine = (x: { category: string | null }) => !!x.category && x.category.toLowerCase() === mach.shopCategory.toLowerCase();
+  const machine = isMachine(p);
+  const others = products.filter((x) => x.id !== p.id && (machine ? isMachine(x) : x.kind === "coffee")).slice(0, 3);
   const facts = [
     p.origin ? { icon: MapPin, label: "Origin", value: p.origin } : null,
     p.roast ? { icon: Sparkles, label: "Roast", value: p.roast } : null,
@@ -47,7 +52,7 @@ export default async function ProductPage({ params }: P) {
   return (
     <ShopFrame org={org} active="shop" topBanners={top}>
       <div className={`${PAGE} pt-6`}>
-        <Link href={`/shop/${org.slug}`} className="inline-flex items-center gap-1.5 text-[0.9063rem] font-medium text-[#6b655f] hover:text-[#171714]"><ArrowLeft className="h-4 w-4" />All coffee</Link>
+        <Link href={machine && mach.enabled ? `/hire/${org.slug}/machines#range` : `/shop/${org.slug}`} className="inline-flex items-center gap-1.5 text-[0.9063rem] font-medium text-[#6b655f] hover:text-[#171714]"><ArrowLeft className="h-4 w-4" />{machine ? "All coffee machines" : "All coffee"}</Link>
       </div>
       <section className={`${PAGE} grid gap-8 pb-16 pt-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14`}>
         <div>
@@ -68,8 +73,10 @@ export default async function ProductPage({ params }: P) {
               {facts.map((f) => <div key={f.label} className="rounded-2xl bg-[#F1EAE2] p-4"><dt className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-[#6b655f]"><f.icon className="h-4 w-4" />{f.label}</dt><dd className="mt-1 text-[0.9688rem] font-semibold leading-snug">{f.value}</dd></div>)}
             </dl>
           )}
-          <div className="mt-7"><BuyBox slug={org.slug} p={p} s={org.shop} products={products ?? []} /></div>
-          {(chips.length > 0 || org.shop.roastNote) && (
+          <div className="mt-7">{machine
+            ? <MachineEnquireBox price={p.variants.length ? Math.min(...p.variants.map((v) => v.price)) : null} currency={org.currency} href={mach.enabled ? `/hire/${org.slug}/machines?model=${p.slug}#enquire` : `/hire/${org.slug}/quote`} chooser={mach.enabled ? `/hire/${org.slug}/machines#choose` : null} />
+            : <BuyBox slug={org.slug} p={p} s={org.shop} products={products ?? []} />}</div>
+          {!machine && (chips.length > 0 || org.shop.roastNote) && (
             <div className="mt-5 rounded-2xl border border-dashed border-[#D8CCBF] p-4 text-[0.9375rem] leading-relaxed text-[#4a4743]">
               {org.shop.roastNote || chips.map((c) => c.text).join(" · ")}
             </div>
@@ -79,7 +86,7 @@ export default async function ProductPage({ params }: P) {
       {p.description && (
         <section className="bg-[#F1EAE2] py-14">
           <div className={`${PAGE} max-w-4xl`}>
-            <h2 className={`${serif} text-[2rem] font-semibold`}>About this coffee</h2>
+            <h2 className={`${serif} text-[2rem] font-semibold`}>{machine ? "About this machine" : "About this coffee"}</h2>
             <div className="mt-4 space-y-4 text-[1.0625rem] leading-relaxed text-[#3f3c38]">{paras(p.description).map((t, i) => <p key={i} className="whitespace-pre-line">{t}</p>)}</div>
           </div>
         </section>

@@ -1,4 +1,5 @@
 import "server-only";
+import { readMachines } from "@/lib/machines/core";
 import { isTestCode, testSubject } from "@/lib/testing/core";
 import { isTest } from "@/lib/testing/server";
 import { finishCart, rememberCart } from "@/lib/reminders/server";
@@ -215,6 +216,12 @@ export async function startShopCheckout(input: CheckoutInput): Promise<CheckoutR
   }
   if (priced.problems.length) return { ok: false, error: priced.problems[0] };
   if (!priced.lines.length) return { ok: false, error: "Your cart is empty." };
+  {
+    // coffee machines are sold by enquiry, never through the cart
+    const machCat = readMachines(org.rawSettings).shopCategory.toLowerCase();
+    const machine = priced.lines.find((l) => (products.find((p) => p.id === l.productId)?.category ?? "").toLowerCase() === machCat);
+    if (machine) return { ok: false, error: `${machine.name} is sold by enquiry — please send us an enquiry from its page.` };
+  }
   if (mode !== "one_off" && priced.lines.some((l) => l.kind === "gift_card")) return { ok: false, error: "Gift cards can't be part of a subscription." };
 
   // Card payments are only needed when something is owed (a gift card can cover a one-off order)

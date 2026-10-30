@@ -13,6 +13,7 @@ import { EventLink } from "@/components/shop/event-link";
 
 import { copyOf, ed, edImg } from "@/lib/site/copy";
 import { Lines } from "@/components/site/lines";
+import { readMachines } from "@/lib/machines/core";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }>; searchParams: Promise<Record<string, string | undefined>> };
@@ -40,7 +41,10 @@ export default async function Storefront({ params, searchParams }: P) {
   const top = banners.filter((b) => b.placement === "top");
   const promo = banners.filter((b) => b.placement !== "top");
   const coffee = products.filter((p) => p.kind === "coffee");
-  const other = products.filter((p) => p.kind === "other");
+  const mach = readMachines(org.rawSettings);
+  const isMachine = (p: { category: string | null }) => !!p.category && p.category.toLowerCase() === mach.shopCategory.toLowerCase();
+  const machines = products.filter(isMachine);
+  const other = products.filter((p) => p.kind === "other" && !isMachine(p));
   const s = org.shop;
   const c = copyOf(org.rawSettings, "shop");
   const base = `/shop/${org.slug}`;
@@ -127,6 +131,18 @@ export default async function Storefront({ params, searchParams }: P) {
           ? <p className="mt-8 rounded-2xl bg-white p-8 text-center text-[#5E5853]">New coffees are on their way.</p>
           : <div className="mt-[34px] grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{coffee.map((p) => <ProductCard key={p.id} p={p} slug={org.slug} s={s} currency={org.currency} />)}</div>}
         {other.length > 0 && <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{other.map((p) => <ProductCard key={p.id} p={p} slug={org.slug} s={s} currency={org.currency} />)}</div>}
+        {machines.length > 0 && (
+          <div id="machines" className="mt-14 scroll-mt-28">
+            <div className="flex flex-wrap items-end justify-between gap-4 lg:pl-[13px]">
+              <div>
+                <p className={`${eyebrow} tracking-[0.12em]`}>{mach.agentOf ? `${mach.agentOf} · authorised agent` : "Coffee machines"}</p>
+                <h2 className={`${serif} mt-[10px] text-[2.25rem] font-[620] leading-none tracking-[-0.025em] sm:text-[3rem]`}>Coffee machines</h2>
+              </div>
+              {mach.enabled && <Link href={`/hire/${org.slug}/machines#choose`} className="inline-flex h-[49px] shrink-0 items-center gap-2 rounded-full border-[1.5px] border-[var(--pk)] px-6 text-[0.9375rem] font-semibold text-[var(--pk)] transition hover:bg-[color-mix(in_srgb,var(--pk)_7%,white)]">Help me choose<ArrowRight className="h-4 w-4" /></Link>}
+            </div>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{machines.map((p) => <ProductCard key={p.id} p={p} slug={org.slug} s={s} currency={org.currency} />)}</div>
+          </div>
+        )}
       </section>
 
       {/* Subscriptions */}

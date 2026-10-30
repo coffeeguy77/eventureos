@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset } from "lucide-react";
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Wrench } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
 import { BusinessRail, type OrgChip } from "./business-rail";
@@ -26,6 +26,7 @@ const NAV = [
   { href: "/wholesale", label: "Wholesale", icon: Truck },
   { href: "/pricing", label: "Pricing", icon: Tag },
   { href: "/printing", label: "Printing", icon: Printer },
+  { href: "/machines", label: "Coffee machines", icon: Wrench },
   { href: "/nerd-herd", label: "Nerd Herd", icon: Headset },
   { href: "/hosting", label: "Hosting", icon: Server },
   { href: "/rentals", label: "Hire", icon: Tent, flag: "hire" as const },

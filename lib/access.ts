@@ -22,7 +22,7 @@ export const SECTIONS: { key: string; label: string; group: string }[] = [
   { key: "/enquiries", label: "Enquiries", group: "Sales" }, { key: "/crm", label: "CRM", group: "Sales" }, { key: "/quotes", label: "Quotes", group: "Sales" },
   { key: "/clients", label: "Clients", group: "Sales" }, { key: "/tasks", label: "To-do", group: "Sales" },
   { key: "/events", label: "Events", group: "Operations" }, { key: "/calendar", label: "Calendar", group: "Operations" }, { key: "/rentals", label: "Hire", group: "Operations" },
-  { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" }, { key: "/printing", label: "Printing", group: "Operations" },
+  { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" }, { key: "/printing", label: "Printing", group: "Operations" }, { key: "/machines", label: "Coffee machines", group: "Operations" },
   { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
   { key: "/nerd-herd", label: "Nerd Herd (tickets & websites)", group: "Operations" },
   { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/hosting", label: "Hosting", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },
