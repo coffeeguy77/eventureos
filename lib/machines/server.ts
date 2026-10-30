@@ -70,32 +70,40 @@ export async function sendMachineEnquiry(i: EnquiryInput) {
     brand: kind === "sale" ? (s.agentOf ?? null) : brand, model: kind === "sale" ? machine || null : str(i.model, 120) || null, serial: str(i.serial, 80) || null,
     issue: issue || null, preferred: str(i.preferred, 300) || null, callout: kind !== "sale", source: "online", created_by: null,
   }).select("id, number").single();
-  if (error) throw new Error(/machine_jobs/.test(error.message) ? "Online enquiries aren't available right now — please contact us." : error.message);
+  // before the 0082 database update the job can't be saved — the enquiry is still emailed to the business below
+  const missing = !!error && /machine_jobs/.test(error.message);
+  if (error && !missing) throw new Error(error.message);
+  const ref = (job?.number as string | undefined) ?? "";
+  const link = job ? `/machines/${job.id}` : "/machines";
   const what = kind === "sale" ? `Machine enquiry${machine ? ` — ${machine}` : ""}` : `${kind === "service" ? "Service" : kind === "install" ? "Install" : "Repair"} enquiry — ${[brand, str(i.model, 120)].filter(Boolean).join(" ")}`;
   await db.from("notifications").insert({
-    organisation_id: org.id, type: "machines.enquiry", title: `${job.number}: ${what}`.slice(0, 200), body: `${str(i.company, 160) || name}`,
-    link: `/machines/${job.id}`, entity_type: "machine_job", entity_id: job.id,
+    organisation_id: org.id, type: "machines.enquiry", title: `${ref ? `${ref}: ` : ""}${what}`.slice(0, 200), body: `${str(i.company, 160) || name}${missing ? ` · ${email} · ${phone}` : ""}`,
+    link, entity_type: job ? "machine_job" : null, entity_id: job?.id ?? null,
   }).then(() => undefined, () => undefined);
   const { data: o } = await db.from("organisations").select("name, logo_url, brand_colour, contact_email").eq("id", org.id).single();
+  let alerted = false;
   if (o?.contact_email) {
     try {
       const { emailConfigured, sendEmail } = await import("@/lib/email/send");
       const { officeAlertEmail } = await import("@/lib/bookings/emails");
       if (emailConfigured()) {
         const m = officeAlertEmail({ businessName: o.name, logoUrl: o.logo_url, brand: o.brand_colour }, {
-          heading: `${job.number}: ${what}`,
+          heading: `${ref ? `${ref}: ` : ""}${what}`,
           lines: [
             { label: "Customer", value: `${str(i.company, 160) ? `${str(i.company, 160)} — ` : ""}${name}` },
             { label: "Contact", value: [email, phone].join(" · ") },
             ...(str(i.address, 300) ? [{ label: "Where", value: str(i.address, 300) }] : []),
             ...(issue ? [{ label: kind === "sale" ? "Notes" : "Problem", value: issue.slice(0, 600) }] : []),
             ...(str(i.preferred, 300) ? [{ label: "When suits", value: str(i.preferred, 300) }] : []),
+            ...(kind !== "sale" && (str(i.model, 120) || str(i.serial, 80)) ? [{ label: "Machine", value: [brand, str(i.model, 120), str(i.serial, 80) ? `SN ${str(i.serial, 80)}` : ""].filter(Boolean).join(" ") }] : []),
           ],
-          url: `${appBaseUrl()}/machines/${job.id}`,
+          url: `${appBaseUrl()}${link}`,
         });
         await sendEmail({ to: o.contact_email, ...m, replyTo: email, fromName: "EventureOS" });
+        alerted = true;
       }
     } catch (e) { console.error("machine enquiry alert", e); }
   }
-  return { ok: true as const, number: job.number as string };
+  if (missing && !alerted) throw new Error("Online enquiries aren't available right now — please contact us.");
+  return { ok: true as const, number: ref };
 }
