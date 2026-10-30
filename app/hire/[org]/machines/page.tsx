@@ -57,8 +57,8 @@ export default async function MachinesPage({ params, searchParams }: { params: P
           {hero.length > 0 && (
             <div aria-hidden className="relative mx-auto grid h-[320px] w-full max-w-[520px] grid-cols-3 items-end gap-3 sm:h-[400px]">
               {hero.map((m, k) => (
-                <div key={m.slug} className={`relative rounded-[22px] bg-[linear-gradient(180deg,#ffffff18,#ffffff06)] p-3 ring-1 ring-white/10 ${k === 1 ? "h-full" : "h-[78%]"}`}>
-                  <img src={m.image!} alt="" className="h-full w-full object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,.45)]" />
+                <div key={m.slug} className={`relative overflow-hidden rounded-[22px] bg-white p-3 shadow-[0_30px_50px_-20px_rgba(0,0,0,.6)] ${k === 1 ? "h-full" : "h-[78%]"}`}>
+                  <img src={m.image!} alt="" className="h-full w-full object-contain" />
                 </div>
               ))}
             </div>
@@ -88,7 +88,7 @@ export default async function MachinesPage({ params, searchParams }: { params: P
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {[...machines].sort((a, b) => a.cups - b.cups).map((m) => (
                 <a key={m.slug} href={m.href} className="shop-card group flex flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_18px_40px_-28px_rgba(80,45,40,.35)]">
-                  <div className="relative h-[230px] bg-[linear-gradient(180deg,#FBF8F5,#F3ECE5)]">
+                  <div className="relative h-[230px] border-b border-[#EFE8E2] bg-white">
                     {m.image && <img src={m.image} alt={m.name} className="shop-zoom absolute inset-0 h-full w-full object-contain p-6" loading="lazy" />}
                     <span className="absolute left-3 top-3 rounded-full bg-[#151312] px-3 py-1 text-[0.75rem] font-semibold text-white">{m.cups}+ a day</span>
                   </div>

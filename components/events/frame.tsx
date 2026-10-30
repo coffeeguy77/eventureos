@@ -31,8 +31,8 @@ export function eventsNav(org: Pick<PublicOrg, "slug">, s: EventsSettings) {
     { key: "branding" as EventsPage, href: `${base}/branding`, label: "Branding" },
     { key: "catering" as EventsPage, href: `${base}/catering`, label: "Catering" },
     ...(readPrinting((org as { rawSettings?: unknown }).rawSettings).enabled ? [{ key: "printing" as EventsPage, href: `${base}/printing`, label: "Printing" }] : []),
-    ...(readMachines((org as { rawSettings?: unknown }).rawSettings).enabled ? [{ key: "machines" as EventsPage, href: `${base}/machines`, label: "Coffee machines" }] : []),
-    ...(readMachines((org as { rawSettings?: unknown }).rawSettings).serviceEnabled ? [{ key: "repairs" as EventsPage, href: `${base}/repairs`, label: "Machine repairs" }] : []),
+    ...(readMachines((org as { rawSettings?: unknown }).rawSettings).enabled ? [{ key: "machines" as EventsPage, href: `${base}/machines`, label: "Machines" }] : []),
+    ...(readMachines((org as { rawSettings?: unknown }).rawSettings).serviceEnabled ? [{ key: "repairs" as EventsPage, href: `${base}/repairs`, label: "Repairs" }] : []),
   ];
 }
 

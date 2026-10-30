@@ -63,7 +63,7 @@ export function MachineChooser({ machines }: { machines: ChooserMachine[] }) {
             return (
               <div key={p.slug} className={`overflow-hidden rounded-[22px] bg-white shadow-[0_18px_40px_-28px_rgba(80,45,40,.35)] ${k === 0 && p.fits ? "ring-2 ring-[var(--pk)]" : ""}`}>
                 <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 p-4 sm:grid-cols-[150px_minmax(0,1fr)] sm:p-5">
-                  <div className="relative grid aspect-square place-items-center rounded-2xl bg-[linear-gradient(180deg,#F6F1EC,#FBF8F5)]">
+                  <div className="relative grid aspect-square place-items-center rounded-2xl bg-white ring-1 ring-[#EFE8E2]">
                     {m.image ? <img src={m.image} alt={m.name} className="h-full w-full object-contain p-2" loading="lazy" /> : null}
                     {k === 0 && p.fits && <span className="absolute -top-1 left-1 inline-flex items-center gap-1 rounded-full bg-[var(--pk)] px-2.5 py-1 text-[0.6875rem] font-bold text-white"><Sparkles className="h-3 w-3" />Best match</span>}
                   </div>
