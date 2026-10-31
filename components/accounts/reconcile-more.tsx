@@ -111,7 +111,8 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
   const coded = !!c.income && !!c.fees;
   const lastDay = useMemo(() => file.accounts.reduce((a, x) => (x.to > a ? x.to : a), file.accounts[0].to), [file]);
   const bankName = (acc: string) => banks.find((b) => b.id === map[acc])?.name ?? tail(acc);
-  const matched = useMemo(() => (data ? matchPayouts(file.lines, data.payouts) : []), [data, file]);
+  // only payouts that landed in the bank on or after the start date (Stripe is asked a day either side)
+  const matched = useMemo(() => (data ? matchPayouts(file.lines.filter((l) => !from || l.date >= from), data.payouts).filter((m) => !from || (m.line?.date ?? m.payout.arrival) >= from) : []), [data, file, from]);
   const rows = matched.map((m) => {
     const r = res[m.payout.id];
     const preview = payoutLines(m.payout, { clearing: clearing?.code ?? null, income: c.income ?? "income", incomeTax: c.incomeTax, fees: c.fees ?? "fees", feesTax: c.feesTax });

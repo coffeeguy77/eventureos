@@ -145,7 +145,8 @@ export async function loadPayouts(from: string, to: string | null): Promise<R<{ 
 }
 
 /** One Xero deposit per chosen payout — re-read from Stripe here, coded with your saved accounts, never twice. */
-export async function sendPayouts(items: { key: string; payoutId: string; bank: string; date: string }[]): Promise<R<SentResult[]>> {
+export async function sendPayouts(input: { key: string; payoutId: string; bank: string; date: string }[]): Promise<R<SentResult[]>> {
+  let items = Array.isArray(input) ? input : [];
   try {
     const { org, user, role, profile, supabase } = await owner();
     if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can send payouts to Xero.");
@@ -156,11 +157,15 @@ export async function sendPayouts(items: { key: string; payoutId: string; bank: 
     if (!c.income || !c.fees) throw new Error("Choose the income and fees accounts for Stripe first (and save).");
     const { db, ctx, banks } = await xero(org.id, user.id);
     const ids = new Set(banks.map((b) => b.id));
-    for (const t of items) {
-      if (!/^po_\w+$/.test(t.payoutId)) throw new Error("Refresh and try again.");
-      if (!ids.has(t.bank)) throw new Error("A payout has a bank account that isn't in your Xero — check the account matching.");
-      if (!DATE.test(t.date) || (s.from && t.date < s.from)) throw new Error("A payout is before your start date.");
-    }
+    const results: SentResult[] = [];
+    // one payout before the start date (or with a bad account) is skipped on its own — the rest still go
+    items = items.filter((t) => {
+      const bad = !/^po_\w+$/.test(t.payoutId) ? "Refresh and try again." : !ids.has(t.bank) ? "Its bank account isn't in your Xero — check the account matching."
+        : !DATE.test(t.date) || (s.from && t.date < s.from) ? "Before your start date — left alone." : null;
+      if (bad) results.push({ key: t.key, ok: false, error: bad });
+      return !bad;
+    });
+    if (!items.length) return { ok: true, data: results };
     const dates = items.map((t) => t.date).sort();
     const { stripePayouts } = await import("@/lib/reconcile/stripe");
     const all = await stripePayouts(db, org.id, await sharedOrgIds(db, org.id), addDays(dates[0], -5), addDays(dates[dates.length - 1], 2));
@@ -171,7 +176,6 @@ export async function sendPayouts(items: { key: string; payoutId: string; bank: 
     const clearing = clearingId ? accounts.find((a) => a.id === clearingId || a.code === clearingId) ?? null : null;
     const there = await payoutsInXero(ctx, items.map((t) => t.payoutId));
     const { payoutLines } = await import("@/lib/reconcile/match");
-    const results: SentResult[] = [];
     const todo: import("@/lib/reconcile/xero").NewDeposit[] = [];
     for (const t of items) {
       const p = all.find((x) => x.id === t.payoutId);
