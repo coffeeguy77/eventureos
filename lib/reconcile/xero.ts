@@ -185,3 +185,49 @@ export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[]
   }
   return out;
 }
+
+// ── Ordermentum: one batch payment per payout ────────────────────────────────────────────────────
+
+export interface NewBatch { key: string; batch: string; bank: string; date: string; payments: { invoice: string; amount: number }[] }
+
+/** Batches already in Xero (Reference = Ordermentum batch code). */
+export async function batchesInXero(ctx: SyncContext, refs: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  for (let i = 0; i < refs.length; i += 15) {
+    const where = refs.slice(i, i + 15).map((r) => `Reference=="${r.replace(/[^\w]/g, "")}"`).join(" OR ");
+    const r = await xeroGet<{ BatchPayments?: { Reference?: string; Status?: string }[] }>(ctx, "/BatchPayments", { where });
+    for (const b of r.BatchPayments ?? []) if (b.Reference && b.Status !== "DELETED") found.add(b.Reference);
+  }
+  return found;
+}
+
+/**
+ * Each payout as one Xero batch payment into the bank it landed in (a single transaction to match), after checking
+ * every invoice is still owing in Xero. Never twice for the same batch code.
+ */
+export async function createBatchPayments(ctx: SyncContext, items: NewBatch[]): Promise<SentResult[]> {
+  const out: SentResult[] = [];
+  const there = await batchesInXero(ctx, items.map((t) => t.batch));
+  const due = new Map<string, { status: string; due: number }>();
+  const ids = [...new Set(items.flatMap((t) => t.payments.map((p) => p.invoice)))];
+  for (let i = 0; i < ids.length; i += 40) {
+    const r = await xeroGet<{ Invoices?: { InvoiceID: string; Status: string; AmountDue?: number }[] }>(ctx, "/Invoices", { IDs: ids.slice(i, i + 40).join(","), summaryOnly: "true" });
+    for (const inv of r.Invoices ?? []) due.set(inv.InvoiceID, { status: inv.Status, due: Number(inv.AmountDue ?? 0) });
+  }
+  for (const t of items) {
+    if (there.has(t.batch)) { out.push({ key: t.key, ok: true, error: "Already in Xero" }); continue; }
+    const bad = t.payments.find((p) => { const d = due.get(p.invoice); return !d || d.status !== "AUTHORISED" || d.due + 0.005 < p.amount; });
+    if (bad) { out.push({ key: t.key, ok: false, error: "An invoice in this batch isn't owing that much in Xero any more — reconcile this one by hand." }); continue; }
+    try {
+      const r = await xeroPut<{ BatchPayments?: { BatchPaymentID?: string; ValidationErrors?: { Message?: string }[] }[] }>(ctx, "/BatchPayments", {
+        BatchPayments: [{ Account: { AccountID: t.bank }, Date: t.date, Reference: t.batch, Payments: t.payments.map((p) => ({ Invoice: { InvoiceID: p.invoice }, Amount: p.amount.toFixed(2) })) }],
+      });
+      const b = r.BatchPayments?.[0];
+      const errs = (b?.ValidationErrors ?? []).map((v) => v.Message).filter(Boolean);
+      out.push(b?.BatchPaymentID && !errs.length ? { key: t.key, ok: true, id: b.BatchPaymentID } : { key: t.key, ok: false, error: errs.join("; ") || "Xero didn't accept it." });
+    } catch (e) {
+      out.push({ key: t.key, ok: false, error: e instanceof Error ? e.message.slice(0, 220) : "Xero didn't accept it." });
+    }
+  }
+  return out;
+}

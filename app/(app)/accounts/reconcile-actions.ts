@@ -219,3 +219,50 @@ export async function removePayouts(payoutIds: string[]): Promise<R<SentResult[]
     return { ok: true, data: results };
   } catch (e) { return fail(e); }
 }
+
+/** Ordermentum remittance CSVs from your Gmail, for these batch codes. */
+export async function ordermentumFromGmail(batches: string[]): Promise<R<{ rows: import("@/lib/reconcile/ordermentum").RemitRow[]; emails: number }>> {
+  try {
+    const { org, user } = await owner();
+    const db = createServiceClient();
+    const { buildContext } = await import("@/lib/integrations/sync-runner");
+    const ctx = await buildContext(db, "service", org.id, "gmail", user.id).catch(() => { throw new Error("Gmail isn't connected — add the remittance CSV instead."); });
+    const { ordermentumRemittances } = await import("@/lib/reconcile/ordermentum-gmail");
+    return { ok: true, data: await ordermentumRemittances(ctx, Array.isArray(batches) ? batches.map(String) : []) };
+  } catch (e) { return fail(e); }
+}
+
+/** Each Ordermentum payout as one Xero batch payment against the invoices on its remittance. */
+export async function sendOrdermentum(items: { key: string; batch: string; bank: string; date: string; amount: number; payments: { invoice: string; amount: number }[] }[]): Promise<R<SentResult[]>> {
+  try {
+    const { org, user, role, profile, supabase } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can record payments in Xero.");
+    if (!Array.isArray(items) || !items.length) throw new Error("Choose the payouts to send.");
+    if (items.length > 50) throw new Error("Send at most 50 at a time.");
+    const s = readReconcile(org.settings);
+    const { db, ctx, banks } = await xero(org.id, user.id);
+    const ids = new Set(banks.map((b) => b.id));
+    const orgs = await sharedOrgIds(db, org.id);
+    const all = items.flatMap((t) => (Array.isArray(t.payments) ? t.payments : []).map((p) => String(p.invoice)));
+    const { data: invs } = await db.from("invoices").select("xero_invoice_id").in("organisation_id", orgs).in("xero_invoice_id", all.length ? all : ["-"]);
+    const known = new Set(((invs ?? []) as { xero_invoice_id: string }[]).map((r) => r.xero_invoice_id));
+    const results: SentResult[] = [];
+    const todo: import("@/lib/reconcile/xero").NewBatch[] = [];
+    for (const t of items) {
+      const payments = (Array.isArray(t.payments) ? t.payments : []).map((p) => ({ invoice: String(p.invoice), amount: Math.round(Number(p.amount) * 100) / 100 }));
+      const sum = Math.round(payments.reduce((a, p) => a + p.amount, 0) * 100);
+      const bad = !/^OM\d{6,}$/.test(String(t.batch)) ? "Refresh and try again." : !ids.has(t.bank) ? "Its bank account isn't in your Xero — check the account matching."
+        : !DATE.test(t.date) || (s.from && t.date < s.from) ? "Before your start date — left alone."
+        : !payments.length || payments.some((p) => !known.has(p.invoice) || !(p.amount > 0)) ? "An invoice on this remittance isn't one of this business's."
+        : sum !== Math.round(Number(t.amount) * 100) ? "The invoices don't add up to the deposit." : null;
+      if (bad) results.push({ key: t.key, ok: false, error: bad });
+      else todo.push({ key: String(t.key).slice(0, 400), batch: t.batch, bank: t.bank, date: t.date, payments });
+    }
+    const { createBatchPayments } = await import("@/lib/reconcile/xero");
+    results.push(...(await createBatchPayments(ctx, todo)));
+    const n = results.filter((r) => r.ok && r.id).length;
+    if (n) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.ordermentum", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} recorded ${n} Ordermentum payout${n === 1 ? "" : "s"} as Xero batch payments (Reconcile)` });
+    revalidatePath("/invoices");
+    return { ok: true, data: results };
+  } catch (e) { return fail(e); }
+}

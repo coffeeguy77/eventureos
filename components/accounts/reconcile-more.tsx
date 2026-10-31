@@ -9,7 +9,8 @@ import { cn } from "@/lib/cn";
 import type { ParsedStatement, ReconcileSettings, StripeCoding } from "@/lib/reconcile/core";
 import { matchDeposits, matchPayouts, payoutLines, type OpenInvoice, type Payout } from "@/lib/reconcile/match";
 import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
-import { loadPayouts, removePayouts, saveReconcileSettings, sendPayments, sendPayouts } from "@/app/(app)/accounts/reconcile-actions";
+import { loadPayouts, ordermentumFromGmail, removePayouts, saveReconcileSettings, sendOrdermentum, sendPayments, sendPayouts } from "@/app/(app)/accounts/reconcile-actions";
+import { isOrdermentum, matchOrdermentum, parseRemittance, type RemitRow } from "@/lib/reconcile/ordermentum";
 
 const money = (n: number) => `$${n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
@@ -205,6 +206,73 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
           {!shown.length && <p className="px-5 py-4 text-[0.8125rem] text-ink-muted">Nothing here.</p>}
         </div>
       )}
+    </Card>
+  );
+}
+
+/** 6. Ordermentum: each payout matched to its remittance (from Gmail or a CSV) and sent as one Xero batch payment. */
+export function OrdermentumPayouts({ file, map, from, banks, invoices, canSend }: { file: ParsedStatement; map: Record<string, string>; from: string; banks: XeroBank[]; invoices: OpenInvoice[]; canSend: boolean }) {
+  const [remits, setRemits] = useState<RemitRow[]>([]);
+  const [res, setRes] = useState<Res>({});
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const matches = useMemo(() => matchOrdermentum(file.lines, remits, invoices, { from: from || null }), [file, remits, invoices, from]);
+  if (!file.lines.some(isOrdermentum)) return null;
+  const bankName = (acc: string) => banks.find((b) => b.id === map[acc])?.name ?? tail(acc);
+  const rows = matches.map((m) => { const r = res[m.key]; return { ...m, done: !!r?.ok, error: r && !r.ok ? r.error : undefined, note: r?.ok && !r.id ? r.error : undefined, ticked: picked[m.key] ?? m.state === "ready" }; });
+  const toSend = rows.filter((r) => !r.done && r.state === "ready" && r.ticked && map[r.line.account]);
+  const missing = [...new Set(rows.filter((r) => r.state === "no-remittance" && r.batch).map((r) => r.batch!))];
+  const gmail = () => start(async () => {
+    setMsg(null);
+    const r = await ordermentumFromGmail(missing);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setRemits((x) => [...x, ...r.data.rows]);
+    setMsg({ ok: true, text: `Found ${r.data.emails} remittance${r.data.emails === 1 ? "" : "s"} in Gmail (${r.data.rows.length} invoices).` });
+  });
+  const addFiles = async (list: FileList | null) => {
+    if (!list) return;
+    setMsg(null);
+    const add: RemitRow[] = [];
+    for (const f of Array.from(list)) { try { add.push(...parseRemittance(await f.text())); } catch (e) { setMsg({ ok: false, text: `${f.name}: ${e instanceof Error ? e.message : "couldn't read it"}` }); } }
+    setRemits((x) => [...x, ...add]);
+  };
+  const send = () => start(async () => {
+    setMsg(null);
+    const r = await sendOrdermentum(toSend.map((x) => ({ key: x.key, batch: x.batch!, bank: map[x.line.account], date: x.line.date, amount: x.line.amount, payments: x.rows.map((i) => ({ invoice: i.open!.xeroId, amount: i.amount })) })));
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setRes((s) => { const y = { ...s }; for (const z of r.data) y[z.key] = z; return y; });
+    const ok = r.data.filter((z) => z.ok).length, bad = r.data.length - ok;
+    setMsg({ ok: !bad, text: `${ok} Ordermentum payout${ok === 1 ? "" : "s"} recorded as batch payments${bad ? ` · ${bad} didn't go — reasons are in the list` : ""}. Each Ordermentum line in the bank now matches one batch payment in Xero: click OK.` });
+  });
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader title="6. Ordermentum payouts" subtitle="Ordermentum pays several invoices in one deposit and emails a remittance (CSV) listing them. Each deposit is matched to its remittance by the batch number (OM…) and recorded in Xero as one batch payment against those invoices — one OK in Xero." />
+      <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
+        <Button onClick={gmail} disabled={pending || !missing.length}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Find {missing.length} remittance{missing.length === 1 ? "" : "s"} in Gmail</Button>
+        <label className="inline-flex h-10 cursor-pointer items-center rounded-lg px-3 text-[0.8125rem] font-semibold text-brand-700 ring-1 ring-line hover:bg-canvas">Add remittance CSVs<input type="file" accept=".csv,text/csv" multiple className="hidden" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} /></label>
+        {canSend && <Button variant="primary" onClick={send} disabled={pending || !toSend.length}><Send className="h-4 w-4" />Send {toSend.length} to Xero</Button>}
+      </div>
+      {msg && <p className={cn("border-t border-line px-5 py-2.5 text-[0.8125rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
+      <div className="divide-y divide-line border-t border-line">
+        {rows.map((r) => (
+          <div key={r.key} className="px-5 py-3 text-[0.8125rem]">
+            <label className="flex items-center gap-3">
+              {r.done ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <input type="checkbox" className="h-4 w-4 shrink-0" disabled={r.state !== "ready"} checked={r.state === "ready" && r.ticked} onChange={(e) => setPicked({ ...picked, [r.key]: e.target.checked })} />}
+              <span className="w-24 shrink-0 text-ink-muted">{fmt(r.line.date)}</span>
+              <span className="min-w-0 flex-1"><span className="font-medium text-ink">{r.batch ?? "Ordermentum"}</span><span className="text-ink-muted"> · into {bankName(r.line.account)}{r.rows.length ? ` · ${r.rows.length} invoice${r.rows.length === 1 ? "" : "s"}` : ""}</span></span>
+              <span className="w-24 shrink-0 text-right font-semibold tabular-nums text-ink">{money(r.line.amount)}</span>
+            </label>
+            {(r.problem || r.error || r.note) && <p className={cn("ml-7 mt-1 text-[0.75rem]", r.error || r.state === "problem" ? "text-rose-700" : "text-ink-muted")}>{r.error ?? r.note ?? r.problem}</p>}
+            {r.rows.length > 0 && (
+              <ul className="ml-7 mt-1.5 space-y-0.5 text-[0.75rem] text-ink-muted">
+                {r.rows.map((i) => <li key={i.invoice} className="flex justify-between gap-3"><span className={i.problem ? "text-rose-700" : ""}>{i.invoice} · {i.retailer}{i.problem ? ` — ${i.problem}` : ""}</span><span className="tabular-nums">{money(i.amount)}</span></li>)}
+              </ul>
+            )}
+          </div>
+        ))}
+        {!rows.length && <p className="px-5 py-4 text-[0.8125rem] text-ink-muted">No Ordermentum deposits since the start date.</p>}
+      </div>
     </Card>
   );
 }

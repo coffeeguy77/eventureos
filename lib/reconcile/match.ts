@@ -7,7 +7,7 @@ const dayNo = (iso: string) => Math.round(Date.parse(`${iso.slice(0, 10)}T00:00:
 const cents = (n: number) => Math.round(n * 100);
 
 /** Money in that isn't a transfer between your accounts or a Stripe/Square/other card settlement. */
-export const SETTLEMENT_RE = /\bSTRIPE\b|\bSQUARE\b|\bTYRO\b|\bPAYPAL\b|\bAFTERPAY\b|\bZIP ?PAY\b|\bUBER\b|\bMENULOG\b|\bDOORDASH\b/i;
+export const SETTLEMENT_RE = /\bSTRIPE\b|\bSQUARE\b|ORDERMENTUM|\bTYRO\b|\bPAYPAL\b|\bAFTERPAY\b|\bZIP ?PAY\b|\bUBER\b|\bMENULOG\b|\bDOORDASH\b/i;
 export const isDeposit = (l: BankLine) => l.amount > 0 && !l.transfer && !SETTLEMENT_RE.test(l.narrative) && !/INTEREST|DISHONOU?R|REVERSAL|REFUND/i.test(l.narrative);
 
 export interface OpenInvoice { id: string; xeroId: string; number: string | null; customer: string; company: string | null; balance: number; issueDate: string; dueDate: string | null; org: string }

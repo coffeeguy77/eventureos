@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 import { alreadyInXero, pairTransfers, parseStatement, sameAccountNumber, transferNote, type ParsedStatement, type ReconcileSettings, type XeroTransferLite } from "@/lib/reconcile/core";
 import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
 import type { OpenInvoice } from "@/lib/reconcile/match";
-import { InvoiceDeposits, StripePayouts } from "./reconcile-more";
+import { InvoiceDeposits, OrdermentumPayouts, StripePayouts } from "./reconcile-more";
 import { saveReconcileSettings, sendTransfers, xeroTransfers } from "@/app/(app)/accounts/reconcile-actions";
 
 type Tab = "ready" | "unsure" | "xero" | "sent" | "unpaired";
@@ -196,6 +196,7 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
       )}
       {file && <InvoiceDeposits file={file.s} map={map} from={from} banks={banks} invoices={invoices} canTransfer={canTransfer} canSend={canSend} />}
       {file && <StripePayouts file={file.s} map={map} from={from} banks={banks} settings={settings} accounts={accounts} taxRates={taxRates} clearing={clearing} stripeOn={stripeOn} canTransfer={canTransfer} canSend={canSend} />}
+      {file && <OrdermentumPayouts file={file.s} map={map} from={from} banks={banks} invoices={invoices} canSend={canSend} />}
     </div>
   );
 }
