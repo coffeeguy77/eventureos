@@ -1,0 +1,41 @@
+{
+  "organisation": "Demo Books",
+  "bankAccounts": [
+    { "id": "demo-bank", "code": "090", "name": "Business Cheque" }
+  ],
+  "invoices": [
+    {
+      "id": "demo-inv-1042",
+      "number": "INV-1042",
+      "contactName": "Acme Pty Ltd",
+      "date": "2026-10-01",
+      "dueDate": "2026-10-20",
+      "amountDue": 1250,
+      "reference": "October service"
+    },
+    {
+      "id": "demo-inv-1048",
+      "number": "INV-1048",
+      "contactName": "Northshore Events",
+      "date": "2026-10-12",
+      "dueDate": "2026-10-26",
+      "amountDue": 880,
+      "reference": null
+    }
+  ],
+  "bills": [
+    {
+      "id": "demo-bill-77",
+      "number": "BILL-77",
+      "contactName": "Beans Co",
+      "date": "2026-10-15",
+      "dueDate": "2026-10-30",
+      "amountDue": 640.5,
+      "reference": "Cartons"
+    }
+  ],
+  "accounts": [
+    { "id": "demo-acc-400", "code": "400", "name": "Advertising", "type": "EXPENSE", "taxType": "INPUT" },
+    { "id": "demo-acc-200", "code": "200", "name": "Sales", "type": "REVENUE", "taxType": "OUTPUT" }
+  ]
+}
