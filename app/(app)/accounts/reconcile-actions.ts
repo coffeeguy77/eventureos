@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import { actorName, logActivity } from "@/lib/activity";
 import { readReconcile, type XeroTransferLite } from "@/lib/reconcile/core";
 import { sharedOrgIds } from "@/lib/reconcile/shared";
+import { batchReference, createBatchPayments } from "@/lib/reconcile/xero";
 import type { NewTransfer, SentResult } from "@/lib/reconcile/xero";
 export type { SentResult };
 
@@ -175,7 +176,7 @@ export async function sendPayouts(input: { key: string; payoutId: string; bank: 
     const clearingId = (st?.settings as { xero_account?: string } | null)?.xero_account ?? null;
     const clearing = clearingId ? accounts.find((a) => a.id === clearingId || a.code === clearingId) ?? null : null;
     const there = await payoutsInXero(ctx, items.map((t) => t.payoutId));
-    const { payoutLines } = await import("@/lib/reconcile/match");
+    const { payoutLines, payoutReference } = await import("@/lib/reconcile/match");
     const todo: import("@/lib/reconcile/xero").NewDeposit[] = [];
     for (const t of items) {
       const p = all.find((x) => x.id === t.payoutId);
@@ -184,7 +185,7 @@ export async function sendPayouts(input: { key: string; payoutId: string; bank: 
       if (p.recorded && (!clearing?.code || clearing.type === "BANK")) { results.push({ key: t.key, ok: false, error: "This payout includes payments EventureOS already sent to your Stripe clearing account — reconcile this one in Xero by hand." }); continue; }
       const built = payoutLines(p, { clearing: clearing?.code ?? null, shop: c.shop, bookings: c.bookings, other: c.other, fees: c.fees });
       if (!built.balanced || !built.coded || !(built.total > 0)) { results.push({ key: t.key, ok: false, error: `The breakdown ($${built.total.toFixed(2)}) doesn't add up to the payout ($${p.amount.toFixed(2)}) — reconcile this one by hand.` }); continue; }
-      todo.push({ key: t.key, payoutId: p.id, bank: t.bank, date: t.date, lines: built.lines });
+      todo.push({ key: t.key, payoutId: p.id, bank: t.bank, date: t.date, reference: payoutReference(p), lines: built.lines });
     }
     results.push(...(await createPayoutDeposits(ctx, todo, c.contact ?? "Stripe")));
     const made = results.filter((r) => r.ok && r.id).length;
@@ -233,7 +234,7 @@ export async function ordermentumFromGmail(batches: string[]): Promise<R<{ rows:
 }
 
 /** Each Ordermentum payout as one Xero batch payment against the invoices on its remittance. */
-export async function sendOrdermentum(items: { key: string; batch: string; bank: string; date: string; amount: number; payments: { invoice: string; amount: number }[] }[]): Promise<R<SentResult[]>> {
+export async function sendOrdermentum(items: { key: string; batch: string; bank: string; date: string; amount: number; payments: { invoice: string; amount: number; number?: string; retailer?: string }[] }[], replace = false): Promise<R<SentResult[]>> {
   try {
     const { org, user, role, profile, supabase } = await owner();
     if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can record payments in Xero.");
@@ -249,20 +250,33 @@ export async function sendOrdermentum(items: { key: string; batch: string; bank:
     const results: SentResult[] = [];
     const todo: import("@/lib/reconcile/xero").NewBatch[] = [];
     for (const t of items) {
-      const payments = (Array.isArray(t.payments) ? t.payments : []).map((p) => ({ invoice: String(p.invoice), amount: Math.round(Number(p.amount) * 100) / 100 }));
+      const raw = Array.isArray(t.payments) ? t.payments : [];
+      const payments = raw.map((p) => ({ invoice: String(p.invoice), amount: Math.round(Number(p.amount) * 100) / 100 }));
       const sum = Math.round(payments.reduce((a, p) => a + p.amount, 0) * 100);
       const bad = !/^OM\d{6,}$/.test(String(t.batch)) ? "Refresh and try again." : !ids.has(t.bank) ? "Its bank account isn't in your Xero — check the account matching."
         : !DATE.test(t.date) || (s.from && t.date < s.from) ? "Before your start date — left alone."
         : !payments.length || payments.some((p) => !known.has(p.invoice) || !(p.amount > 0)) ? "An invoice on this remittance isn't one of this business's."
         : sum !== Math.round(Number(t.amount) * 100) ? "The invoices don't add up to the deposit." : null;
       if (bad) results.push({ key: t.key, ok: false, error: bad });
-      else todo.push({ key: String(t.key).slice(0, 400), batch: t.batch, bank: t.bank, date: t.date, payments });
+      else todo.push({ key: String(t.key).slice(0, 400), batch: t.batch, bank: t.bank, date: t.date, payments,
+        reference: batchReference(t.batch, raw.map((p) => ({ invoice: String(p.number ?? "").slice(0, 30) || "Invoice", retailer: String(p.retailer ?? "").replace(/[^\p{L}\p{N} &'.-]/gu, "").slice(0, 40), amount: Math.round(Number(p.amount) * 100) / 100 }))) });
     }
-    const { createBatchPayments } = await import("@/lib/reconcile/xero");
-    results.push(...(await createBatchPayments(ctx, todo)));
+    results.push(...(await createBatchPayments(ctx, todo, { replace })));
     const n = results.filter((r) => r.ok && r.id).length;
     if (n) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.ordermentum", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} recorded ${n} Ordermentum payout${n === 1 ? "" : "s"} as Xero batch payments (Reconcile)` });
     revalidatePath("/invoices");
     return { ok: true, data: results };
+  } catch (e) { return fail(e); }
+}
+
+/** Which Ordermentum batches are already in Xero, and whether their reference has the invoice list yet. */
+export async function ordermentumInXero(batches: string[]): Promise<R<{ batch: string; listed: boolean; reconciled: boolean }[]>> {
+  try {
+    const { org, user } = await owner();
+    const list = (Array.isArray(batches) ? batches : []).filter((b) => /^OM\d{6,}$/.test(b)).slice(0, 100);
+    if (!list.length) return { ok: true, data: [] };
+    const { ctx } = await xero(org.id, user.id);
+    const { batchesInXero } = await import("@/lib/reconcile/xero");
+    return { ok: true, data: [...(await batchesInXero(ctx, list)).entries()].map(([batch, v]) => ({ batch, listed: v.reference.trim() !== batch, reconciled: v.reconciled })) };
   } catch (e) { return fail(e); }
 }

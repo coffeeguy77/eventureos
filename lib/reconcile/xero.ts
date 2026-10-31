@@ -132,10 +132,11 @@ async function depositContact(ctx: SyncContext, name: string): Promise<string> {
 export async function payoutsInXero(ctx: SyncContext, ids: string[]): Promise<Map<string, { id: string; reconciled: boolean }>> {
   const found = new Map<string, { id: string; reconciled: boolean }>();
   for (let i = 0; i < ids.length; i += 15) {
-    const where = ids.slice(i, i + 15).map((id) => `Reference=="${id.replace(/[^\w]/g, "")}"`).join(" OR ");
+    const where = ids.slice(i, i + 15).map((id) => `Reference!=null&&Reference.StartsWith("${id.replace(/[^\w]/g, "")}")`).join(" OR ");
     try {
       const r = await xeroGet<{ BankTransactions?: { BankTransactionID: string; Reference?: string; Status?: string; IsReconciled?: boolean }[] }>(ctx, "/BankTransactions", { where });
-      for (const t of r.BankTransactions ?? []) if (t.Reference && t.Status !== "DELETED" && t.Status !== "VOIDED") found.set(t.Reference, { id: t.BankTransactionID, reconciled: !!t.IsReconciled });
+      // the reference starts with the payout id (then who paid)
+      for (const t of r.BankTransactions ?? []) if (t.Reference && t.Status !== "DELETED" && t.Status !== "VOIDED") found.set(t.Reference.split(/\s/)[0], { id: t.BankTransactionID, reconciled: !!t.IsReconciled });
     } catch (e) { if (permission(e)) throw new Error(NEEDS); throw e; }
   }
   return found;
@@ -156,7 +157,7 @@ export async function deleteDeposits(ctx: SyncContext, items: { key: string; id:
   return out;
 }
 
-export interface NewDeposit { key: string; payoutId: string; bank: string; date: string; lines: { description: string; account: string; amount: number; tax: string | null }[] }
+export interface NewDeposit { key: string; payoutId: string; bank: string; date: string; reference?: string; lines: { description: string; account: string; amount: number; tax: string | null }[] }
 
 /** One "receive money" per payout into the bank it landed in, coded across your accounts (amounts include GST). */
 export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[], contactName: string): Promise<SentResult[]> {
@@ -168,7 +169,7 @@ export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[]
     try {
       const r = await xeroPut<{ BankTransactions?: { BankTransactionID?: string; StatusAttributeString?: string; ValidationErrors?: { Message?: string }[] }[] }>(ctx, "/BankTransactions?summarizeErrors=false", {
         BankTransactions: chunk.map((t) => ({
-          Type: "RECEIVE", Contact: { ContactID: contact }, BankAccount: { AccountID: t.bank }, Date: t.date, Reference: t.payoutId, LineAmountTypes: "Inclusive",
+          Type: "RECEIVE", Contact: { ContactID: contact }, BankAccount: { AccountID: t.bank }, Date: t.date, Reference: (t.reference ?? t.payoutId).slice(0, 255), LineAmountTypes: "Inclusive",
           LineItems: t.lines.map((l) => ({ Description: l.description, Quantity: 1, UnitAmount: l.amount.toFixed(2), AccountCode: l.account, ...(l.tax ? { TaxType: l.tax } : {}) })),
         })),
       });
@@ -188,24 +189,42 @@ export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[]
 
 // ── Ordermentum: one batch payment per payout ────────────────────────────────────────────────────
 
-export interface NewBatch { key: string; batch: string; bank: string; date: string; payments: { invoice: string; amount: number }[] }
+export interface NewBatch { key: string; batch: string; bank: string; date: string; reference: string; payments: { invoice: string; amount: number }[] }
 
-/** Batches already in Xero (Reference = Ordermentum batch code). */
-export async function batchesInXero(ctx: SyncContext, refs: string[]): Promise<Set<string>> {
-  const found = new Set<string>();
+/** Batches already in Xero (the reference starts with the Ordermentum batch code): id, reference, reconciled. */
+export async function batchesInXero(ctx: SyncContext, refs: string[]): Promise<Map<string, { id: string; reference: string; reconciled: boolean }>> {
+  const found = new Map<string, { id: string; reference: string; reconciled: boolean }>();
   for (let i = 0; i < refs.length; i += 15) {
-    const where = refs.slice(i, i + 15).map((r) => `Reference=="${r.replace(/[^\w]/g, "")}"`).join(" OR ");
-    const r = await xeroGet<{ BatchPayments?: { Reference?: string; Status?: string }[] }>(ctx, "/BatchPayments", { where });
-    for (const b of r.BatchPayments ?? []) if (b.Reference && b.Status !== "DELETED") found.add(b.Reference);
+    const where = refs.slice(i, i + 15).map((r) => `Reference!=null&&Reference.StartsWith("${r.replace(/[^\w]/g, "")}")`).join(" OR ");
+    const r = await xeroGet<{ BatchPayments?: { BatchPaymentID: string; Reference?: string; Status?: string; IsReconciled?: boolean | string }[] }>(ctx, "/BatchPayments", { where });
+    for (const b of r.BatchPayments ?? []) if (b.Reference && b.Status !== "DELETED") found.set(b.Reference.split(/\s/)[0], { id: b.BatchPaymentID, reference: b.Reference, reconciled: b.IsReconciled === true || b.IsReconciled === "true" });
   }
   return found;
+}
+
+/** Remove an unreconciled batch payment (to put it back with the invoice list in its reference). */
+export async function deleteBatchPayment(ctx: SyncContext, id: string) {
+  await apiJSON(ctx, `${XERO_API}/BatchPayments`, { method: "POST", headers: { "xero-tenant-id": tenantId(ctx), "content-type": "application/json" }, body: JSON.stringify({ BatchPaymentID: id, Status: "DELETED" }) }, "Xero POST /BatchPayments");
+}
+
+/** "OM26092414 · OMI2657 Café Floriade $778.00; …" — shown on Xero's reconcile screen (Xero allows 255 characters). */
+export function batchReference(batch: string, list: { invoice: string; retailer: string; amount: number }[]) {
+  const head = `${batch} · `;
+  let text = head;
+  for (let k = 0; k < list.length; k++) {
+    const part = `${k ? "; " : ""}${list[k].invoice} ${list[k].retailer} $${list[k].amount.toFixed(2)}`;
+    const more = `; +${list.length - k} more`;
+    if ((text + part).length > (k < list.length - 1 ? 255 - more.length : 255)) return text + more;
+    text += part;
+  }
+  return text;
 }
 
 /**
  * Each payout as one Xero batch payment into the bank it landed in (a single transaction to match), after checking
  * every invoice is still owing in Xero. Never twice for the same batch code.
  */
-export async function createBatchPayments(ctx: SyncContext, items: NewBatch[]): Promise<SentResult[]> {
+export async function createBatchPayments(ctx: SyncContext, items: NewBatch[], opts: { replace?: boolean } = {}): Promise<SentResult[]> {
   const out: SentResult[] = [];
   const there = await batchesInXero(ctx, items.map((t) => t.batch));
   const due = new Map<string, { status: string; due: number }>();
@@ -215,12 +234,20 @@ export async function createBatchPayments(ctx: SyncContext, items: NewBatch[]): 
     for (const inv of r.Invoices ?? []) due.set(inv.InvoiceID, { status: inv.Status, due: Number(inv.AmountDue ?? 0) });
   }
   for (const t of items) {
-    if (there.has(t.batch)) { out.push({ key: t.key, ok: true, error: "Already in Xero" }); continue; }
+    const old = there.get(t.batch);
+    if (old) {
+      if (!opts.replace) { out.push({ key: t.key, ok: true, error: "Already in Xero" }); continue; }
+      if (old.reconciled) { out.push({ key: t.key, ok: false, error: "Already reconciled in Xero — left as it is." }); continue; }
+      if (old.reference === t.reference) { out.push({ key: t.key, ok: true, error: "Already in Xero with the invoice list" }); continue; }
+      try { await deleteBatchPayment(ctx, old.id); } catch (e) { out.push({ key: t.key, ok: false, error: `Couldn't replace the old one: ${e instanceof Error ? e.message.slice(0, 160) : "Xero refused"}` }); continue; }
+      // its invoices are owing again now: check against that
+      for (const p of t.payments) { const d = due.get(p.invoice); if (d) due.set(p.invoice, { status: "AUTHORISED", due: d.due + p.amount }); }
+    }
     const bad = t.payments.find((p) => { const d = due.get(p.invoice); return !d || d.status !== "AUTHORISED" || d.due + 0.005 < p.amount; });
     if (bad) { out.push({ key: t.key, ok: false, error: "An invoice in this batch isn't owing that much in Xero any more — reconcile this one by hand." }); continue; }
     try {
       const r = await xeroPut<{ BatchPayments?: { BatchPaymentID?: string; ValidationErrors?: { Message?: string }[] }[] }>(ctx, "/BatchPayments", {
-        BatchPayments: [{ Account: { AccountID: t.bank }, Date: t.date, Reference: t.batch, Payments: t.payments.map((p) => ({ Invoice: { InvoiceID: p.invoice }, Amount: p.amount.toFixed(2) })) }],
+        BatchPayments: [{ Account: { AccountID: t.bank }, Date: t.date, Reference: t.reference.slice(0, 255), Payments: t.payments.map((p) => ({ Invoice: { InvoiceID: p.invoice }, Amount: p.amount.toFixed(2) })) }],
       });
       const b = r.BatchPayments?.[0];
       const errs = (b?.ValidationErrors ?? []).map((v) => v.Message).filter(Boolean);

@@ -135,3 +135,17 @@ export function payoutLines(p: Payout, c: { clearing: string | null; shop: { acc
   const total = r2(lines.reduce((a, l) => a + l.amount, 0));
   return { lines, total, balanced: Math.abs(total - p.amount) < 0.005, coded: lines.every((l) => !!l.account) };
 }
+
+/** "po_… · INV-1007 Joshua Davis $5,294.85; Jane Smith $61.00 shop order" — shown on Xero's reconcile screen (255 max). */
+export function payoutReference(p: Payout) {
+  let text = `${p.id} · `;
+  const items = [...p.items].sort((a, b) => b.amount - a.amount);
+  for (let k = 0; k < items.length; k++) {
+    const i = items[k];
+    const part = `${k ? "; " : ""}${i.name || "Customer"} $${i.amount.toFixed(2)}${i.what ? ` ${i.what}` : ""}`;
+    const more = `; +${items.length - k} more`;
+    if ((text + part).length > (k < items.length - 1 ? 255 - more.length : 255)) return text + more;
+    text += part;
+  }
+  return items.length ? text : p.id;
+}
