@@ -4,12 +4,12 @@ import { useMemo, useState, useTransition } from "react";
 import { CheckCircle2, Loader2, RefreshCw, Save, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Label, Select } from "@/components/ui/form";
+import { Input, Label, Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import type { ParsedStatement, ReconcileSettings, StripeCoding } from "@/lib/reconcile/core";
 import { matchDeposits, matchPayouts, payoutLines, type OpenInvoice, type Payout } from "@/lib/reconcile/match";
 import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
-import { loadPayouts, saveReconcileSettings, sendPayments, sendPayouts } from "@/app/(app)/accounts/reconcile-actions";
+import { loadPayouts, removePayouts, saveReconcileSettings, sendPayments, sendPayouts } from "@/app/(app)/accounts/reconcile-actions";
 
 const money = (n: number) => `$${n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
@@ -100,25 +100,28 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
   clearing: { name: string; code: string | null; bank: boolean } | null; stripeOn: boolean; canTransfer: boolean; canSend: boolean;
 }) {
   const [c, setC] = useState<StripeCoding>(settings.stripe);
-  const [data, setData] = useState<{ payouts: Payout[]; inXero: Set<string> } | null>(null);
+  const [data, setData] = useState<{ payouts: Payout[]; inXero: Map<string, boolean> } | null>(null);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [res, setRes] = useState<Res>({});
   const [tab, setTab] = useState("ready");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const income = accounts.filter((a) => a.cls === "REVENUE" && a.code);
+  const income = accounts.filter((a) => (a.cls === "REVENUE" || a.cls === "LIABILITY") && a.code);
   const fees = accounts.filter((a) => a.cls === "EXPENSE" && a.code);
-  const coded = !!c.income && !!c.fees;
+  const coded = !!c.other.account && !!c.fees.account;
   const lastDay = useMemo(() => file.accounts.reduce((a, x) => (x.to > a ? x.to : a), file.accounts[0].to), [file]);
   const bankName = (acc: string) => banks.find((b) => b.id === map[acc])?.name ?? tail(acc);
   // only payouts that landed in the bank on or after the start date (Stripe is asked a day either side)
   const matched = useMemo(() => (data ? matchPayouts(file.lines.filter((l) => !from || l.date >= from), data.payouts).filter((m) => !from || (m.line?.date ?? m.payout.arrival) >= from) : []), [data, file, from]);
   const rows = matched.map((m) => {
     const r = res[m.payout.id];
-    const preview = payoutLines(m.payout, { clearing: clearing?.code ?? null, income: c.income ?? "income", incomeTax: c.incomeTax, fees: c.fees ?? "fees", feesTax: c.feesTax });
+    const preview = payoutLines(m.payout, { clearing: clearing?.code ?? null, shop: c.shop, bookings: c.bookings, other: c.other, fees: c.fees });
     const manual = m.payout.recorded > 0 && (!clearing?.code || clearing.bank);
-    const state = r?.ok || data?.inXero.has(m.payout.id) ? "xero" : !m.line ? "missing" : manual || !preview.balanced ? "manual" : "ready";
-    return { ...m, state, preview, error: r && !r.ok ? r.error : undefined, ticked: picked[m.payout.id] ?? state === "ready" };
+    const removed = r?.ok && r.error === "removed";
+    const inXero = !removed && ((r?.ok && !!r.id) || r?.error === "Already in Xero" || (!r && data?.inXero.has(m.payout.id)));
+    const state = inXero ? "xero" : !m.line ? "missing" : manual || !preview.balanced ? "manual" : "ready";
+    const reconciled = !!data?.inXero.get(m.payout.id);
+    return { ...m, state, preview, reconciled, error: r && !r.ok ? r.error : undefined, ticked: picked[m.payout.id] ?? state === "ready" };
   });
   const toSend = rows.filter((r) => r.state === "ready" && r.ticked && r.line && map[r.line.account]);
   const n = (s: string) => rows.filter((r) => r.state === s).length;
@@ -132,7 +135,8 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
     if (!from) { setMsg({ ok: false, text: "Choose a start date first." }); return; }
     const r = await loadPayouts(from, lastDay);
     if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
-    setData({ payouts: r.data.payouts, inXero: new Set(r.data.inXero) });
+    setData({ payouts: r.data.payouts, inXero: new Map(r.data.inXero.map((x) => [x.ref, x.reconciled])) });
+    setRes({});
     setMsg({ ok: true, text: `${r.data.payouts.length} Stripe payout${r.data.payouts.length === 1 ? "" : "s"} from ${fmt(from)} to ${fmt(lastDay)}.` });
   });
   const send = () => start(async () => {
@@ -144,23 +148,40 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
     setMsg({ ok: !bad, text: `${ok} payout${ok === 1 ? "" : "s"} sent to Xero${bad ? ` · ${bad} didn't go — reasons are in the list` : ""}. Each Stripe line in the bank now matches its deposit in Xero: click OK.` });
   });
 
+  const remove = (ids: string[]) => start(async () => {
+    setMsg(null);
+    const r = await removePayouts(ids);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setRes((s) => { const y = { ...s }; for (const z of r.data) y[z.key] = z.ok && z.id ? { ok: true, error: "removed" } : z; return y; });
+    setData((d) => (d ? { ...d, inXero: new Map([...d.inXero].filter(([k]) => !r.data.some((z) => z.key === k && z.ok && z.id))) } : d));
+    const n = r.data.filter((z) => z.ok && z.id).length, bad = r.data.filter((z) => !z.ok).length;
+    setMsg({ ok: !bad, text: `${n} removed from Xero${bad ? ` · ${bad} couldn't be (reasons in the list)` : ""}. They're back under Ready — change the coding, save, and send again.` });
+  });
+  const removable = rows.filter((r) => r.state === "xero" && !r.reconciled);
+
   if (!stripeOn) return <Card className="p-5 text-[0.8125rem] text-ink-muted">5. Stripe payouts — connect Stripe (Settings → Payments) to match payouts.</Card>;
   const shown = rows.filter((r) => r.state === tab);
   return (
     <Card className="overflow-hidden">
-      <CardHeader title="5. Stripe payouts" subtitle="Each payout goes to Xero as one deposit into the bank it landed in — the sales, less refunds, to your income account and Stripe's fees to your fees account — so the Stripe line in the bank is one OK." />
+      <CardHeader title="5. Stripe payouts" subtitle="Stripe payments made through EventureOS (your shop, classes, gift vouchers). Each payout goes to Xero as one deposit into the bank it landed in, split by what was sold — naming who paid — with Stripe's fees on their own line, so the Stripe line in the bank is one OK. Invoices paid through Xero's own Stripe button are already handled by Xero." />
       <div className="grid gap-3 border-t border-line px-5 py-4 sm:grid-cols-2">
-        <div><Label htmlFor="st-inc">Stripe sales go to</Label><Select id="st-inc" value={c.income ?? ""} onChange={(e) => setC({ ...c, income: e.target.value || null })}><option value="">Choose an income account…</option>{income.map((a) => <option key={a.id} value={a.code!}>{a.code} · {a.name}</option>)}</Select></div>
-        <div><Label htmlFor="st-inct">GST on those sales</Label><Select id="st-inct" value={c.incomeTax ?? ""} onChange={(e) => setC({ ...c, incomeTax: e.target.value || null })}><option value="">The account&apos;s default</option>{taxRates.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}</Select></div>
-        <div><Label htmlFor="st-fee">Stripe fees go to</Label><Select id="st-fee" value={c.fees ?? ""} onChange={(e) => setC({ ...c, fees: e.target.value || null })}><option value="">Choose an expense account…</option>{fees.map((a) => <option key={a.id} value={a.code!}>{a.code} · {a.name}</option>)}</Select></div>
-        <div><Label htmlFor="st-feet">GST on the fees</Label><Select id="st-feet" value={c.feesTax ?? ""} onChange={(e) => setC({ ...c, feesTax: e.target.value || null })}><option value="">The account&apos;s default</option>{taxRates.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}</Select></div>
+        <div className="sm:col-span-2"><Label htmlFor="st-contact" hint="Who the deposits are from in Xero, e.g. VIP">Xero contact</Label><Input id="st-contact" value={c.contact ?? ""} placeholder="Stripe" onChange={(e) => setC({ ...c, contact: e.target.value || null })} /></div>
+        {([["shop", "Shop orders (coffee)"], ["bookings", "Classes, bookings & gift vouchers"], ["other", "Everything else"], ["fees", "Stripe fees"]] as [keyof Omit<StripeCoding, "contact">, string][]).map(([k, label]) => (
+          <div key={k} className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+            <div><Label htmlFor={`st-${k}`}>{label} go to</Label><Select id={`st-${k}`} value={c[k].account ?? ""} onChange={(e) => setC({ ...c, [k]: { ...c[k], account: e.target.value || null } })}>
+              <option value="">{k === "shop" || k === "bookings" ? "Same as everything else" : k === "fees" ? "Choose an expense account…" : "Choose an income account…"}</option>
+              {(k === "fees" ? fees : income).map((a) => <option key={a.id} value={a.code!}>{a.code} · {a.name}</option>)}</Select></div>
+            <div><Label htmlFor={`st-${k}-tax`}>GST</Label><Select id={`st-${k}-tax`} value={c[k].tax ?? ""} onChange={(e) => setC({ ...c, [k]: { ...c[k], tax: e.target.value || null } })}><option value="">The account&apos;s default</option>{taxRates.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}</Select></div>
+          </div>
+        ))}
         <p className="text-[0.75rem] text-ink-muted sm:col-span-2">Payments EventureOS already sent to Xero go to your Stripe clearing account{clearing ? ` (${clearing.name})` : ""}, so nothing is counted twice. Check the GST choices with your bookkeeper.</p>
         <div className="flex flex-wrap gap-2 sm:col-span-2">
           <Button onClick={saveCoding} disabled={pending}><Save className="h-4 w-4" />Save Stripe coding</Button>
           <Button onClick={load} disabled={pending || !from}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{data ? "Reload payouts" : "Load Stripe payouts"}</Button>
           {canSend && data && <Button variant="primary" onClick={send} disabled={pending || !canTransfer || !coded || !toSend.length}><Send className="h-4 w-4" />Send {toSend.length} to Xero</Button>}
+          {canSend && tab === "xero" && removable.length > 0 && <Button variant="danger" onClick={() => remove(removable.map((r) => r.payout.id))} disabled={pending}>Remove {removable.length} from Xero</Button>}
         </div>
-        {data && !coded && <p className="text-[0.75rem] text-amber-800 sm:col-span-2">Choose and save the income and fees accounts before sending.</p>}
+        {data && !coded && <p className="text-[0.75rem] text-amber-800 sm:col-span-2">Choose and save the “everything else” and fees accounts before sending.</p>}
       </div>
       {msg && <p className={cn("border-t border-line px-5 py-2.5 text-[0.8125rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
       {data && tabs([["ready", "Ready", n("ready")], ["manual", "Do by hand", n("manual")], ["missing", "Not in this file", n("missing")], ["xero", "In Xero", n("xero")]], tab, setTab)}
@@ -171,8 +192,10 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
               {r.state === "ready" ? <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0" checked={r.ticked} onChange={(e) => setPicked({ ...picked, [r.payout.id]: e.target.checked })} /> : r.state === "xero" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <span className="w-4" />}
               <span className="w-24 shrink-0 text-ink-muted">{fmt(r.line?.date ?? r.payout.arrival)}</span>
               <span className="min-w-0 flex-1">
-                <span className="block font-medium text-ink">{r.payout.count} payment{r.payout.count === 1 ? "" : "s"} · sales {money(r.payout.gross)}{r.payout.refunds ? ` · refunds ${money(r.payout.refunds)}` : ""} · fees {money(r.payout.fees)}</span>
+                <span className="block font-medium text-ink">{r.payout.count} payment{r.payout.count === 1 ? "" : "s"}{r.payout.groups.shop ? ` · shop ${money(r.payout.groups.shop)}` : ""}{r.payout.groups.bookings ? ` · classes ${money(r.payout.groups.bookings)}` : ""}{r.payout.groups.other ? ` · other ${money(r.payout.groups.other)}` : ""}{r.payout.refunds ? ` (after refunds ${money(r.payout.refunds)})` : ""} · fees {money(r.payout.fees)}</span>
+                <span className="block truncate text-[0.75rem] text-ink-muted">{r.payout.items.map((i) => `${i.name || "Customer"} ${money(i.amount)}${i.what ? ` · ${i.what}` : ""}`).join(" — ")}</span>
                 <span className="block text-[0.75rem] text-ink-muted">{r.line ? `into ${bankName(r.line.account)}` : "No STRIPE line of this amount in the file"}{r.payout.recorded ? ` · ${money(r.payout.recorded)} already sent to Xero by EventureOS` : ""} · {r.payout.id}</span>
+                {r.state === "xero" && r.reconciled && <span className="block text-[0.75rem] text-ink-muted">Reconciled in Xero</span>}
                 {r.state === "manual" && <span className="block text-[0.75rem] text-amber-800">{!r.preview.balanced ? "The breakdown doesn't add up to the payout." : "Includes payments already in your clearing account, which can't be coded in one deposit here."}</span>}
                 {r.error && <span className="block text-[0.75rem] text-rose-700">{r.error}</span>}
               </span>

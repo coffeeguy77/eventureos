@@ -2,15 +2,18 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripeGet } from "@/lib/payments/stripe";
 import { loadStripe } from "@/lib/payments/service";
-import type { Payout } from "./match";
+import type { PayItem, PayKind, Payout } from "./match";
 
 /**
  * Stripe payouts and what's in them.
  *  GET /v1/payouts?arrival_date[gte]=…&status=paid           https://docs.stripe.com/api/payouts/list
  *  GET /v1/balance_transactions?payout=po_…&expand[]=data.source   https://docs.stripe.com/api/balance_transactions/list
- * Each balance transaction has amount (gross), fee and net in cents; the payout's own entry is skipped.
+ *  GET /v1/charges/ch_…   (only for a refund, to see what was refunded)
+ * Each balance transaction has amount (gross), fee and net in cents; the payout's own entry is skipped. What each payment
+ * was for comes from the metadata EventureOS puts on every payment (shop checkout, booking, gift, academy, invoice).
  */
-type BT = { id: string; type: string; amount: number; fee: number; net: number; source?: { id?: string; payment_intent?: string | null } | string | null };
+type Charge = { id?: string; payment_intent?: string | null; metadata?: Record<string, string> | null; billing_details?: { name?: string | null; email?: string | null } | null; receipt_email?: string | null; description?: string | null; charge?: string | null };
+type BT = { id: string; type: string; amount: number; fee: number; net: number; source?: Charge | string | null };
 type PO = { id: string; amount: number; arrival_date: number; status: string; currency: string };
 
 const iso = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
@@ -27,6 +30,18 @@ async function all<T extends { id: string }>(key: string, account: string | null
   }
   return out.slice(0, max);
 }
+
+/** What a payment was for, from EventureOS's metadata on it. */
+export function kindOf(meta: Record<string, string> | null | undefined): { kind: PayKind; what: string | null } {
+  const m = meta ?? {};
+  if (m.eventureos_shop_checkout || m.eventureos_shop_renewal) return { kind: "shop", what: m.eventureos_shop_renewal ? "subscription" : "shop order" };
+  if (m.eventureos_booking_id) return { kind: "bookings", what: m.booking_reference ? `booking ${m.booking_reference}` : "booking" };
+  if (m.eventureos_gift_id) return { kind: "bookings", what: "gift voucher" };
+  if (m.eventureos_learn_access || m.eventureos_learn_hire || m.eventureos_learn_addon) return { kind: "bookings", what: "academy" };
+  if (m.eventureos_invoice_id) return { kind: "other", what: m.invoice_number ? `invoice ${m.invoice_number}` : "invoice" };
+  return { kind: "other", what: null };
+}
+const payer = (c: Charge) => (c.billing_details?.name || c.billing_details?.email || c.receipt_email || c.description || "").trim().slice(0, 60);
 
 /** Payment intents EventureOS already sent to Xero (into the Stripe clearing account), for these businesses. */
 async function recordedIntents(db: SupabaseClient, orgIds: string[]) {
@@ -48,18 +63,33 @@ export async function stripePayouts(db: SupabaseClient, orgId: string, orgIds: s
     res.push(...(await Promise.all(chunk.map(async (p) => {
       const bts = await all<BT>(cfg.secretKey, cfg.account, `/balance_transactions?payout=${p.id}&expand[]=data.source`, 2000);
       let gross = 0, fees = 0, refunds = 0, other = 0, rec = 0, count = 0;
+      const groups: Record<PayKind, number> = { shop: 0, bookings: 0, other: 0 };
       const refs: string[] = [];
+      const items: PayItem[] = [];
       for (const b of bts) {
         if (b.type === "payout") continue;
+        const src = typeof b.source === "object" && b.source ? b.source : null;
         if (b.type === "charge" || b.type === "payment") {
           gross += b.amount; fees += b.fee; count++;
-          const pi = typeof b.source === "object" && b.source ? b.source.payment_intent ?? null : null;
-          if (pi && recorded.has(pi)) { rec += b.amount; refs.push(pi); }
-        } else if (b.type === "refund" || b.type === "payment_refund") { refunds += b.amount; fees += b.fee; }
-        else if (b.type === "stripe_fee" || b.type === "tax_fee") fees += -b.net;
-        else other += b.net;
+          const { kind, what } = kindOf(src?.metadata);
+          const isRec = !!src?.payment_intent && recorded.has(src.payment_intent);
+          if (isRec) { rec += b.amount; refs.push(src!.payment_intent!); } else groups[kind] += b.amount;
+          items.push({ name: src ? payer(src) : "", amount: b.amount / 100, kind, recorded: isRec, what });
+        } else if (b.type === "refund" || b.type === "payment_refund") {
+          refunds += b.amount; fees += b.fee;
+          // refunds come off the kind of sale they refund
+          let kind: PayKind = "other";
+          const chargeId = typeof src?.charge === "string" ? src.charge : null;
+          if (chargeId) { try { kind = kindOf((await stripeGet<Charge>(cfg.secretKey, `/charges/${chargeId}`, cfg.account)).metadata).kind; } catch { /* keep "other" */ } }
+          groups[kind] += b.amount;
+        } else if (b.type === "stripe_fee" || b.type === "tax_fee") fees += -b.net;
+        else { other += b.net; groups.other += b.net; }
       }
-      return { id: p.id, amount: p.amount / 100, arrival: iso(p.arrival_date), gross: gross / 100, fees: fees / 100, refunds: refunds / 100, other: other / 100, recorded: rec / 100, recordedRefs: refs, count } satisfies Payout;
+      const c = (n: number) => n / 100;
+      return {
+        id: p.id, amount: c(p.amount), arrival: iso(p.arrival_date), groups: { shop: c(groups.shop), bookings: c(groups.bookings), other: c(groups.other) },
+        gross: c(gross), fees: c(fees), refunds: c(refunds), other: c(other), recorded: c(rec), recordedRefs: refs, count, items,
+      } satisfies Payout;
     }))));
   }
   return res;

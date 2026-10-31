@@ -200,11 +200,17 @@ export function transferNote(narrative: string) {
 
 /**
  * Saved at organisations.settings.reconcile: which Xero bank account each statement account is, the start date, and
- * how Stripe payouts are coded in Xero (income and fee accounts, with their GST, chosen by the business).
+ * how Stripe payouts are coded in Xero — the contact, and an account + GST for each kind of payment (shop orders,
+ * classes & bookings, everything else) and for Stripe's fees. All chosen by the business.
  */
-export interface StripeCoding { income: string | null; incomeTax: string | null; fees: string | null; feesTax: string | null }
+export interface Coding { account: string | null; tax: string | null }
+export interface StripeCoding { contact: string | null; shop: Coding; bookings: Coding; other: Coding; fees: Coding }
 export interface ReconcileSettings { accounts: Record<string, string>; from: string | null; stripe: StripeCoding }
 const code = (v: unknown) => (typeof v === "string" && /^[\w.-]{1,20}$/.test(v) ? v : null);
+const coding = (v: unknown, acc?: unknown, tax?: unknown): Coding => {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  return { account: code(o.account ?? acc), tax: code(o.tax ?? tax) };
+};
 export function readReconcile(settings: unknown): ReconcileSettings {
   const r = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).reconcile : null) ?? {}) as Record<string, unknown>;
   const acc: Record<string, string> = {};
@@ -213,5 +219,10 @@ export function readReconcile(settings: unknown): ReconcileSettings {
   }
   const from = typeof r.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.from) ? r.from : null;
   const st = (r.stripe && typeof r.stripe === "object" ? r.stripe : {}) as Record<string, unknown>;
-  return { accounts: acc, from, stripe: { income: code(st.income), incomeTax: code(st.incomeTax), fees: code(st.fees), feesTax: code(st.feesTax) } };
+  const contact = typeof st.contact === "string" && st.contact.trim() ? st.contact.trim().slice(0, 100) : null;
+  // the first version had one income account (income/incomeTax) and fees (fees/feesTax): carried over as "everything else"
+  return {
+    accounts: acc, from,
+    stripe: { contact, shop: coding(st.shop), bookings: coding(st.bookings), other: coding(st.other, st.income, st.incomeTax), fees: coding(typeof st.fees === "object" ? st.fees : null, typeof st.fees === "string" ? st.fees : null, st.feesTax) },
+  };
 }

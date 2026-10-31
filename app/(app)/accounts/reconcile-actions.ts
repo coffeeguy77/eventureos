@@ -28,7 +28,7 @@ async function xero(orgId: string, userId: string) {
   return { db, ctx, banks: await xeroBankAccounts(ctx) };
 }
 
-export async function saveReconcileSettings(input: { accounts: Record<string, string>; from: string | null; stripe?: { income: string | null; incomeTax: string | null; fees: string | null; feesTax: string | null } }): Promise<R> {
+export async function saveReconcileSettings(input: { accounts: Record<string, string>; from: string | null; stripe?: import("@/lib/reconcile/core").StripeCoding }): Promise<R> {
   try {
     const { supabase, org } = await owner();
     if (input.from && !DATE.test(input.from)) throw new Error("Choose a start date.");
@@ -127,18 +127,18 @@ export async function sendPayments(items: { key: string; invoice: string; bank: 
 }
 
 /** Stripe payouts since the start date, with what's in each, and which already have a Xero deposit. */
-export async function loadPayouts(from: string, to: string | null): Promise<R<{ payouts: import("@/lib/reconcile/match").Payout[]; inXero: string[] }>> {
+export async function loadPayouts(from: string, to: string | null): Promise<R<{ payouts: import("@/lib/reconcile/match").Payout[]; inXero: { ref: string; reconciled: boolean }[] }>> {
   try {
     if (!DATE.test(from) || (to && !DATE.test(to))) throw new Error("Choose a start date.");
     const { org, user } = await owner();
     const db = createServiceClient();
     const { stripePayouts } = await import("@/lib/reconcile/stripe");
     const payouts = await stripePayouts(db, org.id, await sharedOrgIds(db, org.id), from, to);
-    let inXero: string[] = [];
+    let inXero: { ref: string; reconciled: boolean }[] = [];
     if (payouts.length) {
       const { ctx } = await xero(org.id, user.id);
       const { payoutsInXero } = await import("@/lib/reconcile/xero");
-      inXero = [...(await payoutsInXero(ctx, payouts.map((p) => p.id)))];
+      inXero = [...(await payoutsInXero(ctx, payouts.map((p) => p.id))).entries()].map(([ref, v]) => ({ ref, reconciled: v.reconciled }));
     }
     return { ok: true, data: { payouts, inXero } };
   } catch (e) { return fail(e); }
@@ -154,7 +154,7 @@ export async function sendPayouts(input: { key: string; payoutId: string; bank: 
     if (items.length > 100) throw new Error("Send at most 100 at a time.");
     const s = readReconcile(org.settings);
     const c = s.stripe;
-    if (!c.income || !c.fees) throw new Error("Choose the income and fees accounts for Stripe first (and save).");
+    if (!c.other.account || !c.fees.account) throw new Error("Choose (and save) at least the “everything else” and fees accounts for Stripe first.");
     const { db, ctx, banks } = await xero(org.id, user.id);
     const ids = new Set(banks.map((b) => b.id));
     const results: SentResult[] = [];
@@ -182,11 +182,11 @@ export async function sendPayouts(input: { key: string; payoutId: string; bank: 
       if (!p) { results.push({ key: t.key, ok: false, error: "Stripe didn't return this payout." }); continue; }
       if (there.has(p.id)) { results.push({ key: t.key, ok: true, error: "Already in Xero" }); continue; }
       if (p.recorded && (!clearing?.code || clearing.type === "BANK")) { results.push({ key: t.key, ok: false, error: "This payout includes payments EventureOS already sent to your Stripe clearing account — reconcile this one in Xero by hand." }); continue; }
-      const built = payoutLines(p, { clearing: clearing?.code ?? null, income: c.income, incomeTax: c.incomeTax, fees: c.fees, feesTax: c.feesTax });
-      if (!built.balanced || !(built.total > 0)) { results.push({ key: t.key, ok: false, error: `The breakdown ($${built.total.toFixed(2)}) doesn't add up to the payout ($${p.amount.toFixed(2)}) — reconcile this one by hand.` }); continue; }
+      const built = payoutLines(p, { clearing: clearing?.code ?? null, shop: c.shop, bookings: c.bookings, other: c.other, fees: c.fees });
+      if (!built.balanced || !built.coded || !(built.total > 0)) { results.push({ key: t.key, ok: false, error: `The breakdown ($${built.total.toFixed(2)}) doesn't add up to the payout ($${p.amount.toFixed(2)}) — reconcile this one by hand.` }); continue; }
       todo.push({ key: t.key, payoutId: p.id, bank: t.bank, date: t.date, lines: built.lines });
     }
-    results.push(...(await createPayoutDeposits(ctx, todo)));
+    results.push(...(await createPayoutDeposits(ctx, todo, c.contact ?? "Stripe")));
     const made = results.filter((r) => r.ok && r.id).length;
     if (made) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.payouts", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} sent ${made} Stripe payout${made === 1 ? "" : "s"} to Xero (Reconcile)` });
     return { ok: true, data: results };
@@ -194,3 +194,28 @@ export async function sendPayouts(input: { key: string; payoutId: string; bank: 
 }
 
 function addDays(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+
+/** Take back payout deposits EventureOS sent (e.g. to re-send with different coding) — only ones not yet reconciled. */
+export async function removePayouts(payoutIds: string[]): Promise<R<SentResult[]>> {
+  try {
+    const { org, user, role, profile, supabase } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can remove payouts from Xero.");
+    const ids = (Array.isArray(payoutIds) ? payoutIds : []).filter((x) => /^po_\w+$/.test(x)).slice(0, 100);
+    if (!ids.length) throw new Error("Choose the payouts to remove.");
+    const { ctx } = await xero(org.id, user.id);
+    const { payoutsInXero, deleteDeposits } = await import("@/lib/reconcile/xero");
+    const found = await payoutsInXero(ctx, ids);
+    const results: SentResult[] = [];
+    const todo: { key: string; id: string }[] = [];
+    for (const id of ids) {
+      const f = found.get(id);
+      if (!f) results.push({ key: id, ok: true, error: "Not in Xero" });
+      else if (f.reconciled) results.push({ key: id, ok: false, error: "Already reconciled in Xero — unreconcile it there first, or change the account on it in Xero." });
+      else todo.push({ key: id, id: f.id });
+    }
+    results.push(...(await deleteDeposits(ctx, todo)));
+    const n = results.filter((r) => r.ok && r.id).length;
+    if (n) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.payouts_removed", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} removed ${n} Stripe payout deposit${n === 1 ? "" : "s"} from Xero (Reconcile)` });
+    return { ok: true, data: results };
+  } catch (e) { return fail(e); }
+}

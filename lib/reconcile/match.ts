@@ -74,7 +74,18 @@ export function matchDeposits(lines: BankLine[], invoices: OpenInvoice[], opts: 
   return out;
 }
 
-export interface Payout { id: string; amount: number; arrival: string; gross: number; fees: number; refunds: number; other: number; recorded: number; recordedRefs: string[]; count: number }
+/** What a payment in a payout was for (from the details EventureOS puts on every Stripe payment). */
+export type PayKind = "shop" | "bookings" | "other";
+export interface PayItem { name: string; amount: number; kind: PayKind; recorded: boolean; what: string | null }
+export interface Payout {
+  id: string; amount: number; arrival: string;
+  /** sales by kind, less refunds of those sales (not counting payments already in Xero) */
+  groups: Record<PayKind, number>;
+  gross: number; fees: number; refunds: number; other: number;
+  /** payments EventureOS already sent to Xero (into the Stripe clearing account) */
+  recorded: number; recordedRefs: string[]; count: number;
+  items: PayItem[];
+}
 export interface PayoutMatch { key: string; payout: Payout; line: BankLine | null }
 
 /** Stripe payouts → the "STRIPE" bank line of the same amount within 3 days of arrival (closest first). */
@@ -93,19 +104,34 @@ export function matchPayouts(lines: BankLine[], payouts: Payout[]): PayoutMatch[
   });
 }
 
+const KIND_LABEL: Record<PayKind, string> = { shop: "Shop orders", bookings: "Classes & bookings", other: "Other Stripe payments" };
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const who = (items: PayItem[]) => {
+  const list = items.map((i) => `${i.name || "Customer"} $${i.amount.toFixed(2)}${i.what ? ` (${i.what})` : ""}`);
+  const text = list.join("; ");
+  return text.length > 900 ? `${text.slice(0, 880)}… (${items.length} payments)` : text;
+};
+
 /**
  * The lines of the Xero deposit for one payout (they add up to the payout): payments EventureOS already sent to Xero
- * go to the Stripe clearing account; the rest of the sales (less refunds and other adjustments) to your income
- * account; Stripe's fees as a negative line to your fees account.
+ * go to the Stripe clearing account; the rest by kind (shop orders, classes & bookings, everything else) to the
+ * accounts you chose, each line naming who paid; Stripe's fees as a negative line to your fees account.
+ * A kind without its own account uses "everything else".
  */
-export function payoutLines(p: Payout, c: { clearing: string | null; income: string; incomeTax: string | null; fees: string; feesTax: string | null }) {
-  const r2 = (n: number) => Math.round(n * 100) / 100;
+export function payoutLines(p: Payout, c: { clearing: string | null; shop: { account: string | null; tax: string | null }; bookings: { account: string | null; tax: string | null }; other: { account: string | null; tax: string | null }; fees: { account: string | null; tax: string | null } }) {
   const lines: { description: string; account: string; amount: number; tax: string | null }[] = [];
   const recorded = c.clearing ? p.recorded : 0;
-  if (recorded) lines.push({ description: `Stripe payments already in Xero (${p.recordedRefs.length})`, account: c.clearing!, amount: r2(recorded), tax: "NONE" });
-  const sales = r2(p.gross - recorded + p.refunds + p.other);
-  if (sales) lines.push({ description: `Stripe sales (${p.count - p.recordedRefs.length} payment${p.count - p.recordedRefs.length === 1 ? "" : "s"}${p.refunds ? ", less refunds" : ""})`, account: c.income, amount: sales, tax: c.incomeTax });
-  if (p.fees) lines.push({ description: "Stripe fees", account: c.fees, amount: r2(-p.fees), tax: c.feesTax });
+  if (recorded) lines.push({ description: `Stripe payments already in Xero: ${who(p.items.filter((i) => i.recorded))}`, account: c.clearing!, amount: r2(recorded), tax: "NONE" });
+  const groups = { ...p.groups };
+  if (!c.clearing && p.recorded) groups.other = r2(groups.other + p.recorded);
+  for (const k of ["shop", "bookings", "other"] as PayKind[]) {
+    const amt = r2(groups[k]);
+    if (!amt) continue;
+    const cfg = c[k].account ? c[k] : c.other;
+    const items = p.items.filter((i) => i.kind === k && !(c.clearing && i.recorded));
+    lines.push({ description: `${KIND_LABEL[k]}: ${who(items)}`.slice(0, 1000), account: cfg.account ?? "", amount: amt, tax: cfg.tax });
+  }
+  if (p.fees) lines.push({ description: "Stripe fees", account: c.fees.account ?? "", amount: r2(-p.fees), tax: c.fees.tax });
   const total = r2(lines.reduce((a, l) => a + l.amount, 0));
-  return { lines, total, balanced: Math.abs(total - p.amount) < 0.005 };
+  return { lines, total, balanced: Math.abs(total - p.amount) < 0.005, coded: lines.every((l) => !!l.account) };
 }

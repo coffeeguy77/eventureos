@@ -1,6 +1,6 @@
 import "server-only";
-import { ApiError, type SyncContext } from "@/lib/integrations/runtime";
-import { xeroDate, xeroGet, xeroPut } from "@/lib/integrations/xero";
+import { ApiError, apiJSON, type SyncContext } from "@/lib/integrations/runtime";
+import { XERO_API, tenantId, xeroDate, xeroGet, xeroPut } from "@/lib/integrations/xero";
 import type { XeroTransferLite } from "./core";
 
 /**
@@ -117,35 +117,51 @@ export async function createXeroPayments(ctx: SyncContext, items: NewPayment[]):
   return out;
 }
 
-/** The "Stripe" contact for payout deposits (Xero needs a contact on every bank transaction). */
-async function stripeContact(ctx: SyncContext): Promise<string> {
-  const r = await xeroGet<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", { where: 'Name=="Stripe"' });
+/** The contact for payout deposits (Xero needs one on every bank transaction) — found by name, or added. */
+async function depositContact(ctx: SyncContext, name: string): Promise<string> {
+  const safe = name.replace(/"/g, "").slice(0, 100) || "Stripe";
+  const r = await xeroGet<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", { where: `Name=="${safe}"` });
   if (r.Contacts?.[0]) return r.Contacts[0].ContactID;
-  const c = await xeroPut<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", { Contacts: [{ Name: "Stripe" }] });
+  const c = await xeroPut<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", { Contacts: [{ Name: safe }] });
   const id = c.Contacts?.[0]?.ContactID;
-  if (!id) throw new Error("Couldn't add a Stripe contact in Xero.");
+  if (!id) throw new Error(`Couldn't add the contact "${safe}" in Xero.`);
   return id;
 }
 
-/** Payout ids that already have a Xero deposit (Reference = payout id). */
-export async function payoutsInXero(ctx: SyncContext, ids: string[]): Promise<Set<string>> {
-  const found = new Set<string>();
+/** Payout deposits already in Xero (Reference = payout id): their Xero id and whether they've been reconciled. */
+export async function payoutsInXero(ctx: SyncContext, ids: string[]): Promise<Map<string, { id: string; reconciled: boolean }>> {
+  const found = new Map<string, { id: string; reconciled: boolean }>();
   for (let i = 0; i < ids.length; i += 15) {
     const where = ids.slice(i, i + 15).map((id) => `Reference=="${id.replace(/[^\w]/g, "")}"`).join(" OR ");
     try {
-      const r = await xeroGet<{ BankTransactions?: { Reference?: string; Status?: string }[] }>(ctx, "/BankTransactions", { where });
-      for (const t of r.BankTransactions ?? []) if (t.Reference && t.Status !== "DELETED" && t.Status !== "VOIDED") found.add(t.Reference);
+      const r = await xeroGet<{ BankTransactions?: { BankTransactionID: string; Reference?: string; Status?: string; IsReconciled?: boolean }[] }>(ctx, "/BankTransactions", { where });
+      for (const t of r.BankTransactions ?? []) if (t.Reference && t.Status !== "DELETED" && t.Status !== "VOIDED") found.set(t.Reference, { id: t.BankTransactionID, reconciled: !!t.IsReconciled });
     } catch (e) { if (permission(e)) throw new Error(NEEDS); throw e; }
   }
   return found;
 }
 
+/** Take back deposits EventureOS made (only while they're not reconciled — Xero won't delete a reconciled one). */
+export async function deleteDeposits(ctx: SyncContext, items: { key: string; id: string }[]): Promise<SentResult[]> {
+  const out: SentResult[] = [];
+  for (const t of items) {
+    try {
+      await apiJSON(ctx, `${XERO_API}/BankTransactions/${t.id}`, { method: "POST", headers: { "xero-tenant-id": tenantId(ctx), "content-type": "application/json" }, body: JSON.stringify({ BankTransactions: [{ BankTransactionID: t.id, Status: "DELETED" }] }) }, "Xero POST /BankTransactions");
+      out.push({ key: t.key, ok: true, id: t.id });
+    } catch (e) {
+      if (permission(e)) throw new Error(NEEDS);
+      out.push({ key: t.key, ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "Xero didn't remove it." });
+    }
+  }
+  return out;
+}
+
 export interface NewDeposit { key: string; payoutId: string; bank: string; date: string; lines: { description: string; account: string; amount: number; tax: string | null }[] }
 
 /** One "receive money" per payout into the bank it landed in, coded across your accounts (amounts include GST). */
-export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[]): Promise<SentResult[]> {
+export async function createPayoutDeposits(ctx: SyncContext, items: NewDeposit[], contactName: string): Promise<SentResult[]> {
   if (!items.length) return [];
-  const contact = await stripeContact(ctx);
+  const contact = await depositContact(ctx, contactName);
   const out: SentResult[] = [];
   for (let i = 0; i < items.length; i += 25) {
     const chunk = items.slice(i, i + 25);

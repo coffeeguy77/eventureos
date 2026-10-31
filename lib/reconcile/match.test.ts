@@ -41,7 +41,7 @@ test("invoice number in the description; each invoice used once", () => {
   assert.deepEqual(m.map((x) => x.invoice?.id), ["b", "a"]);
 });
 
-const P = (o: Partial<Payout> & { id: string; amount: number; arrival: string }): Payout => ({ gross: o.amount, fees: 0, refunds: 0, other: 0, recorded: 0, recordedRefs: [], count: 1, ...o });
+const P = (o: Partial<Payout> & { id: string; amount: number; arrival: string }): Payout => ({ groups: { shop: 0, bookings: 0, other: o.amount }, gross: o.amount, fees: 0, refunds: 0, other: 0, recorded: 0, recordedRefs: [], count: 1, items: [], ...o });
 
 test("payouts match the STRIPE line of the same amount within 3 days", () => {
   const m = matchPayouts([L("1", "2026-10-03", 97.1, "DEPOSIT STRIPE 4F3A"), L("2", "2026-10-03", 97.1, "DEPOSIT OTHER")], [P({ id: "po_1", amount: 97.1, arrival: "2026-10-01" }), P({ id: "po_2", amount: 50, arrival: "2026-10-01" })]);
@@ -49,9 +49,14 @@ test("payouts match the STRIPE line of the same amount within 3 days", () => {
   assert.equal(m.find((x) => x.payout.id === "po_2")?.line, null);
 });
 
-test("payout lines add up to the payout: recorded → clearing, rest → income, fees negative", () => {
-  const p = P({ id: "po", amount: 190.5, arrival: "2026-10-01", gross: 200, fees: 5.5, refunds: -4, recorded: 50, recordedRefs: ["pi_1"], count: 3 });
-  const r = payoutLines(p, { clearing: "CLR", income: "200", incomeTax: "OUTPUT", fees: "404", feesTax: "INPUT" });
-  assert.deepEqual(r.lines.map((l) => [l.account, l.amount]), [["CLR", 50], ["200", 146], ["404", -5.5]]);
+test("payout lines: by kind, recorded → clearing, fees negative; kinds without an account use everything else", () => {
+  const p = P({ id: "po", amount: 190.5, arrival: "2026-10-01", groups: { shop: 120, bookings: 26, other: 0 }, gross: 200, fees: 5.5, refunds: -4, recorded: 50, recordedRefs: ["pi_1"], count: 3,
+    items: [{ name: "Jane", amount: 120, kind: "shop", recorded: false, what: "shop order" }, { name: "Bob", amount: 30, kind: "bookings", recorded: false, what: "booking" }, { name: "Ann", amount: 50, kind: "other", recorded: true, what: "invoice" }] });
+  const coding = { clearing: "CLR", shop: { account: "77", tax: "EXEMPTOUTPUT" }, bookings: { account: null, tax: null }, other: { account: "200", tax: "OUTPUT" }, fees: { account: "404", tax: "INPUT" } };
+  const r = payoutLines(p, coding);
+  assert.deepEqual(r.lines.map((l) => [l.account, l.amount, l.tax]), [["CLR", 50, "NONE"], ["77", 120, "EXEMPTOUTPUT"], ["200", 26, "OUTPUT"], ["404", -5.5, "INPUT"]]);
+  assert.ok(r.lines[1].description.includes("Jane $120.00"));
   assert.equal(r.balanced, true);
+  assert.equal(r.coded, true);
+  assert.equal(payoutLines(p, { ...coding, other: { account: null, tax: null } }).coded, false);
 });
