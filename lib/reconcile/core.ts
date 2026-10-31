@@ -198,8 +198,13 @@ export function transferNote(narrative: string) {
   return (m?.[1] ?? "").trim().slice(0, 60);
 }
 
-/** Saved at organisations.settings.reconcile: which Xero bank account each statement account is, and the start date. */
-export interface ReconcileSettings { accounts: Record<string, string>; from: string | null }
+/**
+ * Saved at organisations.settings.reconcile: which Xero bank account each statement account is, the start date, and
+ * how Stripe payouts are coded in Xero (income and fee accounts, with their GST, chosen by the business).
+ */
+export interface StripeCoding { income: string | null; incomeTax: string | null; fees: string | null; feesTax: string | null }
+export interface ReconcileSettings { accounts: Record<string, string>; from: string | null; stripe: StripeCoding }
+const code = (v: unknown) => (typeof v === "string" && /^[\w.-]{1,20}$/.test(v) ? v : null);
 export function readReconcile(settings: unknown): ReconcileSettings {
   const r = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).reconcile : null) ?? {}) as Record<string, unknown>;
   const acc: Record<string, string> = {};
@@ -207,5 +212,6 @@ export function readReconcile(settings: unknown): ReconcileSettings {
     for (const [k, v] of Object.entries(r.accounts as Record<string, unknown>)) if (/^[\w -]{1,40}$/.test(k) && typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)) acc[k] = v;
   }
   const from = typeof r.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.from) ? r.from : null;
-  return { accounts: acc, from };
+  const st = (r.stripe && typeof r.stripe === "object" ? r.stripe : {}) as Record<string, unknown>;
+  return { accounts: acc, from, stripe: { income: code(st.income), incomeTax: code(st.incomeTax), fees: code(st.fees), feesTax: code(st.feesTax) } };
 }

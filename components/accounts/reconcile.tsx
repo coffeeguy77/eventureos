@@ -7,7 +7,9 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { alreadyInXero, pairTransfers, parseStatement, sameAccountNumber, transferNote, type ParsedStatement, type ReconcileSettings, type XeroTransferLite } from "@/lib/reconcile/core";
-import type { XeroBank } from "@/lib/reconcile/xero";
+import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
+import type { OpenInvoice } from "@/lib/reconcile/match";
+import { InvoiceDeposits, StripePayouts } from "./reconcile-more";
 import { saveReconcileSettings, sendTransfers, xeroTransfers } from "@/app/(app)/accounts/reconcile-actions";
 
 type Tab = "ready" | "unsure" | "xero" | "sent" | "unpaired";
@@ -19,7 +21,10 @@ const tail = (n: string) => `…${n.replace(/\D/g, "").slice(-4) || n}`;
  * Reconcile: read the bank's export in the browser, pair the transfers between your accounts, check which Xero already
  * has, and send the rest to Xero. The statement itself never leaves this computer.
  */
-export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend }: { banks: XeroBank[]; bankError: string | null; canTransfer: boolean; settings: ReconcileSettings; canSend: boolean }) {
+export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend, invoices, accounts, taxRates, clearing, stripeOn }: {
+  banks: XeroBank[]; bankError: string | null; canTransfer: boolean; settings: ReconcileSettings; canSend: boolean;
+  invoices: OpenInvoice[]; accounts: XeroAccountLite[]; taxRates: XeroTaxRate[]; clearing: { name: string; code: string | null; bank: boolean } | null; stripeOn: boolean;
+}) {
   const [file, setFile] = useState<{ name: string; s: ParsedStatement } | null>(null);
   const [map, setMap] = useState<Record<string, string>>(settings.accounts);
   const [from, setFrom] = useState(settings.from ?? "");
@@ -141,7 +146,7 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
 
       {file && pairing && (
         <Card className="overflow-hidden">
-          <CardHeader title="3. Transfers found" subtitle={`${pairing.transferLines.toLocaleString()} transfer lines since ${from ? fmt(from) : "the start of the file"} → ${pairing.pairs.length.toLocaleString()} transfers paired (money out of one account, same amount into another, same day or soon after).`} />
+          <CardHeader title="3. Transfers between your accounts" subtitle={`${pairing.transferLines.toLocaleString()} transfer lines since ${from ? fmt(from) : "the start of the file"} → ${pairing.pairs.length.toLocaleString()} transfers paired (money out of one account, same amount into another, same day or soon after).`} />
           <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
             <Button onClick={check} disabled={pending || !canTransfer || !from}>{pending && !progress ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{checked ? "Check Xero again" : "Check what's already in Xero"}</Button>
             {canSend && <Button variant="primary" onClick={send} disabled={pending || !canTransfer || !checked || !toSend.length || unmapped.length > 0}><Send className="h-4 w-4" />Send {toSend.length.toLocaleString()} to Xero</Button>}
@@ -189,6 +194,8 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
           </div>
         </Card>
       )}
+      {file && <InvoiceDeposits file={file.s} map={map} from={from} banks={banks} invoices={invoices} canTransfer={canTransfer} canSend={canSend} />}
+      {file && <StripePayouts file={file.s} map={map} from={from} banks={banks} settings={settings} accounts={accounts} taxRates={taxRates} clearing={clearing} stripeOn={stripeOn} canTransfer={canTransfer} canSend={canSend} />}
     </div>
   );
 }

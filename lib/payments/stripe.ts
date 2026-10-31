@@ -47,6 +47,9 @@ async function call<T>(secretKey: string, method: "GET" | "POST", path: string, 
   return json;
 }
 
+/** Read-only GET (payouts, balance transactions) on the business's own account (or a connected one). */
+export const stripeGet = <T>(key: string, path: string, account?: string | null) => call<T>(key, "GET", path, undefined, undefined, account);
+
 export interface StripeAccount { id: string; business_profile?: { name?: string | null } | null; settings?: { dashboard?: { display_name?: string | null } } | null; email?: string | null; charges_enabled?: boolean }
 export const getAccount = (key: string, account?: string | null) => call<StripeAccount>(key, "GET", account ? `/accounts/${account}` : "/account");
 

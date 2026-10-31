@@ -5,7 +5,9 @@ import { canManage, requireOrg } from "@/lib/context";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { actorName, logActivity } from "@/lib/activity";
 import { readReconcile, type XeroTransferLite } from "@/lib/reconcile/core";
+import { sharedOrgIds } from "@/lib/reconcile/shared";
 import type { NewTransfer, SentResult } from "@/lib/reconcile/xero";
+export type { SentResult };
 
 /** Accounts → Reconcile: save the account matching, check Xero for transfers already there, send new ones. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -26,14 +28,15 @@ async function xero(orgId: string, userId: string) {
   return { db, ctx, banks: await xeroBankAccounts(ctx) };
 }
 
-export async function saveReconcileSettings(input: { accounts: Record<string, string>; from: string | null }): Promise<R> {
+export async function saveReconcileSettings(input: { accounts: Record<string, string>; from: string | null; stripe?: { income: string | null; incomeTax: string | null; fees: string | null; feesTax: string | null } }): Promise<R> {
   try {
     const { supabase, org } = await owner();
     if (input.from && !DATE.test(input.from)) throw new Error("Choose a start date.");
     const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
     if (e1) throw new Error(e1.message);
     const settings = (data?.settings ?? {}) as Record<string, unknown>;
-    const clean = readReconcile({ reconcile: input });
+    // the transfers step saves accounts + date only; keep the Stripe coding unless it's being changed
+    const clean = readReconcile({ reconcile: { ...input, stripe: input.stripe ?? readReconcile(settings).stripe } });
     const { error } = await supabase.from("organisations").update({ settings: { ...settings, reconcile: clean } }).eq("id", org.id);
     if (error) throw new Error(error.message);
     revalidatePath("/accounts/reconcile");
@@ -87,3 +90,103 @@ export async function sendTransfers(items: NewTransfer[]): Promise<R<SentResult[
     return { ok: true, data: results };
   } catch (e) { return fail(e); }
 }
+
+// ── Invoices and Stripe payouts ──────────────────────────────────────────────────────────────────
+
+/** Record the chosen deposits as payments on their invoices, into the bank account they landed in. */
+export async function sendPayments(items: { key: string; invoice: string; bank: string; amount: number; date: string; reference: string }[]): Promise<R<SentResult[]>> {
+  try {
+    const { org, user, role, profile, supabase } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can record payments in Xero.");
+    if (!Array.isArray(items) || !items.length) throw new Error("Choose the payments to record.");
+    if (items.length > 200) throw new Error("Record at most 200 at a time.");
+    const s = readReconcile(org.settings);
+    const { db, ctx, banks } = await xero(org.id, user.id);
+    const ids = new Set(banks.map((b) => b.id));
+    const orgs = await sharedOrgIds(db, org.id);
+    const { data: invs } = await db.from("invoices").select("xero_invoice_id").in("organisation_id", orgs).in("xero_invoice_id", items.map((t) => String(t.invoice)));
+    const known = new Set(((invs ?? []) as { xero_invoice_id: string }[]).map((r) => r.xero_invoice_id));
+    const seen = new Set<string>();
+    const clean = items.map((t) => {
+      const amount = Math.round(Number(t.amount) * 100) / 100;
+      if (!known.has(t.invoice)) throw new Error("A payment is for an invoice that isn't this business's.");
+      if (seen.has(t.invoice)) throw new Error("Two deposits are against the same invoice — choose one.");
+      seen.add(t.invoice);
+      if (!ids.has(t.bank)) throw new Error("A payment has a bank account that isn't in your Xero — check the account matching.");
+      if (!(amount > 0) || amount > 10_000_000) throw new Error("A payment amount doesn't look right.");
+      if (!DATE.test(t.date) || (s.from && t.date < s.from)) throw new Error("A payment is before your start date.");
+      return { key: String(t.key).slice(0, 400), invoice: t.invoice, bank: t.bank, amount, date: t.date, reference: String(t.reference ?? "").slice(0, 200) };
+    });
+    const { createXeroPayments } = await import("@/lib/reconcile/xero");
+    const res = await createXeroPayments(ctx, clean);
+    const made = res.filter((r) => r.ok).length;
+    if (made) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.payments", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} recorded ${made} invoice payment${made === 1 ? "" : "s"} in Xero from bank deposits (Reconcile)` });
+    revalidatePath("/invoices");
+    return { ok: true, data: res };
+  } catch (e) { return fail(e); }
+}
+
+/** Stripe payouts since the start date, with what's in each, and which already have a Xero deposit. */
+export async function loadPayouts(from: string, to: string | null): Promise<R<{ payouts: import("@/lib/reconcile/match").Payout[]; inXero: string[] }>> {
+  try {
+    if (!DATE.test(from) || (to && !DATE.test(to))) throw new Error("Choose a start date.");
+    const { org, user } = await owner();
+    const db = createServiceClient();
+    const { stripePayouts } = await import("@/lib/reconcile/stripe");
+    const payouts = await stripePayouts(db, org.id, await sharedOrgIds(db, org.id), from, to);
+    let inXero: string[] = [];
+    if (payouts.length) {
+      const { ctx } = await xero(org.id, user.id);
+      const { payoutsInXero } = await import("@/lib/reconcile/xero");
+      inXero = [...(await payoutsInXero(ctx, payouts.map((p) => p.id)))];
+    }
+    return { ok: true, data: { payouts, inXero } };
+  } catch (e) { return fail(e); }
+}
+
+/** One Xero deposit per chosen payout — re-read from Stripe here, coded with your saved accounts, never twice. */
+export async function sendPayouts(items: { key: string; payoutId: string; bank: string; date: string }[]): Promise<R<SentResult[]>> {
+  try {
+    const { org, user, role, profile, supabase } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can send payouts to Xero.");
+    if (!Array.isArray(items) || !items.length) throw new Error("Choose the payouts to send.");
+    if (items.length > 100) throw new Error("Send at most 100 at a time.");
+    const s = readReconcile(org.settings);
+    const c = s.stripe;
+    if (!c.income || !c.fees) throw new Error("Choose the income and fees accounts for Stripe first (and save).");
+    const { db, ctx, banks } = await xero(org.id, user.id);
+    const ids = new Set(banks.map((b) => b.id));
+    for (const t of items) {
+      if (!/^po_\w+$/.test(t.payoutId)) throw new Error("Refresh and try again.");
+      if (!ids.has(t.bank)) throw new Error("A payout has a bank account that isn't in your Xero — check the account matching.");
+      if (!DATE.test(t.date) || (s.from && t.date < s.from)) throw new Error("A payout is before your start date.");
+    }
+    const dates = items.map((t) => t.date).sort();
+    const { stripePayouts } = await import("@/lib/reconcile/stripe");
+    const all = await stripePayouts(db, org.id, await sharedOrgIds(db, org.id), addDays(dates[0], -5), addDays(dates[dates.length - 1], 2));
+    const { xeroAccountsAll, payoutsInXero, createPayoutDeposits } = await import("@/lib/reconcile/xero");
+    const accounts = await xeroAccountsAll(ctx);
+    const { data: st } = await db.from("integrations").select("settings").eq("organisation_id", org.id).eq("provider", "stripe").maybeSingle();
+    const clearingId = (st?.settings as { xero_account?: string } | null)?.xero_account ?? null;
+    const clearing = clearingId ? accounts.find((a) => a.id === clearingId || a.code === clearingId) ?? null : null;
+    const there = await payoutsInXero(ctx, items.map((t) => t.payoutId));
+    const { payoutLines } = await import("@/lib/reconcile/match");
+    const results: SentResult[] = [];
+    const todo: import("@/lib/reconcile/xero").NewDeposit[] = [];
+    for (const t of items) {
+      const p = all.find((x) => x.id === t.payoutId);
+      if (!p) { results.push({ key: t.key, ok: false, error: "Stripe didn't return this payout." }); continue; }
+      if (there.has(p.id)) { results.push({ key: t.key, ok: true, error: "Already in Xero" }); continue; }
+      if (p.recorded && (!clearing?.code || clearing.type === "BANK")) { results.push({ key: t.key, ok: false, error: "This payout includes payments EventureOS already sent to your Stripe clearing account — reconcile this one in Xero by hand." }); continue; }
+      const built = payoutLines(p, { clearing: clearing?.code ?? null, income: c.income, incomeTax: c.incomeTax, fees: c.fees, feesTax: c.feesTax });
+      if (!built.balanced || !(built.total > 0)) { results.push({ key: t.key, ok: false, error: `The breakdown ($${built.total.toFixed(2)}) doesn't add up to the payout ($${p.amount.toFixed(2)}) — reconcile this one by hand.` }); continue; }
+      todo.push({ key: t.key, payoutId: p.id, bank: t.bank, date: t.date, lines: built.lines });
+    }
+    results.push(...(await createPayoutDeposits(ctx, todo)));
+    const made = results.filter((r) => r.ok && r.id).length;
+    if (made) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "xero.payouts", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} sent ${made} Stripe payout${made === 1 ? "" : "s"} to Xero (Reconcile)` });
+    return { ok: true, data: results };
+  } catch (e) { return fail(e); }
+}
+
+function addDays(iso: string, n: number) { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
