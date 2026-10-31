@@ -6,6 +6,8 @@ import { customerRecord, loadCustomersForMatching, upsertCandidate, type Custome
 import { bestMatch } from "@/lib/integrations/matching";
 import { inScope, readScope } from "@/lib/integrations/xero-scope";
 import { xeroReason } from "@/lib/integrations/xero-recode";
+import { ensureXeroContact } from "@/lib/integrations/xero-contacts";
+import { belongsToCompany } from "@/lib/customers/company-match";
 import {
   RateLimited, errMessage, finishSyncLog, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
 } from "@/lib/integrations/runtime";
@@ -376,17 +378,25 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
   const errors: string[] = [];
   let pushed = 0;
   const { data: rows, error } = await ctx.db.from("invoices")
-    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, quote_id, reference, line_items, customer:customers(name, company, email, phone, xero_contact_id), event:events(name)")
+    .select("id, number, kind, issue_date, due_date, total, currency, status, customer_id, event_id, quote_id, reference, line_items, customer:customers(name, company, kind, email, phone, xero_contact_id), event:events(name)")
     // Drafts made in EventureOS (e.g. agency course bookings) wait for someone to check and approve them first
     .eq("organisation_id", ctx.org.id).is("xero_invoice_id", null).neq("status", "void").neq("status", "draft").limit(50);
   if (error) throw new Error(`Could not load invoices to push: ${error.message}`);
-  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; quote_id: string | null; reference: string | null; line_items: LocalLine[] | null; customer: { name: string; company: string | null; email: string | null; phone: string | null; xero_contact_id: string | null } | null; event: { name: string } | null };
+  type Row = { id: string; number: string; kind: string; issue_date: string; due_date: string | null; total: number; currency: string; status: string; customer_id: string; event_id: string | null; quote_id: string | null; reference: string | null; line_items: LocalLine[] | null; customer: { name: string; company: string | null; kind: string; email: string | null; phone: string | null; xero_contact_id: string | null } | null; event: { name: string } | null };
   const list = (rows ?? []) as unknown as Row[];
   // A customer EventureOS met first (a new booking, a card payment) has no Xero contact yet: find theirs in Xero by
   // email or exact name, or add them — otherwise their invoice (and its payment) would never reach Xero.
   const made = new Map<string, string>();
+  const held = new Set<string>();
   for (const r of list) {
-    if (!r.customer || r.customer.xero_contact_id) continue;
+    if (!r.customer) continue;
+    // A person who works for a company you already have (same email on its contacts, or the same work email domain)
+    // is held back: the invoice probably belongs to the company, and billing it to the person in Xero would be wrong
+    if (r.customer.kind !== "company") {
+      const co = await belongsToCompany(ctx.db, ctx.org.id, r.customer_id, r.customer.email).catch(() => null);
+      if (co) { held.add(r.id); errors.push(`${r.number}: held — ${r.customer.name} looks like ${co.name}'s person (${co.why}). Open the invoice and change its customer to ${co.name}, or make ${r.customer.name} a company`); continue; }
+    }
+    if (r.customer.xero_contact_id) continue;
     const known = made.get(r.customer_id);
     if (known) { r.customer.xero_contact_id = known; continue; }
     try {
@@ -396,7 +406,7 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
       made.set(r.customer_id, id);
     } catch (e) { errors.push(`${r.number}: couldn't find or add ${r.customer.name} in Xero — ${errMessage(e)}`); }
   }
-  const ready = list.filter((r) => r.customer?.xero_contact_id);
+  const ready = list.filter((r) => r.customer?.xero_contact_id && !held.has(r.id));
   for (const inv of ready) {
     const kindLabel = inv.kind === "deposit" ? "Deposit" : inv.kind === "final" ? "Final balance" : "Services";
     // Lines written on the invoice itself (GST inclusive), e.g. an agency booking; otherwise the quote's lines for a full invoice
@@ -545,25 +555,3 @@ async function fillFromContacts(ctx: SyncContext, list: XeroContactFull[], linke
 }
 
 
-/** The customer's Xero contact: by email, then by exact name (Xero names are unique), else a new one. */
-async function ensureXeroContact(ctx: SyncContext, c: { name: string; company: string | null; email: string | null; phone: string | null }): Promise<string> {
-  const q = (v: string) => v.replace(/["\\]/g, "").trim();
-  const email = c.email?.trim().toLowerCase() || null;
-  if (email) {
-    const r = await xeroGet<{ Contacts?: { ContactID: string; ContactStatus?: string }[] }>(ctx, "/Contacts", { where: `EmailAddress=="${q(email)}"` });
-    const hit = (r.Contacts ?? []).find((x) => x.ContactStatus !== "ARCHIVED") ?? r.Contacts?.[0];
-    if (hit) return hit.ContactID;
-  }
-  const name = q(c.company?.trim() || c.name).slice(0, 255);
-  if (!name) throw new Error("the customer has no name");
-  const byName = await xeroGet<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", { where: `Name=="${name}"` });
-  if (byName.Contacts?.[0]) return byName.Contacts[0].ContactID;
-  const [first, ...rest] = (c.company ? c.name : "").trim().split(/\s+/);
-  const created = await xeroPut<{ Contacts?: { ContactID: string }[] }>(ctx, "/Contacts", {
-    Contacts: [{ Name: name, ...(email ? { EmailAddress: email } : {}), ...(first ? { FirstName: first, LastName: rest.join(" ") || undefined } : {}),
-      ...(c.phone ? { Phones: [{ PhoneType: "DEFAULT", PhoneNumber: c.phone }] } : {}) }],
-  });
-  const id = created.Contacts?.[0]?.ContactID;
-  if (!id) throw new Error("Xero didn't return a contact id");
-  return id;
-}

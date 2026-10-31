@@ -337,3 +337,45 @@ export async function saveInvoiceLines(invoiceId: string, rawLines: unknown): Pr
   revalidateInvoice(inv.id, inv.event_id, inv.customer_id);
   return { ok: `Saved — new total ${money(t.total, ctx.org.currency, { cents: true })}${inXero}.` };
 }
+
+/** Customers to bill an invoice to (companies first). */
+export async function searchCustomersToBill(q: string): Promise<{ id: string; name: string; detail: string | null; company: boolean }[]> {
+  const ctx = await requireOrg();
+  if (!canManage(ctx.role)) return [];
+  const term = q.trim().replace(/[%_,()]/g, " ").slice(0, 60);
+  if (term.length < 2) return [];
+  const { data } = await ctx.supabase.from("customers").select("id, name, kind, email")
+    .eq("organisation_id", ctx.org.id).or(`name.ilike.%${term}%,company.ilike.%${term}%,email.ilike.%${term}%`).order("kind").order("name").limit(12);
+  return ((data ?? []) as { id: string; name: string; kind: string; email: string | null }[])
+    .map((c) => ({ id: c.id, name: c.name, detail: c.email, company: c.kind === "company" }));
+}
+
+/**
+ * Bill an invoice — or its whole job — to a different customer (e.g. the company, not the person who booked).
+ * If it's in Xero, Xero's copy is moved to that customer's contact first.
+ */
+export async function changeInvoiceCustomer(invoiceId: string, toCustomerId: string, wholeJob: boolean): Promise<InvoiceFormState> {
+  const { ctx, inv } = await loadInvoice(invoiceId);
+  if (!inv) return { error: "Invoice not found." };
+  if (!canManage(ctx.role)) return { error: "Only owners, admins and managers can change invoices." };
+  if (!UUID.test(toCustomerId)) return { error: "Choose a customer." };
+  try {
+    const { moveToCustomer } = await import("@/lib/customers/move");
+    const r = await moveToCustomer(ctx.supabase, ctx.org.id, {
+      invoiceId: inv.id, to: toCustomerId, wholeJob,
+      xero: () => buildContext(ctx.supabase, "user", ctx.org.id, "xero", ctx.user.id).catch(() => null),
+    });
+    if (r.moved.length) {
+      await logActivity(ctx.supabase, {
+        orgId: ctx.org.id, actorId: ctx.user.id, action: "invoice.customer_changed", entityType: "invoice", entityId: inv.id, eventId: inv.event_id, customerId: toCustomerId,
+        summary: `${actorName(ctx.profile)} billed ${r.moved.join(", ")}${r.job ? " and its job" : ""} to ${r.toName}`,
+      });
+    }
+    revalidateInvoice(inv.id, inv.event_id, toCustomerId);
+    revalidatePath(`/clients/${r.from}`);
+    if (r.refused.length) return { error: `${r.moved.length ? `Moved ${r.moved.join(", ")}. ` : ""}Xero wouldn't move ${r.refused.join("; ")}${wholeJob ? " — so the job stayed where it was" : ""}.` };
+    return { ok: `Now billed to ${r.toName}${r.moved.length > 1 ? ` (${r.moved.join(", ")})` : ""}${r.job ? ", with its job" : ""}.` };
+  } catch (e) {
+    return { error: errMessage(e) };
+  }
+}

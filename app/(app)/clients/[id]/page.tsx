@@ -39,7 +39,7 @@ type TabKey = (typeof TABS)[number];
 interface CustomerRow {
   id: string; kind: "individual" | "company"; name: string; company: string | null; email: string | null; phone: string | null;
   address: string | null; notes: string | null; source: EnquirySource | null; tags: string[]; customer_since: string;
-  xero_contact_id: string | null; created_at: string; updated_at: string;
+  xero_contact_id: string | null; created_at: string; updated_at: string; abn?: string | null;
 }
 interface EventRow {
   id: string; number: number; name: string; event_date: string | null; status: EventStatus; venue: string | null;
@@ -312,6 +312,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                       <Field label="Name">{c.name}</Field>
                       <Field label="Company">{c.company ?? "—"}</Field>
                       <Field label="Type">{c.kind === "company" ? "Company" : "Individual"}</Field>
+                      {"abn" in c && <Field label="ABN">{c.abn ?? "—"}</Field>}
                       <Field label="Email"><span className="break-all">{c.email ?? "—"}</span></Field>
                       <Field label="Phone">{c.phone ?? "—"}</Field>
                       <Field label="Address"><span className="whitespace-pre-line">{c.address ?? "—"}</span></Field>

@@ -53,6 +53,19 @@ export async function updateCustomerDetails(id: string, _prev: FormState, form: 
         : v;
     changes[label] = [show(prev), show(next)];
   }
+  // ABN (once the column exists — migration 0083)
+  if ("abn" in before && form.has("abn")) {
+    const abn = String(form.get("abn") ?? "").replace(/\s+/g, "") || null;
+    if (abn && !/^\d{11}$/.test(abn)) return { error: "An ABN is 11 digits." };
+    if ((before.abn ?? null) !== abn) { patch.abn = abn; changes.ABN = [before.abn ?? null, abn]; }
+  }
+  // Making a person a company: the company becomes the client's name, and the person stays on as its contact
+  const toCompany = patch.kind === "company" && before.kind !== "company";
+  const company = String(patch.company ?? before.company ?? "").trim();
+  if (toCompany) {
+    if (!company) return { error: "Add the company name to make this a company." };
+    if (String(patch.name ?? before.name) === String(before.name)) { patch.name = company; changes.name = [before.name, company]; }
+  }
   if ("name" in patch && !patch.name) return { error: "A client needs a name." };
   if (patch.kind && !["individual", "company"].includes(String(patch.kind))) return { error: "Choose individual or company." };
   if (patch.email && !EMAIL_RE.test(String(patch.email))) return { error: "That email address doesn't look right." };
@@ -60,6 +73,16 @@ export async function updateCustomerDetails(id: string, _prev: FormState, form: 
 
   const { error } = await supabase.from("customers").update(patch).eq("id", id).eq("organisation_id", org.id);
   if (error) return { error: `Couldn't save: ${error.message}` };
+
+  if (toCompany && before.email) {
+    // keep the person: add them as a contact if they aren't one already
+    const { data: has } = await supabase.from("contacts").select("id").eq("organisation_id", org.id).eq("customer_id", id).ilike("email", String(before.email)).limit(1);
+    if (!has?.length) {
+      const [first, ...rest] = String(before.name).trim().split(/\s+/);
+      const { count } = await supabase.from("contacts").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("customer_id", id);
+      await supabase.from("contacts").insert({ organisation_id: org.id, customer_id: id, first_name: first, last_name: rest.join(" ") || null, email: before.email, phone: before.phone, is_primary: !count, created_by: user.id });
+    }
+  }
 
   const summary = Object.entries(changes)
     .map(([k, [a, b]]) => (a === "updated" || b === "updated" ? `updated ${k}` : `changed ${k} ${a ?? "—"} → ${b ?? "—"}`))
@@ -69,7 +92,43 @@ export async function updateCustomerDetails(id: string, _prev: FormState, form: 
     summary: `${actorName(profile)} ${summary} on ${String(patch.name ?? before.name)}`, changes,
   });
   refresh(id);
+
+  // Keep the Xero contact in step (name, email, ABN, phone)
+  const xeroFields = ["name", "company", "kind", "email", "phone", "abn"];
+  if (before.xero_contact_id && xeroFields.some((f) => f in patch)) {
+    const after = { ...before, ...patch } as typeof before;
+    const r = await syncContactToXero(supabase, org.id, user.id, id, after).catch((e) => ({ ok: false as const, error: errMessage(e) }));
+    if (!r.ok) return { error: `Saved here, but Xero didn't take it: ${r.error}` };
+  }
   return undefined;
+}
+
+/**
+ * Push a customer's details to their Xero contact. If Xero already has a different contact with the new name (e.g.
+ * the company is already in Xero), the customer is linked to that contact instead and their unpaid invoices in Xero
+ * are re-billed to it.
+ */
+async function syncContactToXero(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], orgId: string, userId: string, id: string,
+  c: { name: string; company: string | null; kind: string; email: string | null; phone: string | null; abn?: string | null; xero_contact_id: string }): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { updateXeroContact, findXeroContactByName, setXeroInvoiceContact, xeroName } = await import("@/lib/integrations/xero-contacts");
+  const ctx = await buildContext(supabase, "user", orgId, "xero", userId);
+  const { data: primary } = await supabase.from("contacts").select("first_name, last_name").eq("organisation_id", orgId).eq("customer_id", id).order("is_primary", { ascending: false }).limit(1);
+  const fields = { name: c.name, company: c.kind === "company" ? c.company || c.name : c.company, email: c.email, phone: c.phone, abn: c.abn ?? null,
+    person: c.kind === "company" && primary?.[0] ? { first: primary[0].first_name as string, last: (primary[0].last_name as string | null) ?? null } : null };
+  const other = await findXeroContactByName(ctx, xeroName(fields));
+  if (!other || other === c.xero_contact_id) {
+    try { await updateXeroContact(ctx, c.xero_contact_id, fields); return { ok: true }; }
+    catch (e) { return { ok: false, error: errMessage(e) }; }
+  }
+  // the name belongs to another Xero contact: use that one, and move this customer's Xero invoices onto it
+  await supabase.from("customers").update({ xero_contact_id: other }).eq("id", id).eq("organisation_id", orgId);
+  const { data: invs } = await supabase.from("invoices").select("number, xero_invoice_id").eq("organisation_id", orgId).eq("customer_id", id).not("xero_invoice_id", "is", null);
+  const refused: string[] = [];
+  for (const i of (invs ?? []) as { number: string; xero_invoice_id: string }[]) {
+    try { await setXeroInvoiceContact(ctx, i.xero_invoice_id, other); } catch (e) { refused.push(`${i.number} (${errMessage(e)})`); }
+  }
+  await logIntegration(ctx, { action: "customer.xero_contact_relinked", entityType: "customer", entityId: id, customerId: id, summary: `Linked to the existing Xero contact “${xeroName(fields)}”${invs?.length ? ` and moved ${invs.length - refused.length} invoice(s) onto it` : ""}` });
+  return refused.length ? { ok: false, error: `linked to the existing Xero contact “${xeroName(fields)}”, but Xero wouldn't move ${refused.join("; ")}` } : { ok: true };
 }
 
 const CONTACT_FIELDS: [col: string, label: string][] = [

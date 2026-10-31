@@ -11,7 +11,7 @@ import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form"
 
 export interface CustomerEditable {
   id: string; name: string; company: string | null; kind: "individual" | "company"; email: string | null;
-  phone: string | null; address: string | null; tags: string[]; notes: string | null;
+  phone: string | null; address: string | null; tags: string[]; notes: string | null; abn?: string | null;
 }
 
 export function CustomerDetailsEditor({ customer, view }: { customer: CustomerEditable; view: React.ReactNode }) {
@@ -39,7 +39,8 @@ export function CustomerDetailsEditor({ customer, view }: { customer: CustomerEd
         <Label htmlFor="c-kind">Type</Label>
         <Select id="c-kind" name="kind" defaultValue={customer.kind}><option value="individual">Individual</option><option value="company">Company</option></Select>
       </div>
-      <div className="sm:col-span-3"><Label htmlFor="c-company">Company</Label><Input id="c-company" name="company" defaultValue={customer.company ?? ""} /></div>
+      <div className="sm:col-span-3"><Label htmlFor="c-company" hint={customer.kind === "individual" ? "Set Type to Company to bill the company — this person stays on as its contact" : undefined}>Company</Label><Input id="c-company" name="company" defaultValue={customer.company ?? ""} /></div>
+      {"abn" in customer && <div className="sm:col-span-3"><Label htmlFor="c-abn" hint="11 digits — goes to Xero too">ABN</Label><Input id="c-abn" name="abn" inputMode="numeric" defaultValue={customer.abn ?? ""} /></div>}
       <div className="sm:col-span-3"><Label htmlFor="c-email">Email</Label><Input id="c-email" name="email" type="email" defaultValue={customer.email ?? ""} /></div>
       <div className="sm:col-span-2"><Label htmlFor="c-phone">Phone</Label><Input id="c-phone" name="phone" type="tel" defaultValue={customer.phone ?? ""} /></div>
       <div className="sm:col-span-4"><Label htmlFor="c-address" hint="Shown on quotes and invoices">Address</Label><Textarea id="c-address" name="address" rows={3} defaultValue={customer.address ?? ""} placeholder={"Street\nSuburb STATE Postcode"} /></div>

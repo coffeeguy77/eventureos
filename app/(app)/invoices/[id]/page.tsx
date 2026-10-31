@@ -19,6 +19,8 @@ import { cn } from "@/lib/cn";
 import { EmailInvoiceButton, InvoiceActions } from "./controls";
 import { DocMenu } from "./doc-menu";
 import { InvoiceJobPicker } from "@/components/invoices/link-job";
+import { ChangeInvoiceCustomer } from "@/components/invoices/change-customer";
+import { belongsToCompany } from "@/lib/customers/company-match";
 import { OldLines } from "@/components/history/old-lines";
 import { copyJobs, copyPeople, forView, loadMatchContext } from "@/lib/quotes/history";
 import { matchLines, type XeroLine } from "@/lib/quotes/xero-import";
@@ -36,7 +38,7 @@ type Inv = {
   quote_id: string | null; created_at: string; updated_at: string; reference: string | null; line_items: XeroLine[] | null;
   origin?: string; created_by: string | null;
   emailed_at?: string | null; email_count?: number; first_viewed_at?: string | null; last_viewed_at?: string | null; view_count?: number; reminders?: { key: string; at: string }[];
-  customer: { id: string; name: string; email: string | null; phone: string | null; company: string | null } | null;
+  customer: { id: string; name: string; email: string | null; phone: string | null; company: string | null; kind: string } | null;
   event: { id: string; number: number; name: string; event_date: string | null; venue: string | null } | null;
 };
 type Version = {
@@ -53,7 +55,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   const tz = org.timezone;
   const today = todayISO(tz);
 
-  const cols = "id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, created_by, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company), event:events(id, number, name, event_date, venue)";
+  const cols = "id, number, kind, issue_date, due_date, subtotal, tax_total, total, amount_paid, balance, status, currency, xero_invoice_id, xero_synced_at, quote_id, created_by, pay_token, created_at, updated_at, reference, line_items, customer:customers(id, name, email, phone, company, kind), event:events(id, number, name, event_date, venue)";
   let { data, error } = await supabase.from("invoices").select(`${cols}, origin, emailed_at, email_count, first_viewed_at, last_viewed_at, view_count, reminders`).eq("id", id).eq("organisation_id", org.id).maybeSingle();
   // Before the 0058 / 0059 database updates these columns don't exist
   if (error && /origin|emailed_at|email_count|viewed|view_count|reminders/.test(error.message)) ({ data, error } = await supabase.from("invoices").select(cols).eq("id", id).eq("organisation_id", org.id).maybeSingle());
@@ -319,6 +321,10 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 {inv.customer?.phone && <li className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-ink-faint" /><a href={`tel:${inv.customer.phone.replace(/\s+/g, "")}`} className="hover:text-brand-700">{inv.customer.phone}</a></li>}
               </ul>
             </div>
+            {canManage(role) && inv.status !== "void" && inv.customer && (
+              <ChangeInvoiceCustomer invoiceId={inv.id} hasJob={!!inv.event} inXero={!!inv.xero_invoice_id}
+                suggestion={inv.customer.kind === "company" ? null : await belongsToCompany(supabase, org.id, inv.customer.id, inv.customer.email).catch(() => null)} />
+            )}
           </Card>
 
           <Card>
