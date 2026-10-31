@@ -432,7 +432,12 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
       }],
     };
     try {
-      const r = await xeroPut<{ Invoices?: XeroInvoice[] }>(ctx, "/Invoices", body);
+      // an item code from your price list that isn't set up as an item in Xero: send the lines without item codes
+      const r = await xeroPut<{ Invoices?: XeroInvoice[] }>(ctx, "/Invoices", body).catch(async (e) => {
+        if (!/Item code '.*' is not valid/i.test(xeroReason(e))) throw e;
+        for (const l of body.Invoices[0].LineItems as Record<string, unknown>[]) delete l.ItemCode;
+        return xeroPut<{ Invoices?: XeroInvoice[] }>(ctx, "/Invoices", body);
+      });
       const x = r.Invoices?.[0];
       if (!x?.InvoiceID) throw new Error("Xero did not return an invoice id");
       const { error: uErr } = await ctx.db.from("invoices").update({ xero_invoice_id: x.InvoiceID, xero_synced_at: new Date().toISOString() }).eq("id", inv.id);
