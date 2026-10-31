@@ -72,8 +72,10 @@ export async function stripePayouts(db: SupabaseClient, orgId: string, orgIds: s
         if (b.type === "charge" || b.type === "payment") {
           gross += b.amount; fees += b.fee; count++;
           const { kind, what } = kindOf(src?.metadata);
-          const isRec = !!src?.payment_intent && recorded.has(src.payment_intent);
-          if (isRec) { rec += b.amount; refs.push(src!.payment_intent!); } else groups[kind] += b.amount;
+          // payments for EventureOS invoices always belong in the Stripe clearing account: EventureOS records them
+          // against the invoice there (straight away, or once the invoice reaches Xero) — never as sales here too
+          const isRec = (!!src?.payment_intent && recorded.has(src.payment_intent)) || !!src?.metadata?.eventureos_invoice_id;
+          if (isRec) { rec += b.amount; refs.push(src?.payment_intent ?? src?.id ?? b.id); } else groups[kind] += b.amount;
           items.push({ name: src ? payer(src) : "", amount: b.amount / 100, kind, recorded: isRec, what });
         } else if (b.type === "refund" || b.type === "payment_refund") {
           refunds += b.amount; fees += b.fee;

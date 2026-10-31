@@ -175,7 +175,7 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
             <div><Label htmlFor={`st-${k}-tax`}>GST</Label><Select id={`st-${k}-tax`} value={c[k].tax ?? ""} onChange={(e) => setC({ ...c, [k]: { ...c[k], tax: e.target.value || null } })}><option value="">The account&apos;s default</option>{taxRates.map((t) => <option key={t.type} value={t.type}>{t.name}</option>)}</Select></div>
           </div>
         ))}
-        <p className="text-[0.75rem] text-ink-muted sm:col-span-2">Payments EventureOS already sent to Xero go to your Stripe clearing account{clearing ? ` (${clearing.name})` : ""}, so nothing is counted twice. Check the GST choices with your bookkeeper.</p>
+        <p className="text-[0.75rem] text-ink-muted sm:col-span-2">Payments for EventureOS invoices go to your Stripe clearing account (EventureOS records them against the invoice there){clearing ? ` (${clearing.name})` : ""}, so nothing is counted twice. Check the GST choices with your bookkeeper.</p>
         <div className="flex flex-wrap gap-2 sm:col-span-2">
           <Button onClick={saveCoding} disabled={pending}><Save className="h-4 w-4" />Save Stripe coding</Button>
           <Button onClick={load} disabled={pending || !from}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{data ? "Reload payouts" : "Load Stripe payouts"}</Button>
@@ -195,7 +195,7 @@ export function StripePayouts({ file, map, from, banks, settings, accounts, taxR
               <span className="min-w-0 flex-1">
                 <span className="block font-medium text-ink">{r.payout.count} payment{r.payout.count === 1 ? "" : "s"}{r.payout.groups.shop ? ` · shop ${money(r.payout.groups.shop)}` : ""}{r.payout.groups.bookings ? ` · classes ${money(r.payout.groups.bookings)}` : ""}{r.payout.groups.other ? ` · other ${money(r.payout.groups.other)}` : ""}{r.payout.refunds ? ` (after refunds ${money(r.payout.refunds)})` : ""} · fees {money(r.payout.fees)}</span>
                 <span className="block truncate text-[0.75rem] text-ink-muted">{r.payout.items.map((i) => `${i.name || "Customer"} ${money(i.amount)}${i.what ? ` · ${i.what}` : ""}`).join(" — ")}</span>
-                <span className="block text-[0.75rem] text-ink-muted">{r.line ? `into ${bankName(r.line.account)}` : "No STRIPE line of this amount in the file"}{r.payout.recorded ? ` · ${money(r.payout.recorded)} already sent to Xero by EventureOS` : ""} · {r.payout.id}</span>
+                <span className="block text-[0.75rem] text-ink-muted">{r.line ? `into ${bankName(r.line.account)}` : "No STRIPE line of this amount in the file"}{r.payout.recorded ? ` · ${money(r.payout.recorded)} for EventureOS invoices → Stripe clearing` : ""} · {r.payout.id}</span>
                 {r.state === "xero" && r.reconciled && <span className="block text-[0.75rem] text-ink-muted">Reconciled in Xero</span>}
                 {r.state === "manual" && <span className="block text-[0.75rem] text-amber-800">{!r.preview.balanced ? "The breakdown doesn't add up to the payout." : "Includes payments already in your clearing account, which can't be coded in one deposit here."}</span>}
                 {r.error && <span className="block text-[0.75rem] text-rose-700">{r.error}</span>}

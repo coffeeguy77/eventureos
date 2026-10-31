@@ -82,7 +82,7 @@ export interface Payout {
   /** sales by kind, less refunds of those sales (not counting payments already in Xero) */
   groups: Record<PayKind, number>;
   gross: number; fees: number; refunds: number; other: number;
-  /** payments EventureOS already sent to Xero (into the Stripe clearing account) */
+  /** payments for EventureOS invoices (they go to the Stripe clearing account, where EventureOS records them against the invoice) */
   recorded: number; recordedRefs: string[]; count: number;
   items: PayItem[];
 }
@@ -121,7 +121,7 @@ const who = (items: PayItem[]) => {
 export function payoutLines(p: Payout, c: { clearing: string | null; shop: { account: string | null; tax: string | null }; bookings: { account: string | null; tax: string | null }; other: { account: string | null; tax: string | null }; fees: { account: string | null; tax: string | null } }) {
   const lines: { description: string; account: string; amount: number; tax: string | null }[] = [];
   const recorded = c.clearing ? p.recorded : 0;
-  if (recorded) lines.push({ description: `Stripe payments already in Xero: ${who(p.items.filter((i) => i.recorded))}`, account: c.clearing!, amount: r2(recorded), tax: "NONE" });
+  if (recorded) lines.push({ description: `EventureOS invoice payments (recorded against the invoices): ${who(p.items.filter((i) => i.recorded))}`, account: c.clearing!, amount: r2(recorded), tax: "NONE" });
   const groups = { ...p.groups };
   if (!c.clearing && p.recorded) groups.other = r2(groups.other + p.recorded);
   for (const k of ["shop", "bookings", "other"] as PayKind[]) {
