@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 
-const ITEMS = [{ href: "/accounts", label: "Money owing" }, { href: "/accounts/resolution", label: "Resolution centre" }, { href: "/accounts/results", label: "Email results" }, { href: "/accounts/templates", label: "Templates" }, { href: "/accounts/terms", label: "Fees & terms" }];
+const ITEMS = [{ href: "/accounts", label: "Money owing" }, { href: "/accounts/resolution", label: "Resolution centre" }, { href: "/accounts/reconcile", label: "Reconcile" }, { href: "/accounts/results", label: "Email results" }, { href: "/accounts/templates", label: "Templates" }, { href: "/accounts/terms", label: "Fees & terms" }];
 
 export function AccountsNav() {
   const path = usePathname();
