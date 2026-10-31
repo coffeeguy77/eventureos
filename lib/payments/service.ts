@@ -235,12 +235,14 @@ export async function recordCardPayment(db: SupabaseClient, orgId: string, cfg: 
 
 /** Retry Stripe payments that didn't reach Xero (called from the Xero sync). */
 export async function retryStripePaymentsToXero(db: SupabaseClient, orgId: string): Promise<number> {
-  const cfg = await loadStripe(db, orgId).catch(() => null);
+  const cfg = await loadStripe(db, orgId);
   const account = cfg?.settings.xero_account?.trim();
   if (!cfg || !account || cfg.settings.mode === "test") return 0;
-  const { data } = await db.from("payments").select("id, amount, paid_at, stripe_payment_intent, invoice:invoices!inner(xero_invoice_id)")
-    .eq("organisation_id", orgId).not("stripe_payment_intent", "is", null).is("xero_payment_id", null).not("invoice.xero_invoice_id", "is", null)
-    .or("xero_push_error.is.null,xero_push_error.not.ilike.Stripe is in test mode%").limit(20);
+  const { data: raw, error } = await db.from("payments").select("id, amount, paid_at, stripe_payment_intent, xero_push_error, invoice:invoices!inner(xero_invoice_id)")
+    .eq("organisation_id", orgId).not("stripe_payment_intent", "is", null).is("xero_payment_id", null).not("invoice.xero_invoice_id", "is", null).limit(50);
+  if (error) throw new Error(`couldn't load card payments waiting for Xero: ${error.message}`);
+  // test-mode payments never go to Xero
+  const data = ((raw ?? []) as { xero_push_error: string | null }[]).filter((p) => !/^Stripe is in test mode/i.test(p.xero_push_error ?? "")).slice(0, 20);
   const { data: org } = await db.from("organisations").select("timezone").eq("id", orgId).single();
   let n = 0;
   for (const p of (data ?? []) as unknown as { id: string; amount: number; paid_at: string; stripe_payment_intent: string; invoice: { xero_invoice_id: string } }[]) {

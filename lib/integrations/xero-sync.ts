@@ -5,6 +5,7 @@ import { localDate } from "@/lib/ai/classify";
 import { customerRecord, loadCustomersForMatching, upsertCandidate, type CustomerForMatch } from "@/lib/integrations/gmail-import";
 import { bestMatch } from "@/lib/integrations/matching";
 import { inScope, readScope } from "@/lib/integrations/xero-scope";
+import { xeroReason } from "@/lib/integrations/xero-recode";
 import {
   RateLimited, errMessage, finishSyncLog, logIntegration, saveIntegrationSettings, startSyncLog, type SyncContext,
 } from "@/lib/integrations/runtime";
@@ -240,7 +241,9 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
   // 4b. Card payments that couldn't be sent to Xero when they came in
   let stripeRetried = 0;
   if (done) {
-    try { const { retryStripePaymentsToXero } = await import("@/lib/payments/service"); stripeRetried = await retryStripePaymentsToXero(ctx.db, ctx.org.id); }
+    try { const { retryStripePaymentsToXero } = await import("@/lib/payments/service"); // the Stripe keys are only readable by the server, so this runs as the server even when you press Sync now
+      const { createServiceClient } = await import("@/lib/integrations/runtime");
+      stripeRetried = await retryStripePaymentsToXero(createServiceClient(), ctx.org.id); }
     catch (e) { notes.push(`Stripe payments to Xero: ${e instanceof Error ? e.message : String(e)}`); }
   }
 
@@ -427,7 +430,7 @@ async function pushInvoices(ctx: SyncContext, s: XeroSettings) {
       await logIntegration(ctx, { action: "invoice.pushed", entityType: "invoice", entityId: inv.id, customerId: inv.customer_id, eventId: inv.event_id, summary: `${inv.number} sent to Xero as ${body.Invoices[0].Status}` });
       pushed++;
     } catch (e) {
-      errors.push(`${inv.number}: ${errMessage(e)}`);
+      errors.push(`${inv.number}: ${xeroReason(e)}`);
     }
   }
   return { pushed, waiting: list.length - ready.length, errors };
