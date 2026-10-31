@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { buildContext } from "@/lib/integrations/sync-runner";
 import { xeroPut } from "@/lib/integrations/xero";
+import { xeroReason } from "@/lib/integrations/xero-recode";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { createCheckout, toCents, verifyWebhook, type CheckoutSession } from "./stripe";
 
@@ -89,9 +90,10 @@ export async function startCheckout(token: string): Promise<string> {
 async function pushToXero(db: SupabaseClient, orgId: string, xeroInvoiceId: string, amount: number, date: string, reference: string, account: string) {
   const ctx = await buildContext(db, "service", orgId, "xero", null);
   const acct = UUID.test(account) ? { AccountID: account } : { Code: account };
+  // Xero's own reason (e.g. "Payment amount exceeds the amount outstanding"), not the raw JSON — it's shown to you and kept short
   const res = await xeroPut<{ Payments?: { PaymentID: string }[] }>(ctx, "/Payments", {
     Payments: [{ Invoice: { InvoiceID: xeroInvoiceId }, Account: acct, Date: date, Amount: amount, Reference: reference }],
-  });
+  }).catch((e) => { throw new Error(`Xero: ${xeroReason(e)}`); });
   const id = res.Payments?.[0]?.PaymentID;
   if (!id) throw new Error("Xero didn't return a payment id");
   return id;
