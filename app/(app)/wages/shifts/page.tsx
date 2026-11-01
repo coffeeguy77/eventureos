@@ -24,7 +24,12 @@ export default async function ShiftsPage() {
   const [{ data: staffRows }, { data: series }, { data: shifts }] = await Promise.all([
     supabase.from("crew_members").select("id, name").eq("organisation_id", org.id).eq("active", true).order("rank").order("name"),
     supabase.from("staff_shift_series").select("id, title, weekday, every_weeks, start_time, finish_time, location, starts_on, ends_on, member:crew_members(name)").eq("organisation_id", org.id).eq("active", true).order("weekday"),
-    supabase.from("staff_shifts").select("id, crew_member_id, title, shift_date, start_time, finish_time, location, notes, hours_override, rate_override, series_id, payment_id, member:crew_members(name)").eq("organisation_id", org.id).eq("roster", false).gte("shift_date", today).lte("shift_date", addDaysISO(today, HORIZON_DAYS)).order("shift_date").order("start_time"),
+    (async () => {
+      // café roster shifts live on the Roster page (before the 0084 update there's no roster column)
+      const q = (roster: boolean) => { let x = supabase.from("staff_shifts").select("id, crew_member_id, title, shift_date, start_time, finish_time, location, notes, hours_override, rate_override, series_id, payment_id, member:crew_members(name)").eq("organisation_id", org.id); if (roster) x = x.eq("roster", false); return x.gte("shift_date", today).lte("shift_date", addDaysISO(today, HORIZON_DAYS)).order("shift_date").order("start_time"); };
+      const r = await q(true);
+      return r.error ? q(false) : r;
+    })(),
   ]);
   const staff = (staffRows ?? []) as { id: string; name: string }[];
   type Ser = { id: string; title: string; weekday: number; every_weeks: number; start_time: string; finish_time: string; location: string | null; starts_on: string; ends_on: string | null; member: { name: string } | null };
