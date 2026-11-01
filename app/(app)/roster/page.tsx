@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { weekOf } from "@/lib/roster/award";
 import { loadWeek, plainWeek } from "@/lib/roster/data";
-import { LEAVE_LABEL } from "@/lib/roster/settings";
+import { LEAVE_LABEL, readRosterSettings } from "@/lib/roster/settings";
 import { RosterTabs } from "./tabs";
 import { RosterGrid, Requests } from "./grid";
 
@@ -49,7 +49,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
       ) : (
         <div className="space-y-6">
           {(leaveList.length > 0 || offerList.length > 0) && <Requests leave={leaveList} offers={offerList} />}
-          <RosterGrid week={plainWeek(week)} today={today} prev={addDaysISO(monday, -7)} next={addDaysISO(monday, 7)} smsOn={smsOn} />
+          <RosterGrid week={plainWeek(week)} today={today} prev={addDaysISO(monday, -7)} next={addDaysISO(monday, 7)} smsOn={smsOn} meal={readRosterSettings(org.settings).meal} />
         </div>
       )}
     </div>

@@ -34,7 +34,7 @@ export default async function CrewShifts({ params, searchParams }: { params: Pro
           {offered.map((x) => (
             <Card key={x.id} className="ring-2 ring-[var(--crew-brand)]">
               <ShiftRow href={`/crew/${slug}/shift/${x.id}`} date={x.job.event_date}>
-                <JobSummary name={x.job.name} client={x.job.client} venue={x.job.venue} start={x.start} finish={x.finish} hours={x.hours} href />
+                <JobSummary name={x.job.name} client={x.job.client} venue={x.job.venue} start={x.start} finish={x.finish} hours={x.hours} breakMinutes={x.breakMinutes} href />
               </ShiftRow>
               <AcceptDecline slug={slug} shiftId={x.id} />
             </Card>
@@ -49,7 +49,7 @@ export default async function CrewShifts({ params, searchParams }: { params: Pro
         {confirmed.map((x) => (
           <Card key={x.id}>
             <ShiftRow href={`/crew/${slug}/shift/${x.id}`} date={x.job.event_date}>
-              <JobSummary name={x.job.name} client={x.job.client} venue={x.job.venue} start={x.start} finish={x.finish} hours={x.hours} href
+              <JobSummary name={x.job.name} client={x.job.client} venue={x.job.venue} start={x.start} finish={x.finish} hours={x.hours} breakMinutes={x.breakMinutes} href
                 badge={<>
                   <Pill tone="green">Confirmed</Pill>
                   {x.boardPostedAt && <Pill tone="amber">On job board — looking for cover</Pill>}

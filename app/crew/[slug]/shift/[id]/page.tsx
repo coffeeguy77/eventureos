@@ -61,7 +61,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
           <div><p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint">Service</p><p className="mt-0.5 text-[1.125rem] font-bold text-ink">{t12(d.job.start_time)}</p></div>
           <div><p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint">Finish</p><p className="mt-0.5 text-[1.125rem] font-bold text-ink">{t12(d.finish)}</p></div>
         </div>
-        <p className="mt-3 flex items-center justify-center gap-1 border-t border-line pt-3 text-[0.8125rem] text-ink-muted"><Clock className="h-4 w-4" />{fmtHours(d.hours)} paid{d.extraApproved ? ` (incl. ${fmtHours(d.extraApproved)} extra)` : ""}</p>
+        <p className="mt-3 flex items-center justify-center gap-1 border-t border-line pt-3 text-[0.8125rem] text-ink-muted"><Clock className="h-4 w-4" />{d.breakMinutes && d.hours != null ? `${fmtHours(Math.round((d.hours + d.breakMinutes / 60) * 100) / 100)} shift − ${d.breakMinutes} min unpaid break = ${fmtHours(d.hours)} paid` : `${fmtHours(d.hours)} paid`}{d.extraApproved ? ` (incl. ${fmtHours(d.extraApproved)} extra)` : ""}</p>
       </Card>
 
       {where && (

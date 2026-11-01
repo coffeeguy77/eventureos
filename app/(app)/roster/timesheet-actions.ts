@@ -35,7 +35,7 @@ export async function updateEntry(id: string, v: { start: string; finish: string
       const { readRosterSettings } = await import("@/lib/roster/settings");
       const { meal } = readRosterSettings(org.settings);
       const hrs = (Date.parse(fromLocal(v.finish, org.timezone)) - Date.parse(fromLocal(v.start, org.timezone))) / 3_600_000;
-      if (meal.minutes > 0 && hrs > meal.after_hours) brk = Math.max(brk, meal.minutes);
+      if (meal.minutes > 0 && hrs >= meal.after_hours) brk = Math.max(brk, meal.minutes);
     }
     if (!e.clock_out) throw new Error("They're still clocked on — wait until they clock off.");
     const { error } = await supabase.from("staff_time_entries").update({
@@ -74,7 +74,7 @@ export async function addEntry(v: { crewId: string; start: string; finish: strin
     const { readRosterSettings } = await import("@/lib/roster/settings");
     const { meal } = readRosterSettings(org.settings);
     let brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
-    if (meal.minutes > 0 && (Date.parse(f) - Date.parse(s)) / 3_600_000 > meal.after_hours) brk = Math.max(brk, meal.minutes);
+    if (meal.minutes > 0 && (Date.parse(f) - Date.parse(s)) / 3_600_000 >= meal.after_hours) brk = Math.max(brk, meal.minutes);
     const { error } = await supabase.from("staff_time_entries").insert({
       organisation_id: org.id, crew_member_id: v.crewId, staff_shift_id: v.shiftId, work_date: v.start.slice(0, 10), clock_in: s, clock_out: f, paid_start: s, paid_finish: f,
       break_minutes: brk, source: "office", status: "pending", note: v.note?.trim().slice(0, 500) || `Added by ${user.email ?? "the office"}`,

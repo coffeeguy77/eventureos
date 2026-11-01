@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { periodFor, type PayCalendar } from "@/lib/roster/period";
 import { requireOrg } from "@/lib/context";
 import { Card, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -21,8 +22,11 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const today = todayISO(org.timezone);
   const D = /^\d{4}-\d{2}-\d{2}$/;
-  const from = D.test(sp.from ?? "") ? sp.from! : weekOf(today);
-  const to = D.test(sp.to ?? "") && sp.to! >= from ? sp.to! : addDaysISO(from, 6);
+  // opens on the current pay period of your Xero pay calendar (e.g. the fortnight), else this week
+  const cal = ((org.settings as { roster?: { pay_calendar?: PayCalendar } } | null)?.roster?.pay_calendar) ?? null;
+  const period = cal ? periodFor(cal, today) : null;
+  const from = D.test(sp.from ?? "") ? sp.from! : period?.start ?? weekOf(today);
+  const to = D.test(sp.to ?? "") && sp.to! >= from ? sp.to! : !D.test(sp.from ?? "") && period ? period.end : addDaysISO(from, 6);
   const probe = await supabase.from("staff_time_entries").select("id").limit(1);
   if (probe.error) return (<div><PageHeader title="Roster" /><RosterTabs active="timesheets" /><Card><EmptyState title="One database update to go">Run 0084_cafe_roster.sql in Supabase to switch on timesheets.</EmptyState></Card></div>);
   const settings = readRosterSettings(org.settings);
@@ -89,7 +93,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     <div>
       <PageHeader title="Roster" subtitle="Check clocked hours, approve them, then send them to Xero Payroll split by award category." />
       <RosterTabs active="timesheets" />
-      <Timesheets from={from} to={to} today={today} sheets={sheets} earningsReady={!!settings.xero.earnings.ordinary} fence={settingsPlace} />
+      <Timesheets payPeriod={period ? { ...period, name: cal!.name } : null} from={from} to={to} today={today} sheets={sheets} earningsReady={!!settings.xero.earnings.ordinary} fence={settingsPlace} />
     </div>
   );
 }

@@ -24,7 +24,7 @@ const len = (s: { start_time: string; finish_time: string; break_minutes: number
 };
 const hrs = (n: number) => `${Math.round(n * 100) / 100}h`;
 
-export function RosterGrid({ week, today, prev, next, smsOn = false }: { week: PlainWeek; today: string; prev: string; next: string; smsOn?: boolean }) {
+export function RosterGrid({ week, today, prev, next, smsOn = false, meal = { after_hours: 5, minutes: 30 } }: { week: PlainWeek; today: string; prev: string; next: string; smsOn?: boolean; meal?: { after_hours: number; minutes: number } }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -145,18 +145,27 @@ export function RosterGrid({ week, today, prev, next, smsOn = false }: { week: P
         <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber-500 align-middle" />not published yet · costs are estimates from Setup → Pay rules; Xero Payroll pays the real amounts.
       </p>
 
-      {draft && <ShiftDialog week={week} draft={draft} setDraft={setDraft} pending={pending} onSave={save}
+      {draft && <ShiftDialog meal={meal} week={week} draft={draft} setDraft={setDraft} pending={pending} onSave={save}
         onDelete={() => draft.id && run(() => deleteRosterShift(draft.id!), true)} onClose={() => setDraft(null)} />}
     </Card>
   );
 }
 
-function ShiftDialog({ week, draft, setDraft, pending, onSave, onDelete, onClose }: {
-  week: PlainWeek; draft: Draft; setDraft: (d: Draft) => void; pending: boolean; onSave: () => void; onDelete: () => void; onClose: () => void;
+function ShiftDialog({ meal, week, draft, setDraft, pending, onSave, onDelete, onClose }: {
+  meal: { after_hours: number; minutes: number }; week: PlainWeek; draft: Draft; setDraft: (d: Draft) => void; pending: boolean; onSave: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const [sure, setSure] = useState(false);
   const warn = shiftWarnings(week, { id: draft.id, crew_member_id: draft.crewId, shift_date: draft.date, start_time: draft.start, finish_time: draft.finish });
-  const set = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
+  // changing the times puts the award's unpaid meal break in (or takes it out for a short shift)
+  const set = (p: Partial<Draft>) => {
+    const d = { ...draft, ...p };
+    if ((p.start !== undefined || p.finish !== undefined) && meal.minutes > 0 && /^\d{2}:\d{2}$/.test(d.start) && /^\d{2}:\d{2}$/.test(d.finish)) {
+      const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      let span = m(d.finish) - m(d.start); if (span <= 0) span += 1440;
+      d.breakMinutes = span >= meal.after_hours * 60 ? Math.max(d.breakMinutes, meal.minutes) : d.breakMinutes === meal.minutes ? 0 : d.breakMinutes;
+    }
+    setDraft(d);
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-t-2xl bg-surface p-5 shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>

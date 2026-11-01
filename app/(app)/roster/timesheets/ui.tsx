@@ -29,7 +29,7 @@ const hm = (local: string | null) => (local ? local.slice(11, 16) : "—");
 const len = (a: string, b: string | null, brk: number) => (b ? Math.max(0, (Date.parse(`${b}:00Z`) - Date.parse(`${a}:00Z`)) / 3_600_000 - brk / 60) : 0);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export function Timesheets({ from, to, today, sheets, earningsReady, fence }: { from: string; to: string; today: string; sheets: PersonSheet[]; earningsReady: boolean; fence: Fence }) {
+export function Timesheets({ payPeriod, from, to, today, sheets, earningsReady, fence }: { payPeriod: { start: string; end: string; name: string } | null; from: string; to: string; today: string; sheets: PersonSheet[]; earningsReady: boolean; fence: Fence }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -53,6 +53,9 @@ export function Timesheets({ from, to, today, sheets, earningsReady, fence }: { 
         <Link href={`/roster/timesheets?from=${addDaysISO(from, -days)}&to=${addDaysISO(to, -days)}`} className="rounded-md px-2 py-1 text-[0.8125rem] text-ink-muted hover:bg-zinc-100">‹</Link>
         <p className="text-[0.875rem] font-semibold text-ink">{fmtDate(from, "weekday")} – {fmtDate(to, "weekday")}</p>
         <Link href={`/roster/timesheets?from=${addDaysISO(from, days)}&to=${addDaysISO(to, days)}`} className="rounded-md px-2 py-1 text-[0.8125rem] text-ink-muted hover:bg-zinc-100">›</Link>
+{payPeriod && from === payPeriod.start && to === payPeriod.end
+          ? <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-sky-800">Pay period · {payPeriod.name}</span>
+          : payPeriod ? <Link href="/roster/timesheets" className="text-[0.75rem] font-medium text-brand-600">This pay period</Link> : null}
         <Link href={`/roster/timesheets?from=${from}&to=${addDaysISO(from, days === 7 ? 13 : 6)}`} className="text-[0.75rem] font-medium text-brand-600">{days === 7 ? "Show a fortnight" : "Show a week"}</Link>
         <span className="text-[0.75rem] text-ink-muted">{r2(totalHours)} h · ~{money(totalCost)}</span>
         <div className="ml-auto flex flex-wrap gap-2">

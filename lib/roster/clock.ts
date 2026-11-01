@@ -128,7 +128,7 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   // award's minimum once the shift is long enough — even if nobody pressed "Start break"
   const recorded = brk;
   const spanH = (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000;
-  const required = Math.max(rostered?.break_minutes ?? 0, spanH > settings.meal.after_hours ? settings.meal.minutes : 0);
+  const required = Math.max(rostered?.break_minutes ?? 0, settings.meal.minutes > 0 && spanH >= settings.meal.after_hours ? settings.meal.minutes : 0);
   if (!e.event_crew_id && brk < required) brk = required;
   const photo = await takePhoto(db, settings, opts, { orgId: org.id, memberId, workDate: e.work_date, entryId: e.id, which: "out" });
   const { error } = await db.from("staff_time_entries").update({

@@ -256,7 +256,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
           <div><Label hint="minutes">Round clock times to</Label><Input type="number" min={0} max={60} value={v.rounding} onChange={(e) => setV({ ...v, rounding: Number(e.target.value) })} /></div>
           <div><Label hint="minutes">Pay rostered times if within</Label><Input type="number" min={0} max={60} value={v.grace} onChange={(e) => setV({ ...v, grace: Number(e.target.value) })} /></div>
           <div><Label hint="minutes">Unpaid meal break</Label><Input type="number" min={0} max={120} step={5} value={v.meal.minutes} onChange={(e) => setV({ ...v, meal: { ...v.meal, minutes: Number(e.target.value) } })} /></div>
-          <div><Label hint="hours">…on shifts longer than</Label><Input type="number" min={0} max={12} step={0.5} value={v.meal.after_hours} onChange={(e) => setV({ ...v, meal: { ...v.meal, after_hours: Number(e.target.value) } })} /></div>
+          <div><Label hint="hours">…on shifts this long or longer</Label><Input type="number" min={0} max={12} step={0.5} value={v.meal.after_hours} onChange={(e) => setV({ ...v, meal: { ...v.meal, after_hours: Number(e.target.value) } })} /></div>
         </div>
         <p className="-mt-3 text-[0.7188rem] text-ink-faint">The break is always taken off café shifts over that length — on the roster, in texts and emails, and at clock-off — even if they don&rsquo;t tap &ldquo;Start break&rdquo;. Event shifts are paid from the job, so this doesn&rsquo;t apply to them.</p>
         <label className="flex items-center gap-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.googleCalendar} onChange={(e) => setV({ ...v, googleCalendar: e.target.checked })} />Also put published shifts on Google Calendar</label>

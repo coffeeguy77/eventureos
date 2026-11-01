@@ -47,7 +47,7 @@ export async function saveRosterShift(input: RosterShiftInput) {
       const { meal } = readRosterSettings(org.settings);
       const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
       let span = m(input.finish) - m(input.start); if (span <= 0) span += 1440;
-      if (meal.minutes > 0 && span > meal.after_hours * 60) brk = Math.max(brk, meal.minutes);
+      if (meal.minutes > 0 && span >= meal.after_hours * 60) brk = Math.max(brk, meal.minutes);
     }
     let title = "Shift";
     if (input.areaId) {

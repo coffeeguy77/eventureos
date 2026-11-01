@@ -16,8 +16,8 @@ export function DateBlock({ date }: { date: string | null }) {
   );
 }
 
-export function JobSummary({ name, client, venue, start, finish, hours, href, badge }: {
-  name: string; client?: string | null; venue?: string | null; start?: string | null; finish?: string | null; hours?: number | null;
+export function JobSummary({ name, client, venue, start, finish, hours, breakMinutes, href, badge }: {
+  name: string; client?: string | null; venue?: string | null; start?: string | null; finish?: string | null; hours?: number | null; breakMinutes?: number;
   href?: boolean; badge?: React.ReactNode;
 }) {
   return (
@@ -28,7 +28,7 @@ export function JobSummary({ name, client, venue, start, finish, hours, href, ba
       </div>
       {client && client !== name && <p className="text-[0.8125rem] text-ink-muted">{client}</p>}
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[0.8125rem] text-ink-muted">
-        <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{start ?? "?"}–{finish ?? "?"}{hours != null && <span className="text-ink-faint">· {fmtHours(hours)}</span>}</span>
+        <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{start ?? "?"}–{finish ?? "?"}{hours != null && <span className="text-ink-faint">· {fmtHours(hours)}{breakMinutes ? ` paid + ${breakMinutes} min unpaid break` : ""}</span>}</span>
         {venue && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{venue}</span></span>}
       </div>
       {badge && <div className="mt-1.5 flex flex-wrap gap-1.5">{badge}</div>}
