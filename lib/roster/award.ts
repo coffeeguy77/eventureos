@@ -143,6 +143,10 @@ export function awardHours(entries: Worked[], type: EmploymentType, holidays: Se
           day(p.date).overtime_200 += over - first;
           weekOt.set(wk, (weekOt.get(wk) ?? 0) + over);
         }
+      } else if (ot) {
+        // Sunday and public holiday hours count towards the week's hours, but stay at their own rate
+        const wk = weekOf(p.date);
+        weekly.set(wk, (weekly.get(wk) ?? 0) + p.mins);
       }
       day(p.date)[p.cat] += normal;
       shiftMins += p.mins;

@@ -75,3 +75,32 @@ test("rules read with defaults and keep valid overrides", () => {
   assert.equal(r.weekly_overtime, null);
   assert.equal(r.evening_from, "18:00");
 });
+
+test("Sunday hours count towards the 38 but stay Sunday", () => {
+  const m = awardHours([
+    { start: "2026-11-02T07:00", finish: "2026-11-02T15:00", breakMinutes: 0 }, // Mon 8
+    { start: "2026-11-03T07:00", finish: "2026-11-03T15:00", breakMinutes: 0 },
+    { start: "2026-11-04T07:00", finish: "2026-11-04T15:00", breakMinutes: 0 },
+    { start: "2026-11-05T07:00", finish: "2026-11-05T15:00", breakMinutes: 0 }, // 32
+    { start: "2026-11-08T07:00", finish: "2026-11-08T12:00", breakMinutes: 0 }, // Sun 5 → 37
+  ], "full_time", new Set());
+  // Sunday comes after Thursday chronologically; add a Friday that pushes past 38 before Sunday instead
+  assert.equal(m.get("2026-11-08")!.sunday, 5);
+  const m2 = awardHours([
+    { start: "2026-11-01T07:00", finish: "2026-11-01T15:00", breakMinutes: 0 }, // Sun 1 Nov (previous week)
+    { start: "2026-11-08T07:00", finish: "2026-11-08T15:00", breakMinutes: 0 }, // Sun 8 Nov counts in week of 2 Nov
+    ...["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05"].map((d) => ({ start: `${d}T07:00`, finish: `${d}T15:00`, breakMinutes: 0 })),
+  ], "full_time", new Set());
+  assert.equal(m2.get("2026-11-05")!.ordinary, 8); // 32 by Thursday; Sunday 8 Nov is after Thursday
+});
+
+test("public holiday hours count towards the week, so a later weekday goes into overtime", () => {
+  const days = ["2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01"].map((d) => ({ start: `${d}T07:00`, finish: `${d}T15:00`, breakMinutes: 0 }));
+  const m = awardHours(days, "full_time", new Set(["2026-12-28", "2027-01-01"]));
+  assert.equal(m.get("2026-12-28")!.public_holiday, 8);
+  assert.equal(m.get("2026-12-31")!.ordinary, 8); // 32 so far
+  assert.equal(m.get("2027-01-01")!.public_holiday, 8); // holiday stays holiday even past 38
+  const n = awardHours([...days.slice(0, 4), { start: "2027-01-02T07:00", finish: "2027-01-02T15:00", breakMinutes: 0 }], "full_time", new Set(["2026-12-28"]));
+  assert.equal(n.get("2027-01-02")!.saturday, 6);
+  assert.equal(n.get("2027-01-02")!.overtime_150, 2);
+});
