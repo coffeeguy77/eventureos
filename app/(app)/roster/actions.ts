@@ -41,7 +41,14 @@ export async function saveRosterShift(input: RosterShiftInput) {
     if (!DATE.test(input.date)) throw new Error("Choose the date.");
     if (!TIME.test(input.start) || !TIME.test(input.finish)) throw new Error("Check the start and finish times.");
     if (input.start === input.finish) throw new Error("The shift starts and finishes at the same time.");
-    const brk = Math.max(0, Math.min(240, Math.round(Number(input.breakMinutes) || 0)));
+    let brk = Math.max(0, Math.min(240, Math.round(Number(input.breakMinutes) || 0)));
+    {
+      // the award's unpaid meal break: a shift longer than the set hours always has at least the set break
+      const { meal } = readRosterSettings(org.settings);
+      const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      let span = m(input.finish) - m(input.start); if (span <= 0) span += 1440;
+      if (meal.minutes > 0 && span > meal.after_hours * 60) brk = Math.max(brk, meal.minutes);
+    }
     let title = "Shift";
     if (input.areaId) {
       const { data: a } = await supabase.from("roster_areas").select("name").eq("id", input.areaId).eq("organisation_id", org.id).maybeSingle();
@@ -264,12 +271,35 @@ async function saveSettings(patch: Record<string, unknown>) {
   if (error) throw new Error(error.message);
 }
 
-export async function saveRosterOptions(input: { rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null }) {
+export async function saveRosterOptions(input: {
+  rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null;
+  clock?: { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean }; meal?: { after_hours: number; minutes: number }; address?: string | null;
+}) {
   return wrap(async () => {
     const n = (v: number, max: number) => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
-    await saveSettings({ rounding: n(input.rounding, 60), grace: n(input.grace, 60), google_calendar: !!input.googleCalendar, geofence: input.geofence && input.geofence.metres > 0 ? input.geofence : null });
-    return "Saved.";
+    const g = input.geofence;
+    const fence = g && Number.isFinite(g.lat) && Number.isFinite(g.lng) && Math.abs(g.lat) <= 90 && Math.abs(g.lng) <= 180 && g.metres > 0
+      ? { lat: Math.round(g.lat * 1e6) / 1e6, lng: Math.round(g.lng * 1e6) / 1e6, metres: Math.max(20, Math.min(5000, Math.round(g.metres))) } : null;
+    const patch: Record<string, unknown> = { rounding: n(input.rounding, 60), grace: n(input.grace, 60), google_calendar: !!input.googleCalendar, geofence: fence };
+    if (input.clock) patch.clock = { cafe: ["ipad", "phone", "both"].includes(input.clock.cafe) ? input.clock.cafe : "both", events: !!input.clock.events, photo: !!input.clock.photo };
+    if (input.meal) patch.meal = { after_hours: Math.max(0, Math.min(12, Number(input.meal.after_hours) || 0)), minutes: n(input.meal.minutes, 120) };
+    if (input.address !== undefined) patch.place = { address: input.address?.trim().slice(0, 200) || null };
+    await saveSettings(patch);
+    return input.clock && (input.clock.cafe !== "ipad" || input.clock.events) && !fence ? "Saved — phones can clock on from anywhere until you set the café's location." : "Saved.";
   });
+}
+
+/** Find an address on the map (OpenStreetMap) for the clock-on area. */
+export async function findAddress(address: string): Promise<{ ok: true; lat: number; lng: number; label: string } | { ok: false; error: string }> {
+  try {
+    await office();
+    const q = address.trim();
+    if (q.length < 4) return { ok: false, error: "Type the street address." };
+    const { geocode } = await import("@/lib/jobs/server");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const hit = await geocode(createServiceClient(), q.slice(0, 150));
+    return hit ? { ok: true, ...hit } : { ok: false, error: "Couldn't find that address — try adding the suburb, or tap the map to drop the pin." };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
 export async function saveAwardRules(rules: AwardRules) {
@@ -342,6 +372,22 @@ export async function testRosterText(memberId: string, monday: string, to: strin
     const r = await textRoster(org.id, [memberId], monday, to?.trim() ? { to: to.trim() } : {});
     if (!r.sent.length) throw new Error(r.failed.join(", ") || "Not sent.");
     return "Test text sent.";
+  });
+}
+
+/** A test email: the roster email this person would get for the week, sent to them (or another address). */
+export async function testRosterEmail(memberId: string, monday: string, to: string | null) {
+  return wrap(async () => {
+    const { supabase, org } = await office();
+    if (!UUID.test(memberId) || !DATE.test(monday)) throw new Error("Choose who and the week.");
+    const addr = to?.trim() || "";
+    if (addr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) throw new Error("Check the email address.");
+    const { data } = await supabase.from("staff_shifts").select("shift_date, start_time, finish_time, break_minutes, notes, area:roster_areas(name)")
+      .eq("organisation_id", org.id).eq("roster", true).eq("crew_member_id", memberId).gte("shift_date", monday).lte("shift_date", addDaysISO(monday, 6)).order("shift_date").order("start_time");
+    const shifts = (data ?? []) as unknown as { shift_date: string; start_time: string; finish_time: string; break_minutes: number; notes: string | null; area: { name: string } | null }[];
+    await emailStaff(supabase, org.id, [{ memberId, subject: `Your roster: week of ${fmtDate(monday, "short")}`,
+      intro: shifts.length ? "Here are your shifts for the week:" : "You're not rostered this week.", lines: shifts.map((s) => shiftLine({ ...s, area: s.area?.name ?? null })) }], { to: addr || undefined, strict: true });
+    return `Test email sent${addr ? ` to ${addr}` : ""}${shifts.length ? "" : " (they have no shifts that week, so it says so)"}.`;
   });
 }
 

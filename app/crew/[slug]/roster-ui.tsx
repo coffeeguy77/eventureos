@@ -21,18 +21,28 @@ function getWhere(): Promise<{ lat: number; lng: number } | null> {
 }
 
 /** Clock on / break / clock off. */
-export function ClockPanel({ slug, open, needsPlace }: { slug: string; open: { clock_in: string; break_started_at: string | null; break_minutes: number } | null; needsPlace: boolean }) {
+export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad = false, events = [] }: {
+  slug: string; open: { clock_in: string; break_started_at: string | null; break_minutes: number } | null; needsPlace: boolean;
+  cafePhone?: boolean; cafeIpad?: boolean; events?: { id: string; name: string; start: string | null }[];
+}) {
   const { run, pending, toast } = useRun();
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30000); return () => clearInterval(t); }, []);
-  const go = (what: "on" | "break" | "back" | "off") => run(async () => clock(slug, what, what === "on" || what === "off" ? (needsPlace ? await getWhere() : null) : null));
+  // the location is saved when the phone gives it (and checked against the café pin for café shifts); off = not saved
+  const go = (what: "on" | "break" | "back" | "off", eventId: string | null = null) => run(async () => clock(slug, what, what === "on" || what === "off" ? await getWhere() : null, eventId));
   return (
     <div className="space-y-3 rounded-2xl bg-surface p-5 text-center shadow-card ring-1 ring-line">
       {!open ? (
         <>
           <p className="text-[0.9375rem] text-ink-muted">You&apos;re not clocked on.</p>
-          <button className={btn("primary", "h-14 w-full text-[1rem]")} disabled={pending} onClick={() => go("on")}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}Clock on</button>
-          {needsPlace && <p className="text-[0.75rem] text-ink-faint">Your phone will ask for your location to check you&apos;re at work.</p>}
+          {cafePhone && <button className={btn("primary", "h-14 w-full text-[1rem]")} disabled={pending} onClick={() => go("on")}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}Clock on{events.length ? " — café shift" : ""}</button>}
+          {events.map((e) => (
+            <button key={e.id} className={btn(cafePhone ? "secondary" : "primary", "h-14 w-full text-[1rem]")} disabled={pending} onClick={() => go("on", e.id)}>
+              <LogIn className="h-5 w-5" />Clock on — {e.name}{e.start ? ` (${e.start.slice(0, 5)})` : ""}
+            </button>
+          ))}
+          {!cafePhone && !events.length && <p className="text-[0.875rem] text-ink-muted">{cafeIpad ? "Café shifts are clocked on at the café iPad." : "No shift to clock on for today."}</p>}
+          {(cafePhone || events.length > 0) && <p className="text-[0.75rem] text-ink-faint">{needsPlace ? "Your phone will ask for your location to check you're at work." : "Your phone may ask for your location — it's saved with your clock-on if you allow it."}</p>}
         </>
       ) : (
         <>

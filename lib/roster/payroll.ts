@@ -49,7 +49,11 @@ export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: 
       for (const per of periods.values()) {
         const { data: rows } = await db.from("staff_time_entries").select("id, crew_member_id, work_date, paid_start, paid_finish, clock_in, clock_out, break_minutes, status, sent_to_xero_at")
           .eq("crew_member_id", p.id).eq("status", "approved").gte("work_date", per.start).lte("work_date", per.end);
-        const entries = (rows ?? []) as (Entry & { sent_to_xero_at?: string | null })[];
+        // event-shift clock-ons are a record only (event pay comes from the job), so they never go to Xero
+        let evIds = new Set<string>();
+        const ev = await db.from("staff_time_entries").select("id").eq("crew_member_id", p.id).gte("work_date", per.start).lte("work_date", per.end).not("event_crew_id", "is", null);
+        if (!ev.error) evIds = new Set(((ev.data ?? []) as { id: string }[]).map((r) => r.id));
+        const entries = ((rows ?? []) as (Entry & { sent_to_xero_at?: string | null })[]).filter((e) => !evIds.has(e.id));
         // already in Xero and nothing changed since (e.g. weeks brought over from Deputy, which Xero has paid)
         if (entries.length && entries.every((e) => e.sent_to_xero_at)) continue;
         const { data: hol } = await db.from("public_holidays").select("holiday_date").eq("organisation_id", org.id).gte("holiday_date", per.start).lte("holiday_date", per.end);

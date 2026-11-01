@@ -26,5 +26,6 @@ export default async function KioskPage({ params, searchParams }: { params: Prom
   for (const s of (shifts ?? []) as { crew_member_id: string | null; start_time: string; finish_time: string }[]) if (s.crew_member_id) when.set(s.crew_member_id, `${s.start_time.slice(0, 5)}–${s.finish_time.slice(0, 5)}`);
   const list = ((people ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name, state: (state.get(p.id) ?? "off") as "off" | "on" | "break", shift: when.get(p.id) ?? null }))
     .sort((a, b) => Number(!!b.shift) - Number(!!a.shift) || a.name.localeCompare(b.name));
-  return <Kiosk slug={slug} token={token} business={k.name} people={list} />;
+  const { readRosterSettings } = await import("@/lib/roster/settings");
+  return <Kiosk slug={slug} token={token} business={k.name} people={list} photo={readRosterSettings(k.org.settings).clock.photo} />;
 }

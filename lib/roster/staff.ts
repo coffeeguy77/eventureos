@@ -4,10 +4,15 @@ import { addDaysISO, todayISO } from "@/lib/format";
 
 /** The café-roster parts of the staff app: availability, leave, swaps / cover, open shifts, timesheets. */
 
-export async function rosterProfile(s: CrewSession): Promise<{ onRoster: boolean; employment: string }> {
-  const { data, error } = await s.db.from("crew_members").select("on_roster, employment_type").eq("id", s.member.id).maybeSingle();
-  if (error || !data) return { onRoster: false, employment: "casual" };
-  return { onRoster: !!data.on_roster, employment: (data.employment_type as string) ?? "casual" };
+export async function rosterProfile(s: CrewSession): Promise<{ onRoster: boolean; employment: string; clockEvents: boolean; cafePhone: boolean }> {
+  const [{ data, error }, { data: o }] = await Promise.all([
+    s.db.from("crew_members").select("on_roster, employment_type").eq("id", s.member.id).maybeSingle(),
+    s.db.from("organisations").select("settings").eq("id", s.org.id).maybeSingle(),
+  ]);
+  const { readRosterSettings } = await import("./settings");
+  const st = readRosterSettings(o?.settings);
+  if (error || !data) return { onRoster: false, employment: "casual", clockEvents: st.clock.events, cafePhone: false };
+  return { onRoster: !!data.on_roster, employment: (data.employment_type as string) ?? "casual", clockEvents: st.clock.events, cafePhone: !!data.on_roster && st.clock.cafe !== "ipad" };
 }
 
 export async function myAvailability(s: CrewSession) {

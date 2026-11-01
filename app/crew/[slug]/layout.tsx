@@ -51,7 +51,7 @@ export default async function CrewLayout({ children, params }: { children: React
         {s && <InstallPrompt appName="Roster" />}
         {children}
       </main>
-      {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} roster={(await rosterProfile(s)).onRoster} />}
+      {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} roster={await rosterProfile(s).then((r) => r.onRoster || r.clockEvents)} />}
     </div>
   );
 }

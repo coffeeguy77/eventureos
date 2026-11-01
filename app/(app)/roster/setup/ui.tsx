@@ -9,7 +9,8 @@ import { Input, Label, Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
-import { disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { LeafletMap } from "@/components/maps/leaflet-map";
+import { findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -214,36 +215,74 @@ export function PayRulesCard({ rules }: { rules: AwardRules }) {
   );
 }
 
-export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug }: { rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null; kioskSet: boolean; slug: string }) {
-  const { pending, run, note } = useAct();
-  const [v, setV] = useState({ rounding, grace, googleCalendar, geofence });
+type ClockHow = { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean };
+export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug, clock, meal, address }: {
+  rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null; kioskSet: boolean; slug: string;
+  clock: ClockHow; meal: { after_hours: number; minutes: number }; address: string | null;
+}) {
+  const { pending, run, note, setMsg } = useAct();
+  const [v, setV] = useState({ rounding, grace, googleCalendar, geofence, clock, meal, address: address ?? "" });
   const [link, setLink] = useState<string | null>(null);
-  const here = () => navigator.geolocation?.getCurrentPosition((p) => setV((x) => ({ ...x, geofence: { lat: Math.round(p.coords.latitude * 1e6) / 1e6, lng: Math.round(p.coords.longitude * 1e6) / 1e6, metres: x.geofence?.metres ?? 150 } })));
+  const [finding, setFinding] = useState(false);
+  const pin = (lat: number, lng: number) => setV((x) => ({ ...x, geofence: { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, metres: x.geofence?.metres ?? 100 } }));
+  const here = () => navigator.geolocation?.getCurrentPosition((p) => pin(p.coords.latitude, p.coords.longitude), () => setMsg({ ok: false, text: "Your browser didn't share your location — search the address or tap the map instead." }));
+  const search = async () => {
+    setFinding(true);
+    const r = await findAddress(v.address).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+    setFinding(false);
+    if (r.ok) { pin(r.lat, r.lng); setMsg({ ok: true, text: `Found ${r.label} — drag the pin onto your door if it's a little off, then Save.` }); }
+    else setMsg({ ok: false, text: r.error });
+  };
+  const phones = v.clock.cafe !== "ipad" || v.clock.events;
   return (
     <Card>
-      <CardHeader title="Clocking on" subtitle="Staff clock on and off in the staff app on their phone, or on a café iPad with their PIN." />
-      <div className="space-y-4 border-t border-line px-5 py-4 text-[0.8125rem]">
+      <CardHeader title="Clocking on" subtitle="How staff clock on and off: café shifts on the iPad with a PIN, event shifts in the staff app on their phone — or whichever you allow." />
+      <div className="space-y-5 border-t border-line px-5 py-4 text-[0.8125rem]">
         <div className="grid gap-3 sm:grid-cols-3">
+          <div><Label>Café shifts clock on</Label>
+            <Select value={v.clock.cafe} onChange={(e) => setV({ ...v, clock: { ...v.clock, cafe: e.target.value as ClockHow["cafe"] } })}>
+              <option value="ipad">On the café iPad only</option><option value="phone">On their phone only</option><option value="both">iPad or phone</option>
+            </Select></div>
+          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.clock.events} onChange={(e) => setV({ ...v, clock: { ...v.clock, events: e.target.checked } })} />Event shifts: clock on in the staff app</label>
+          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.clock.photo} onChange={(e) => setV({ ...v, clock: { ...v.clock, photo: e.target.checked } })} />iPad takes a photo at clock on / off</label>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
           <div><Label hint="minutes">Round clock times to</Label><Input type="number" min={0} max={60} value={v.rounding} onChange={(e) => setV({ ...v, rounding: Number(e.target.value) })} /></div>
           <div><Label hint="minutes">Pay rostered times if within</Label><Input type="number" min={0} max={60} value={v.grace} onChange={(e) => setV({ ...v, grace: Number(e.target.value) })} /></div>
-          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.googleCalendar} onChange={(e) => setV({ ...v, googleCalendar: e.target.checked })} />Also put published shifts on Google Calendar</label>
+          <div><Label hint="minutes">Unpaid meal break</Label><Input type="number" min={0} max={120} step={5} value={v.meal.minutes} onChange={(e) => setV({ ...v, meal: { ...v.meal, minutes: Number(e.target.value) } })} /></div>
+          <div><Label hint="hours">…on shifts longer than</Label><Input type="number" min={0} max={12} step={0.5} value={v.meal.after_hours} onChange={(e) => setV({ ...v, meal: { ...v.meal, after_hours: Number(e.target.value) } })} /></div>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div><Label hint="phones only">Clock on near the café</Label>
-            <p className="text-[0.75rem] text-ink-muted">{v.geofence ? `Within ${v.geofence.metres} m of ${v.geofence.lat}, ${v.geofence.lng}` : "Anywhere"}</p></div>
-          <Button size="sm" onClick={here}><MapPin className="h-3.5 w-3.5" />Use where I am now</Button>
-          {v.geofence && <Input type="number" className="w-24" min={50} max={2000} value={v.geofence.metres} onChange={(e) => setV({ ...v, geofence: { ...v.geofence!, metres: Number(e.target.value) } })} aria-label="Metres" />}
-          {v.geofence && <Button size="sm" variant="ghost" onClick={() => setV({ ...v, geofence: null })}>Anywhere</Button>}
+        <p className="-mt-3 text-[0.7188rem] text-ink-faint">The break is always taken off café shifts over that length — on the roster, in texts and emails, and at clock-off — even if they don&rsquo;t tap &ldquo;Start break&rdquo;. Event shifts are paid from the job, so this doesn&rsquo;t apply to them.</p>
+        <label className="flex items-center gap-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.googleCalendar} onChange={(e) => setV({ ...v, googleCalendar: e.target.checked })} />Also put published shifts on Google Calendar</label>
+
+        <div className="space-y-2 rounded-lg bg-zinc-50 px-3 py-3">
+          <p className="font-medium text-ink">Where phones can clock on</p>
+          <p className="text-[0.75rem] text-ink-muted">{phones ? "Search the café's address, or tap the map to drop the pin, then set how close they must be. Anyone further away can't clock on from their phone." : "Only the iPad is used for café shifts, so this only matters if you allow phones."} Their location is saved with each phone clock-on and off; if location is turned off on their phone, nothing is saved{v.geofence ? " and they can't clock on from it" : ""}.</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[220px] flex-1"><Label>Café address</Label><Input value={v.address} onChange={(e) => setV({ ...v, address: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); search(); } }} placeholder="Street, suburb" /></div>
+            <Button size="sm" disabled={finding || v.address.trim().length < 4} onClick={search}>{finding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}Find on map</Button>
+            <Button size="sm" variant="ghost" onClick={here}>Use where I am now</Button>
+          </div>
+          <LeafletMap pins={v.geofence ? [{ lat: v.geofence.lat, lng: v.geofence.lng, label: "Clock-on point (drag me)" }] : []} circle={v.geofence} onPick={pin} height={280} />
+          <div className="flex flex-wrap items-center gap-2 text-[0.75rem] text-ink-muted">
+            {v.geofence ? <>
+              <span>Within</span>
+              <Input type="number" className="h-8 w-24" min={20} max={5000} step={10} value={v.geofence.metres} onChange={(e) => setV({ ...v, geofence: { ...v.geofence!, metres: Number(e.target.value) } })} aria-label="Metres" />
+              <span>metres of the pin (about 50–100 m keeps out the street over)</span>
+              <Button size="sm" variant="ghost" onClick={() => setV({ ...v, geofence: null })}>Allow anywhere</Button>
+            </> : <span>No pin yet — phones can clock on from anywhere. Tap the map to drop one.</span>}
+          </div>
         </div>
         <Button size="sm" variant="primary" disabled={pending} onClick={() => run(() => saveRosterOptions(v))}>Save</Button>
+        {note && !link ? note : null}
+
         <div className="rounded-lg bg-zinc-50 px-3 py-3">
           <p className="font-medium text-ink">Café iPad</p>
-          <p className="text-[0.75rem] text-ink-muted">Open this link on the café iPad and add it to the home screen. Staff tap their name and enter their PIN to clock on, start a break, or clock off. {kioskSet ? "Making a new link stops the old one working." : ""}</p>
+          <p className="text-[0.75rem] text-ink-muted">Open this link on the café iPad in Safari and add it to the home screen. Staff tap their name and enter their PIN to clock on, start a break, or clock off{v.clock.photo ? "; the front camera takes a small photo each time (Safari asks to allow the camera the first time)" : ""}. {kioskSet ? "Making a new link stops the old one working." : ""}</p>
           {link ? <p className="mt-2 select-all break-all rounded bg-canvas px-2 py-1.5 font-mono text-[0.75rem] text-ink ring-1 ring-line">{`${window.location.origin}/crew/${slug}/kiosk?k=${link}`}</p> : null}
           <Button size="sm" className="mt-2" disabled={pending} onClick={() => run(() => newKioskLink(), (r) => r.ok && r.message && setLink(r.message))}>{kioskSet ? "Make a new iPad link" : "Make the iPad link"}</Button>
           {link && <p className="mt-1 text-[0.7188rem] text-amber-800">Copy it now — it isn&rsquo;t shown again.</p>}
         </div>
-        {note && !link ? note : null}
       </div>
     </Card>
   );
@@ -310,26 +349,34 @@ export function PastPayCard({ past }: { past: PastPay | null }) {
 }
 
 /** Send a test of the weekly roster text (what that person gets), to them or to another mobile. */
-export function TextsCard({ people, monday, smsOn }: { people: { id: string; name: string; phone: string | null }[]; monday: string; smsOn: boolean }) {
+export function TextsCard({ people, monday, smsOn }: { people: { id: string; name: string; phone: string | null; email: string | null }[]; monday: string; smsOn: boolean }) {
   const { pending, run, note } = useAct();
   const [who, setWho] = useState(people[0]?.id ?? "");
   const [to, setTo] = useState("");
+  const [mailTo, setMailTo] = useState("");
   const p = people.find((x) => x.id === who);
   return (
     <Card>
-      <CardHeader title="Text messages" subtitle="When Cara publishes, tick “Text staff” and each person gets their shifts for the week and a link to the staff app. Staff need a mobile number in Settings → Team." />
-      <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
-        {!smsOn ? <p className="text-ink-muted">Connect Twilio in Settings → Integrations first.</p> : (
-          <>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-              <div><Label>Whose roster (this week)</Label>
-                <Select value={who} onChange={(e) => setWho(e.target.value)}>{people.map((x) => <option key={x.id} value={x.id}>{x.name}{x.phone ? "" : " — no mobile yet"}</option>)}</Select></div>
-              <div><Label hint="optional">Send it to this mobile instead</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={p?.phone ?? "04xx xxx xxx"} inputMode="tel" /></div>
-              <Button size="sm" variant="primary" disabled={pending || !who || (!to.trim() && !p?.phone)} onClick={() => run(() => testRosterText(who, monday, to || null))}>Send a test text</Button>
-            </div>
-            <p className="text-[0.7188rem] text-ink-faint">It reads like: “Hi Cara, your Bean Culture roster for w/c 2 Nov: Tue 6:30am–3pm, Thu 6:30am–3pm… Details, swaps &amp; clock on: (link)”.</p>
-          </>
+      <CardHeader title="Texts and emails" subtitle="When you publish, tick “Email staff” and/or “Text staff”: each person gets their shifts for the week — one per line, with any shift notes — and a link to the staff app. Mobiles and emails come from Settings → Team." />
+      <div className="space-y-4 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <div><Label>Whose roster (this week)</Label>
+          <Select value={who} onChange={(e) => setWho(e.target.value)}>{people.map((x) => <option key={x.id} value={x.id}>{x.name}{!x.phone ? " — no mobile" : ""}{!x.email ? " — no email" : ""}</option>)}</Select></div>
+        {!smsOn ? <p className="text-ink-muted">Connect Twilio in Settings → Integrations to send texts.</p> : (
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div><Label hint="optional">Send the test text to this mobile instead</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={p?.phone ?? "04xx xxx xxx"} inputMode="tel" /></div>
+            <Button size="sm" variant="primary" disabled={pending || !who || (!to.trim() && !p?.phone)} onClick={() => run(() => testRosterText(who, monday, to || null))}>Send a test text</Button>
+          </div>
         )}
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div><Label hint="optional">Send the test email to this address instead</Label><Input type="email" value={mailTo} onChange={(e) => setMailTo(e.target.value)} placeholder={p?.email ?? "name@example.com"} /></div>
+          <Button size="sm" variant="primary" disabled={pending || !who || (!mailTo.trim() && !p?.email)} onClick={() => run(() => testRosterEmail(who, monday, mailTo || null))}>Send a test email</Button>
+        </div>
+        <pre className="whitespace-pre-wrap rounded-lg bg-canvas px-3 py-2 font-sans text-[0.75rem] text-ink-muted ring-1 ring-line">{`A text reads like:
+Hi ${p?.name.split(" ")[0] ?? "Sam"}, your shifts at (your business) from Mon, 3 Nov:
+Mon 6:30am-3pm Cafe (30m unpaid break)
+ > Note: (the shift's note)
+Wed 7am-11am Kitchen
+Roster, swaps & clock on: (link)`}</pre>
         {note}
       </div>
     </Card>

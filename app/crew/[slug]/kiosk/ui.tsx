@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Delete, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -8,7 +8,7 @@ import { kioskClock } from "./actions";
 
 type P = { id: string; name: string; state: "off" | "on" | "break"; shift: string | null };
 
-export function Kiosk({ slug, token, business, people }: { slug: string; token: string; business: string; people: P[] }) {
+export function Kiosk({ slug, token, business, people, photo = true }: { slug: string; token: string; business: string; people: P[]; photo?: boolean }) {
   const router = useRouter();
   const [who, setWho] = useState<P | null>(null);
   const [pin, setPin] = useState("");
@@ -17,7 +17,27 @@ export function Kiosk({ slug, token, business, people }: { slug: string; token: 
   const [pending, start] = useTransition();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => { setNow(new Date()); router.refresh(); }, 60000); return () => clearInterval(t); }, [router]);
-  const reset = () => { setWho(null); setPin(""); setState(null); };
+  const video = useRef<HTMLVideoElement | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const stopCam = () => { stream.current?.getTracks().forEach((t) => t.stop()); stream.current = null; };
+  const reset = () => { setWho(null); setPin(""); setState(null); stopCam(); };
+  // once the PIN is right, the front camera turns on so a photo can be taken as they clock on / off
+  useEffect(() => {
+    if (!photo || !state || !navigator.mediaDevices?.getUserMedia) return;
+    let live = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } }, audio: false })
+      .then((st) => { if (!live) { st.getTracks().forEach((t) => t.stop()); return; } stream.current = st; if (video.current) { video.current.srcObject = st; void video.current.play().catch(() => undefined); } })
+      .catch(() => undefined); // no camera / not allowed: clocking still works
+    return () => { live = false; stopCam(); };
+  }, [photo, state]);
+  const snap = (): string | null => {
+    const v = video.current;
+    if (!v || !v.videoWidth) return null;
+    const side = Math.min(v.videoWidth, v.videoHeight), c = document.createElement("canvas");
+    c.width = 320; c.height = 320;
+    c.getContext("2d")!.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, 320, 320);
+    return c.toDataURL("image/jpeg", 0.7);
+  };
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(null), 5000); return () => clearTimeout(t); }, [msg]);
   useEffect(() => { if (!who) return; const t = setTimeout(reset, 45000); return () => clearTimeout(t); }, [who, pin, state]);
 
@@ -31,7 +51,8 @@ export function Kiosk({ slug, token, business, people }: { slug: string; token: 
     });
   };
   const doIt = (what: "on" | "break" | "back" | "off") => who && start(async () => {
-    const r = await kioskClock(slug, token, who.id, pin, what);
+    const pic = what === "on" || what === "off" ? snap() : null;
+    const r = await kioskClock(slug, token, who.id, pin, what, pic);
     setMsg(r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error });
     reset();
     router.refresh();
@@ -75,6 +96,7 @@ export function Kiosk({ slug, token, business, people }: { slug: string; token: 
               </>
             ) : (
               <div className="mt-4 grid gap-3">
+                {photo && <video ref={video} playsInline muted className="mx-auto aspect-square w-40 rounded-2xl bg-zinc-100 object-cover [transform:scaleX(-1)]" aria-label="Camera — your photo is taken as you clock on or off" />}
                 {state === "off" && <button disabled={pending} onClick={() => doIt("on")} className="h-16 rounded-2xl bg-emerald-600 text-[1.125rem] font-semibold text-white">Clock on</button>}
                 {state === "on" && <button disabled={pending} onClick={() => doIt("break")} className="h-16 rounded-2xl bg-amber-500 text-[1.125rem] font-semibold text-white">Start break</button>}
                 {state === "break" && <button disabled={pending} onClick={() => doIt("back")} className="h-16 rounded-2xl bg-amber-500 text-[1.125rem] font-semibold text-white">End break</button>}

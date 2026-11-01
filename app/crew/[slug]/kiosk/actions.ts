@@ -9,7 +9,7 @@ export type KioskResult = { ok: true; message: string; state?: "off" | "on" | "b
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-export async function kioskClock(slug: string, token: string, memberId: string, pin: string, what: "check" | "on" | "break" | "back" | "off"): Promise<KioskResult> {
+export async function kioskClock(slug: string, token: string, memberId: string, pin: string, what: "check" | "on" | "break" | "back" | "off", photo: string | null = null): Promise<KioskResult> {
   try {
     const k = await kioskOrg(slug, token);
     if (!k) return { ok: false, error: "This iPad link has been replaced — ask the office for the new one." };
@@ -25,8 +25,9 @@ export async function kioskClock(slug: string, token: string, memberId: string, 
       const e = await openEntry(k.db, k.org.id, memberId);
       return { ok: true, message: `Hi ${first}`, state: !e ? "off" : e.break_started_at ? "break" : "on" };
     }
-    const msg = what === "on" ? await clockOn(k.db, k.org, memberId, { source: "kiosk", where: null })
-      : what === "off" ? await clockOff(k.db, k.org, memberId, { source: "kiosk", where: null })
+    const pic = photo && photo.length < 800_000 ? photo : null;
+    const msg = what === "on" ? await clockOn(k.db, k.org, memberId, { source: "kiosk", where: null, photo: pic })
+      : what === "off" ? await clockOff(k.db, k.org, memberId, { source: "kiosk", where: null, photo: pic })
       : what === "break" ? await startBreak(k.db, k.org.id, memberId) : await endBreak(k.db, k.org.id, memberId);
     return { ok: true, message: `${first}: ${msg}` };
   } catch (e) {

@@ -27,9 +27,16 @@ export async function updateEntry(id: string, v: { start: string; finish: string
     if (!UUID.test(id)) throw new Error("Refresh and try again.");
     if (!LOCAL.test(v.start) || !LOCAL.test(v.finish)) throw new Error("Check the start and finish.");
     if (v.finish <= v.start) throw new Error("The finish is before the start.");
-    const brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
-    const { data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    let brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
+    let { data: e, error: selErr } = await supabase.from("staff_time_entries").select("id, clock_out, status, event_crew_id").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    if (selErr) ({ data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status").eq("id", id).eq("organisation_id", org.id).maybeSingle());
     if (!e) throw new Error("That entry no longer exists.");
+    if (!(e as { event_crew_id?: string | null }).event_crew_id) {
+      const { readRosterSettings } = await import("@/lib/roster/settings");
+      const { meal } = readRosterSettings(org.settings);
+      const hrs = (Date.parse(fromLocal(v.finish, org.timezone)) - Date.parse(fromLocal(v.start, org.timezone))) / 3_600_000;
+      if (meal.minutes > 0 && hrs > meal.after_hours) brk = Math.max(brk, meal.minutes);
+    }
     if (!e.clock_out) throw new Error("They're still clocked on — wait until they clock off.");
     const { error } = await supabase.from("staff_time_entries").update({
       paid_start: fromLocal(v.start, org.timezone), paid_finish: fromLocal(v.finish, org.timezone), break_minutes: brk, note: v.note?.trim().slice(0, 500) || null,
@@ -64,9 +71,13 @@ export async function addEntry(v: { crewId: string; start: string; finish: strin
     if (!LOCAL.test(v.start) || !LOCAL.test(v.finish) || v.finish <= v.start) throw new Error("Check the start and finish.");
     if (v.shiftId && !UUID.test(v.shiftId)) throw new Error("Refresh and try again.");
     const s = fromLocal(v.start, org.timezone), f = fromLocal(v.finish, org.timezone);
+    const { readRosterSettings } = await import("@/lib/roster/settings");
+    const { meal } = readRosterSettings(org.settings);
+    let brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
+    if (meal.minutes > 0 && (Date.parse(f) - Date.parse(s)) / 3_600_000 > meal.after_hours) brk = Math.max(brk, meal.minutes);
     const { error } = await supabase.from("staff_time_entries").insert({
       organisation_id: org.id, crew_member_id: v.crewId, staff_shift_id: v.shiftId, work_date: v.start.slice(0, 10), clock_in: s, clock_out: f, paid_start: s, paid_finish: f,
-      break_minutes: Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0))), source: "office", status: "pending", note: v.note?.trim().slice(0, 500) || `Added by ${user.email ?? "the office"}`,
+      break_minutes: brk, source: "office", status: "pending", note: v.note?.trim().slice(0, 500) || `Added by ${user.email ?? "the office"}`,
     });
     if (error) throw new Error(/one_open/.test(error.message) ? "They're clocked on right now — add it after they clock off." : error.message);
     return "Added.";

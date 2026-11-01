@@ -17,6 +17,12 @@ export interface RosterSettings {
   flat: string[];
   /** the café iPad: a secret in its link (hashed here) */
   kiosk_hash: string | null;
+  /** how staff clock on: café roster shifts on the iPad, a phone, or either; event shifts in the staff app (yes/no) */
+  clock: { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean };
+  /** the unpaid meal break the award requires: at least this many minutes once a shift is longer than this many hours */
+  meal: { after_hours: number; minutes: number };
+  /** where the café is (an address and a pin), and how close a phone must be to clock on (metres) */
+  place: { address: string | null } ;
   /** clock on from a phone only near the café (metres; 0 = anywhere) */
   geofence: { lat: number; lng: number; metres: number } | null;
 }
@@ -34,6 +40,9 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     xero: { earnings: x.earnings ?? {}, status: x.status === "DRAFT" ? "DRAFT" : "APPROVED" },
     kiosk_hash: typeof r.kiosk_hash === "string" ? r.kiosk_hash : null,
     payroll_off: r.payroll_off === true,
+    clock: (() => { const c = (r.clock ?? {}) as Record<string, unknown>; return { cafe: c.cafe === "ipad" || c.cafe === "phone" ? c.cafe : "both", events: c.events === true, photo: c.photo !== false } as RosterSettings["clock"]; })(),
+    meal: (() => { const m = (r.meal ?? {}) as Record<string, unknown>; return { after_hours: n(m.after_hours, 5), minutes: n(m.minutes, 30) }; })(),
+    place: { address: typeof (r.place as { address?: unknown } | undefined)?.address === "string" ? String((r.place as { address: string }).address) : null },
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
     geofence: g && typeof g.lat === "number" && typeof g.lng === "number" && typeof g.metres === "number" && g.metres > 0 ? { lat: g.lat, lng: g.lng, metres: g.metres } : null,
   };
