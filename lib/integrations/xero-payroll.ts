@@ -16,7 +16,8 @@ import { xeroReason } from "@/lib/integrations/xero-recode";
 const API = "https://api.xero.com/payroll.xro/1.0";
 const get = <T,>(ctx: SyncContext, path: string) => apiJSON<T>(ctx, `${API}${path}`, { headers: { "xero-tenant-id": tenantId(ctx) } }, `Xero Payroll ${path.split("?")[0]}`);
 
-export const PAYROLL_SCOPES = ["payroll.employees.read", "payroll.settings.read", "payroll.timesheets"];
+/** read employees, pay items and past pay runs / payslips (to see the rates used); write timesheets */
+export const PAYROLL_SCOPES = ["payroll.employees.read", "payroll.settings.read", "payroll.payruns.read", "payroll.payslip.read", "payroll.timesheets"];
 
 export interface PayrollEmployee { id: string; name: string; email: string | null; status: string; calendarId: string | null }
 export interface EarningsRate { id: string; name: string; type: string; rateType: string }
@@ -68,3 +69,36 @@ export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Prom
   } catch (e) { throw new Error(xeroReason(e)); }
 }
 
+
+export interface PastPay { employeeId: string; name: string; runs: number; lines: { earningsRateId: string; name: string; rate: number | null; hours: number; amount: number }[] }
+
+/**
+ * What the last few posted pay runs paid each person: hours and rate per earnings rate.
+ *   GET /PayRuns · GET /PayRuns/{id} (its payslips) · GET /Payslip/{id} (earnings lines)
+ */
+export async function pastPay(ctx: SyncContext, runs = 4): Promise<{ periods: { start: string | null; end: string | null; paid: string | null }[]; people: PastPay[] }> {
+  const rates = new Map((await earningsRates(ctx)).map((r) => [r.id, r.name]));
+  const all = await get<{ PayRuns?: { PayRunID: string; PayRunStatus: string; PayRunPeriodStartDate?: string; PayRunPeriodEndDate?: string; PaymentDate?: string }[] }>(ctx, "/PayRuns");
+  const posted = (all.PayRuns ?? []).filter((r) => r.PayRunStatus === "POSTED")
+    .sort((a, b) => (xeroDate(b.PaymentDate) ?? "").localeCompare(xeroDate(a.PaymentDate) ?? "")).slice(0, runs);
+  const people = new Map<string, PastPay>();
+  const periods: { start: string | null; end: string | null; paid: string | null }[] = [];
+  for (const run of posted) {
+    periods.push({ start: xeroDate(run.PayRunPeriodStartDate), end: xeroDate(run.PayRunPeriodEndDate), paid: xeroDate(run.PaymentDate) });
+    const d = await get<{ PayRuns?: { Payslips?: { PayslipID: string; EmployeeID: string; FirstName?: string; LastName?: string }[] }[] }>(ctx, `/PayRuns/${run.PayRunID}`);
+    for (const ps of d.PayRuns?.[0]?.Payslips ?? []) {
+      const slip = await get<{ Payslip?: { EarningsLines?: { EarningsRateID: string; RatePerUnit?: number; NumberOfUnits?: number; Amount?: number; FixedAmount?: number }[] } }>(ctx, `/Payslip/${ps.PayslipID}`);
+      const p = people.get(ps.EmployeeID) ?? { employeeId: ps.EmployeeID, name: `${ps.FirstName ?? ""} ${ps.LastName ?? ""}`.trim(), runs: 0, lines: [] };
+      p.runs++;
+      for (const l of slip.Payslip?.EarningsLines ?? []) {
+        const units = Number(l.NumberOfUnits ?? 0), rate = l.RatePerUnit == null ? null : Number(l.RatePerUnit);
+        const amount = Number(l.Amount ?? l.FixedAmount ?? (rate != null ? rate * units : 0));
+        const cur = p.lines.find((x) => x.earningsRateId === l.EarningsRateID && x.rate === rate);
+        if (cur) { cur.hours += units; cur.amount += amount; }
+        else p.lines.push({ earningsRateId: l.EarningsRateID, name: rates.get(l.EarningsRateID) ?? "Earnings", rate, hours: units, amount });
+      }
+      people.set(ps.EmployeeID, p);
+    }
+  }
+  return { periods, people: [...people.values()].map((p) => ({ ...p, lines: p.lines.map((l) => ({ ...l, hours: Math.round(l.hours * 100) / 100, amount: Math.round(l.amount * 100) / 100 })) })) };
+}

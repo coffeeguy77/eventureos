@@ -261,3 +261,37 @@ export function HolidaysCard({ holidays }: { holidays: { holiday_date: string; n
     </Card>
   );
 }
+
+type PastPay = { periods: { start: string | null; end: string | null; paid: string | null }[]; people: { employeeId: string; name: string; runs: number; lines: { earningsRateId: string; name: string; rate: number | null; hours: number; amount: number }[] }[]; fetched_at?: string };
+
+/** What the last pay runs in Xero paid each person — the rates and earnings rates to copy. */
+export function PastPayCard({ past }: { past: PastPay | null }) {
+  return (
+    <Card>
+      <CardHeader title="Past pay runs (from Xero)" subtitle={past?.periods.length ? `The last ${past.periods.length} posted pay runs${past.periods[past.periods.length - 1]?.start ? `, from ${fmtDate(past.periods[past.periods.length - 1].start)}` : ""}. Use these rates for each person's base rate, and to match the earnings rates above.` : undefined} />
+      <div className="border-t border-line px-5 py-4 text-[0.8125rem]">
+        {!past ? (
+          <div className="space-y-2"><p className="text-ink-muted">EventureOS needs one more Xero permission to read past pay runs and payslips.</p>
+            <a href="/api/integrations/xero/connect?payroll=1" className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-3 text-[0.8125rem] font-medium text-white hover:bg-brand-700">Reconnect Xero Payroll</a></div>
+        ) : !past.people.length ? <p className="text-ink-muted">No posted pay runs found in Xero.</p> : (
+          <div className="space-y-4">
+            {past.people.map((p) => (
+              <div key={p.employeeId}>
+                <p className="font-semibold text-ink">{p.name} <span className="font-normal text-ink-faint">· {p.runs} pay run{p.runs === 1 ? "" : "s"}</span></p>
+                <table className="mt-1 w-full max-w-xl text-[0.75rem]">
+                  <tbody>
+                    {p.lines.map((l, i) => (
+                      <tr key={i} className="border-b border-line/60"><td className="py-1 pr-3 text-ink">{l.name}</td><td className="py-1 pr-3 text-right tabular-nums">{l.hours} h</td>
+                        <td className="py-1 pr-3 text-right tabular-nums">{l.rate != null ? `$${l.rate.toFixed(2)}/h` : "—"}</td><td className="py-1 text-right tabular-nums text-ink-muted">${l.amount.toFixed(2)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+            {past.fetched_at && <p className="text-[0.7188rem] text-ink-faint">Read from Xero {new Date(past.fetched_at).toLocaleString()}.</p>}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}

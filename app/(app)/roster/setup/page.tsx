@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { RosterTabs } from "../tabs";
-import { AreasCard, HolidaysCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
+import { AreasCard, HolidaysCard, PastPayCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
 
 export const metadata = { title: "Roster setup" };
 export const dynamic = "force-dynamic";
@@ -41,6 +41,21 @@ export default async function RosterSetup() {
       payroll = { employees: employees.filter((e) => e.status !== "TERMINATED").map(({ id, name, email }) => ({ id, name, email })), rates: rates.map(({ id, name }) => ({ id, name })) };
     } catch (e) { payrollError = e instanceof Error ? e.message : String(e); }
   }
+  // What past pay runs paid (rates and earnings rates), kept for 12 hours so the page stays quick
+  const payslipsOn = payrollOn && (xi!.scopes as string[]).includes("payroll.payslip.read");
+  type Past = Awaited<ReturnType<typeof import("@/lib/integrations/xero-payroll").pastPay>> & { fetched_at?: string };
+  let past = ((org.settings as { roster?: { past_pay?: Past } } | null)?.roster?.past_pay) ?? null;
+  if (payslipsOn && !payrollError && (!past?.fetched_at || Date.now() - Date.parse(past.fetched_at) > 12 * 3_600_000)) {
+    try {
+      const { buildContext } = await import("@/lib/integrations/sync-runner");
+      const { pastPay } = await import("@/lib/integrations/xero-payroll");
+      const fresh = { ...(await pastPay(await buildContext(supabase, "user", org.id, "xero", user.id))), fetched_at: new Date().toISOString() };
+      past = fresh;
+      const { data: cur } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+      const st = (cur?.settings ?? {}) as Record<string, unknown>;
+      await supabase.from("organisations").update({ settings: { ...st, roster: { ...((st.roster ?? {}) as Record<string, unknown>), past_pay: fresh } } }).eq("id", org.id);
+    } catch (e) { payrollError = payrollError ?? `Past pay runs: ${e instanceof Error ? e.message : String(e)}`; }
+  }
 
   type P = { id: string; name: string; email: string | null; role: string | null; on_roster: boolean; employment_type: "casual" | "part_time" | "full_time"; default_area_id: string | null; hourly_rate: number | null; xero_employee_id: string | null; kiosk_pin_hash: string | null };
   const list = ((people ?? []) as P[]).map(({ kiosk_pin_hash, ...p }) => ({ ...p, hourly_rate: p.hourly_rate == null ? null : Number(p.hourly_rate), has_pin: !!kiosk_pin_hash }));
@@ -53,6 +68,7 @@ export default async function RosterSetup() {
         <PeopleCard people={list} areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} payroll={payroll?.employees ?? null} orgRate={orgRate} />
         <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} />
         <XeroPayrollCard xeroOn={xeroOn} payrollOn={payrollOn} error={payrollError} rates={payroll?.rates ?? []} earnings={settings.xero.earnings} status={settings.xero.status} />
+        {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
         <PayRulesCard rules={settings.rules} />
         <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} />
         <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
