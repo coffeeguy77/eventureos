@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { CATEGORIES, weekOf, type EmploymentType } from "@/lib/roster/award";
 import { totalsFor } from "@/lib/roster/pay";
-import { personHours, type Entry } from "@/lib/roster/payroll";
+import { personHours, withBreaks, type Entry } from "@/lib/roster/payroll";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { shiftSpan, toLocal } from "@/lib/roster/time";
 import { RosterTabs } from "../tabs";
@@ -36,6 +36,8 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     (async () => {
       const base = "id, crew_member_id, staff_shift_id, work_date, clock_in, clock_out, break_minutes, paid_start, paid_finish, status, source, note, sent_to_xero_at, in_lat, in_lng, out_lat, out_lng";
       const q = (cols: string) => supabase.from("staff_time_entries").select(cols).eq("organisation_id", org.id).gte("work_date", from).lte("work_date", to).order("clock_in");
+      const r0 = await q(`${base}, in_photo, out_photo, event_crew_id, event:event_crew(event:events(name)), break_taken, break_locked, breaks`);
+      if (!r0.error) return r0;
       const r = await q(`${base}, in_photo, out_photo, event_crew_id, event:event_crew(event:events(name))`);
       return r.error ? q(base) : r;
     })(),
@@ -46,7 +48,8 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const holidays = new Set(((hol ?? []) as { holiday_date: string }[]).map((h) => h.holiday_date));
   const orgRate = Number((rateRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? 30);
   type E = Entry & { staff_shift_id: string | null; source: string; note: string | null; sent_to_xero_at: string | null; in_lat: number | null; in_lng: number | null; out_lat: number | null; out_lng: number | null;
-    in_photo?: string | null; out_photo?: string | null; event_crew_id?: string | null; event?: { event: { name: string } | null } | null };
+    in_photo?: string | null; out_photo?: string | null; event_crew_id?: string | null; event?: { event: { name: string } | null } | null;
+    break_taken?: number | null; break_locked?: boolean; breaks?: { start: string; end: string }[] };
   type S = { id: string; crew_member_id: string; shift_date: string; start_time: string; finish_time: string; break_minutes: number };
   const allEntries = (entries ?? []) as unknown as E[];
   // photos from the café iPad: short-lived links
@@ -66,19 +69,22 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     const approved = mine.filter((e) => e.status === "approved");
     const counted = mine.filter((e) => e.status !== "rejected" && e.clock_out && !e.event_crew_id);
     const byDay = personHours(counted, p.employment_type, tz, holidays, org.settings, p.id);
+    const brk = withBreaks(counted, org.settings).info;
     const tot = totalsFor(byDay, { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate == null ? orgRate : Number(p.hourly_rate) }, settings.rules);
     const totals = Object.fromEntries(CATEGORIES.map((c) => [c, Math.round([...byDay.values()].reduce((t, h) => t + h[c], 0) * 100) / 100])) as PersonSheet["totals"];
     return {
       id: p.id, name: p.name, type: p.employment_type, xero: !!p.xero_employee_id,
       hours: tot.hours, cost: tot.cost,
-      totals, approved: approved.length, waiting: mine.filter((e) => e.status === "pending" && !e.event_crew_id).length, unsent: approved.filter((e) => !e.sent_to_xero_at).length,
+      totals, approved: approved.length, waiting: mine.filter((e) => e.status === "pending" && !e.event_crew_id).length, unsent: approved.filter((e) => !e.sent_to_xero_at).length, breakIssues: [...brk.values()].filter((b) => b.flag).length,
       entries: mine.map((e) => {
         const sh = allShifts.find((s) => s.id === e.staff_shift_id);
         return {
           id: e.id, date: e.work_date, status: e.status, source: e.source, note: e.note, sent: !!e.sent_to_xero_at,
           clockIn: toLocal(e.clock_in, tz), clockOut: e.clock_out ? toLocal(e.clock_out, tz) : null,
           paidStart: e.paid_start ? toLocal(e.paid_start, tz) : toLocal(e.clock_in, tz), paidFinish: e.paid_finish ? toLocal(e.paid_finish, tz) : e.clock_out ? toLocal(e.clock_out, tz) : null,
-          breakMinutes: e.break_minutes, rostered: sh ? `${sh.start_time.slice(0, 5)}–${sh.finish_time.slice(0, 5)}${sh.break_minutes ? ` (${sh.break_minutes}m break)` : ""}` : null,
+          breakMinutes: brk.get(e.id)?.minutes ?? e.break_minutes, breakTaken: e.break_taken ?? null, breakFlag: brk.get(e.id)?.flag ?? null, breakBalanced: !!brk.get(e.id)?.balanced, breakLocked: !!e.break_locked,
+          breaks: (e.breaks ?? []).map((b) => `${toLocal(b.start, tz).slice(11, 16)}–${toLocal(b.end, tz).slice(11, 16)}`),
+          rostered: sh ? `${sh.start_time.slice(0, 5)}–${sh.finish_time.slice(0, 5)}${sh.break_minutes ? ` (${sh.break_minutes}m break)` : ""}` : null,
           event: e.event_crew_id ? (e.event?.event?.name ?? "Event shift") : null,
           inAt: e.in_lat != null && e.in_lng != null ? { lat: Number(e.in_lat), lng: Number(e.in_lng) } : null,
           outAt: e.out_lat != null && e.out_lng != null ? { lat: Number(e.out_lat), lng: Number(e.out_lng) } : null,

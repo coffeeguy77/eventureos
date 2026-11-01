@@ -38,10 +38,13 @@ export async function updateEntry(id: string, v: { start: string; finish: string
       if (meal.minutes > 0 && hrs >= meal.after_hours) brk = Math.max(brk, meal.minutes);
     }
     if (!e.clock_out) throw new Error("They're still clocked on — wait until they clock off.");
-    const { error } = await supabase.from("staff_time_entries").update({
+    const row = {
       paid_start: fromLocal(v.start, org.timezone), paid_finish: fromLocal(v.finish, org.timezone), break_minutes: brk, note: v.note?.trim().slice(0, 500) || null,
       status: e.status === "approved" ? "pending" : e.status, sent_to_xero_at: null, updated_at: new Date().toISOString(),
-    }).eq("id", id);
+    };
+    // the office has set this break — it's paid as entered (smart breaks leave it alone)
+    let { error } = await supabase.from("staff_time_entries").update({ ...row, break_locked: true }).eq("id", id);
+    if (error && /break_locked/.test(error.message)) ({ error } = await supabase.from("staff_time_entries").update(row).eq("id", id));
     if (error) throw new Error(error.message);
     return "Saved — approve it when it's right.";
   });

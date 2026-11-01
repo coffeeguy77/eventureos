@@ -2,7 +2,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO, todayISO } from "@/lib/format";
-import { distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
+import { breakRules, distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
+import { shiftBreak } from "./breaks";
 import { shiftSpan, toLocal } from "./time";
 import { paidTimes } from "./paid";
 
@@ -12,11 +13,12 @@ import { paidTimes } from "./paid";
  * minutes. The office can change them before approving.
  */
 export interface ClockOrg { id: string; timezone: string; settings: unknown }
-export interface OpenEntry { id: string; clock_in: string; break_minutes: number; break_started_at: string | null; staff_shift_id: string | null; work_date: string; event_crew_id?: string | null }
+export interface OpenEntry { id: string; clock_in: string; break_minutes: number; break_started_at: string | null; staff_shift_id: string | null; work_date: string; event_crew_id?: string | null; breaks?: { start: string; end: string }[] }
 export interface TodayShift { id: string; shift_date: string; start_time: string; finish_time: string; break_minutes: number; area: string | null }
 
 export async function openEntry(db: SupabaseClient, orgId: string, memberId: string): Promise<OpenEntry | null> {
-  let r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle();
+  let r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id, breaks").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle();
+  if (r.error) r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle() as typeof r;
   if (r.error) r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle() as typeof r;
   return (r.data as OpenEntry | null) ?? null;
 }
@@ -108,8 +110,11 @@ const breakSoFar = (e: OpenEntry) => e.break_minutes + (e.break_started_at ? Mat
 export async function endBreak(db: SupabaseClient, orgId: string, memberId: string) {
   const e = await openEntry(db, orgId, memberId);
   if (!e?.break_started_at) throw new Error("You're not on a break.");
-  await db.from("staff_time_entries").update({ break_minutes: Math.min(600, breakSoFar(e)), break_started_at: null, updated_at: new Date().toISOString() }).eq("id", e.id);
-  return "Welcome back.";
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(e.break_started_at)) / 60_000));
+  const base = { break_minutes: Math.min(600, breakSoFar(e)), break_started_at: null, updated_at: new Date().toISOString() };
+  const { error } = await db.from("staff_time_entries").update({ ...base, breaks: [...(e.breaks ?? []), { start: e.break_started_at, end: new Date().toISOString() }] }).eq("id", e.id);
+  if (error) await db.from("staff_time_entries").update(base).eq("id", e.id); // before database update 0086
+  return `Welcome back — ${mins} min break.`;
 }
 
 export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: string, opts: { source: "phone" | "kiosk"; where: { lat: number; lng: number } | null; photo?: string | null }) {
@@ -126,18 +131,21 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   const paid = paidTimes(settings, org.timezone, e.clock_in, now.toISOString(), rostered);
   // the unpaid meal break is part of the shift (staff must take it): at least the rostered break, and at least the
   // award's minimum once the shift is long enough — even if nobody pressed "Start break"
+  // breaks clocked on the iPad (any break still running ends now); none clocked = null
   const recorded = brk;
-  const spanH = (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000;
-  const required = Math.max(rostered?.break_minutes ?? 0, settings.meal.minutes > 0 && spanH >= settings.meal.after_hours ? settings.meal.minutes : 0);
-  if (!e.event_crew_id && brk < required) brk = required;
+  const taken = (e.breaks?.length ?? 0) > 0 || e.break_started_at || recorded > 0 ? recorded : null;
+  const spanMin = (Date.parse(paid.finish) - Date.parse(paid.start)) / 60_000;
+  if (!e.event_crew_id) brk = shiftBreak(spanMin, taken, breakRules(settings), rostered?.break_minutes ?? 0);
+  const breaks = e.break_started_at ? [...(e.breaks ?? []), { start: e.break_started_at, end: now.toISOString() }] : null;
   const photo = await takePhoto(db, settings, opts, { orgId: org.id, memberId, workDate: e.work_date, entryId: e.id, which: "out" });
   const { error } = await db.from("staff_time_entries").update({
     ...(photo ? { out_photo: photo } : {}),
     clock_out: now.toISOString(), break_minutes: brk, break_started_at: null, out_lat: opts.where?.lat ?? null, out_lng: opts.where?.lng ?? null,
     paid_start: paid.start, paid_finish: paid.finish, status: "pending", updated_at: now.toISOString(),
-    ...(brk > recorded ? { note: `Unpaid break: ${brk} min${recorded ? ` (${recorded} min recorded)` : ""}.` } : {}),
   }).eq("id", e.id);
   if (error) throw new Error(error.message);
+  // what was actually clocked, for the office (database update 0086)
+  await db.from("staff_time_entries").update({ break_taken: e.event_crew_id ? null : taken, ...(breaks ? { breaks } : {}) }).eq("id", e.id).then(() => undefined, () => undefined);
   const hours = Math.max(0, (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000 - brk / 60);
   return `Clocked off — ${Math.round(hours * 100) / 100} paid hours${brk ? ` after your ${brk} min unpaid break` : ""}. Thanks!`;
 }

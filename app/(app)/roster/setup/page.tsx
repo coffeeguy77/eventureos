@@ -89,7 +89,7 @@ export default async function RosterSetup() {
         <XeroPayrollCard xeroOn={xeroOn} payrollOn={payrollOn} error={payrollError} rates={payroll?.rates ?? []} earnings={settings.xero.earnings} status={settings.xero.status} />
         {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
         <PayRulesCard rules={settings.rules} />
-        <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} />
+        <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} />
         <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null, email: p.email }))} monday={weekOf(today)} smsOn={smsOn} />
         <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
       </div>

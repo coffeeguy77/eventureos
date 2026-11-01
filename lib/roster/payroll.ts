@@ -4,7 +4,8 @@ import type { SyncContext } from "@/lib/integrations/runtime";
 import { type DayHours, type EmploymentType } from "./award";
 import { hoursFor } from "./pay";
 import { timesheetLines } from "./paid";
-import { readRosterSettings } from "./settings";
+import { breakRules, readRosterSettings } from "./settings";
+import { effectiveBreaks, type BreakResult } from "./breaks";
 import { toLocal } from "./time";
 
 /**
@@ -20,10 +21,24 @@ export function entryWorked(e: Entry, tz: string) {
   return { start: toLocal(a, tz), finish: toLocal(b, tz), breakMinutes: e.break_minutes };
 }
 
-/** Hours by category per day for one person's entries. */
-export function personHours(entries: Entry[], type: EmploymentType, tz: string, holidays: Set<string>, orgSettings: unknown, memberId?: string): Map<string, DayHours> {
+/** Break details (database update 0086); entries without them keep their saved break. */
+export interface BreakFields { source?: string; break_taken?: number | null; break_locked?: boolean; event_crew_id?: string | null }
+
+/** The unpaid break each entry is paid with — the minimum, longer breaks as taken, smart weekly balancing (lib/roster/breaks). */
+export function withBreaks<T extends Entry & BreakFields>(entries: T[], orgSettings: unknown): { entries: T[]; info: Map<string, BreakResult> } {
   const st = readRosterSettings(orgSettings);
-  const worked = entries.map((e) => entryWorked(e, tz)).filter((x): x is NonNullable<typeof x> => !!x);
+  const info = effectiveBreaks(entries.filter((e) => e.clock_out).map((e) => ({
+    id: e.id, work_date: e.work_date, stored: e.break_minutes, taken: e.break_taken ?? null,
+    spanMinutes: (Date.parse((e.paid_finish ?? e.clock_out)!) - Date.parse(e.paid_start ?? e.clock_in)) / 60_000,
+    tracked: (e.source === "kiosk" || e.source === "phone") && !e.break_locked && !e.event_crew_id && e.break_taken !== undefined,
+  })), breakRules(st));
+  return { entries: entries.map((e) => (info.has(e.id) ? { ...e, break_minutes: info.get(e.id)!.minutes } : e)), info };
+}
+
+/** Hours by category per day for one person's entries. */
+export function personHours(entries: (Entry & BreakFields)[], type: EmploymentType, tz: string, holidays: Set<string>, orgSettings: unknown, memberId?: string): Map<string, DayHours> {
+  const st = readRosterSettings(orgSettings);
+  const worked = withBreaks(entries, orgSettings).entries.map((e) => entryWorked(e, tz)).filter((x): x is NonNullable<typeof x> => !!x);
   return hoursFor(worked, { type, flat: !!memberId && st.flat.includes(memberId) }, holidays, st.rules);
 }
 
@@ -47,13 +62,15 @@ export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: 
       if (!periods.size) { results.push({ name: p.name, ok: true, text: "no approved hours" }); continue; }
       let hours = 0;
       for (const per of periods.values()) {
-        const { data: rows } = await db.from("staff_time_entries").select("id, crew_member_id, work_date, paid_start, paid_finish, clock_in, clock_out, break_minutes, status, sent_to_xero_at")
-          .eq("crew_member_id", p.id).eq("status", "approved").gte("work_date", per.start).lte("work_date", per.end);
+        const cols = "id, crew_member_id, work_date, paid_start, paid_finish, clock_in, clock_out, break_minutes, status, sent_to_xero_at, source";
+        let res = await db.from("staff_time_entries").select(`${cols}, break_taken, break_locked`).eq("crew_member_id", p.id).eq("status", "approved").gte("work_date", per.start).lte("work_date", per.end);
+        if (res.error) res = await db.from("staff_time_entries").select(cols).eq("crew_member_id", p.id).eq("status", "approved").gte("work_date", per.start).lte("work_date", per.end) as typeof res;
+        const rows = res.data;
         // event-shift clock-ons are a record only (event pay comes from the job), so they never go to Xero
         let evIds = new Set<string>();
         const ev = await db.from("staff_time_entries").select("id").eq("crew_member_id", p.id).gte("work_date", per.start).lte("work_date", per.end).not("event_crew_id", "is", null);
         if (!ev.error) evIds = new Set(((ev.data ?? []) as { id: string }[]).map((r) => r.id));
-        const entries = ((rows ?? []) as (Entry & { sent_to_xero_at?: string | null })[]).filter((e) => !evIds.has(e.id));
+        const entries = ((rows ?? []) as (Entry & BreakFields & { sent_to_xero_at?: string | null })[]).filter((e) => !evIds.has(e.id));
         // already in Xero and nothing changed since (e.g. weeks brought over from Deputy, which Xero has paid)
         if (entries.length && entries.every((e) => e.sent_to_xero_at)) continue;
         const { data: hol } = await db.from("public_holidays").select("holiday_date").eq("organisation_id", org.id).gte("holiday_date", per.start).lte("holiday_date", per.end);

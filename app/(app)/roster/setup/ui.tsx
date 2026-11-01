@@ -222,12 +222,12 @@ export function PayRulesCard({ rules }: { rules: AwardRules }) {
 }
 
 type ClockHow = { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean };
-export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug, clock, meal, address }: {
+export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug, clock, meal, address, breaks }: {
   rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null; kioskSet: boolean; slug: string;
-  clock: ClockHow; meal: { after_hours: number; minutes: number }; address: string | null;
+  clock: ClockHow; meal: { after_hours: number; minutes: number }; address: string | null; breaks: { max: number; smart: boolean; ipad_only: boolean };
 }) {
   const { pending, run, note, setMsg } = useAct();
-  const [v, setV] = useState({ rounding, grace, googleCalendar, geofence, clock, meal, address: address ?? "" });
+  const [v, setV] = useState({ rounding, grace, googleCalendar, geofence, clock, meal, address: address ?? "", breaks });
   const [link, setLink] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const pin = (lat: number, lng: number) => setV((x) => ({ ...x, geofence: { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, metres: x.geofence?.metres ?? 100 } }));
@@ -258,7 +258,16 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
           <div><Label hint="minutes">Unpaid meal break</Label><Input type="number" min={0} max={120} step={5} value={v.meal.minutes} onChange={(e) => setV({ ...v, meal: { ...v.meal, minutes: Number(e.target.value) } })} /></div>
           <div><Label hint="hours">…on shifts this long or longer</Label><Input type="number" min={0} max={12} step={0.5} value={v.meal.after_hours} onChange={(e) => setV({ ...v, meal: { ...v.meal, after_hours: Number(e.target.value) } })} /></div>
         </div>
-        <p className="-mt-3 text-[0.7188rem] text-ink-faint">The break is always taken off café shifts over that length — on the roster, in texts and emails, and at clock-off — even if they don&rsquo;t tap &ldquo;Start break&rdquo;. Event shifts are paid from the job, so this doesn&rsquo;t apply to them.</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div><Label hint="minutes">Longest break allowed</Label><Input type="number" min={v.meal.minutes} max={240} step={5} value={v.breaks.max} onChange={(e) => setV({ ...v, breaks: { ...v.breaks, max: Number(e.target.value) } })} /></div>
+          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.breaks.ipad_only} onChange={(e) => setV({ ...v, breaks: { ...v.breaks, ipad_only: e.target.checked } })} />Breaks only on the café iPad (not phones)</label>
+          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.breaks.smart} onChange={(e) => setV({ ...v, breaks: { ...v.breaks, smart: e.target.checked } })} />Smart breaks — balance over the week</label>
+        </div>
+        <p className="-mt-3 text-[0.7188rem] text-ink-faint">
+          Café shifts of {v.meal.after_hours} h or more always have at least {v.meal.minutes} min unpaid break — even if no break is clocked. A shorter break still counts as {v.meal.minutes} min; a longer one counts as taken (45 min on the couch = 45 min unpaid).
+          {v.breaks.smart ? ` Smart breaks: each week, the unpaid time is the larger of ${v.meal.minutes} min × shifts and what they actually took — so a 20 min break on a busy day is balanced by a 40 min one on a quiet day.` : ""}
+          {" "}Only managers see the break flags (none clocked, short, long) on Timesheets; change any break there to override it. Event shifts are paid from the job, so none of this applies to them.
+        </p>
         <label className="flex items-center gap-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.googleCalendar} onChange={(e) => setV({ ...v, googleCalendar: e.target.checked })} />Also put published shifts on Google Calendar</label>
 
         <div className="space-y-2 rounded-lg bg-zinc-50 px-3 py-3">

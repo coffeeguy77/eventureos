@@ -11,12 +11,15 @@ import { Input } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { addDaysISO, fmtDate, money } from "@/lib/format";
 import { CATEGORY_LABEL, type Category } from "@/lib/roster/award";
+import { FLAG_LABEL, type BreakFlag } from "@/lib/roster/breaks";
 import { addEntry, deleteEntry, sendToXero, setEntriesStatus, updateEntry } from "../timesheet-actions";
 
 export interface PersonSheet {
   id: string; name: string; type: string; xero: boolean; hours: number; cost: number; totals: Record<Category, number>;
-  approved: number; waiting: number; unsent: number;
+  approved: number; waiting: number; unsent: number; breakIssues: number;
   entries: { id: string; date: string; status: string; source: string; note: string | null; sent: boolean; clockIn: string; clockOut: string | null; paidStart: string; paidFinish: string | null; breakMinutes: number; rostered: string | null;
+    /** minutes clocked on the iPad (null = none), the manager-only flag, smart-balanced, set by the office, each break's times */
+    breakTaken: number | null; breakFlag: BreakFlag | null; breakBalanced: boolean; breakLocked: boolean; breaks: string[];
     /** the event this was clocked for (event pay comes from the job — not counted here) */
     event: string | null; inAt: LatLng | null; outAt: LatLng | null; inPhoto: string | null; outPhoto: string | null }[];
   missing: { id: string; date: string; start: string; finish: string; breakMinutes: number }[];
@@ -94,6 +97,7 @@ function PersonCard({ s, today, pending, run, from, to, earningsReady, fence }: 
           <span className="ml-2 text-[0.75rem] text-ink-muted">{s.hours} h · ~{money(s.cost)}{!s.xero ? " · not matched in Xero Payroll" : ""}</span>
         </span>
         {s.waiting > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-amber-800">{s.waiting} to approve</span>}
+        {s.breakIssues > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-orange-800" title="Breaks not clocked, short or long — for a chat / training">{s.breakIssues} break{s.breakIssues === 1 ? "" : "s"} to check</span>}
         {s.missing.length > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-rose-800">{s.missing.length} not clocked</span>}
         {s.unsent > 0 && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-sky-800">{s.unsent} not in Xero yet</span>}
       </button>
@@ -166,11 +170,17 @@ function EntryRow({ e, pending, run, fence }: { e: PersonSheet["entries"][number
             </span>
           ) : (
             <button onClick={() => setEdit(true)} className="text-left hover:text-brand-700">
-              <b className="text-ink">{hm(e.paidStart)}–{hm(e.paidFinish)}</b>{e.breakMinutes ? ` · ${e.breakMinutes}m break` : ""} · <b className="text-ink">{hours} h</b>
+              <b className="text-ink">{hm(e.paidStart)}–{hm(e.paidFinish)}</b>{e.breakMinutes ? ` · ${e.breakMinutes}m unpaid break` : ""} · <b className="text-ink">{hours} h</b>
               <span className="block text-[0.7188rem] text-ink-faint">
                 {e.source === "office" ? "Added by the office" : e.source === "kiosk" ? "On the iPad" : e.source === "phone" ? "On their phone" : "Clocked"}{e.rostered ? ` · rostered ${e.rostered}` : " · not rostered"}{e.note ? ` · ${e.note}` : ""}
               </span>
             </button>
+          )}
+          {e.clockOut && !e.event && e.source !== "office" && (
+            <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.7188rem]">
+              <span className="text-ink-muted">Break: {e.breakTaken == null ? "none clocked" : `${e.breakTaken} min clocked${e.breaks.length ? ` (${e.breaks.join(", ")})` : ""}`} → {e.breakMinutes} min unpaid{e.breakBalanced ? " (smart: balanced over the week)" : ""}{e.breakLocked ? " (set by the office)" : ""}</span>
+              {e.breakFlag && <span className={cn("rounded-full px-2 py-0.5 font-semibold", e.breakFlag === "over" || e.breakFlag === "long" ? "bg-rose-100 text-rose-800" : "bg-orange-100 text-orange-800")}>{FLAG_LABEL[e.breakFlag]}{e.breakTaken != null ? ` · ${e.breakTaken}m` : ""}</span>}
+            </span>
           )}
           {e.event && <span className="mt-0.5 block text-[0.7188rem] font-medium text-violet-700">Event shift: {e.event} — paid from the job, not this timesheet</span>}
           {e.source !== "office" && (

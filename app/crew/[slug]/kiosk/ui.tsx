@@ -6,9 +6,9 @@ import { Delete, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { kioskClock } from "./actions";
 
-type P = { id: string; name: string; state: "off" | "on" | "break"; shift: string | null };
+type P = { id: string; name: string; state: "off" | "on" | "break"; shift: string | null; breakSince?: string | null };
 
-export function Kiosk({ slug, token, business, people, photo = true }: { slug: string; token: string; business: string; people: P[]; photo?: boolean }) {
+export function Kiosk({ slug, token, business, people, photo = true, breakMin = 30, breakMax = 60 }: { slug: string; token: string; business: string; people: P[]; photo?: boolean; breakMin?: number; breakMax?: number }) {
   const router = useRouter();
   const [who, setWho] = useState<P | null>(null);
   const [pin, setPin] = useState("");
@@ -17,6 +17,10 @@ export function Kiosk({ slug, token, business, people, photo = true }: { slug: s
   const [pending, start] = useTransition();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const t = setInterval(() => { setNow(new Date()); router.refresh(); }, 60000); return () => clearInterval(t); }, [router]);
+  // the break timer on each name: minutes since they started their break
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(t); }, []);
+  const breakMins = (p: P) => (p.breakSince ? Math.max(0, Math.floor((Date.now() - Date.parse(p.breakSince)) / 60000)) : 0);
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const stopCam = () => { stream.current?.getTracks().forEach((t) => t.stop()); stream.current = null; };
@@ -72,8 +76,11 @@ export function Kiosk({ slug, token, business, people, photo = true }: { slug: s
             <p className="text-[1.0625rem] font-semibold text-ink">{p.name}</p>
             <p className="text-[0.8125rem] text-ink-muted">{p.shift ? `Today ${p.shift}` : "Not rostered today"}</p>
             <p className={cn("mt-2 inline-block rounded-full px-2 py-0.5 text-[0.75rem] font-semibold", p.state === "on" ? "bg-emerald-100 text-emerald-800" : p.state === "break" ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-ink-muted")}>
-              {p.state === "on" ? "On now" : p.state === "break" ? "On a break" : "Off"}
+              {p.state === "on" ? "On now" : p.state === "break" ? `On break · ${breakMins(p)} min` : "Off"}
             </p>
+            {p.state === "break" && <p className={cn("mt-1 text-[0.75rem] font-semibold", breakMins(p) >= breakMax ? "text-rose-700" : breakMins(p) >= breakMin ? "text-amber-700" : "text-ink-muted")}>
+              {breakMins(p) < breakMin ? `${breakMin - breakMins(p)} min of your ${breakMin} min break left` : breakMins(p) < breakMax ? "Break time's up — tap to end your break" : `Over the ${breakMax} min break limit`}
+            </p>}
           </button>
         ))}
       </div>
@@ -99,6 +106,8 @@ export function Kiosk({ slug, token, business, people, photo = true }: { slug: s
                 {photo && <video ref={video} playsInline muted className="mx-auto aspect-square w-40 rounded-2xl bg-zinc-100 object-cover [transform:scaleX(-1)]" aria-label="Camera — your photo is taken as you clock on or off" />}
                 {state === "off" && <button disabled={pending} onClick={() => doIt("on")} className="h-16 rounded-2xl bg-emerald-600 text-[1.125rem] font-semibold text-white">Clock on</button>}
                 {state === "on" && <button disabled={pending} onClick={() => doIt("break")} className="h-16 rounded-2xl bg-amber-500 text-[1.125rem] font-semibold text-white">Start break</button>}
+                {state === "break" && who.breakSince && <p className="text-center text-[0.9375rem] text-ink-muted">On break for <b className="text-ink">{breakMins(who)} min</b> — breaks under {breakMin} min still count as {breakMin}; longer ones count as taken.</p>}
+                {state === "on" && <p className="text-center text-[0.8125rem] text-ink-muted">Your break is at least {breakMin} min (up to {breakMax}).</p>}
                 {state === "break" && <button disabled={pending} onClick={() => doIt("back")} className="h-16 rounded-2xl bg-amber-500 text-[1.125rem] font-semibold text-white">End break</button>}
                 {state !== "off" && <button disabled={pending} onClick={() => doIt("off")} className="h-16 rounded-2xl bg-ink text-[1.125rem] font-semibold text-surface">Clock off</button>}
                 <button onClick={reset} className="h-12 rounded-2xl text-[0.9375rem] font-medium text-ink-muted">Cancel</button>

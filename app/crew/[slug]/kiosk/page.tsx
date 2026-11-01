@@ -21,11 +21,14 @@ export default async function KioskPage({ params, searchParams }: { params: Prom
     k.db.from("staff_time_entries").select("crew_member_id, break_started_at").eq("organisation_id", k.org.id).is("clock_out", null),
     k.db.from("staff_shifts").select("crew_member_id, start_time, finish_time").eq("organisation_id", k.org.id).eq("roster", true).eq("shift_date", today).not("published_at", "is", null),
   ]);
-  const state = new Map(((open ?? []) as { crew_member_id: string; break_started_at: string | null }[]).map((o) => [o.crew_member_id, o.break_started_at ? "break" : "on"]));
+  const openRows = (open ?? []) as { crew_member_id: string; break_started_at: string | null }[];
+  const state = new Map(openRows.map((o) => [o.crew_member_id, o.break_started_at ? "break" : "on"]));
+  const breakSince = new Map(openRows.filter((o) => o.break_started_at).map((o) => [o.crew_member_id, o.break_started_at as string]));
   const when = new Map<string, string>();
   for (const s of (shifts ?? []) as { crew_member_id: string | null; start_time: string; finish_time: string }[]) if (s.crew_member_id) when.set(s.crew_member_id, `${s.start_time.slice(0, 5)}–${s.finish_time.slice(0, 5)}`);
-  const list = ((people ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name, state: (state.get(p.id) ?? "off") as "off" | "on" | "break", shift: when.get(p.id) ?? null }))
+  const list = ((people ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name, state: (state.get(p.id) ?? "off") as "off" | "on" | "break", shift: when.get(p.id) ?? null, breakSince: breakSince.get(p.id) ?? null }))
     .sort((a, b) => Number(!!b.shift) - Number(!!a.shift) || a.name.localeCompare(b.name));
   const { readRosterSettings } = await import("@/lib/roster/settings");
-  return <Kiosk slug={slug} token={token} business={k.name} people={list} photo={readRosterSettings(k.org.settings).clock.photo} />;
+  const st = readRosterSettings(k.org.settings);
+  return <Kiosk slug={slug} token={token} business={k.name} people={list} photo={st.clock.photo} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} />;
 }

@@ -5,6 +5,9 @@ import { BottomNav, InstallPrompt, RegisterSW } from "./ui";
 import { crewSignOut } from "./actions";
 import { isKitchen } from "@/lib/crew/skills";
 import { rosterProfile } from "@/lib/roster/staff";
+import Link from "next/link";
+import { Bell } from "lucide-react";
+import { unreadNotices } from "@/lib/crew/notices";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -28,6 +31,7 @@ export default async function CrewLayout({ children, params }: { children: React
   const org = await crewOrg(slug);
   if (!org) notFound();
   const s = await crewSession(slug);
+  const news = s ? await unreadNotices(s) : 0;
   const brand = /^#[0-9a-f]{6}$/i.test(org.brand_colour ?? "") ? org.brand_colour! : "#6028EC";
   return (
     <div className="min-h-[100dvh] bg-canvas" style={{ ["--crew-brand" as string]: brand }}>
@@ -40,6 +44,10 @@ export default async function CrewLayout({ children, params }: { children: React
               ? <img src={org.logo_url} alt={org.name} className="h-8 max-w-[120px] object-contain" />
               : <span className="text-[0.9375rem] font-semibold text-ink">{org.name}</span>}
             <span className="ml-auto truncate text-[0.8125rem] text-ink-muted">Hi {s.member.name.split(" ")[0]}</span>
+            <Link href={`/crew/${slug}/news`} className="relative rounded-md p-1.5 text-ink-muted hover:bg-zinc-100 hover:text-ink" aria-label={news ? `News — ${news} new` : "News"}>
+              <Bell className="h-5 w-5" />
+              {news > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[0.625rem] font-bold text-white">{news > 9 ? "9+" : news}</span>}
+            </Link>
             <form action={crewSignOut}>
               <input type="hidden" name="slug" value={slug} />
               <button className="rounded-md px-2 py-1 text-[0.75rem] text-ink-faint hover:bg-zinc-100 hover:text-ink">Sign out</button>

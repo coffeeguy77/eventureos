@@ -313,6 +313,7 @@ async function saveSettings(patch: Record<string, unknown>) {
 export async function saveRosterOptions(input: {
   rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null;
   clock?: { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean }; meal?: { after_hours: number; minutes: number }; address?: string | null;
+  breaks?: { max: number; smart: boolean; ipad_only: boolean };
 }) {
   return wrap(async () => {
     const n = (v: number, max: number) => Math.max(0, Math.min(max, Math.round(Number(v) || 0)));
@@ -322,6 +323,7 @@ export async function saveRosterOptions(input: {
     const patch: Record<string, unknown> = { rounding: n(input.rounding, 60), grace: n(input.grace, 60), google_calendar: !!input.googleCalendar, geofence: fence };
     if (input.clock) patch.clock = { cafe: ["ipad", "phone", "both"].includes(input.clock.cafe) ? input.clock.cafe : "both", events: !!input.clock.events, photo: !!input.clock.photo };
     if (input.meal) patch.meal = { after_hours: Math.max(0, Math.min(12, Number(input.meal.after_hours) || 0)), minutes: n(input.meal.minutes, 120) };
+    if (input.breaks) patch.breaks = { max: Math.max(n(input.meal?.minutes ?? 30, 120), n(input.breaks.max, 240)), smart: !!input.breaks.smart, ipad_only: !!input.breaks.ipad_only };
     if (input.address !== undefined) patch.place = { address: input.address?.trim().slice(0, 200) || null };
     await saveSettings(patch);
     return input.clock && (input.clock.cafe !== "ipad" || input.clock.events) && !fence ? "Saved — phones can clock on from anywhere until you set the café's location." : "Saved.";

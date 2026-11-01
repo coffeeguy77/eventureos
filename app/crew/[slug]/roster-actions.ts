@@ -30,9 +30,12 @@ async function orgFor(s: CrewSession) {
 export async function clock(slug: string, what: "on" | "break" | "back" | "off", where: { lat: number; lng: number } | null, eventCrewId: string | null = null, photo: string | null = null) {
   return act(slug, async (s) => {
     const loc = where && Number.isFinite(where.lat) && Number.isFinite(where.lng) ? { lat: Number(where.lat), lng: Number(where.lng) } : null;
-    if (what === "break") return startBreak(s.db, s.org.id, s.member.id);
-    if (what === "back") return endBreak(s.db, s.org.id, s.member.id);
     const org = await orgFor(s);
+    if (what === "break" || what === "back") {
+      const { readRosterSettings } = await import("@/lib/roster/settings");
+      if (readRosterSettings(org.settings).breaks.ipad_only) throw new Error("Breaks are clocked on the café iPad.");
+      return what === "break" ? startBreak(s.db, s.org.id, s.member.id) : endBreak(s.db, s.org.id, s.member.id);
+    }
     if (eventCrewId) {
       if (!UUID.test(eventCrewId)) throw new Error("Refresh and try again.");
       const { data: ec } = await s.db.from("event_crew").select("id").eq("id", eventCrewId).eq("crew_member_id", s.member.id).eq("organisation_id", s.org.id).maybeSingle();

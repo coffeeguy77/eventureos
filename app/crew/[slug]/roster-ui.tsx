@@ -70,9 +70,9 @@ function Selfie({ label, busy, onShot, onCancel }: { label: string; busy: boolea
 }
 
 /** Clock on / break / clock off — with a selfie when the business has photos switched on. */
-export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad = false, events = [], photo = false }: {
+export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad = false, events = [], photo = false, phoneBreaks = false }: {
   slug: string; open: { clock_in: string; break_started_at: string | null; break_minutes: number } | null; needsPlace: boolean;
-  cafePhone?: boolean; cafeIpad?: boolean; events?: { id: string; name: string; start: string | null }[]; photo?: boolean;
+  cafePhone?: boolean; cafeIpad?: boolean; events?: { id: string; name: string; start: string | null }[]; photo?: boolean; phoneBreaks?: boolean;
 }) {
   const { run, pending, toast } = useRun();
   const [, tick] = useState(0);
@@ -104,10 +104,11 @@ export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad 
           <p className="text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{open.break_started_at ? "On a break" : "Clocked on"}</p>
           <p className="text-[1.75rem] font-bold text-ink">{since(open.break_started_at ?? open.clock_in)}</p>
           <p className="text-[0.8125rem] text-ink-muted">since {new Date(open.break_started_at ?? open.clock_in).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}{open.break_minutes ? ` · ${open.break_minutes} min break so far` : ""}</p>
-          <div className="grid grid-cols-2 gap-2">
-            {open.break_started_at
+          {!phoneBreaks && <p className="text-[0.75rem] text-ink-faint">Start and end your break on the café iPad.</p>}
+          <div className={cn("grid gap-2", phoneBreaks ? "grid-cols-2" : "grid-cols-1")}>
+            {phoneBreaks && (open.break_started_at
               ? <button className={btn("secondary", "h-14")} disabled={pending} onClick={() => go("back")}><Coffee className="h-5 w-5" />End break</button>
-              : <button className={btn("secondary", "h-14")} disabled={pending} onClick={() => go("break")}><Coffee className="h-5 w-5" />Start break</button>}
+              : <button className={btn("secondary", "h-14")} disabled={pending} onClick={() => go("break")}><Coffee className="h-5 w-5" />Start break</button>)}
             <button className={btn("primary", "h-14")} disabled={pending} onClick={() => go("off")}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}Clock off</button>
           </div>
         </>
