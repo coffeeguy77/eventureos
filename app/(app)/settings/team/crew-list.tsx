@@ -24,9 +24,10 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
-  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, ok?: string) => start(async () => {
-    const r = await fn().catch(() => ({ ok: false, error: "Couldn't reach the server." }));
-    setNote(r.ok ? (ok ? { text: ok, ok: true } : null) : { text: r.error ?? "Something went wrong.", ok: false });
+  const [inviting, setInviting] = useState<string | null>(null);
+  const run = (fn: () => Promise<{ ok: boolean; error?: string; message?: string }>, ok?: string) => start(async () => {
+    const r: { ok: boolean; error?: string; message?: string } = await fn().catch(() => ({ ok: false, error: "Couldn't reach the server." }));
+    setNote(r.ok ? (r.message ? { text: r.message, ok: true } : ok ? { text: ok, ok: true } : null) : { text: r.error ?? "Something went wrong.", ok: false });
     router.refresh();
   });
   const active = rows.filter((r) => r.active), inactive = rows.filter((r) => !r.active);
@@ -85,11 +86,18 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                   )}
                 </span>
               )}
-              {canEdit && app?.ready && r.active && r.email && (
-                <button type="button" disabled={pending} onClick={() => run(() => inviteCrewToApp(r.id), `Staff app link emailed to ${r.email}.`)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium text-brand-700 hover:bg-brand-50" title="Email them the staff app link">
+              {canEdit && app?.ready && r.active && (r.email || r.phone) && (inviting !== r.id ? (
+                <button type="button" disabled={pending} onClick={() => setInviting(r.id)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[0.75rem] font-medium text-brand-700 hover:bg-brand-50" title="Send them the staff app link by email and/or text">
                   <Send className="h-3.5 w-3.5" />{r.app_invited_at ? "Resend app" : "Invite to app"}
                 </button>
-              )}
+              ) : (
+                <span className="inline-flex flex-wrap items-center gap-1 text-[0.75rem]">
+                  {r.email && <button type="button" disabled={pending} onClick={() => { setInviting(null); run(() => inviteCrewToApp(r.id, "email")); }} className="rounded-md px-2 py-1 font-medium text-brand-700 ring-1 ring-line hover:bg-brand-50">Email</button>}
+                  {r.phone && <button type="button" disabled={pending} onClick={() => { setInviting(null); run(() => inviteCrewToApp(r.id, "sms")); }} className="rounded-md px-2 py-1 font-medium text-brand-700 ring-1 ring-line hover:bg-brand-50">Text</button>}
+                  {r.email && r.phone && <button type="button" disabled={pending} onClick={() => { setInviting(null); run(() => inviteCrewToApp(r.id, "both")); }} className="rounded-md px-2 py-1 font-medium text-brand-700 ring-1 ring-line hover:bg-brand-50">Both</button>}
+                  <button type="button" onClick={() => setInviting(null)} className="px-1 text-ink-faint">Cancel</button>
+                </span>
+              ))}
               {canEdit && <button type="button" onClick={() => setEditing(r.id)} className="ml-auto inline-flex h-9 items-center gap-1 rounded-md px-2 text-[0.75rem] text-ink-faint hover:bg-zinc-100 hover:text-ink sm:ml-0 sm:h-auto sm:p-1.5" aria-label={`Edit ${r.name}`}><Pencil className="h-4 w-4" /><span className="sm:hidden">Edit</span></button>}
               </div>
             </li>

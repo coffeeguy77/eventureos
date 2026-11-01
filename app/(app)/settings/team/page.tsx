@@ -261,7 +261,7 @@ export default async function TeamPage() {
         <Card>
           <CardHeader
             title="Invite someone"
-            subtitle="We email them an invitation. They get access as soon as they create their account (or next sign in) with this email address."
+            subtitle="We email and/or text them an invitation. They get access as soon as they create their account (or next sign in) with this email address."
           />
           <div className="border-t border-line px-5 py-5">
             <ActionForm action={inviteMember} resetOnOk>
@@ -277,6 +277,11 @@ export default async function TeamPage() {
                   </Select>
                 </div>
                 <SubmitButton pendingLabel="Inviting…" className="w-full sm:w-auto">Invite</SubmitButton>
+              </div>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                <div><Label htmlFor="invite_mobile" hint="optional — to text the invite">Mobile</Label><Input id="invite_mobile" name="mobile" type="tel" inputMode="tel" placeholder="04xx xxx xxx" autoComplete="off" /></div>
+                <div><Label htmlFor="invite_send">Send the invite by</Label>
+                  <Select id="invite_send" name="send" defaultValue="email"><option value="email">Email</option><option value="sms">Text message</option><option value="both">Email and text</option></Select></div>
               </div>
               <div className="mt-3 max-w-md">
                 <Label htmlFor="invite_access" hint="admins, managers and sales">Can open</Label>

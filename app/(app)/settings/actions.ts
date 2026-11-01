@@ -312,15 +312,35 @@ export async function inviteMember(_prev: ActionState, form: FormData): Promise<
     if (error.code === "23505") return { error: `${email} already has a pending invitation. Revoke it first to change the role.` };
     return { error: `Couldn't create the invitation: ${error.message}` };
   }
-  const sent = await emailInvitation(data.id);
+  const how = str(form.get("send")) ?? "email";
+  const mobile = str(form.get("mobile"));
+  const sent = how === "sms" ? null : await emailInvitation(data.id);
+  let texted: { ok: boolean; error?: string } | null = null;
+  if (how !== "email" && mobile) {
+    try {
+      const { loadTwilio, sendSms, smsNumber } = await import("@/lib/sms/twilio");
+      const { createServiceClient } = await import("@/lib/integrations/runtime");
+      const to = smsNumber(mobile);
+      const cfg = await loadTwilio(createServiceClient(), org.id);
+      if (!to) texted = { ok: false, error: "that mobile number can't take texts" };
+      else if (!cfg) texted = { ok: false, error: "texts aren't set up (Twilio)" };
+      else {
+        const url = `${appBaseUrl()}/signup?email=${encodeURIComponent(email)}&org=${encodeURIComponent(org.name)}`;
+        await sendSms(cfg, to, `${actorName(profile)} invited you to ${org.name} on EventureOS (${ROLE_LABEL[inviteRole as keyof typeof ROLE_LABEL]}). Create your account with ${email}: ${url}`);
+        texted = { ok: true };
+      }
+    } catch (e) { texted = { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  } else if (how !== "email") texted = { ok: false, error: "no mobile number given" };
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "team.invited", entityType: "invitation", entityId: data.id,
     summary: `${actorName(profile)} invited ${email} as ${ROLE_LABEL[inviteRole as keyof typeof ROLE_LABEL]}`,
   });
   revalidatePath("/settings/team");
-  return sent.ok
-    ? { ok: `Invitation emailed to ${email}. They get access as soon as they create their account with that email.` }
-    : { ok: `Invitation saved, but the email didn't go: ${sent.error} They still get access when they sign up with ${email}.` };
+  const parts = [sent?.ok ? `emailed to ${email}` : null, texted?.ok ? `texted to ${mobile}` : null].filter(Boolean);
+  const fails = [sent && !sent.ok ? `the email didn't go (${sent.error})` : null, texted && !texted.ok ? `the text didn't go (${texted.error})` : null].filter(Boolean);
+  return parts.length
+    ? { ok: `Invitation ${parts.join(" and ")}${fails.length ? ` — but ${fails.join("; ")}` : ""}. They get access as soon as they create their account with ${email}.` }
+    : { ok: `Invitation saved, but ${fails.join("; ") || "nothing was sent"}. They still get access when they sign up with ${email}.` };
 }
 
 /** Email (or re-email) a pending team invitation. Never throws. */

@@ -29,7 +29,7 @@ export default async function CrewLogin({ params }: { params: Promise<{ slug: st
       <div className="rounded-2xl bg-surface p-5 shadow-card ring-1 ring-line">
         <CrewSignInForm slug={slug} />
       </div>
-      <p className="mt-6 text-center text-[0.75rem] text-ink-faint">Use the email the office has for you. No password needed.</p>
+      <p className="mt-6 text-center text-[0.75rem] text-ink-faint">Use the mobile or email the office has for you. No password needed.</p>
     </div>
   );
 }

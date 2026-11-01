@@ -115,7 +115,7 @@ export function CrewSignInForm({ slug }: { slug: string }) {
   if (state.step === "code" && state.email) {
     return (
       <div className="space-y-4">
-        {state.message && <p className="rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink ring-1 ring-line">{state.message} It can take a minute — check spam too.</p>}
+        {state.message && <p className="rounded-xl bg-zinc-50 px-4 py-3 text-[0.875rem] text-ink ring-1 ring-line">{state.message} It can take a minute{state.message.includes("texted") ? "" : " — check spam too"}.</p>}
         <form action={action} className="space-y-3">
           <input type="hidden" name="slug" value={slug} /><input type="hidden" name="email" value={state.email} /><input type="hidden" name="intent" value="verify" />
           <label className="block text-[0.8125rem] font-medium text-ink-muted" htmlFor="code">Sign-in code</label>
@@ -125,8 +125,8 @@ export function CrewSignInForm({ slug }: { slug: string }) {
           <button className={btn("primary", "w-full")} disabled={pending}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Sign in</button>
         </form>
         <form action={action} className="flex justify-between text-[0.8125rem]">
-          <input type="hidden" name="slug" value={slug} /><input type="hidden" name="email" value={state.email} />
-          <button name="intent" value="restart" className="text-ink-muted">Use a different email</button>
+          <input type="hidden" name="slug" value={slug} /><input type="hidden" name="email" value={state.email} />{state.phone && <input type="hidden" name="phone" value={state.phone} />}
+          <button name="intent" value="restart" className="text-ink-muted">Use a different mobile or email</button>
           <button name="intent" value="resend" className="font-medium text-[var(--crew-brand)]">Send a new code</button>
         </form>
       </div>
@@ -135,10 +135,10 @@ export function CrewSignInForm({ slug }: { slug: string }) {
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="slug" value={slug} /><input type="hidden" name="intent" value="send" />
-      <label className="block text-[0.8125rem] font-medium text-ink-muted" htmlFor="email">Your email</label>
-      <input id="email" name="email" type="email" autoComplete="email" required autoFocus defaultValue={state.email} placeholder="you@example.com" className={input} />
+      <label className="block text-[0.8125rem] font-medium text-ink-muted" htmlFor="email">Your mobile or email</label>
+      <input id="email" name="email" type="text" inputMode="email" autoComplete="username" required autoFocus defaultValue={state.email} placeholder="04xx xxx xxx or you@example.com" className={input} />
       {state.error && <p className="text-[0.8125rem] text-rose-700">{state.error}</p>}
-      <button className={btn("primary", "w-full")} disabled={pending}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Email me a sign-in code</button>
+      <button className={btn("primary", "w-full")} disabled={pending}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Send me a sign-in code</button>
     </form>
   );
 }

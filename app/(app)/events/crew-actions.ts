@@ -9,7 +9,7 @@ import { actorName, logActivity } from "@/lib/activity";
  * The staff list (people without an EventureOS login, e.g. casual baristas): who's on it, and who works each job.
  * People on a job — and anyone set to "always invite" — get the job's Google Calendar invite.
  */
-export type CrewResult = { ok: true } | { ok: false; error: string };
+export type CrewResult = { ok: true; message?: string } | { ok: false; error: string };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -18,8 +18,8 @@ async function manager() {
   if (!["owner", "admin", "manager"].includes(ctx.role)) throw new Error("Only owners, admins and managers can change the staff list and rosters.");
   return ctx;
 }
-async function wrap(fn: () => Promise<void>): Promise<CrewResult> {
-  try { await fn(); return { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+async function wrap(fn: () => Promise<void | string>): Promise<CrewResult> {
+  try { const m = await fn(); return m ? { ok: true, message: m } : { ok: true }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 /** Re-send the job's calendar invite on the next sync (guest list changed). */
 async function resync(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], orgId: string, eventId?: string) {
@@ -179,23 +179,44 @@ export async function moveCrewRank(crewId: string, dir: -1 | 1): Promise<CrewRes
   });
 }
 
-/** Email someone the link to the staff app. */
-export async function inviteCrewToApp(crewId: string): Promise<CrewResult> {
+/** Invite someone to the staff app by email, text, or both. */
+export async function inviteCrewToApp(crewId: string, via: "email" | "sms" | "both" = "email"): Promise<CrewResult> {
   return wrap(async () => {
     const { supabase, org, profile } = await manager();
     if (!UUID.test(crewId)) throw new Error("Refresh and try again.");
-    const { data: m } = await supabase.from("crew_members").select("name, email, active").eq("id", crewId).eq("organisation_id", org.id).maybeSingle();
+    const { data: m } = await supabase.from("crew_members").select("name, email, phone, active").eq("id", crewId).eq("organisation_id", org.id).maybeSingle();
     if (!m) throw new Error("That person isn't on the staff list.");
-    if (!m.email) throw new Error(`Add ${m.name}'s email first.`);
+    const wantEmail = via !== "sms", wantSms = via !== "email";
+    if (wantEmail && !m.email && via === "email") throw new Error(`Add ${m.name}'s email first — or text the invite.`);
     const { data: o } = await supabase.from("organisations").select("slug, brand_colour, logo_url, contact_email").eq("id", org.id).single();
-    const { emailConfigured, sendEmail } = await import("@/lib/email/send");
-    if (!emailConfigured()) throw new Error("Email isn't set up (RESEND_API_KEY).");
     const { appBaseUrl } = await import("@/lib/integrations/registry");
-    const { staffAppInviteEmail } = await import("@/lib/email/templates");
-    const msg = staffAppInviteEmail({ businessName: org.name, firstName: m.name.split(" ")[0], inviterName: profile.full_name ?? null, url: `${appBaseUrl()}/crew/${o!.slug}`, brand: o!.brand_colour, logoUrl: o!.logo_url });
-    await sendEmail({ to: m.email, ...msg, replyTo: profile.email ?? o!.contact_email, fromName: org.name });
+    const url = `${appBaseUrl()}/crew/${o!.slug}`;
+    const done: string[] = [], problems: string[] = [];
+    if (wantEmail && m.email) {
+      const { emailConfigured, sendEmail } = await import("@/lib/email/send");
+      if (!emailConfigured()) problems.push("email isn't set up");
+      else {
+        const { staffAppInviteEmail } = await import("@/lib/email/templates");
+        const msg = staffAppInviteEmail({ businessName: org.name, firstName: m.name.split(" ")[0], inviterName: profile.full_name ?? null, url, brand: o!.brand_colour, logoUrl: o!.logo_url });
+        try { await sendEmail({ to: m.email, ...msg, replyTo: profile.email ?? o!.contact_email, fromName: org.name }); done.push(`emailed ${m.email}`); } catch (e) { problems.push(`email: ${e instanceof Error ? e.message : String(e)}`); }
+      }
+    } else if (wantEmail) problems.push("no email on file");
+    if (wantSms) {
+      const { loadTwilio, sendSms, smsNumber } = await import("@/lib/sms/twilio");
+      const { createServiceClient } = await import("@/lib/integrations/runtime");
+      const to = m.phone ? smsNumber(m.phone as string) : null;
+      const cfg = await loadTwilio(createServiceClient(), org.id);
+      if (!to) problems.push("no mobile number on file");
+      else if (!cfg) problems.push("texts aren't set up (Twilio)");
+      else {
+        try { await sendSms(cfg, to, `Hi ${m.name.split(" ")[0]}, ${org.name} has set you up on the staff app — your shifts, roster and pay.\nOpen ${url} and sign in with this mobile number. Then add it to your home screen.`); done.push(`texted ${m.phone}`); }
+        catch (e) { problems.push(`text: ${e instanceof Error ? e.message : String(e)}`); }
+      }
+    }
+    if (!done.length) throw new Error(`Not sent — ${problems.join("; ")}.`);
     await supabase.from("crew_members").update({ app_invited_at: new Date().toISOString() }).eq("id", crewId);
     revalidatePath("/settings/team");
+    return `Invited — ${done.join(" and ")}${problems.length ? ` (not: ${problems.join("; ")})` : ""}.`;
   });
 }
 

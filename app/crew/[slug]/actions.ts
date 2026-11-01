@@ -13,7 +13,7 @@ import { fmtDate, todayISO } from "@/lib/format";
 /* Sign in with an emailed code (codes work inside the installed app,  */
 /* where a sign-in link would open in the browser instead)             */
 /* ------------------------------------------------------------------ */
-export type CrewSignInState = { step: "email" | "code"; email?: string; error?: string; message?: string };
+export type CrewSignInState = { step: "email" | "code"; email?: string; phone?: string; error?: string; message?: string };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function friendly(msg: string) {
@@ -28,8 +28,21 @@ export async function crewSignIn(prev: CrewSignInState, form: FormData): Promise
   if (!org) return { step: "email", error: "This staff app link isn't valid." };
   const intent = String(form.get("intent") ?? "send");
   if (intent === "restart") return { step: "email" };
-  const email = String(form.get("email") ?? prev.email ?? "").trim().toLowerCase();
-  if (!EMAIL_RE.test(email) || email.length > 254) return { step: "email", email, error: "Enter a valid email address." };
+  const phoneAgain = intent === "resend" ? String(form.get("phone") ?? "") : "";
+  const login = phoneAgain || String(form.get("email") ?? prev.email ?? "").trim();
+  // a mobile number: text them a one-tap link and a code (sign-in is still against their account's email behind the scenes)
+  if ((intent === "send" || intent === "resend") && !login.includes("@") && /\d{8,}/.test(login.replace(/\D/g, ""))) {
+    const { smsNumber } = await import("@/lib/sms/twilio");
+    const to = smsNumber(login);
+    if (!to) return { step: "email", email: login, error: "Enter your mobile (04…) or your email." };
+    try {
+      const r = await sendStaffSmsSignIn(createServiceClient(), org, to);
+      if (!r) return { step: "email", email: login, error: `${login} isn't on ${org.name}'s staff list. Ask the office to add your mobile, or use your email.` };
+      return { step: "code", email: r.email, phone: login, message: `We've texted a sign-in link and code to ${login}. Tap the link — or type the code below.` };
+    } catch (e) { return { step: "email", email: login, error: e instanceof Error ? e.message : String(e) }; }
+  }
+  const email = login.toLowerCase();
+  if (!EMAIL_RE.test(email) || email.length > 254) return { step: "email", email, error: "Enter your mobile (04…) or your email address." };
 
   if (intent === "send" || intent === "resend") {
     // Only people on the staff list (main or extra email) can sign in
@@ -77,6 +90,37 @@ async function sendStaffSignIn(db: ReturnType<typeof createServiceClient>, org: 
   const msg = staffSignInEmail({ businessName: org.name, firstName: (m?.name as string | undefined)?.split(" ")[0] ?? "there", url, code: data.properties.email_otp ?? null, brand: org.brand_colour, logoUrl: org.logo_url });
   await sendEmail({ to: email, ...msg, fromName: org.name, replyTo: org.contact_email });
   return true;
+}
+
+/**
+ * Sign in by text: find the staff member by mobile, make sure they have a login (their email — or, with no email, a
+ * private login address only EventureOS uses), and text a one-tap link plus the code. Returns null if the number
+ * isn't on the staff list.
+ */
+async function sendStaffSmsSignIn(db: ReturnType<typeof createServiceClient>, org: CrewOrg, to: string): Promise<{ email: string } | null> {
+  const { loadTwilio, sendSms, smsNumber } = await import("@/lib/sms/twilio");
+  const { data: people } = await db.from("crew_members").select("id, name, email, phone, user_id").eq("organisation_id", org.id).eq("active", true).not("phone", "is", null);
+  const m = ((people ?? []) as { id: string; name: string; email: string | null; phone: string; user_id: string | null }[]).find((p) => smsNumber(p.phone) === to);
+  if (!m) return null;
+  const cfg = await loadTwilio(db, org.id);
+  if (!cfg) throw new Error("Text sign-in isn't set up here yet — use your email.");
+  // which login: the one already linked, else their email, else a private address tied to them
+  let email: string | null = null;
+  if (m.user_id) { const { data } = await db.auth.admin.getUserById(m.user_id); email = data?.user?.email ?? null; }
+  email = email ?? m.email?.toLowerCase() ?? `staff-${m.id}@sms.eventureos.com.au`;
+  const { data: made, error: cErr } = await db.auth.admin.createUser({ email, email_confirm: true });
+  if (cErr && !/already|registered|exists/i.test(cErr.message)) throw cErr;
+  if (made?.user && !m.user_id && !m.email) await db.from("crew_members").update({ user_id: made.user.id }).eq("id", m.id).is("user_id", null);
+  const { data, error } = await db.auth.admin.generateLink({ type: "magiclink", email });
+  if (error || !data?.properties?.hashed_token) throw error ?? new Error("No sign-in link");
+  if (!m.user_id && !m.email && !made?.user) { // the private login existed already — make sure it's linked
+    const { data: u } = await db.auth.admin.getUserById(data.user.id);
+    if (u?.user) await db.from("crew_members").update({ user_id: u.user.id }).eq("id", m.id).is("user_id", null);
+  }
+  const { appBaseUrl } = await import("@/lib/integrations/registry");
+  const url = `${appBaseUrl()}/crew/${org.slug}/auth?th=${encodeURIComponent(data.properties.hashed_token)}&t=${encodeURIComponent(data.properties.verification_type ?? "magiclink")}`;
+  await sendSms(cfg, to, `${org.name} staff app: tap to sign in ${url}${data.properties.email_otp ? `\nOr enter code ${data.properties.email_otp}` : ""}`);
+  return { email };
 }
 
 /** Finish signing in from the emailed link. */
