@@ -325,7 +325,23 @@ export default async function TeamPage() {
 
       <Card>
         <CardHeader title="What each role can do" subtitle="Customers never see the staff app — they only use the customer portal." />
-        <div className="overflow-x-auto border-t border-line">
+        {/* phones: one block per role */}
+        <div className="divide-y divide-line border-t border-line md:hidden">
+          {roleOrder.map((r) => (
+            <div key={r} className="px-4 py-3">
+              <p className="text-[0.8125rem] font-semibold text-ink">{ROLE_LABEL[r]} <span className="font-normal text-ink-faint">— {ROLE_HINT[r]}</span></p>
+              <ul className="mt-1.5 space-y-1 text-[0.7812rem]">
+                {PERMISSIONS.map((p) => (
+                  <li key={p.label} className="flex items-start gap-2">
+                    {p[r] === true ? <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Yes" /> : p[r] === "limited" ? <span className="mt-0.5 w-4 shrink-0 text-center text-[0.6875rem] font-semibold text-amber-700">½</span> : <Minus className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" aria-label="No" />}
+                    <span className={p[r] ? "text-ink" : "text-ink-faint"}>{p.label}{p[r] === "limited" ? " (limited)" : ""}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto border-t border-line md:block">
           <table className="w-full text-[0.7812rem] md:min-w-[560px]">
             <thead>
               <tr className="text-left">

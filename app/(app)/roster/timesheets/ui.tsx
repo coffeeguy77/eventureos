@@ -34,7 +34,7 @@ export function Timesheets({ from, to, today, sheets, earningsReady }: { from: s
     router.refresh();
   });
   const waitingIds = sheets.flatMap((s) => s.entries.filter((e) => e.status === "pending").map((e) => e.id));
-  const sendable = sheets.filter((s) => s.xero && s.approved > 0).map((s) => s.id);
+  const sendable = sheets.filter((s) => s.xero && s.unsent > 0).map((s) => s.id);
   const totalCost = sheets.reduce((t, s) => t + s.cost, 0), totalHours = sheets.reduce((t, s) => t + s.hours, 0);
   return (
     <div className="space-y-4">
@@ -50,7 +50,7 @@ export function Timesheets({ from, to, today, sheets, earningsReady }: { from: s
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Send approved to Xero
           </Button>
         </div>
-        {!earningsReady && <p className="w-full text-[0.75rem] text-amber-800">Connect Xero Payroll and choose the earnings rates in Setup before sending.</p>}
+        {!earningsReady && <p className="w-full text-[0.75rem] text-amber-800">Xero Payroll is connected, but no earnings rates are chosen yet — pick them in <Link href="/roster/setup" className="font-semibold underline">Setup → Xero Payroll</Link> (Ordinary at least) before sending.</p>}
       </Card>
       {msg && <p className={cn("rounded-lg px-3 py-2 text-[0.8125rem]", msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800")}>{msg.text}</p>}
       {sheets.length === 0 && <Card><p className="px-5 py-6 text-[0.8125rem] text-ink-muted">No one is on the roster yet.</p></Card>}
@@ -109,7 +109,7 @@ function PersonCard({ s, today, pending, run, from, to, earningsReady }: { s: Pe
               </>
             )}
             <span className="ml-auto" />
-            {s.xero && s.approved > 0 && earningsReady && <Button size="sm" disabled={pending} onClick={() => run(() => sendToXero([s.id], from, to))}><Send className="h-3.5 w-3.5" />Send {s.name.split(" ")[0]}&rsquo;s to Xero</Button>}
+            {s.xero && s.unsent > 0 && earningsReady && <Button size="sm" disabled={pending} onClick={() => run(() => sendToXero([s.id], from, to))}><Send className="h-3.5 w-3.5" />Send {s.name.split(" ")[0]}&rsquo;s to Xero</Button>}
           </div>
         </div>
       )}

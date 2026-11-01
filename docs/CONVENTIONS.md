@@ -57,8 +57,18 @@ events→contacts use `contacts!events_primary_contact_id_organisation_id_fkey`.
   `ink-faint`, `line`, `canvas`. Text sizes are small and precise (12–14px). Rounded-xl cards, subtle borders, no
   decorative UI. Status colours from `lib/status.ts`. Money via `money()`, dates via `fmtDate/fmtDateTime/relative`
   (org timezone `org.timezone`) from `lib/format.ts`. Use `tabular` class for numbers in columns.
+- DARK MODE IS THE OWNER'S DEFAULT — every back-office and staff-app screen must read correctly on a dark background.
+  Never use literal `bg-white`, `text-white` on a default background, `bg-black`, `text-black` or hex colours for
+  surfaces/text. Use the theme tokens, which flip with the colour scheme: `bg-surface` (cards, inputs, boxes),
+  `bg-canvas` (page / inset boxes), `text-ink` / `text-ink-muted` / `text-ink-faint`, `ring-line`, and the palette
+  shades (`zinc-*`, `amber-*`, `emerald-*`… are remapped for dark). `text-white` is only for text on a solid
+  `bg-brand-*` / coloured button. Any box that shows text (codes, links, copy fields) sets BOTH its background
+  token and `text-ink`. Public customer pages with their own fixed light palette are the only exception, and must
+  set their text colour explicitly alongside `bg-white`.
 - Every record page shows the most likely NEXT ACTION prominently.
-- Desktop-first but must work at 375px wide (tables scroll horizontally inside cards).
+- Desktop-first but must work at 375px wide: forms stack to one column on phones (`grid gap-3 sm:grid-cols-…`), rows
+  of controls wrap (`flex flex-wrap`) instead of squeezing inputs, wide tables scroll inside their card, and no input
+  is narrower than its content. Check every new list/form at phone width.
 - Be honest in UI: when an integration isn't connected, say so plainly; never fake a sync.
 
 ## Working rules for contributors

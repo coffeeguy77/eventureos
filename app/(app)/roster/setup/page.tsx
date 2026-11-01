@@ -30,7 +30,7 @@ export default async function RosterSetup() {
 
   // Xero Payroll: employees and earnings rates, once payroll is connected
   const xeroOn = !!xi && ["connected", "syncing", "error"].includes(xi.status as string);
-  const payrollOn = xeroOn && Array.isArray(xi?.scopes) && (xi!.scopes as string[]).some((s) => s.startsWith("payroll."));
+  const payrollOn = xeroOn && !settings.payroll_off && Array.isArray(xi?.scopes) && (xi!.scopes as string[]).some((s) => s.startsWith("payroll."));
   let payroll: { employees: { id: string; name: string; email: string | null }[]; rates: { id: string; name: string }[] } | null = null;
   let payrollError: string | null = null;
   if (payrollOn) {

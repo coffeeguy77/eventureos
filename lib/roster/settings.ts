@@ -11,6 +11,8 @@ export interface RosterSettings {
   google_calendar: boolean;
   /** Xero Payroll: which earnings rate each category is sent as, and how timesheets arrive */
   xero: { earnings: Partial<Record<Category, string>>; status: "DRAFT" | "APPROVED" };
+  /** Xero Payroll switched off here (EventureOS stops reading payroll and sending timesheets; reconnecting turns it back on) */
+  payroll_off: boolean;
   /** people paid an agreed flat hourly rate (no penalties — every hour is ordinary) */
   flat: string[];
   /** the café iPad: a secret in its link (hashed here) */
@@ -31,6 +33,7 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     google_calendar: r.google_calendar === true,
     xero: { earnings: x.earnings ?? {}, status: x.status === "DRAFT" ? "DRAFT" : "APPROVED" },
     kiosk_hash: typeof r.kiosk_hash === "string" ? r.kiosk_hash : null,
+    payroll_off: r.payroll_off === true,
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
     geofence: g && typeof g.lat === "number" && typeof g.lng === "number" && typeof g.metres === "number" && g.metres > 0 ? { lat: g.lat, lng: g.lng, metres: g.metres } : null,
   };

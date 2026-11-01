@@ -9,7 +9,7 @@ import { Input, Label, Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
-import { testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -150,8 +150,12 @@ export function XeroPayrollCard({ xeroOn, payrollOn, error, rates, earnings, sta
                 <Select value={st} onChange={(e) => setSt(e.target.value as "DRAFT" | "APPROVED")}>
                   <option value="APPROVED">Approved — ready for the pay run</option><option value="DRAFT">Draft — check them in Xero first</option>
                 </Select></div>
-              <Button size="sm" variant="primary" disabled={pending || !map.ordinary} onClick={() => run(() => saveXeroPayroll({ earnings: map, status: st }))}>Save</Button>
-              {!map.ordinary && <p className="text-[0.75rem] text-amber-800">Ordinary is needed at least.</p>}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="primary" disabled={pending || !map.ordinary} onClick={() => run(() => saveXeroPayroll({ earnings: map, status: st }))}>Save</Button>
+                <a href="/api/integrations/xero/connect?payroll=1" className="text-[0.75rem] font-medium text-brand-600">Reconnect Xero Payroll</a>
+                <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => disconnectPayroll())}>Disconnect Xero Payroll</Button>
+              </div>
+              {!map.ordinary && <p className="text-[0.75rem] text-amber-800">Choose the earnings rate for Ordinary at least — timesheets can&rsquo;t go to Xero until then.</p>}
             </>
           )}
         {note}
@@ -235,7 +239,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
         <div className="rounded-lg bg-zinc-50 px-3 py-3">
           <p className="font-medium text-ink">Café iPad</p>
           <p className="text-[0.75rem] text-ink-muted">Open this link on the café iPad and add it to the home screen. Staff tap their name and enter their PIN to clock on, start a break, or clock off. {kioskSet ? "Making a new link stops the old one working." : ""}</p>
-          {link ? <p className="mt-2 break-all rounded bg-white px-2 py-1.5 font-mono text-[0.75rem] ring-1 ring-line">{`${window.location.origin}/crew/${slug}/kiosk?k=${link}`}</p> : null}
+          {link ? <p className="mt-2 select-all break-all rounded bg-canvas px-2 py-1.5 font-mono text-[0.75rem] text-ink ring-1 ring-line">{`${window.location.origin}/crew/${slug}/kiosk?k=${link}`}</p> : null}
           <Button size="sm" className="mt-2" disabled={pending} onClick={() => run(() => newKioskLink(), (r) => r.ok && r.message && setLink(r.message))}>{kioskSet ? "Make a new iPad link" : "Make the iPad link"}</Button>
           {link && <p className="mt-1 text-[0.7188rem] text-amber-800">Copy it now — it isn&rsquo;t shown again.</p>}
         </div>

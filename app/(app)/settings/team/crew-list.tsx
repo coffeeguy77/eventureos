@@ -51,7 +51,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
         {[...active, ...inactive].map((r) => editing === r.id
           ? <li key={r.id} className="py-3"><CrewForm initial={r} skills={!!app?.skillsReady} onDone={() => setEditing(null)} /></li>
           : (
-            <li key={r.id} className={`flex flex-wrap items-center gap-3 py-2.5 ${r.active ? "" : "opacity-60"}`}>
+            <li key={r.id} className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-3 ${r.active ? "" : "opacity-60"}`}>
               {canEdit && app?.ready && r.active && (
                 <span className="flex flex-col">
                   <button type="button" disabled={pending || active[0]?.id === r.id} onClick={() => run(() => moveCrewRank(r.id, -1))} aria-label={`Move ${r.name} up`} className="rounded p-0.5 text-ink-faint hover:bg-zinc-100 hover:text-ink disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
@@ -60,7 +60,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
               )}
               {app?.ready && r.active && <span className="w-5 text-center text-[0.75rem] font-semibold tabular text-ink-faint">{active.findIndex((a) => a.id === r.id) + 1}</span>}
               <Avatar name={r.name} size={30} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-[14rem]">
                 <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-medium text-ink">{r.name}
                   {r.role && <span className="font-normal text-ink-muted">· {r.role}</span>}
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
@@ -68,11 +68,13 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                   {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : k === "kitchen" ? "amber" : "brand"}>{skillLabel(k)}</Badge>)}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
-                <p className="truncate text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>
+                <p className="break-words text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>
                 {app?.ready && r.active && (
                   <p className="text-[0.7188rem] text-ink-faint">{r.app_last_seen_at ? <span className="text-emerald-700">Using the staff app</span> : r.app_invited_at ? "Invited to the staff app" : "Not invited to the staff app yet"}</p>
                 )}
               </div>
+              {/* controls: on a phone they sit on their own row under the name, full width */}
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
               {app?.ready && r.active && (
                 <span className="flex items-center gap-2 text-[0.75rem] text-ink-muted">
                   {r.salaried ? <span className="font-medium text-ink">On salary</span> : <span className="flex items-center gap-1"><RateInput value={r.hourly_rate ?? null} placeholder={String(app.rate)} disabled={!canEdit || pending} onSave={(v) => run(() => setStaffRate(r.id, v), "Rate saved.")} />/hr</span>}
@@ -88,7 +90,8 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                   <Send className="h-3.5 w-3.5" />{r.app_invited_at ? "Resend app" : "Invite to app"}
                 </button>
               )}
-              {canEdit && <button type="button" onClick={() => setEditing(r.id)} className="rounded-md p-1.5 text-ink-faint hover:bg-zinc-100 hover:text-ink" aria-label={`Edit ${r.name}`}><Pencil className="h-4 w-4" /></button>}
+              {canEdit && <button type="button" onClick={() => setEditing(r.id)} className="ml-auto inline-flex h-9 items-center gap-1 rounded-md px-2 text-[0.75rem] text-ink-faint hover:bg-zinc-100 hover:text-ink sm:ml-0 sm:h-auto sm:p-1.5" aria-label={`Edit ${r.name}`}><Pencil className="h-4 w-4" /><span className="sm:hidden">Edit</span></button>}
+              </div>
             </li>
           ))}
       </ul>

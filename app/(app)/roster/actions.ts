@@ -344,3 +344,8 @@ export async function testRosterText(memberId: string, monday: string, to: strin
     return "Test text sent.";
   });
 }
+
+/** Stop using Xero Payroll here (no more reading payroll or sending timesheets). Connect again to turn it back on. */
+export async function disconnectPayroll() {
+  return wrap(async () => { await saveSettings({ payroll_off: true }); return "Xero Payroll disconnected — EventureOS won't read payroll or send timesheets. Your accounting connection to Xero is unchanged."; });
+}

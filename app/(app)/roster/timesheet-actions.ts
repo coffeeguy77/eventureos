@@ -92,6 +92,8 @@ export async function sendToXero(crewIds: string[], from: string, to: string) {
     if (!DATE.test(from) || !DATE.test(to) || to < from) throw new Error("Choose the dates.");
     const ids = crewIds.filter((x) => UUID.test(x));
     if (!ids.length) throw new Error("Choose who to send.");
+    const { readRosterSettings } = await import("@/lib/roster/settings");
+    if (readRosterSettings(org.settings).payroll_off) throw new Error("Xero Payroll is disconnected — reconnect it in Roster → Setup first.");
     const { buildContext } = await import("@/lib/integrations/sync-runner");
     const { sendTimesheets } = await import("@/lib/roster/payroll");
     const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);

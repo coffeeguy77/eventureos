@@ -26,7 +26,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const { PAYROLL_SCOPES } = await import("@/lib/integrations/xero-payroll");
       const { data: cur } = await supabase.from("integrations").select("scopes").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle();
       const had = Array.isArray(cur?.scopes) && (cur!.scopes as string[]).some((x) => x.startsWith("payroll."));
-      if (request.nextUrl.searchParams.get("payroll") === "1" || had) extraScopes = PAYROLL_SCOPES;
+      const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+      const st = (o?.settings ?? {}) as Record<string, unknown>;
+      const roster = (st.roster ?? {}) as Record<string, unknown>;
+      const ask = request.nextUrl.searchParams.get("payroll") === "1";
+      if (ask && roster.payroll_off) await supabase.from("organisations").update({ settings: { ...st, roster: { ...roster, payroll_off: false } } }).eq("id", org.id);
+      if (ask || (had && !roster.payroll_off)) extraScopes = PAYROLL_SCOPES;
     }
     const url = buildAuthorizeUrl(provider, { redirectUri: redirectUri(provider, request.nextUrl.origin), state, codeVerifier: verifier || undefined, extraScopes });
     const res = NextResponse.redirect(url);
