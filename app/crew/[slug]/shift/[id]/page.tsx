@@ -126,7 +126,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
             <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint">Your pay</p>
             <p className="text-[1.125rem] font-bold text-ink">{d.amount != null ? money(d.amount, s.org.currency, { cents: true }) : "—"}</p>
           </div>
-          <p className="-mt-2 text-[0.8125rem] text-ink-muted">{roster ? `${fmtHours(d.hours)}${(rs as { break_minutes?: number } | null)?.break_minutes ? ` after a ${(rs as { break_minutes: number }).break_minutes} min unpaid break` : ""} · paid through payroll` : <>{fmtHours(d.hours)} × {money(d.rate, s.org.currency, { cents: true })}/hr{d.paymentId ? " · Paid" : ""}</>}</p>
+          <p className="-mt-2 text-[0.8125rem] text-ink-muted">{roster ? `${fmtHours(d.hours)}${(rs as { break_minutes?: number } | null)?.break_minutes ? ` after a ${(rs as { break_minutes: number }).break_minutes} min unpaid break` : ""} · an estimate at award rates — paid through payroll` : <>{fmtHours(d.hours)} × {money(d.rate, s.org.currency, { cents: true })}/hr{d.paymentId ? " · Paid" : ""}</>}</p>
           {d.claims.length > 0 && (
             <ul className="space-y-1 text-[0.8125rem]">
               {d.claims.map((c) => (

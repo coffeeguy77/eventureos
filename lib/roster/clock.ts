@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
@@ -57,27 +58,41 @@ export async function clockOn(db: SupabaseClient, org: ClockOrg, memberId: strin
   if (await openEntry(db, org.id, memberId)) throw new Error("You're already clocked on.");
   const nowLocal = toLocal(new Date(), org.timezone);
   const shift = event ? null : nearestShift(await shiftsToday(db, org, memberId), nowLocal);
-  const { data: made, error } = await db.from("staff_time_entries").insert({
-    organisation_id: org.id, crew_member_id: memberId, staff_shift_id: shift?.id ?? null, work_date: shift?.shift_date ?? nowLocal.slice(0, 10),
+  const id = randomUUID(), workDate = shift?.shift_date ?? nowLocal.slice(0, 10);
+  const photo = await takePhoto(db, settings, opts, { orgId: org.id, memberId, workDate, entryId: id, which: "in" });
+  const row = {
+    id, organisation_id: org.id, crew_member_id: memberId, staff_shift_id: shift?.id ?? null, work_date: workDate,
     clock_in: new Date().toISOString(), source: opts.source, in_lat: opts.where?.lat ?? null, in_lng: opts.where?.lng ?? null,
-    ...(event ? { event_crew_id: opts.eventCrewId } : {}),
-  }).select("id").single();
+    ...(event ? { event_crew_id: opts.eventCrewId } : {}), ...(photo ? { in_photo: photo } : {}),
+  };
+  let { error } = await db.from("staff_time_entries").insert(row);
+  if (error && /in_photo/.test(error.message)) { const { in_photo: _drop, ...rest } = row as typeof row & { in_photo?: string }; void _drop; ({ error } = await db.from("staff_time_entries").insert(rest)); }
   if (error) throw new Error(/one_open/.test(error.message) ? "You're already clocked on." : error.message);
-  if (opts.photo && made) await savePhoto(db, org.id, made.id as string, "in", opts.photo);
   return event ? "Clocked on for the event." : shift ? `Clocked on for your ${shift.start_time.slice(0, 5)} shift.` : "Clocked on. You weren't rostered on now — the office will check it.";
 }
 
-/** A small photo from the café iPad camera (data URL, JPEG), saved privately against the entry. Never blocks clocking. */
-async function savePhoto(db: SupabaseClient, orgId: string, entryId: string, which: "in" | "out", dataUrl: string) {
-  try {
-    const m = dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
-    if (!m) return;
-    const bytes = Buffer.from(m[1], "base64");
-    if (bytes.length > 600_000) return;
-    const path = `${orgId}/${entryId}-${which}.jpg`;
-    const { error } = await db.storage.from("clock-photos").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
-    if (!error) await db.from("staff_time_entries").update({ [which === "in" ? "in_photo" : "out_photo"]: path }).eq("id", entryId);
-  } catch { /* the clock-on still counts */ }
+/**
+ * The photo taken as someone clocks on / off (iPad or phone camera; a small JPEG data URL), saved privately under
+ * their name: clock-photos/{org}/{person}/{date}-{entry}-in.jpg. When photos are switched on it's required — no photo,
+ * no clock-on — unless the photo store itself isn't set up yet (database update 0085 not run), so clocking still works.
+ */
+async function takePhoto(db: SupabaseClient, settings: RosterSettings, opts: { source: "phone" | "kiosk"; photo?: string | null },
+  at: { orgId: string; memberId: string; workDate: string; entryId: string; which: "in" | "out" }): Promise<string | null> {
+  const need = settings.clock.photo;
+  const m = opts.photo?.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/);
+  const word = at.which === "in" ? "clock on" : "clock off";
+  if (!m) {
+    if (!need) return null;
+    throw new Error(opts.source === "kiosk" ? `Look at the camera — a photo is needed to ${word}. If Safari asks, allow the camera.` : `Take your photo to ${word} — allow the camera if your phone asks.`);
+  }
+  const bytes = Buffer.from(m[1], "base64");
+  if (bytes.length > 600_000) throw new Error("That photo is too big — try again.");
+  const path = `${at.orgId}/${at.memberId}/${at.workDate}-${at.entryId}-${at.which}.jpg`;
+  const { error } = await db.storage.from("clock-photos").upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+  if (!error) return path;
+  if (/bucket not found|not found/i.test(error.message)) return null; // photo store not set up yet
+  if (need) throw new Error(`Couldn't save your photo (${error.message}) — try again.`);
+  return null;
 }
 
 export async function startBreak(db: SupabaseClient, orgId: string, memberId: string) {
@@ -115,13 +130,14 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   const spanH = (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000;
   const required = Math.max(rostered?.break_minutes ?? 0, spanH > settings.meal.after_hours ? settings.meal.minutes : 0);
   if (!e.event_crew_id && brk < required) brk = required;
+  const photo = await takePhoto(db, settings, opts, { orgId: org.id, memberId, workDate: e.work_date, entryId: e.id, which: "out" });
   const { error } = await db.from("staff_time_entries").update({
+    ...(photo ? { out_photo: photo } : {}),
     clock_out: now.toISOString(), break_minutes: brk, break_started_at: null, out_lat: opts.where?.lat ?? null, out_lng: opts.where?.lng ?? null,
     paid_start: paid.start, paid_finish: paid.finish, status: "pending", updated_at: now.toISOString(),
     ...(brk > recorded ? { note: `Unpaid break: ${brk} min${recorded ? ` (${recorded} min recorded)` : ""}.` } : {}),
   }).eq("id", e.id);
   if (error) throw new Error(error.message);
-  if (opts.photo) await savePhoto(db, org.id, e.id, "out", opts.photo);
   const hours = Math.max(0, (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000 - brk / 60);
   return `Clocked off — ${Math.round(hours * 100) / 100} paid hours${brk ? ` after your ${brk} min unpaid break` : ""}. Thanks!`;
 }

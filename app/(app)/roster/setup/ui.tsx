@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
 import { LeafletMap } from "@/components/maps/leaflet-map";
-import { findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { ratesFromXeroAll, findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -32,11 +32,16 @@ type Person = { id: string; name: string; email: string | null; role: string | n
 
 export function PeopleCard({ people, areas, payroll, orgRate }: { people: Person[]; areas: Area[]; payroll: { id: string; name: string; email: string | null }[] | null; orgRate: number }) {
   const [showAll, setShowAll] = useState(false);
+  const { pending: rp, run: rrun, note: rnote } = useAct();
   const list = showAll ? people : people.filter((p) => p.on_roster);
   return (
     <Card>
-      <CardHeader title="Who's on the roster" subtitle="Tick everyone who can do café shifts. Base rate = their Monday–Friday rate, for cost estimates (Xero Payroll pays the real rate). People not on Xero Payroll (e.g. subs off the books) can still be rostered — their café shifts go to Wages, not Xero."
-        action={<button onClick={() => setShowAll(!showAll)} className="text-[0.75rem] font-medium text-brand-600">{showAll ? "Only people on the roster" : `Show all staff (${people.length})`}</button>} />
+      <CardHeader title="Who's on the roster" subtitle="Tick everyone who can do café shifts. Base rate = the award base before casual loading, used for cost estimates and the pay shown in the staff app. For people matched in Xero Payroll it's set from what Xero pays them when you Save (e.g. casual $34.76 Mon–Fri ÷ 1.25 = $27.81). People not on Xero Payroll (e.g. subs off the books) can still be rostered — their café shifts go to Wages, not Xero."
+        action={<span className="flex flex-wrap items-center gap-3">
+          {payroll && <button disabled={rp} onClick={() => rrun(() => ratesFromXeroAll())} className="text-[0.75rem] font-medium text-brand-600">{rp ? "Reading Xero…" : "Base rates from Xero"}</button>}
+          <button onClick={() => setShowAll(!showAll)} className="text-[0.75rem] font-medium text-brand-600">{showAll ? "Only people on the roster" : `Show all staff (${people.length})`}</button>
+        </span>} />
+      {rnote && <div className="border-t border-line px-5 py-2">{rnote}</div>}
       {list.length === 0 && <p className="border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted">Nobody yet — tap “Show all staff” and tick the café team. Add new people in Settings → Team.</p>}
       <ul className="divide-y divide-line border-t border-line">
         {list.map((p) => <PersonRow key={p.id} p={p} areas={areas} payroll={payroll} orgRate={orgRate} />)}
@@ -244,7 +249,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
               <option value="ipad">On the café iPad only</option><option value="phone">On their phone only</option><option value="both">iPad or phone</option>
             </Select></div>
           <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.clock.events} onChange={(e) => setV({ ...v, clock: { ...v.clock, events: e.target.checked } })} />Event shifts: clock on in the staff app</label>
-          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.clock.photo} onChange={(e) => setV({ ...v, clock: { ...v.clock, photo: e.target.checked } })} />iPad takes a photo at clock on / off</label>
+          <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.clock.photo} onChange={(e) => setV({ ...v, clock: { ...v.clock, photo: e.target.checked } })} />Selfie required to clock on / off (iPad and phone)</label>
         </div>
         <div className="grid gap-3 sm:grid-cols-4">
           <div><Label hint="minutes">Round clock times to</Label><Input type="number" min={0} max={60} value={v.rounding} onChange={(e) => setV({ ...v, rounding: Number(e.target.value) })} /></div>
@@ -278,7 +283,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
 
         <div className="rounded-lg bg-zinc-50 px-3 py-3">
           <p className="font-medium text-ink">Café iPad</p>
-          <p className="text-[0.75rem] text-ink-muted">Open this link on the café iPad in Safari and add it to the home screen. Staff tap their name and enter their PIN to clock on, start a break, or clock off{v.clock.photo ? "; the front camera takes a small photo each time (Safari asks to allow the camera the first time)" : ""}. {kioskSet ? "Making a new link stops the old one working." : ""}</p>
+          <p className="text-[0.75rem] text-ink-muted">Open this link on the café iPad in Safari and add it to the home screen. Staff tap their name and enter their PIN to clock on, start a break, or clock off{v.clock.photo ? "; the front camera takes a small photo each time — no photo, no clock-on (Safari asks to allow the camera the first time)" : ""}. {kioskSet ? "Making a new link stops the old one working." : ""}</p>
           {link ? <p className="mt-2 select-all break-all rounded bg-canvas px-2 py-1.5 font-mono text-[0.75rem] text-ink ring-1 ring-line">{`${window.location.origin}/crew/${slug}/kiosk?k=${link}`}</p> : null}
           <Button size="sm" className="mt-2" disabled={pending} onClick={() => run(() => newKioskLink(), (r) => r.ok && r.message && setLink(r.message))}>{kioskSet ? "Make a new iPad link" : "Make the iPad link"}</Button>
           {link && <p className="mt-1 text-[0.7188rem] text-amber-800">Copy it now — it isn&rsquo;t shown again.</p>}

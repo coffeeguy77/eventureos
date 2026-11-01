@@ -165,19 +165,16 @@ function EntryRow({ e, pending, run, fence }: { e: PersonSheet["entries"][number
             <button onClick={() => setEdit(true)} className="text-left hover:text-brand-700">
               <b className="text-ink">{hm(e.paidStart)}–{hm(e.paidFinish)}</b>{e.breakMinutes ? ` · ${e.breakMinutes}m break` : ""} · <b className="text-ink">{hours} h</b>
               <span className="block text-[0.7188rem] text-ink-faint">
-                {e.source === "office" ? "Added by the office" : `Clocked ${hm(e.clockIn)}–${hm(e.clockOut)}${e.source === "kiosk" ? " on the iPad" : ""}`}{e.rostered ? ` · rostered ${e.rostered}` : " · not rostered"}{e.note ? ` · ${e.note}` : ""}
+                {e.source === "office" ? "Added by the office" : e.source === "kiosk" ? "On the iPad" : e.source === "phone" ? "On their phone" : "Clocked"}{e.rostered ? ` · rostered ${e.rostered}` : " · not rostered"}{e.note ? ` · ${e.note}` : ""}
               </span>
             </button>
           )}
           {e.event && <span className="mt-0.5 block text-[0.7188rem] font-medium text-violet-700">Event shift: {e.event} — paid from the job, not this timesheet</span>}
-          {(e.inAt || e.outAt || e.inPhoto || e.outPhoto) && (
-            <span className="mt-1 flex flex-wrap items-center gap-2 text-[0.7188rem] text-ink-muted">
-              {e.inPhoto && <a href={e.inPhoto} target="_blank" rel="noreferrer" title="Photo at clock-on"><img src={e.inPhoto} alt="At clock-on" className="h-10 w-10 rounded object-cover ring-1 ring-line" /></a>}
-              {e.outPhoto && <a href={e.outPhoto} target="_blank" rel="noreferrer" title="Photo at clock-off"><img src={e.outPhoto} alt="At clock-off" className="h-10 w-10 rounded object-cover ring-1 ring-line" /></a>}
-              {(e.inPhoto || e.outPhoto) && <Camera className="h-3.5 w-3.5" />}
-              {(e.inAt || e.outAt) && <button onClick={() => setWhere(!where)} className={cn("inline-flex items-center gap-1 font-medium", (inAway ?? 0) > (fence?.metres ?? Infinity) || (outAway ?? 0) > (fence?.metres ?? Infinity) ? "text-rose-700" : "text-brand-600")}>
-                <MapPin className="h-3.5 w-3.5" />{where ? "Hide map" : "Map"}{inAway != null ? ` · on ${inAway} m away` : ""}{outAway != null ? ` · off ${outAway} m away` : ""}
-              </button>}
+          {e.source !== "office" && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[0.7188rem] text-ink-muted">
+              <Punch label="On" time={hm(e.clockIn)} photo={e.inPhoto} away={inAway} fence={fence} />
+              {e.clockOut && <Punch label="Off" time={hm(e.clockOut)} photo={e.outPhoto} away={outAway} fence={fence} />}
+              {(e.inAt || e.outAt) && <button onClick={() => setWhere(!where)} className="inline-flex items-center gap-1 font-medium text-brand-600"><MapPin className="h-3.5 w-3.5" />{where ? "Hide map" : "Map"}</button>}
             </span>
           )}
         </span>
@@ -193,5 +190,22 @@ function EntryRow({ e, pending, run, fence }: { e: PersonSheet["entries"][number
       </div>
       {where && <div className="mt-2"><LeafletMap pins={[...(e.inAt ? [{ ...e.inAt, label: `Clocked on ${hm(e.clockIn)}`, colour: "#059669" }] : []), ...(e.outAt ? [{ ...e.outAt, label: `Clocked off ${hm(e.clockOut)}`, colour: "#e11d48" }] : [])]} circle={fence} /></div>}
     </li>
+  );
+}
+
+/** One clock-on or clock-off: the photo (small; tap for full size), the time, and how far from the café a phone was. */
+function Punch({ label, time, photo, away, fence }: { label: string; time: string; photo: string | null; away: number | null; fence: Fence }) {
+  const far = away != null && fence && away > fence.metres;
+  return (
+    <span className={cn("inline-flex items-center gap-2 rounded-lg bg-canvas py-1 pl-1 pr-2.5 ring-1", far ? "ring-rose-300" : "ring-line")}>
+      {photo
+        ? <a href={photo} target="_blank" rel="noreferrer" title={`Photo at clock ${label.toLowerCase()} — tap to enlarge`}><img src={photo} alt={`At clock ${label.toLowerCase()}`} className="h-12 w-12 rounded-md object-cover" /></a>
+        : <span className="flex h-12 w-12 flex-col items-center justify-center rounded-md bg-surface text-[0.625rem] leading-tight text-ink-faint ring-1 ring-line"><Camera className="h-4 w-4" />no photo</span>}
+      <span className="text-left leading-tight">
+        <span className="block text-[0.6875rem] uppercase tracking-wide text-ink-faint">{label}</span>
+        <b className="text-[0.8125rem] text-ink">{time}</b>
+        {away != null && <span className={cn("block", far ? "font-semibold text-rose-700" : "text-ink-faint")}>{away} m away</span>}
+      </span>
+    </span>
   );
 }

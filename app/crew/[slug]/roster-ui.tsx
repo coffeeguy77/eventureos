@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Coffee, Loader2, LogIn, LogOut, Megaphone } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Coffee, Loader2, LogIn, LogOut, Megaphone, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { btn, useRun } from "./ui";
 import { cancelLeave, cancelOffer, claimOffer, clock, offerShift, requestLeave, saveAvailability, takeOpenRosterShift } from "./roster-actions";
@@ -20,19 +20,74 @@ function getWhere(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
-/** Clock on / break / clock off. */
-export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad = false, events = [] }: {
+/** Square-crop and shrink to a small JPEG (about 20–40 KB). */
+function shrink(src: CanvasImageSource, w: number, h: number): string {
+  const side = Math.min(w, h), c = document.createElement("canvas");
+  c.width = 320; c.height = 320;
+  c.getContext("2d")!.drawImage(src, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 320, 320);
+  return c.toDataURL("image/jpeg", 0.7);
+}
+
+/**
+ * The selfie step before clocking on / off: the front camera in the app; if the phone won't share the camera there,
+ * its own camera opens instead. Nothing is sent until they take the photo.
+ */
+function Selfie({ label, busy, onShot, onCancel }: { label: string; busy: boolean; onShot: (photo: string) => void; onCancel: () => void }) {
+  const video = useRef<HTMLVideoElement | null>(null);
+  const file = useRef<HTMLInputElement | null>(null);
+  const [live, setLive] = useState<"starting" | "on" | "off">("starting");
+  useEffect(() => {
+    let st: MediaStream | null = null, dead = false;
+    if (!navigator.mediaDevices?.getUserMedia) { setLive("off"); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } }, audio: false })
+      .then((s) => { if (dead) { s.getTracks().forEach((t) => t.stop()); return; } st = s; if (video.current) { video.current.srcObject = s; void video.current.play().catch(() => undefined); } setLive("on"); })
+      .catch(() => setLive("off"));
+    return () => { dead = true; st?.getTracks().forEach((t) => t.stop()); };
+  }, []);
+  const snap = () => { const v = video.current; if (v?.videoWidth) onShot(shrink(v, v.videoWidth, v.videoHeight)); };
+  const picked = (f: File | undefined) => {
+    if (!f) return;
+    const img = new Image(), url = URL.createObjectURL(f);
+    img.onload = () => { onShot(shrink(img, img.naturalWidth, img.naturalHeight)); URL.revokeObjectURL(url); };
+    img.src = url;
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-[0.9375rem] font-semibold text-ink">Photo to {label.toLowerCase()}</p>
+      {live !== "off" ? (
+        <video ref={video} playsInline muted className="mx-auto aspect-square w-56 rounded-2xl bg-canvas object-cover ring-1 ring-line [transform:scaleX(-1)]" aria-label="Your camera" />
+      ) : (
+        <p className="text-[0.8125rem] text-ink-muted">Your phone didn&apos;t share the camera here — tap below to open your camera and take a selfie.</p>
+      )}
+      <input ref={file} type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => picked(e.target.files?.[0])} />
+      <button className={btn("primary", "h-14 w-full text-[1rem]")} disabled={busy || live === "starting"}
+        onClick={() => (live === "on" ? snap() : file.current?.click())}>
+        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}{live === "on" ? `Take photo & ${label.toLowerCase()}` : "Open camera"}
+      </button>
+      <button className={btn("ghost", "w-full")} disabled={busy} onClick={onCancel}><X className="h-4 w-4" />Cancel</button>
+    </div>
+  );
+}
+
+/** Clock on / break / clock off — with a selfie when the business has photos switched on. */
+export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad = false, events = [], photo = false }: {
   slug: string; open: { clock_in: string; break_started_at: string | null; break_minutes: number } | null; needsPlace: boolean;
-  cafePhone?: boolean; cafeIpad?: boolean; events?: { id: string; name: string; start: string | null }[];
+  cafePhone?: boolean; cafeIpad?: boolean; events?: { id: string; name: string; start: string | null }[]; photo?: boolean;
 }) {
   const { run, pending, toast } = useRun();
   const [, tick] = useState(0);
+  const [cam, setCam] = useState<{ what: "on" | "off"; eventId: string | null } | null>(null);
   useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30000); return () => clearInterval(t); }, []);
   // the location is saved when the phone gives it (and checked against the café pin for café shifts); off = not saved
-  const go = (what: "on" | "break" | "back" | "off", eventId: string | null = null) => run(async () => clock(slug, what, what === "on" || what === "off" ? await getWhere() : null, eventId));
+  const send = (what: "on" | "break" | "back" | "off", eventId: string | null, pic: string | null) =>
+    run(async () => { const r = await clock(slug, what, what === "on" || what === "off" ? await getWhere() : null, eventId, pic); if (r.ok) setCam(null); return r; });
+  const go = (what: "on" | "break" | "back" | "off", eventId: string | null = null) =>
+    photo && (what === "on" || what === "off") ? setCam({ what, eventId }) : send(what, eventId, null);
   return (
     <div className="space-y-3 rounded-2xl bg-surface p-5 text-center shadow-card ring-1 ring-line">
-      {!open ? (
+      {cam ? (
+        <Selfie label={cam.what === "on" ? "Clock on" : "Clock off"} busy={pending} onCancel={() => setCam(null)} onShot={(pic) => send(cam.what, cam.eventId, pic)} />
+      ) : !open ? (
         <>
           <p className="text-[0.9375rem] text-ink-muted">You&apos;re not clocked on.</p>
           {cafePhone && <button className={btn("primary", "h-14 w-full text-[1rem]")} disabled={pending} onClick={() => go("on")}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogIn className="h-5 w-5" />}Clock on{events.length ? " — café shift" : ""}</button>}
@@ -42,7 +97,7 @@ export function ClockPanel({ slug, open, needsPlace, cafePhone = true, cafeIpad 
             </button>
           ))}
           {!cafePhone && !events.length && <p className="text-[0.875rem] text-ink-muted">{cafeIpad ? "Café shifts are clocked on at the café iPad." : "No shift to clock on for today."}</p>}
-          {(cafePhone || events.length > 0) && <p className="text-[0.75rem] text-ink-faint">{needsPlace ? "Your phone will ask for your location to check you're at work." : "Your phone may ask for your location — it's saved with your clock-on if you allow it."}</p>}
+          {(cafePhone || events.length > 0) && <p className="text-[0.75rem] text-ink-faint">{photo ? "You'll take a quick selfie. " : ""}{needsPlace ? "Your phone will ask for your location to check you're at work." : "Your phone may ask for your location — it's saved with your clock-on if you allow it."}</p>}
         </>
       ) : (
         <>

@@ -33,13 +33,20 @@ export default async function RosterSetup() {
   const payrollOn = xeroOn && !settings.payroll_off && Array.isArray(xi?.scopes) && (xi!.scopes as string[]).some((s) => s.startsWith("payroll."));
   let payroll: { employees: { id: string; name: string; email: string | null }[]; rates: { id: string; name: string }[] } | null = null;
   let payrollError: string | null = null;
-  if (payrollOn) {
+  // kept for 15 minutes so opening Setup doesn't wait on Xero every time (Base rates from Xero / Save always read it fresh)
+  type PayrollCache = { employees: { id: string; name: string; email: string | null }[]; rates: { id: string; name: string }[]; fetched_at: string };
+  const cached = ((org.settings as { roster?: { payroll_cache?: PayrollCache } } | null)?.roster?.payroll_cache) ?? null;
+  if (payrollOn && cached?.fetched_at && Date.now() - Date.parse(cached.fetched_at) < 15 * 60_000) payroll = { employees: cached.employees, rates: cached.rates };
+  else if (payrollOn) {
     try {
       const { buildContext } = await import("@/lib/integrations/sync-runner");
       const { payrollEmployees, earningsRates } = await import("@/lib/integrations/xero-payroll");
       const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
       const [employees, rates] = await Promise.all([payrollEmployees(ctx), earningsRates(ctx)]);
       payroll = { employees: employees.filter((e) => e.status !== "TERMINATED").map(({ id, name, email }) => ({ id, name, email })), rates: rates.map(({ id, name }) => ({ id, name })) };
+      const { data: cur } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+      const st = (cur?.settings ?? {}) as Record<string, unknown>;
+      await supabase.from("organisations").update({ settings: { ...st, roster: { ...((st.roster ?? {}) as Record<string, unknown>), payroll_cache: { ...payroll, fetched_at: new Date().toISOString() } } } }).eq("id", org.id);
     } catch (e) { payrollError = e instanceof Error ? e.message : String(e); }
   }
   // What past pay runs paid (rates and earnings rates), kept for 12 hours so the page stays quick

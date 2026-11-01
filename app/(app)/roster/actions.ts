@@ -194,11 +194,39 @@ export async function saveRosterPerson(id: string, input: { onRoster: boolean; e
       hourly_rate: input.hourlyRate == null ? null : Math.round(input.hourlyRate * 100) / 100,
     }).eq("id", id).eq("organisation_id", org.id);
     if (error) throw new Error(dbErr(error.message));
+    let settings = org.settings;
     if (input.flat !== undefined) {
       const cur = readRosterSettings(org.settings).flat.filter((x) => x !== id);
-      await saveSettings({ flat: input.flat ? [...cur, id] : cur });
+      const flat = input.flat ? [...cur, id] : cur;
+      await saveSettings({ flat });
+      const st = (org.settings ?? {}) as Record<string, unknown>;
+      settings = { ...st, roster: { ...((st.roster ?? {}) as Record<string, unknown>), flat } };
     }
-    return input.xeroEmployeeId ? "Saved." : "Saved — not on Xero Payroll, so their café shifts are paid through Wages.";
+    if (!input.xeroEmployeeId) return "Saved — not on Xero Payroll, so their café shifts are paid through Wages.";
+    // matched to Xero Payroll: take their base rate from what Xero pays them
+    try {
+      const { buildContext } = await import("@/lib/integrations/sync-runner");
+      const { ratesFromXero, describeRates } = await import("@/lib/roster/xero-rates");
+      const { user } = await office();
+      const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
+      const r = await ratesFromXero(supabase, ctx, { id: org.id, settings }, [id]);
+      return r.length ? `Saved. ${describeRates(r)}` : "Saved.";
+    } catch (e) { return `Saved — couldn't read their rate from Xero (${e instanceof Error ? e.message : String(e)}).`; }
+  });
+}
+
+/** Set everyone matched in Xero Payroll to the rate Xero pays them. */
+export async function ratesFromXeroAll() {
+  return wrap(async () => {
+    const { supabase, org, user } = await office();
+    if (readRosterSettings(org.settings).payroll_off) throw new Error("Xero Payroll is disconnected — reconnect it first.");
+    const { buildContext } = await import("@/lib/integrations/sync-runner");
+    const { ratesFromXero, describeRates } = await import("@/lib/roster/xero-rates");
+    const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
+    await saveSettings({ payroll_cache: null }); // re-read Xero's people next time Setup opens
+    const r = await ratesFromXero(supabase, ctx, org);
+    if (!r.length) throw new Error("Nobody is matched to Xero Payroll yet — choose each person's Xero employee and Save.");
+    return describeRates(r);
   });
 }
 

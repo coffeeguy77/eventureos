@@ -30,7 +30,7 @@ export default async function CrewClock({ params }: { params: Promise<{ slug: st
     <div>
       <h1 className="mb-1 text-[1.5rem] font-bold tracking-tight text-ink">Clock on</h1>
       <p className="mb-5 text-[0.875rem] text-ink-muted">{today.length ? `Today: ${today.map((t) => `${t.start_time.slice(0, 5)}–${t.finish_time.slice(0, 5)}${t.area ? ` (${t.area})` : ""}`).join(", ")}` : "You're not rostered on today."}</p>
-      <ClockPanel slug={slug} open={open} needsPlace={!!settings.geofence} cafePhone={prof.cafePhone && today.length > 0 || prof.cafePhone && !events.length} cafeIpad={prof.onRoster && settings.clock.cafe === "ipad"} events={events} />
+      <ClockPanel slug={slug} open={open} needsPlace={!!settings.geofence} cafePhone={prof.cafePhone && today.length > 0 || prof.cafePhone && !events.length} cafeIpad={prof.onRoster && settings.clock.cafe === "ipad"} events={events} photo={settings.clock.photo} />
       <Section title="Your hours — last 2 weeks">
         {sheets.length === 0 && <Card><p className="text-[0.875rem] text-ink-muted">Nothing yet.</p></Card>}
         {sheets.map((t) => {

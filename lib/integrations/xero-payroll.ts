@@ -102,3 +102,25 @@ export async function pastPay(ctx: SyncContext, runs = 4): Promise<{ periods: { 
   }
   return { periods, people: [...people.values()].map((p) => ({ ...p, lines: p.lines.map((l) => ({ ...l, hours: Math.round(l.hours * 100) / 100, amount: Math.round(l.amount * 100) / 100 })) })) };
 }
+
+/**
+ * The hourly rate Xero Payroll pays someone for ordinary hours (Mon–Fri) — from their pay template, else the
+ * earnings rate's own rate. null when Xero doesn't hold an hourly rate for them (e.g. a salary).
+ *   GET /Employees/{id} → OrdinaryEarningsRateID, PayTemplate.EarningsLines[{ EarningsRateID, CalculationType, RatePerUnit }]
+ */
+export async function ordinaryRate(ctx: SyncContext, employeeId: string, ordinaryId: string | null, rates?: Map<string, number | null>): Promise<{ rate: number | null; earningsRateId: string | null }> {
+  const r = await get<{ Employees?: { OrdinaryEarningsRateID?: string; PayTemplate?: { EarningsLines?: { EarningsRateID: string; CalculationType?: string; RatePerUnit?: number }[] } }[] }>(ctx, `/Employees/${employeeId}`);
+  const e = r.Employees?.[0];
+  const id = ordinaryId || e?.OrdinaryEarningsRateID || null;
+  const lines = e?.PayTemplate?.EarningsLines ?? [];
+  const line = lines.find((l) => l.EarningsRateID === id);
+  if (line?.RatePerUnit != null && Number(line.RatePerUnit) > 0) return { rate: Number(line.RatePerUnit), earningsRateId: id };
+  if (id && rates?.has(id) && (rates.get(id) ?? 0) > 0) return { rate: rates.get(id)!, earningsRateId: id };
+  return { rate: null, earningsRateId: id };
+}
+
+/** Each earnings rate's own hourly rate (when it has one), by id. */
+export async function earningsRateAmounts(ctx: SyncContext): Promise<Map<string, number | null>> {
+  const r = await get<{ PayItems?: { EarningsRates?: { EarningsRateID: string; RatePerUnit?: number; CurrentRecord?: boolean }[] } }>(ctx, "/PayItems");
+  return new Map((r.PayItems?.EarningsRates ?? []).map((x) => [x.EarningsRateID, x.RatePerUnit == null ? null : Number(x.RatePerUnit)]));
+}
