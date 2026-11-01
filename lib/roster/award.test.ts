@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { awardHours, estimateCost, readRules, roundTime, weekOf, DEFAULT_RULES } from "./award";
+import { awardHours, estimateCost, flatHours, readRules, roundTime, weekOf, workedHours, DEFAULT_RULES, FAST_FOOD_RULES } from "./award";
 
 const none = new Set<string>();
 
@@ -47,14 +47,15 @@ test("casual minimum engagement of 2 hours", () => {
   assert.equal(h.ordinary, 2);
 });
 
-test("weekly overtime after 38 hours: first 2 hours then the higher rate; Sunday never converts", () => {
+test("weekly overtime after 38 hours: first 2 hours of each day at the first rate; Sunday never converts", () => {
   const days = ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"].map((d) => ({ start: `${d}T07:00`, finish: `${d}T15:00`, breakMinutes: 0 })); // 40 h
   days.push({ start: "2026-11-07T07:00", finish: "2026-11-07T10:00", breakMinutes: 0 }); // Sat 3h → all overtime
   days.push({ start: "2026-11-08T07:00", finish: "2026-11-08T10:00", breakMinutes: 0 }); // Sun stays Sunday
   const m = awardHours(days, "full_time", none);
   assert.equal(m.get("2026-11-06")!.ordinary, 6);
   assert.equal(m.get("2026-11-06")!.overtime_150, 2);
-  assert.equal(m.get("2026-11-07")!.overtime_200, 3);
+  assert.equal(m.get("2026-11-07")!.overtime_150, 2);
+  assert.equal(m.get("2026-11-07")!.overtime_200, 1);
   assert.equal(m.get("2026-11-07")!.saturday, 0);
   assert.equal(m.get("2026-11-08")!.sunday, 3);
 });
@@ -103,4 +104,23 @@ test("public holiday hours count towards the week, so a later weekday goes into 
   const n = awardHours([...days.slice(0, 4), { start: "2027-01-02T07:00", finish: "2027-01-02T15:00", breakMinutes: 0 }], "full_time", new Set(["2026-12-28"]));
   assert.equal(n.get("2027-01-02")!.saturday, 6);
   assert.equal(n.get("2027-01-02")!.overtime_150, 2);
+});
+
+test("Fast Food: 10pm–midnight and midnight–6am are paid at their own rate (replace), 3-hour casual minimum, daily overtime after 11", () => {
+  const m = awardHours([{ start: "2026-11-06T05:00", finish: "2026-11-06T10:00", breakMinutes: 0 }], "casual", new Set(), FAST_FOOD_RULES);
+  const h = m.get("2026-11-06")!;
+  assert.equal(h.late_night, 1);
+  assert.equal(h.ordinary, 4);
+  assert.equal(workedHours(h, FAST_FOOD_RULES), 5);
+  assert.equal(awardHours([{ start: "2026-11-03T09:00", finish: "2026-11-03T11:00", breakMinutes: 0 }], "casual", new Set(), FAST_FOOD_RULES).get("2026-11-03")!.ordinary, 3);
+  const long = awardHours([{ start: "2026-11-03T06:00", finish: "2026-11-03T19:00", breakMinutes: 30 }], "part_time", new Set(), FAST_FOOD_RULES).get("2026-11-03")!;
+  assert.equal(long.ordinary, 11);
+  assert.equal(long.overtime_150, 1.5);
+  assert.equal(estimateCost(m, "casual", 30, FAST_FOOD_RULES), 30 * (4 * 1.25 + 1 * 1.4));
+});
+
+test("flat rate: every hour ordinary", () => {
+  const f = flatHours([{ start: "2026-11-07T06:30", finish: "2026-11-07T14:00", breakMinutes: 0 }]);
+  assert.equal(f.get("2026-11-07")!.ordinary, 7.5);
+  assert.equal(f.get("2026-11-07")!.saturday, 0);
 });

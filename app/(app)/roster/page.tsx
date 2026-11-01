@@ -21,6 +21,8 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
   const today = todayISO(org.timezone);
   const monday = weekOf(/^\d{4}-\d{2}-\d{2}$/.test(sp.w ?? "") ? sp.w! : today);
   const week = await loadWeek(supabase, org, monday);
+  const { data: tw } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "twilio").maybeSingle();
+  const smsOn = tw?.status === "connected";
 
   if (!week.ready) {
     return (<div><PageHeader title="Roster" /><Card><EmptyState title="One database update to go">Run 0084_cafe_roster.sql in Supabase to switch on the café roster.</EmptyState></Card></div>);
@@ -47,7 +49,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
       ) : (
         <div className="space-y-6">
           {(leaveList.length > 0 || offerList.length > 0) && <Requests leave={leaveList} offers={offerList} />}
-          <RosterGrid week={plainWeek(week)} today={today} prev={addDaysISO(monday, -7)} next={addDaysISO(monday, 7)} />
+          <RosterGrid week={plainWeek(week)} today={today} prev={addDaysISO(monday, -7)} next={addDaysISO(monday, 7)} smsOn={smsOn} />
         </div>
       )}
     </div>

@@ -71,10 +71,16 @@ async function loadCustomWageShifts(db: SupabaseClient, orgId: string, opts: { u
   if (opts.unpaidOnly) q = q.is("payment_id", null);
   if (opts.paymentIds) q = q.in("payment_id", opts.paymentIds.length ? opts.paymentIds : ["00000000-0000-0000-0000-000000000000"]);
   if (opts.crewId) q = q.eq("crew_member_id", opts.crewId);
-  // café roster shifts are paid through payroll (Roster → Timesheets), not here
-  const { data: withRoster, error: rErr } = await q.eq("roster", false).limit(2000);
-  const { data, error } = rErr ? await q.limit(2000) : { data: withRoster, error: null };
+  // café roster shifts are paid through Xero Payroll (Roster → Timesheets) — except for people who aren't on payroll
+  // (e.g. subs off the books): theirs are paid here, once published, less the unpaid break
+  const withRoster = await db.from("staff_shifts").select("id, roster, published_at, break_minutes, member:crew_members(xero_employee_id)").eq("organisation_id", orgId).eq("roster", true).lte("shift_date", opts.until).limit(5000);
+  const skip = new Set<string>(), breaks = new Map<string, number>();
+  if (!withRoster.error) for (const r of (withRoster.data ?? []) as unknown as { id: string; published_at: string | null; break_minutes: number; member: { xero_employee_id: string | null } | null }[]) {
+    if (!r.published_at || r.member?.xero_employee_id) skip.add(r.id); else breaks.set(r.id, r.break_minutes ?? 0);
+  }
+  const { data: all, error } = await q.limit(2000);
   if (error) return [];
+  const data = (all ?? []).filter((r) => !skip.has((r as { id: string }).id) && !!(r as { crew_member_id: string | null }).crew_member_id);
   type Row = { id: string; crew_member_id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; notes: string | null; series_id: string | null; hours_override: number | null; rate_override: number | null; payment_id: string | null; member: { name: string; hourly_rate: number | null } | null };
   const list = (data ?? []) as unknown as Row[];
   const claims = new Map<string, { approved: number; pending: number }>();
@@ -91,7 +97,9 @@ async function loadCustomWageShifts(db: SupabaseClient, orgId: string, opts: { u
     const ev = { event_date: r.shift_date, setup_time: null, start_time: r.start_time, finish_time: r.finish_time };
     const c = claims.get(r.id) ?? { approved: 0, pending: 0 };
     const p = plannedShift(ev);
-    const pay = shiftPay({ event: ev, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
+    const brk = breaks.get(r.id) ?? 0;
+    const hoursOverride = r.hours_override != null ? Number(r.hours_override) : brk && p.hours != null ? Math.max(0, Math.round((p.hours - brk / 60) * 100) / 100) : null;
+    const pay = shiftPay({ event: ev, hoursOverride, approvedExtra: c.approved,
       rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: r.member?.hourly_rate == null ? null : Number(r.member.hourly_rate), orgRate, minHours });
     return {
       key: `c:${r.id}`, kind: "custom", id: r.id, crewId: r.crew_member_id, crewName: r.member?.name ?? "Removed", eventId: null, eventName: r.title, date: r.shift_date,

@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { fmtDate, money } from "@/lib/format";
 import { shiftWarnings, type PlainWeek } from "@/lib/roster/warnings";
-import { copyPreviousWeek, decideLeave, decideOffer, deleteRosterShift, publishWeek, saveRosterShift } from "./actions";
+import { copyPreviousWeek, decideLeave, decideOffer, deleteRosterShift, publishWeek, saveRosterShift, textWeek } from "./actions";
 
 type Shift = PlainWeek["shifts"][number];
 type Draft = { id: string | null; crewId: string | null; areaId: string | null; date: string; start: string; finish: string; breakMinutes: number; notes: string; also: string[] };
@@ -24,11 +24,12 @@ const len = (s: { start_time: string; finish_time: string; break_minutes: number
 };
 const hrs = (n: number) => `${Math.round(n * 100) / 100}h`;
 
-export function RosterGrid({ week, today, prev, next }: { week: PlainWeek; today: string; prev: string; next: string }) {
+export function RosterGrid({ week, today, prev, next, smsOn = false }: { week: PlainWeek; today: string; prev: string; next: string; smsOn?: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [email, setEmail] = useState(true);
+  const [sms, setSms] = useState(smsOn);
   const [pending, start] = useTransition();
   const areas = week.areas.filter((a) => a.active);
   const areaOf = (id: string | null) => week.areas.find((a) => a.id === id) ?? null;
@@ -74,9 +75,11 @@ export function RosterGrid({ week, today, prev, next }: { week: PlainWeek; today
         {!week.dates.includes(today) && <Link href="/roster" className="text-[0.75rem] font-medium text-brand-600">This week</Link>}
         <span className="text-[0.75rem] text-ink-muted sm:ml-2">{hrs(totalHours)} · ~{money(totalCost)} estimated</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {smsOn && !week.unpublished && week.shifts.some((x) => x.published_at && x.crew_member_id) && <Button size="sm" disabled={pending} onClick={() => run(() => textWeek(week.monday, null))}>Text this week to staff</Button>}
           <Button size="sm" disabled={pending} onClick={() => run(() => copyPreviousWeek(week.monday))}><Copy className="h-3.5 w-3.5" />Copy last week</Button>
           <label className="inline-flex items-center gap-1.5 text-[0.75rem] text-ink-muted"><input type="checkbox" checked={email} onChange={(e) => setEmail(e.target.checked)} />Email staff</label>
-          <Button size="sm" variant="primary" disabled={pending || !week.unpublished} onClick={() => run(() => publishWeek(week.monday, email))}>
+          {smsOn && <label className="inline-flex items-center gap-1.5 text-[0.75rem] text-ink-muted"><input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} />Text staff</label>}
+          <Button size="sm" variant="primary" disabled={pending || !week.unpublished} onClick={() => run(() => publishWeek(week.monday, email, sms))}>
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}{week.unpublished ? `Publish ${week.unpublished} change${week.unpublished === 1 ? "" : "s"}` : "Published"}
           </Button>
         </div>

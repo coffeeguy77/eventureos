@@ -107,7 +107,7 @@ export async function copyPreviousWeek(monday: string) {
 }
 
 /** Publish the week: staff see their shifts in the app, and anyone with new or changed shifts gets an email. */
-export async function publishWeek(monday: string, email: boolean) {
+export async function publishWeek(monday: string, email: boolean, sms = false) {
   return wrap(async () => {
     const { supabase, org, user, profile } = await office();
     if (!DATE.test(monday)) throw new Error("Choose a week.");
@@ -131,9 +131,16 @@ export async function publishWeek(monday: string, email: boolean) {
         lines: all.filter((s) => s.crew_member_id === m).map((s) => shiftLine({ ...s, area: s.area?.name ?? null })),
       })));
     }
+    let texted = "";
+    if (sms) {
+      const { textRoster } = await import("@/lib/roster/sms");
+      const people = [...new Set(pending.map((s) => s.crew_member_id).filter((x): x is string => !!x))];
+      const r = await textRoster(org.id, people, monday).catch((e) => ({ sent: [] as string[], failed: [e instanceof Error ? e.message : String(e)] }));
+      texted = ` · texted ${r.sent.length}${r.failed.length ? ` (not texted: ${r.failed.join(", ")})` : ""}`;
+    }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "roster.published", entityType: "organisation", entityId: org.id,
       summary: `${actorName(profile)} published the roster for the week of ${fmtDate(monday)} (${pending.length} shift${pending.length === 1 ? "" : "s"})` });
-    return `Published ${pending.length} shift${pending.length === 1 ? "" : "s"}${email ? ` — ${sent} ${sent === 1 ? "person" : "people"} emailed` : ""}.`;
+    return `Published ${pending.length} shift${pending.length === 1 ? "" : "s"}${email ? ` — ${sent} ${sent === 1 ? "person" : "people"} emailed` : ""}${texted}.`;
   });
 }
 
@@ -168,7 +175,7 @@ export async function archiveArea(id: string) {
   });
 }
 
-export async function saveRosterPerson(id: string, input: { onRoster: boolean; employmentType: "casual" | "part_time" | "full_time"; areaId: string | null; xeroEmployeeId: string | null; hourlyRate: number | null }) {
+export async function saveRosterPerson(id: string, input: { onRoster: boolean; employmentType: "casual" | "part_time" | "full_time"; areaId: string | null; xeroEmployeeId: string | null; hourlyRate: number | null; flat?: boolean }) {
   return wrap(async () => {
     const { supabase, org } = await office();
     if (!UUID.test(id)) throw new Error("Refresh and try again.");
@@ -180,7 +187,11 @@ export async function saveRosterPerson(id: string, input: { onRoster: boolean; e
       hourly_rate: input.hourlyRate == null ? null : Math.round(input.hourlyRate * 100) / 100,
     }).eq("id", id).eq("organisation_id", org.id);
     if (error) throw new Error(dbErr(error.message));
-    return "Saved.";
+    if (input.flat !== undefined) {
+      const cur = readRosterSettings(org.settings).flat.filter((x) => x !== id);
+      await saveSettings({ flat: input.flat ? [...cur, id] : cur });
+    }
+    return input.xeroEmployeeId ? "Saved." : "Saved — not on Xero Payroll, so their café shifts are paid through Wages.";
   });
 }
 
@@ -302,3 +313,34 @@ export async function removeHoliday(date: string) {
   });
 }
 
+
+/** Text the week to everyone on it (again), or one person. */
+export async function textWeek(monday: string, memberId: string | null) {
+  return wrap(async () => {
+    const { supabase, org } = await office();
+    if (!DATE.test(monday)) throw new Error("Choose a week.");
+    let ids: string[];
+    if (memberId) { if (!UUID.test(memberId)) throw new Error("Choose someone."); ids = [memberId]; }
+    else {
+      const { data } = await supabase.from("staff_shifts").select("crew_member_id").eq("organisation_id", org.id).eq("roster", true).not("published_at", "is", null).not("crew_member_id", "is", null).gte("shift_date", monday).lte("shift_date", addDaysISO(monday, 6));
+      ids = [...new Set(((data ?? []) as { crew_member_id: string }[]).map((r) => r.crew_member_id))];
+    }
+    if (!ids.length) throw new Error("Nobody has published shifts that week.");
+    const { textRoster } = await import("@/lib/roster/sms");
+    const r = await textRoster(org.id, ids, monday);
+    if (!r.sent.length) throw new Error(`Nothing sent: ${r.failed.join(", ")}`);
+    return `Texted ${r.sent.join(", ")}${r.failed.length ? ` · not texted: ${r.failed.join(", ")}` : ""}.`;
+  });
+}
+
+/** A test text: what this person would get for the week, sent to them (or to another number). */
+export async function testRosterText(memberId: string, monday: string, to: string | null) {
+  return wrap(async () => {
+    const { org } = await office();
+    if (!UUID.test(memberId) || !DATE.test(monday)) throw new Error("Choose who and the week.");
+    const { textRoster } = await import("@/lib/roster/sms");
+    const r = await textRoster(org.id, [memberId], monday, to?.trim() ? { to: to.trim() } : {});
+    if (!r.sent.length) throw new Error(r.failed.join(", ") || "Not sent.");
+    return "Test text sent.";
+  });
+}

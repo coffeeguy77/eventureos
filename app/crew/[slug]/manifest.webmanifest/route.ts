@@ -9,8 +9,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const colour = /^#[0-9a-f]{6}$/i.test(org.brand_colour ?? "") ? org.brand_colour! : "#6028EC";
   return NextResponse.json({
     id: `/crew/${slug}`,
-    name: `${org.name} Staff`,
-    short_name: org.name.length > 14 ? `${org.name.split(/\s+/)[0]} Staff` : org.name,
+    name: `${org.name} Roster`,
+    short_name: "Roster",
     description: `Shifts, job details and pay for ${org.name} staff.`,
     start_url: `/crew/${slug}`,
     scope: `/crew/${slug}`,

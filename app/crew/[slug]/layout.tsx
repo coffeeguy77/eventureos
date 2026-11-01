@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: { default: name, template: `%s · ${name}` },
     applicationName: name,
     manifest: `/crew/${slug}/manifest.webmanifest`,
-    appleWebApp: { capable: true, title: name, statusBarStyle: "default" },
+    appleWebApp: { capable: true, title: "Roster", statusBarStyle: "default" },
     icons: { apple: `/crew/${slug}/app-icon/180`, icon: `/crew/${slug}/app-icon/192` },
     robots: { index: false, follow: false },
   };
@@ -48,7 +48,7 @@ export default async function CrewLayout({ children, params }: { children: React
         </header>
       )}
       <main className="mx-auto max-w-xl px-4 pb-28 pt-4">
-        {s && <InstallPrompt appName={`${org.name} Staff`} />}
+        {s && <InstallPrompt appName="Roster" />}
         {children}
       </main>
       {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} roster={(await rosterProfile(s)).onRoster} />}

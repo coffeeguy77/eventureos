@@ -14,7 +14,7 @@ import { STAFF_SKILLS, skillLabel } from "@/lib/crew/skills";
 export interface CrewMember {
   id: string; name: string; email: string | null; phone: string | null; role: string | null; always_invite: boolean; active: boolean;
   hourly_rate?: number | null; rank?: number; extra_emails?: string[]; app_invited_at?: string | null; app_last_seen_at?: string | null; user_id?: string | null;
-  skills?: string[]; salaried?: boolean;
+  skills?: string[]; salaried?: boolean; on_roster?: boolean;
 }
 type AppInfo = { ready: boolean; slug: string; rate: number; minHours?: number; skillsReady?: boolean; salaryReady?: boolean };
 
@@ -64,6 +64,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                 <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-medium text-ink">{r.name}
                   {r.role && <span className="font-normal text-ink-muted">· {r.role}</span>}
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
+                  {r.on_roster && <Badge tone="green">Café roster</Badge>}
                   {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : k === "kitchen" ? "amber" : "brand"}>{skillLabel(k)}</Badge>)}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
@@ -103,7 +104,7 @@ function CrewForm({ initial, onDone, skills: skillsReady = false }: { initial?: 
   const [error, setError] = useState<string | null>(null);
   const [v, setV] = useState<CrewInput>({
     name: initial?.name ?? "", email: initial?.email ?? "", phone: initial?.phone ?? "", role: initial?.role ?? "",
-    always_invite: initial?.always_invite ?? false, active: initial?.active ?? true,
+    always_invite: initial?.always_invite ?? false, active: initial?.active ?? true, on_roster: initial?.on_roster ?? false,
   });
   const [skills, setSkills] = useState<string[]>(initial?.skills ?? []);
   const [extras, setExtras] = useState((initial?.extra_emails ?? []).join(", "));
@@ -138,6 +139,10 @@ function CrewForm({ initial, onDone, skills: skillsReady = false }: { initial?: 
           <p className="mt-1 text-[0.7188rem] text-ink-faint">Coffee van jobs need someone with a licence rostered on. &ldquo;Rosters only&rdquo; people still get the invites but are never counted as event staff.</p>
         </fieldset>
       )}
+      <label className="flex items-start gap-2 text-[0.8125rem] text-ink">
+        <input type="checkbox" checked={!!v.on_roster} onChange={(e) => set("on_roster", e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-500" />
+        <span>Café roster <span className="text-ink-faint">(shows on the Roster page so they can be given café shifts; set pay and Xero in Roster → Setup)</span></span>
+      </label>
       <label className="flex items-start gap-2 text-[0.8125rem] text-ink">
         <input type="checkbox" checked={v.always_invite} onChange={(e) => set("always_invite", e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-500" />
         <span>Invite to every job <span className="text-ink-faint">(e.g. whoever does the rosters)</span></span>

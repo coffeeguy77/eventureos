@@ -8,8 +8,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
-import { CATEGORIES, CATEGORY_LABEL, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
-import { addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
+import { testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -27,14 +27,14 @@ function useAct() {
 }
 
 type Area = { id: string; name: string; colour: string | null; active: boolean };
-type Person = { id: string; name: string; email: string | null; role: string | null; on_roster: boolean; employment_type: EmploymentType; default_area_id: string | null; hourly_rate: number | null; xero_employee_id: string | null; has_pin: boolean };
+type Person = { id: string; name: string; email: string | null; role: string | null; on_roster: boolean; employment_type: EmploymentType; default_area_id: string | null; hourly_rate: number | null; xero_employee_id: string | null; has_pin: boolean; flat: boolean };
 
 export function PeopleCard({ people, areas, payroll, orgRate }: { people: Person[]; areas: Area[]; payroll: { id: string; name: string; email: string | null }[] | null; orgRate: number }) {
   const [showAll, setShowAll] = useState(false);
   const list = showAll ? people : people.filter((p) => p.on_roster);
   return (
     <Card>
-      <CardHeader title="Who's on the roster" subtitle="Tick the café staff. The hourly rate is their base (Monday–Friday, full-time) rate, used for cost estimates — Xero Payroll pays the real rate."
+      <CardHeader title="Who's on the roster" subtitle="Tick everyone who can do café shifts. Base rate = their Monday–Friday rate, for cost estimates (Xero Payroll pays the real rate). People not on Xero Payroll (e.g. subs off the books) can still be rostered — their café shifts go to Wages, not Xero."
         action={<button onClick={() => setShowAll(!showAll)} className="text-[0.75rem] font-medium text-brand-600">{showAll ? "Only people on the roster" : `Show all staff (${people.length})`}</button>} />
       {list.length === 0 && <p className="border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted">Nobody yet — tap “Show all staff” and tick the café team. Add new people in Settings → Team.</p>}
       <ul className="divide-y divide-line border-t border-line">
@@ -47,9 +47,9 @@ export function PeopleCard({ people, areas, payroll, orgRate }: { people: Person
 function PersonRow({ p, areas, payroll, orgRate }: { p: Person; areas: Area[]; payroll: { id: string; name: string; email: string | null }[] | null; orgRate: number }) {
   const { pending, run, note } = useAct();
   const guess = payroll?.find((e) => (p.email && e.email === p.email.toLowerCase()) || e.name.toLowerCase() === p.name.toLowerCase());
-  const [v, setV] = useState({ onRoster: p.on_roster, employmentType: p.employment_type, areaId: p.default_area_id, xeroEmployeeId: p.xero_employee_id ?? guess?.id ?? null, hourlyRate: p.hourly_rate });
+  const [v, setV] = useState({ onRoster: p.on_roster, employmentType: p.employment_type, areaId: p.default_area_id, xeroEmployeeId: p.xero_employee_id ?? guess?.id ?? null, hourlyRate: p.hourly_rate, flat: p.flat });
   const [pin, setPin] = useState("");
-  const dirty = v.onRoster !== p.on_roster || v.employmentType !== p.employment_type || v.areaId !== p.default_area_id || (v.xeroEmployeeId ?? null) !== (p.xero_employee_id ?? null) || v.hourlyRate !== p.hourly_rate;
+  const dirty = v.onRoster !== p.on_roster || v.employmentType !== p.employment_type || v.areaId !== p.default_area_id || (v.xeroEmployeeId ?? null) !== (p.xero_employee_id ?? null) || v.hourlyRate !== p.hourly_rate || v.flat !== p.flat;
   return (
     <li className="grid gap-3 px-5 py-3 text-[0.8125rem] lg:grid-cols-[minmax(0,1.3fr)_repeat(4,minmax(0,1fr))_auto] lg:items-end">
       <label className="flex items-center gap-2">
@@ -57,18 +57,18 @@ function PersonRow({ p, areas, payroll, orgRate }: { p: Person; areas: Area[]; p
         <span className="min-w-0"><span className="block font-medium text-ink">{p.name}</span><span className="block truncate text-[0.7188rem] text-ink-faint">{p.email ?? "No email — can't use the app"}</span></span>
       </label>
       <div><Label>Employment</Label>
-        <Select value={v.employmentType} onChange={(e) => setV({ ...v, employmentType: e.target.value as EmploymentType })}>
-          <option value="casual">Casual</option><option value="part_time">Part-time</option><option value="full_time">Full-time</option>
+        <Select value={v.flat ? "flat" : v.employmentType} onChange={(e) => e.target.value === "flat" ? setV({ ...v, flat: true }) : setV({ ...v, flat: false, employmentType: e.target.value as EmploymentType })}>
+          <option value="casual">Casual (award)</option><option value="part_time">Part-time (award)</option><option value="full_time">Full-time (award)</option><option value="flat">Agreed flat rate</option>
         </Select></div>
       <div><Label>Usual area</Label>
         <Select value={v.areaId ?? ""} onChange={(e) => setV({ ...v, areaId: e.target.value || null })}>
           <option value="">—</option>{areas.filter((a) => a.active).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </Select></div>
-      <div><Label>Base rate $/h</Label><Input type="number" min={0} step="0.01" placeholder={String(orgRate)} value={v.hourlyRate ?? ""} onChange={(e) => setV({ ...v, hourlyRate: e.target.value === "" ? null : Number(e.target.value) })} /></div>
+      <div><Label>{v.flat ? "Flat rate $/h" : "Base rate $/h"}</Label><Input type="number" min={0} step="0.01" placeholder={String(orgRate)} value={v.hourlyRate ?? ""} onChange={(e) => setV({ ...v, hourlyRate: e.target.value === "" ? null : Number(e.target.value) })} /></div>
       <div><Label>Xero Payroll</Label>
         {payroll ? (
           <Select value={v.xeroEmployeeId ?? ""} onChange={(e) => setV({ ...v, xeroEmployeeId: e.target.value || null })}>
-            <option value="">Not matched</option>{payroll.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+            <option value="">Not on payroll — pay through Wages</option>{payroll.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </Select>
         ) : <p className="py-2 text-[0.75rem] text-ink-faint">{p.xero_employee_id ? "Matched" : "Connect Xero Payroll"}</p>}
       </div>
@@ -164,12 +164,17 @@ export function PayRulesCard({ rules }: { rules: AwardRules }) {
   const { pending, run, note } = useAct();
   const [r, setR] = useState(rules);
   const types: [EmploymentType, string][] = [["casual", "Casual"], ["part_time", "Part-time"], ["full_time", "Full-time"]];
-  const cols: [keyof AwardRules["casual"], string][] = [["weekday", "Mon–Fri"], ["saturday", "Sat"], ["sunday", "Sun"], ["public_holiday", "Public hol."], ["overtime_150", "OT first"], ["overtime_200", "OT after"], ["min_hours", "Min. hours"]];
+  const cols: [keyof AwardRules["casual"], string][] = [["weekday", "Mon–Fri"], ["saturday", "Sat"], ["sunday", "Sun"], ["public_holiday", "Public hol."], ["overtime_150", "OT first"], ["overtime_200", "OT after"], ["min_hours", "Min. hours"],
+    ...(r.loadings === "replace" ? [["evening", "Evening"], ["late_night", "Late night"]] as [keyof AwardRules["casual"], string][] : [])];
   const setT = (t: EmploymentType, k: keyof AwardRules["casual"], v: number) => setR({ ...r, [t]: { ...r[t], [k]: v } });
   return (
     <Card>
-      <CardHeader title="Pay rules" subtitle="How hours are split (weekend, public holiday, evening, overtime) and the multipliers for cost estimates. Started from the Hospitality Industry (General) Award — check the numbers against the current Fair Work pay guide." />
+      <CardHeader title="Pay rules" subtitle="How hours are split (weekend, public holiday, evening, overtime) and the multipliers for cost estimates. Check them against the current Fair Work pay guide for your award." />
       <div className="space-y-4 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[0.75rem] text-ink-muted">Start from:</span>
+          {Object.entries(RULE_PRESETS).map(([k, p]) => <Button key={k} size="sm" onClick={() => setR(p.rules)}>{p.label}</Button>)}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-[640px] text-[0.75rem]">
             <thead><tr><th className="py-1 pr-3 text-left font-medium text-ink-muted" />{cols.map(([, l]) => <th key={l} className="px-1 py-1 text-left font-medium text-ink-muted">{l}</th>)}</tr></thead>
@@ -185,10 +190,14 @@ export function PayRulesCard({ rules }: { rules: AwardRules }) {
         </div>
         <p className="text-[0.7188rem] text-ink-faint">Multipliers are of the base rate (casual ones include the 25% casual loading). Minimum hours: a shorter shift is paid up to this.</p>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div><Label hint="Mon–Fri">Evening / late hours are</Label>
+            <Select value={r.loadings} onChange={(e) => setR({ ...r, loadings: e.target.value as "add" | "replace" })}>
+              <option value="replace">Paid at their own rate</option><option value="add">A $ loading on top</option>
+            </Select></div>
           <div><Label hint="Mon–Fri">Evening from</Label><Input type="time" value={r.evening_from} onChange={(e) => setR({ ...r, evening_from: e.target.value })} /></div>
           <div><Label hint="Mon–Fri, from midnight">Late night until</Label><Input type="time" value={r.late_to} onChange={(e) => setR({ ...r, late_to: e.target.value })} /></div>
-          <div><Label hint="per hour">Evening $</Label><Input type="number" step="0.01" min={0} value={r.evening_dollars} onChange={(e) => setR({ ...r, evening_dollars: Number(e.target.value) })} /></div>
-          <div><Label hint="per hour">Late night $</Label><Input type="number" step="0.01" min={0} value={r.late_night_dollars} onChange={(e) => setR({ ...r, late_night_dollars: Number(e.target.value) })} /></div>
+          {r.loadings === "add" && <><div><Label hint="per hour">Evening $</Label><Input type="number" step="0.01" min={0} value={r.evening_dollars} onChange={(e) => setR({ ...r, evening_dollars: Number(e.target.value) })} /></div>
+          <div><Label hint="per hour">Late night $</Label><Input type="number" step="0.01" min={0} value={r.late_night_dollars} onChange={(e) => setR({ ...r, late_night_dollars: Number(e.target.value) })} /></div></>}
           <div><Label hint="hours a week">Overtime after</Label><Input type="number" step="0.5" min={0} placeholder="none" value={r.weekly_overtime ?? ""} onChange={(e) => setR({ ...r, weekly_overtime: e.target.value === "" ? null : Number(e.target.value) })} /></div>
           <div><Label hint="hours in a shift">Daily overtime after</Label><Input type="number" step="0.5" min={0} placeholder="none" value={r.daily_overtime ?? ""} onChange={(e) => setR({ ...r, daily_overtime: e.target.value === "" ? null : Number(e.target.value) })} /></div>
           <div><Label hint="each week">First OT hours</Label><Input type="number" step="0.5" min={0} value={r.overtime_first_hours} onChange={(e) => setR({ ...r, overtime_first_hours: Number(e.target.value) })} /></div>
@@ -291,6 +300,33 @@ export function PastPayCard({ past }: { past: PastPay | null }) {
             {past.fetched_at && <p className="text-[0.7188rem] text-ink-faint">Read from Xero {new Date(past.fetched_at).toLocaleString()}.</p>}
           </div>
         )}
+      </div>
+    </Card>
+  );
+}
+
+/** Send a test of the weekly roster text (what that person gets), to them or to another mobile. */
+export function TextsCard({ people, monday, smsOn }: { people: { id: string; name: string; phone: string | null }[]; monday: string; smsOn: boolean }) {
+  const { pending, run, note } = useAct();
+  const [who, setWho] = useState(people[0]?.id ?? "");
+  const [to, setTo] = useState("");
+  const p = people.find((x) => x.id === who);
+  return (
+    <Card>
+      <CardHeader title="Text messages" subtitle="When Cara publishes, tick “Text staff” and each person gets their shifts for the week and a link to the staff app. Staff need a mobile number in Settings → Team." />
+      <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+        {!smsOn ? <p className="text-ink-muted">Connect Twilio in Settings → Integrations first.</p> : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+              <div><Label>Whose roster (this week)</Label>
+                <Select value={who} onChange={(e) => setWho(e.target.value)}>{people.map((x) => <option key={x.id} value={x.id}>{x.name}{x.phone ? "" : " — no mobile yet"}</option>)}</Select></div>
+              <div><Label hint="optional">Send it to this mobile instead</Label><Input value={to} onChange={(e) => setTo(e.target.value)} placeholder={p?.phone ?? "04xx xxx xxx"} inputMode="tel" /></div>
+              <Button size="sm" variant="primary" disabled={pending || !who || (!to.trim() && !p?.phone)} onClick={() => run(() => testRosterText(who, monday, to || null))}>Send a test text</Button>
+            </div>
+            <p className="text-[0.7188rem] text-ink-faint">It reads like: “Hi Cara, your Bean Culture roster for w/c 2 Nov: Tue 6:30am–3pm, Thu 6:30am–3pm… Details, swaps &amp; clock on: (link)”.</p>
+          </>
+        )}
+        {note}
       </div>
     </Card>
   );

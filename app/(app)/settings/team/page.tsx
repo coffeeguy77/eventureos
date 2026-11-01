@@ -59,6 +59,8 @@ export default async function TeamPage() {
   const { data: salRows, error: salErr } = await supabase.from("crew_members").select("id, salaried").eq("organisation_id", org.id);
   const salaryReady = !salErr;
   for (const c of crew) c.salaried = !!((salRows ?? []) as { id: string; salaried: boolean }[]).find((x) => x.id === c.id)?.salaried;
+  const { data: rosterRows } = await supabase.from("crew_members").select("id, on_roster").eq("organisation_id", org.id);
+  for (const c of crew) c.on_roster = !!((rosterRows ?? []) as { id: string; on_roster: boolean }[]).find((x) => x.id === c.id)?.on_roster;
   const { data: extraRows } = await supabase.from("crew_member_emails").select("crew_member_id, email").eq("organisation_id", org.id);
   for (const c of crew) c.extra_emails = ((extraRows ?? []) as { crew_member_id: string; email: string }[]).filter((x) => x.crew_member_id === c.id).map((x) => x.email);
   const { data: orgRow } = await supabase.from("organisations").select("slug, staff_hourly_rate, settings").eq("id", org.id).maybeSingle();

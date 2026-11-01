@@ -3,7 +3,8 @@ import { requireOrg } from "@/lib/context";
 import { Card, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
-import { CATEGORIES, estimateCost, workedHours, weekOf, type EmploymentType } from "@/lib/roster/award";
+import { CATEGORIES, weekOf, type EmploymentType } from "@/lib/roster/award";
+import { totalsFor } from "@/lib/roster/pay";
 import { personHours, type Entry } from "@/lib/roster/payroll";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { shiftSpan, toLocal } from "@/lib/roster/time";
@@ -46,12 +47,12 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     const mine = allEntries.filter((e) => e.crew_member_id === p.id);
     const approved = mine.filter((e) => e.status === "approved");
     const counted = mine.filter((e) => e.status !== "rejected" && e.clock_out);
-    const byDay = personHours(counted, p.employment_type, tz, holidays, org.settings);
+    const byDay = personHours(counted, p.employment_type, tz, holidays, org.settings, p.id);
+    const tot = totalsFor(byDay, { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate == null ? orgRate : Number(p.hourly_rate) }, settings.rules);
     const totals = Object.fromEntries(CATEGORIES.map((c) => [c, Math.round([...byDay.values()].reduce((t, h) => t + h[c], 0) * 100) / 100])) as PersonSheet["totals"];
     return {
       id: p.id, name: p.name, type: p.employment_type, xero: !!p.xero_employee_id,
-      hours: Math.round([...byDay.values()].reduce((t, h) => t + workedHours(h), 0) * 100) / 100,
-      cost: estimateCost(byDay, p.employment_type, p.hourly_rate == null ? orgRate : Number(p.hourly_rate), settings.rules),
+      hours: tot.hours, cost: tot.cost,
       totals, approved: approved.length, waiting: mine.filter((e) => e.status === "pending").length, unsent: approved.filter((e) => !e.sent_to_xero_at).length,
       entries: mine.map((e) => {
         const sh = allShifts.find((s) => s.id === e.staff_shift_id);

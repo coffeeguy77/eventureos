@@ -1,7 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SyncContext } from "@/lib/integrations/runtime";
-import { awardHours, type DayHours, type EmploymentType } from "./award";
+import { type DayHours, type EmploymentType } from "./award";
+import { hoursFor } from "./pay";
 import { timesheetLines } from "./paid";
 import { readRosterSettings } from "./settings";
 import { toLocal } from "./time";
@@ -20,9 +21,10 @@ export function entryWorked(e: Entry, tz: string) {
 }
 
 /** Hours by category per day for one person's entries. */
-export function personHours(entries: Entry[], type: EmploymentType, tz: string, holidays: Set<string>, orgSettings: unknown): Map<string, DayHours> {
-  const rules = readRosterSettings(orgSettings).rules;
-  return awardHours(entries.map((e) => entryWorked(e, tz)).filter((x): x is NonNullable<typeof x> => !!x), type, holidays, rules);
+export function personHours(entries: Entry[], type: EmploymentType, tz: string, holidays: Set<string>, orgSettings: unknown, memberId?: string): Map<string, DayHours> {
+  const st = readRosterSettings(orgSettings);
+  const worked = entries.map((e) => entryWorked(e, tz)).filter((x): x is NonNullable<typeof x> => !!x);
+  return hoursFor(worked, { type, flat: !!memberId && st.flat.includes(memberId) }, holidays, st.rules);
 }
 
 export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: { id: string; timezone: string; settings: unknown }, crewIds: string[], from: string, to: string) {
@@ -49,12 +51,12 @@ export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: 
           .eq("crew_member_id", p.id).eq("status", "approved").gte("work_date", per.start).lte("work_date", per.end);
         const entries = (rows ?? []) as Entry[];
         const { data: hol } = await db.from("public_holidays").select("holiday_date").eq("organisation_id", org.id).gte("holiday_date", per.start).lte("holiday_date", per.end);
-        const byDay = personHours(entries, p.employment_type, org.timezone, new Set(((hol ?? []) as { holiday_date: string }[]).map((h) => h.holiday_date)), org.settings);
+        const byDay = personHours(entries, p.employment_type, org.timezone, new Set(((hol ?? []) as { holiday_date: string }[]).map((h) => h.holiday_date)), org.settings, p.id);
         const dates = periodDates(per.start, per.end);
-        const lines = timesheetLines(byDay, dates, settings.xero.earnings);
+        const lines = timesheetLines(byDay, dates, settings.xero.earnings, settings.rules.loadings);
         const r = await upsertTimesheet(ctx, { employeeId: emp.id, start: per.start, end: per.end, status: settings.xero.status, lines });
         await db.from("staff_time_entries").update({ xero_timesheet_id: r.id, sent_to_xero_at: new Date().toISOString() }).in("id", entries.map((e) => e.id));
-        hours += lines.filter((l) => l.earningsRateId !== settings.xero.earnings.evening && l.earningsRateId !== settings.xero.earnings.late_night).reduce((t, l) => t + l.units.reduce((a, b) => a + b, 0), 0);
+        hours += lines.filter((l) => settings.rules.loadings === "replace" || (l.earningsRateId !== settings.xero.earnings.evening && l.earningsRateId !== settings.xero.earnings.late_night)).reduce((t, l) => t + l.units.reduce((a, b) => a + b, 0), 0);
       }
       results.push({ name: p.name, ok: true, text: `${Math.round(hours * 100) / 100} h sent (${periods.size} pay period${periods.size === 1 ? "" : "s"})` });
     } catch (e) {

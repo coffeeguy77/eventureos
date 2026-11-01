@@ -4,8 +4,9 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { readRosterSettings } from "@/lib/roster/settings";
+import { weekOf } from "@/lib/roster/award";
 import { RosterTabs } from "../tabs";
-import { AreasCard, HolidaysCard, PastPayCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
+import { AreasCard, HolidaysCard, PastPayCard, TextsCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
 
 export const metadata = { title: "Roster setup" };
 export const dynamic = "force-dynamic";
@@ -57,8 +58,12 @@ export default async function RosterSetup() {
     } catch (e) { payrollError = payrollError ?? `Past pay runs: ${e instanceof Error ? e.message : String(e)}`; }
   }
 
+  const { data: tw } = await supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "twilio").maybeSingle();
+  const smsOn = tw?.status === "connected";
+  const { data: phoneRows } = await supabase.from("crew_members").select("id, phone").eq("organisation_id", org.id);
+  const phones = new Map(((phoneRows ?? []) as { id: string; phone: string | null }[]).map((r) => [r.id, r.phone]));
   type P = { id: string; name: string; email: string | null; role: string | null; on_roster: boolean; employment_type: "casual" | "part_time" | "full_time"; default_area_id: string | null; hourly_rate: number | null; xero_employee_id: string | null; kiosk_pin_hash: string | null };
-  const list = ((people ?? []) as P[]).map(({ kiosk_pin_hash, ...p }) => ({ ...p, hourly_rate: p.hourly_rate == null ? null : Number(p.hourly_rate), has_pin: !!kiosk_pin_hash }));
+  const list = ((people ?? []) as P[]).map(({ kiosk_pin_hash, ...p }) => ({ ...p, hourly_rate: p.hourly_rate == null ? null : Number(p.hourly_rate), has_pin: !!kiosk_pin_hash, flat: settings.flat.includes(p.id) }));
 
   return (
     <div>
@@ -71,6 +76,7 @@ export default async function RosterSetup() {
         {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
         <PayRulesCard rules={settings.rules} />
         <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} />
+        <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null }))} monday={weekOf(today)} smsOn={smsOn} />
         <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
       </div>
     </div>

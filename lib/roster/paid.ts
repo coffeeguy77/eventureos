@@ -17,12 +17,12 @@ export function paidTimes(settings: Pick<RosterSettings, "rounding" | "grace">, 
 }
 
 /** Timesheet lines for a period: one per earnings rate, with hours for each day of the period. */
-export function timesheetLines(byDay: Map<string, DayHours>, dates: string[], earnings: Partial<Record<Category, string>>): { earningsRateId: string; units: number[] }[] {
+export function timesheetLines(byDay: Map<string, DayHours>, dates: string[], earnings: Partial<Record<Category, string>>, loadings: "add" | "replace" = "add"): { earningsRateId: string; units: number[] }[] {
   const ordinary = earnings.ordinary;
   const lines = new Map<string, number[]>();
   for (const c of CATEGORIES) {
-    // a loading with no earnings rate isn't sent (it would double the hours as Ordinary); base hours fall back to Ordinary
-    const rate = earnings[c] ?? (c === "evening" || c === "late_night" ? null : ordinary);
+    // an add-on loading with no earnings rate isn't sent (it would double the hours as Ordinary); hours fall back to Ordinary
+    const rate = earnings[c] ?? ((c === "evening" || c === "late_night") && loadings === "add" ? null : ordinary);
     if (!rate) continue;
     const units = lines.get(rate) ?? dates.map(() => 0);
     dates.forEach((d, i) => { units[i] = Math.round((units[i] + (byDay.get(d)?.[c] ?? 0)) * 100) / 100; });

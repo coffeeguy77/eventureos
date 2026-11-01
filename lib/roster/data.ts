@@ -1,7 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO } from "@/lib/format";
-import { awardHours, estimateCost, workedHours, type EmploymentType } from "./award";
+import { type EmploymentType } from "./award";
+import { hoursFor, totalsFor } from "./pay";
 import { readRosterSettings, type RosterSettings } from "./settings";
 import { shiftSpan, weekDates } from "./time";
 import type { PlainWeek } from "./warnings";
@@ -85,8 +86,8 @@ export async function loadWeek(db: SupabaseClient, org: { id: string; settings: 
   const hol = new Set(base.holidays.keys());
   for (const p of base.people) {
     const mine = base.shifts.filter((s) => s.crew_member_id === p.id).map((s) => ({ ...shiftSpan(s.shift_date, s.start_time, s.finish_time), breakMinutes: s.break_minutes }));
-    const byDay = awardHours(mine, p.employment_type, hol, settings.rules);
-    base.totals.set(p.id, { hours: Math.round([...byDay.values()].reduce((t, h) => t + workedHours(h), 0) * 100) / 100, cost: estimateCost(byDay, p.employment_type, p.hourly_rate ?? orgRate, settings.rules) });
+    const who = { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate ?? orgRate };
+    base.totals.set(p.id, totalsFor(hoursFor(mine, who, hol, settings.rules), who, settings.rules));
   }
   return base;
 }
