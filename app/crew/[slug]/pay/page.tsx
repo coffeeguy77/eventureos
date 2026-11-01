@@ -12,9 +12,17 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
   const { slug } = await params;
   const s = await requireCrew(slug);
   const today = todayISO(s.org.timezone);
-  const [shifts, payments] = await Promise.all([myShifts(s, { from: addDaysISO(today, -180), to: today }), myPayments(s)]);
+  const [shifts, payments, { data: me }, slipsRes] = await Promise.all([
+    myShifts(s, { from: addDaysISO(today, -180), to: today }), myPayments(s),
+    s.db.from("crew_members").select("xero_employee_id").eq("id", s.member.id).maybeSingle(),
+    s.db.from("staff_payslips").select("id, period_start, period_end, paid_on, gross, tax, super, net, lines").eq("crew_member_id", s.member.id).order("paid_on", { ascending: false }).limit(26),
+  ]);
+  const onPayroll = !!(me as { xero_employee_id?: string | null } | null)?.xero_employee_id;
+  type Slip = { id: string; period_start: string | null; period_end: string | null; paid_on: string | null; gross: number | null; tax: number | null; super: number | null; net: number | null; lines: { name: string; hours: number; rate: number | null; amount: number }[] };
+  const slips = (slipsRes.error ? [] : slipsRes.data ?? []) as Slip[];
   const worked = shifts.filter((x) => x.status === "confirmed").reverse();
-  const owed = worked.filter((x) => !x.paymentId);
+  // café shifts for people on Xero Payroll are paid by payroll (see payslips), not owed here
+  const owed = worked.filter((x) => !x.paymentId && !(onPayroll && x.roster));
   const owedTotal = owed.reduce((t, x) => t + (x.amount ?? 0), 0);
   const owedHours = owed.reduce((t, x) => t + (x.hours ?? 0), 0);
   const cur = s.org.currency;
@@ -33,6 +41,29 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
           <p className="mt-1 text-[2rem] font-bold leading-none">{money(owedTotal, cur, { cents: true })}</p>
           <p className="mt-1 text-[0.8125rem] opacity-80">{fmtHours(Math.round(owedHours * 100) / 100)} across {owed.length} shift{owed.length === 1 ? "" : "s"} · rate {money(s.member.hourly_rate ?? s.org.staff_hourly_rate, cur, { cents: true })}/hr</p>
         </Card>
+      )}
+
+      {(onPayroll || slips.length > 0) && (
+        <Section title="Payslips" hint="From payroll (Xero), after each pay run.">
+          {slips.length === 0 && <Card><p className="text-[0.875rem] text-ink-muted">Your payslips show here after the next pay run.</p></Card>}
+          {slips.map((p) => (
+            <details key={p.id} className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line">
+              <summary className="flex cursor-pointer items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[0.9375rem] font-semibold text-ink">Paid {p.paid_on ? fmtDate(p.paid_on, "long") : "—"}</span>
+                  <span className="block text-[0.8125rem] text-ink-muted">{p.period_start && p.period_end ? `${fmtDate(p.period_start)} – ${fmtDate(p.period_end)}` : ""}</span>
+                </span>
+                <span className="text-right"><span className="block text-[1.0625rem] font-bold text-emerald-700">{p.net != null ? money(Number(p.net), cur, { cents: true }) : "—"}</span><span className="block text-[0.6875rem] text-ink-faint">take home</span></span>
+              </summary>
+              <div className="mt-3 space-y-1 border-t border-line pt-3 text-[0.8125rem]">
+                {p.lines.map((l, i) => <p key={i} className="flex justify-between gap-3"><span className="text-ink-muted">{l.name}{l.hours ? ` · ${l.hours} h${l.rate != null ? ` × ${money(l.rate, cur, { cents: true })}` : ""}` : ""}</span><span className="text-ink">{money(l.amount, cur, { cents: true })}</span></p>)}
+                <p className="flex justify-between gap-3 pt-1 font-semibold"><span className="text-ink">Gross</span><span className="text-ink">{p.gross != null ? money(Number(p.gross), cur, { cents: true }) : "—"}</span></p>
+                <p className="flex justify-between gap-3"><span className="text-ink-muted">Tax</span><span className="text-ink">{p.tax != null ? `−${money(Number(p.tax), cur, { cents: true })}` : "—"}</span></p>
+                <p className="flex justify-between gap-3"><span className="text-ink-muted">Super (paid to your fund)</span><span className="text-ink">{p.super != null ? money(Number(p.super), cur, { cents: true }) : "—"}</span></p>
+              </div>
+            </details>
+          ))}
+        </Section>
       )}
 
       <Section title="Payments">

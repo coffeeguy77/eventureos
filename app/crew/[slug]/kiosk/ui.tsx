@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Delete, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { kioskClock } from "./actions";
+import { kioskClock, kioskTick } from "./actions";
+import { ChecklistTicker } from "@/components/roster/checklist-ticker";
+import type { TodayChecklist } from "@/lib/roster/checklists";
 
 type P = { id: string; name: string; state: "off" | "on" | "break"; shift: string | null; breakSince?: string | null };
 
-export function Kiosk({ slug, token, business, people, photo = true, breakMin = 30, breakMax = 60 }: { slug: string; token: string; business: string; people: P[]; photo?: boolean; breakMin?: number; breakMax?: number }) {
+export function Kiosk({ slug, token, business, people, photo = true, breakMin = 30, breakMax = 60, checklists = [] }: { slug: string; token: string; business: string; people: P[]; photo?: boolean; breakMin?: number; breakMax?: number; checklists?: TodayChecklist[] }) {
   const router = useRouter();
   const [who, setWho] = useState<P | null>(null);
   const [pin, setPin] = useState("");
@@ -70,6 +72,7 @@ export function Kiosk({ slug, token, business, people, photo = true, breakMin = 
         <p className="text-[0.9375rem] text-ink-muted">Tap your name to clock on, take a break or clock off.</p>
       </div>
       {msg && <p className={cn("mb-4 rounded-xl px-4 py-3 text-center text-[1rem] font-semibold", msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800")}>{msg.text}</p>}
+      {checklists.length > 0 && <div className="mb-5"><ChecklistTicker big lists={checklists} onTick={(c, i, d) => kioskTick(slug, token, c, i, d)} /></div>}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {people.map((p) => (
           <button key={p.id} onClick={() => { setWho(p); setPin(""); setState(null); }} className="rounded-2xl bg-surface p-4 text-left shadow-card ring-1 ring-line active:scale-[0.98]">

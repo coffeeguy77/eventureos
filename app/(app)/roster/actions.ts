@@ -436,3 +436,67 @@ export async function testRosterEmail(memberId: string, monday: string, to: stri
 export async function disconnectPayroll() {
   return wrap(async () => { await saveSettings({ payroll_off: true }); return "Xero Payroll disconnected — EventureOS won't read payroll or send timesheets. Your accounting connection to Xero is unchanged."; });
 }
+
+/** "Running late?" text from the Today card. */
+export async function textLate(shiftId: string) {
+  return wrap(async () => {
+    const { org, profile } = await office();
+    if (!UUID.test(shiftId)) throw new Error("Refresh and try again.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const { manualLateAlert } = await import("@/lib/roster/jobs");
+    return manualLateAlert(createServiceClient(), org.id, shiftId, actorName(profile));
+  });
+}
+
+/** Staff who see Today in the staff app. */
+export async function setAppManager(id: string, on: boolean) {
+  return wrap(async () => {
+    const { org } = await office();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const cur = readRosterSettings(org.settings).app_managers.filter((x) => x !== id);
+    await saveSettings({ app_managers: on ? [...cur, id] : cur });
+    return on ? "They'll see Today in the staff app." : "Today is hidden from them.";
+  });
+}
+
+/** Late texts, shift reminders, auto-approve and workload limits. */
+export async function saveAutomation(v: { late: { after: number; cooldown: number; auto: boolean }; reminders: { night_before: boolean; at: string; hours_before: number }; auto_approve: boolean; limits: { week_hours: number; rest_hours: number } }) {
+  return wrap(async () => {
+    const n = (x: number, max: number) => Math.max(0, Math.min(max, Math.round(Number(x) || 0)));
+    await saveSettings({
+      late: { after: Math.max(1, n(v.late.after, 120)), cooldown: n(v.late.cooldown, 120), auto: !!v.late.auto },
+      reminders: { night_before: !!v.reminders.night_before, at: /^\d{2}:\d{2}$/.test(v.reminders.at) ? v.reminders.at : "17:00", hours_before: n(v.reminders.hours_before, 24) },
+      auto_approve: !!v.auto_approve,
+      limits: { week_hours: n(v.limits.week_hours, 100), rest_hours: n(v.limits.rest_hours, 24) },
+    });
+    return "Saved.";
+  });
+}
+
+/** The business's bank details for the ABA bank file (Wages). */
+export async function saveAba(v: { bank: string; user_name: string; user_id: string; bsb: string; account: string; account_name: string; remitter: string }) {
+  return wrap(async () => {
+    const bsb = v.bsb.replace(/\D/g, ""), account = v.account.replace(/\D/g, ""), userId = v.user_id.replace(/\D/g, "");
+    if (!/^[A-Z]{3}$/.test(v.bank.trim().toUpperCase())) throw new Error("The bank is its 3-letter code, e.g. CBA, WBC, NAB, ANZ.");
+    if (bsb.length !== 6) throw new Error("Your BSB is 6 digits.");
+    if (account.length < 4 || account.length > 9) throw new Error("Your account number is 4 to 9 digits.");
+    if (userId.length !== 6) throw new Error("The APCA / Direct Entry user ID is 6 digits — your bank gives it to you with bulk payments (some banks use 000000).");
+    const clean = (x: string, len: number) => x.replace(/[^A-Za-z0-9 &'.,-]/g, "").trim().slice(0, len);
+    await saveSettings({ aba: { bank: v.bank.trim().toUpperCase(), user_name: clean(v.user_name, 26), user_id: userId, bsb: `${bsb.slice(0, 3)}-${bsb.slice(3)}`, account, account_name: clean(v.account_name, 32), remitter: clean(v.remitter, 16) } });
+    return "Bank file details saved.";
+  });
+}
+
+/** Read new payslips from Xero Payroll now (they're also read each night). */
+export async function fetchPayslips() {
+  return wrap(async () => {
+    const { supabase, org, user } = await office();
+    if (readRosterSettings(org.settings).payroll_off) throw new Error("Xero Payroll is disconnected.");
+    const { buildContext } = await import("@/lib/integrations/sync-runner");
+    const { syncPayslips } = await import("@/lib/roster/payslips");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
+    const r = await syncPayslips(createServiceClient(), ctx, org.id);
+    return r.added ? `${r.added} new payslip${r.added === 1 ? "" : "s"} — staff can see them in the app (Pay).` : "No new payslips.";
+  });
+}

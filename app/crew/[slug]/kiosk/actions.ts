@@ -34,3 +34,15 @@ export async function kioskClock(slug: string, token: string, memberId: string, 
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/** Tick an item on today's checklist from the café iPad (no PIN needed). */
+export async function kioskTick(slug: string, token: string, checklistId: string, item: number, done: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const k = await kioskOrg(slug, token);
+    if (!k) return { ok: false, error: "This iPad link has been replaced — ask the office for the new one." };
+    if (!UUID.test(checklistId)) return { ok: false, error: "Refresh and try again." };
+    const { tickItem } = await import("@/lib/roster/checklists");
+    await tickItem(k.db, k.org, checklistId, Number(item), null, !!done);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

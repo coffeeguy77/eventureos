@@ -17,6 +17,8 @@ export interface Shift {
   start: string | null; finish: string | null; hours: number | null; amount: number | null; rate: number; extraApproved: number; extraPending: number;
   /** café roster shifts: the unpaid break already taken off hours */
   breakMinutes?: number;
+  /** a café roster shift (paid through Xero Payroll for people on it) */
+  roster?: boolean;
 }
 
 const JOB_COLS = "id, name, event_date, setup_time, start_time, finish_time, days, venue, address, status, crew_needed, customer:customers(name)";
@@ -107,7 +109,7 @@ async function customShifts(s: CrewSession, opts: { from?: string; to?: string }
     }
     return { kind: "custom" as const, id: r.id, status: "confirmed" as const, role: null, boardPostedAt: null, boardNote: null, calendarResponse: null, paymentId: r.payment_id,
       job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending,
-      breakMinutes: r.roster ? (r.break_minutes ?? 0) : undefined };
+      breakMinutes: r.roster ? (r.break_minutes ?? 0) : undefined, roster: !!r.roster };
   });
 }
 

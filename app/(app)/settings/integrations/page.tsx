@@ -48,7 +48,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const pending = pendingRes.count ?? 0;
   const suggestions = suggestRes.count ?? 0;
   const logs = (logsRes.data ?? []) as unknown as { id: string; entity: string | null; direction: string; status: string; records_processed: number; message: string | null; started_at: string; finished_at: string | null; integration: { provider: string } | null }[];
-  const soon = PROVIDERS.filter((p) => p.availability === "coming_soon" && p.id !== "stripe" && p.id !== "twilio");
+  const soon = PROVIDERS.filter((p) => p.availability === "coming_soon" && p.id !== "stripe" && p.id !== "twilio" && p.id !== "square");
+  const squareDef = PROVIDERS.find((p) => p.id === "square")!;
+  const square = rows.get("square") ?? null;
   const twilioDef = PROVIDERS.find((p) => p.id === "twilio")!;
   const twilio = rows.get("twilio") ?? null;
   const stripeDef = PROVIDERS.find((p) => p.id === "stripe")!;
@@ -108,6 +110,19 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Text customers from Accounts — reminders, statement links and payment plans — from your approved sender name.</p>
           {twilio?.status === "connected" && twilio.account_label && <p className="mt-2 text-[0.75rem] text-ink">{twilio.account_label}</p>}
           <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/twilio" variant={twilio?.status === "connected" ? "secondary" : "primary"}>{twilio?.status === "connected" ? "Manage" : "Set up text messages"}</ButtonLink></div>
+        </Card>
+        <Card className="flex flex-col p-5">
+          <div className="flex items-start gap-3">
+            <Mark p={squareDef} />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] font-semibold text-ink">Square
+                <Badge tone={square?.status === "connected" ? "green" : "neutral"} dot>{square?.status === "connected" ? "Connected" : "Not connected"}</Badge></p>
+              <p className="text-[0.75rem] text-ink-faint">Point of sale</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[0.8125rem] text-ink-muted">Today&apos;s takings next to the roster, so you see wages as a % of sales.</p>
+          {square?.status === "connected" && square.account_label && <p className="mt-2 text-[0.75rem] text-ink">{square.account_label}</p>}
+          <div className="mt-auto pt-4"><ButtonLink href="/settings/integrations/square" variant={square?.status === "connected" ? "secondary" : "primary"}>{square?.status === "connected" ? "Manage" : "Connect Square"}</ButtonLink></div>
         </Card>
         <Card className="flex flex-col p-5">
           <div className="flex items-start gap-3">

@@ -25,6 +25,7 @@ export interface RosterWeek {
   totals: Map<string, { hours: number; cost: number }>;
   /** per person: their regular weekly availability */
   avail: Map<string, { weekday: number; available: boolean; start: string | null; finish: string | null }[]>;
+  quals: Record<string, string[]>; areaQuals: Record<string, string[]>;
   unpublished: number;
   ready: boolean;
 }
@@ -37,7 +38,7 @@ export async function loadWeek(db: SupabaseClient, org: { id: string; settings: 
   const { data: rateRow } = await db.from("organisations").select("staff_hourly_rate").eq("id", org.id).maybeSingle();
   const orgRate = Number((rateRow as { staff_hourly_rate?: number } | null)?.staff_hourly_rate ?? org.staff_hourly_rate ?? 30);
   const probe = await db.from("roster_areas").select("id").eq("organisation_id", org.id).limit(1);
-  const base: RosterWeek = { monday, dates, areas: [], people: [], shifts: [], settings, orgRate, holidays: new Map(), blocks: new Map(), totals: new Map(), avail: new Map(), unpublished: 0, ready: !probe.error };
+  const base: RosterWeek = { monday, dates, areas: [], people: [], shifts: [], settings, orgRate, holidays: new Map(), blocks: new Map(), totals: new Map(), avail: new Map(), quals: {}, areaQuals: {}, unpublished: 0, ready: !probe.error };
   if (probe.error) return base;
 
   const [areas, people, shifts, holidays, away, avail] = await Promise.all([
@@ -89,6 +90,13 @@ export async function loadWeek(db: SupabaseClient, org: { id: string; settings: 
     const who = { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate ?? orgRate };
     base.totals.set(p.id, totalsFor(hoursFor(mine, who, hol, settings.rules), who, settings.rules));
   }
+  // qualifications (current on the day) and what each area needs — quietly nothing before database update 0087
+  const [{ data: q, error: qe }, { data: aq, error: ae }] = await Promise.all([
+    db.from("staff_qualifications").select("crew_member_id, name, expires_on").eq("organisation_id", org.id),
+    db.from("roster_areas").select("id, required_quals").eq("organisation_id", org.id),
+  ]);
+  if (!qe) for (const x of (q ?? []) as { crew_member_id: string; name: string; expires_on: string | null }[]) if (!x.expires_on || x.expires_on >= dates[0]) base.quals[x.crew_member_id] = [...(base.quals[x.crew_member_id] ?? []), x.name];
+  if (!ae) for (const x of (aq ?? []) as { id: string; required_quals: string[] }[]) if (x.required_quals?.length) base.areaQuals[x.id] = x.required_quals;
   return base;
 }
 
@@ -96,5 +104,5 @@ export async function loadWeek(db: SupabaseClient, org: { id: string; settings: 
 export function plainWeek(w: RosterWeek): PlainWeek {
   const obj = <V,>(m: Map<string, V>) => Object.fromEntries(m);
   return { monday: w.monday, dates: w.dates, areas: w.areas, people: w.people, shifts: w.shifts, orgRate: w.orgRate, unpublished: w.unpublished,
-    holidays: obj(w.holidays), totals: obj(w.totals), avail: obj(w.avail), blocks: Object.fromEntries([...w.blocks].map(([k, v]) => [k, obj(v)])) };
+    holidays: obj(w.holidays), totals: obj(w.totals), avail: obj(w.avail), blocks: Object.fromEntries([...w.blocks].map(([k, v]) => [k, obj(v)])), quals: w.quals, areaQuals: w.areaQuals, limits: w.settings.limits };
 }

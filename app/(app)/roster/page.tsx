@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { WhosOn, type TodayRow } from "./today";
-import { fromLocal, shiftSpan, toLocal } from "@/lib/roster/time";
-const addMinutesLocal = (local: string, m: number) => new Date(Date.parse(`${local}:00Z`) + m * 60_000).toISOString().slice(0, 16);
+import { TodayBoard } from "@/components/roster/today-board";
+import { todayBoard, type Board } from "@/lib/roster/today";
+import { textLate } from "./actions";
 import { redirect } from "next/navigation";
 import { requireOrg } from "@/lib/context";
-import { Card, EmptyState } from "@/components/ui/card";
+import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { weekOf } from "@/lib/roster/award";
@@ -36,26 +36,12 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
     supabase.from("staff_shift_offers").select("id, status, note, created_at, from:crew_members!staff_shift_offers_from_member_id_organisation_id_fkey(name), to:crew_members!staff_shift_offers_to_member_id_organisation_id_fkey(name), shift:staff_shifts!staff_shift_offers_staff_shift_id_fkey(shift_date, start_time, finish_time, title), swap:staff_shifts!staff_shift_offers_swap_shift_id_fkey(shift_date, start_time, finish_time)")
       .eq("organisation_id", org.id).in("status", ["open", "claimed"]).order("created_at"),
   ]);
-  // Today: who's on, on a break, late or done (this week's view only)
+  // Today at a glance (this week's view only): who's on / on a break / late (call, text), wages vs sales, checklists
   const st = readRosterSettings(org.settings);
-  let todayRows: TodayRow[] = [];
+  let board: Board | null = null;
   if (monday === weekOf(today)) {
-    const { data: ents } = await supabase.from("staff_time_entries").select("crew_member_id, staff_shift_id, clock_in, clock_out, break_started_at").eq("organisation_id", org.id).or(`work_date.eq.${today},clock_out.is.null`);
-    type En = { crew_member_id: string; staff_shift_id: string | null; clock_in: string; clock_out: string | null; break_started_at: string | null };
-    const list = (ents ?? []) as En[];
-    const nowL = toLocal(new Date(), org.timezone);
-    const shiftsToday = week.shifts.filter((x) => x.shift_date === today && x.crew_member_id && x.published_at);
-    const nameOf = new Map(week.people.map((p) => [p.id, p.name]));
-    const used = new Set<En>();
-    todayRows = shiftsToday.sort((a, b) => a.start_time.localeCompare(b.start_time)).map((x) => {
-      const span = shiftSpan(x.shift_date, x.start_time, x.finish_time);
-      const e = list.find((y) => !used.has(y) && y.crew_member_id === x.crew_member_id && (y.staff_shift_id === x.id || !y.staff_shift_id));
-      if (e) used.add(e);
-      const late = !e && nowL > addMinutesLocal(span.start, st.grace) && nowL < span.finish;
-      return { name: nameOf.get(x.crew_member_id!) ?? "—", shift: `${x.start_time.slice(0, 5)}–${x.finish_time.slice(0, 5)}`, start: fromLocal(span.start, org.timezone),
-        state: e ? (e.clock_out ? "done" : e.break_started_at ? "break" : "on") : late ? "late" : nowL >= span.finish ? "done" : "due", since: e?.clock_in ?? null, breakSince: e?.break_started_at ?? null } as TodayRow;
-    }).filter((r) => !(r.state === "done" && !r.since)); // rostered but never came and the shift's over: Timesheets shows it
-    for (const e of list) if (!used.has(e) && !e.clock_out) todayRows.push({ name: nameOf.get(e.crew_member_id) ?? "Someone", shift: null, start: null, state: e.break_started_at ? "break" : "unrostered", since: e.clock_in, breakSince: e.break_started_at });
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    board = await todayBoard(createServiceClient(), org).catch(() => null);
   }
   type L = { id: string; starts_on: string; ends_on: string; leave_type: string | null; hours: number | null; note: string | null; member: { name: string } | null };
   type O = { id: string; status: string; note: string | null; from: { name: string } | null; to: { name: string } | null; shift: { shift_date: string; start_time: string; finish_time: string; title: string } | null; swap: { shift_date: string; start_time: string; finish_time: string } | null };
@@ -72,7 +58,7 @@ export default async function RosterPage({ searchParams }: { searchParams: Promi
         </EmptyState></Card>
       ) : (
         <div className="space-y-6">
-          <WhosOn rows={todayRows} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} />
+          {board && <Card><CardHeader title="Today" subtitle="Who's on, on a break or late — wages against sales so far." /><div className="border-t border-line p-4"><TodayBoard board={board} tz={org.timezone} onText={textLate} /></div></Card>}
           {(leaveList.length > 0 || offerList.length > 0) && <Requests leave={leaveList} offers={offerList} />}
           <RosterGrid week={plainWeek(week)} today={today} prev={addDaysISO(monday, -7)} next={addDaysISO(monday, 7)} smsOn={smsOn} meal={st.meal} />
         </div>

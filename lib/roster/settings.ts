@@ -27,6 +27,18 @@ export interface RosterSettings {
   place: { address: string | null } ;
   /** clock on from a phone only near the café (metres; 0 = anywhere) */
   geofence: { lat: number; lng: number; metres: number } | null;
+  /** staff who see Today (who's on, late alerts, checklists, wage %) in the staff app */
+  app_managers: string[];
+  /** "running late?" texts: minutes after the start with no clock-on; minutes before a manager can resend; send automatically */
+  late: { after: number; cooldown: number; auto: boolean };
+  /** shift reminder texts: the evening before (at a time), and/or a number of hours before (0 = off) */
+  reminders: { night_before: boolean; at: string; hours_before: number };
+  /** approve a timesheet by itself when it matches the roster, has its photos and no break flag */
+  auto_approve: boolean;
+  /** workload warnings on the roster: most hours in a week (0 = off), least hours between shifts (0 = off) */
+  limits: { week_hours: number; rest_hours: number };
+  /** the business's bank details for the ABA bank file (Wages) */
+  aba: { bank: string; user_name: string; user_id: string; bsb: string; account: string; account_name: string; remitter: string };
   /** areas at the usual workplace — left off staff texts (only shifts somewhere else say where) */
   home_areas: string[];
 }
@@ -49,6 +61,12 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     breaks: (() => { const b = (r.breaks ?? {}) as Record<string, unknown>; return { max: n(b.max, 60), smart: b.smart === true, ipad_only: b.ipad_only !== false }; })(),
     place: { address: typeof (r.place as { address?: unknown } | undefined)?.address === "string" ? String((r.place as { address: string }).address) : null },
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    app_managers: Array.isArray(r.app_managers) ? (r.app_managers as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    late: (() => { const l = (r.late ?? {}) as Record<string, unknown>; return { after: n(l.after, 10), cooldown: n(l.cooldown, 10), auto: l.auto !== false }; })(),
+    reminders: (() => { const m = (r.reminders ?? {}) as Record<string, unknown>; return { night_before: m.night_before === true, at: typeof m.at === "string" && /^\d{2}:\d{2}$/.test(m.at) ? m.at : "17:00", hours_before: n(m.hours_before, 0) }; })(),
+    auto_approve: r.auto_approve === true,
+    limits: (() => { const l = (r.limits ?? {}) as Record<string, unknown>; return { week_hours: n(l.week_hours, 0), rest_hours: n(l.rest_hours, 10) }; })(),
+    aba: (() => { const a = (r.aba ?? {}) as Record<string, unknown>; const t = (k: string) => (typeof a[k] === "string" ? String(a[k]) : ""); return { bank: t("bank"), user_name: t("user_name"), user_id: t("user_id"), bsb: t("bsb"), account: t("account"), account_name: t("account_name"), remitter: t("remitter") }; })(),
     home_areas: Array.isArray(r.home_areas) ? (r.home_areas as unknown[]).filter((x): x is string => typeof x === "string") : [],
     geofence: g && typeof g.lat === "number" && typeof g.lng === "number" && typeof g.metres === "number" && g.metres > 0 ? { lat: g.lat, lng: g.lng, metres: g.metres } : null,
   };

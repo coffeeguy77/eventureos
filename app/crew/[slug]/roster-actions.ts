@@ -144,3 +144,24 @@ export async function takeOpenRosterShift(slug: string, shiftId: string) {
     return "It's yours.";
   });
 }
+
+/** A manager in the staff app texts someone who's late (not within the cooldown after the last text). */
+export async function textLateFromApp(slug: string, shiftId: string) {
+  return act(slug, async (s) => {
+    if (!UUID.test(shiftId)) throw new Error("Refresh and try again.");
+    const org = await orgFor(s);
+    const { readRosterSettings } = await import("@/lib/roster/settings");
+    if (!readRosterSettings(org.settings).app_managers.includes(s.member.id)) throw new Error("Only managers can do that.");
+    const { manualLateAlert } = await import("@/lib/roster/jobs");
+    return manualLateAlert(s.db, s.org.id, shiftId, s.member.name);
+  });
+}
+
+/** Tick an item on today's checklist in the staff app. */
+export async function tickChecklist(slug: string, checklistId: string, item: number, done: boolean) {
+  return act(slug, async (s) => {
+    if (!UUID.test(checklistId)) throw new Error("Refresh and try again.");
+    const { tickItem } = await import("@/lib/roster/checklists");
+    await tickItem(s.db, s.org, checklistId, Number(item), s.member.id, !!done);
+  });
+}

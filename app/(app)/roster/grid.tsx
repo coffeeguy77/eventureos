@@ -155,7 +155,7 @@ function ShiftDialog({ meal, week, draft, setDraft, pending, onSave, onDelete, o
   meal: { after_hours: number; minutes: number }; week: PlainWeek; draft: Draft; setDraft: (d: Draft) => void; pending: boolean; onSave: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const [sure, setSure] = useState(false);
-  const warn = shiftWarnings(week, { id: draft.id, crew_member_id: draft.crewId, shift_date: draft.date, start_time: draft.start, finish_time: draft.finish });
+  const warn = shiftWarnings(week, { id: draft.id, crew_member_id: draft.crewId, area_id: draft.areaId, shift_date: draft.date, start_time: draft.start, finish_time: draft.finish, break_minutes: draft.breakMinutes });
   // changing the times puts the award's unpaid meal break in (or takes it out for a short shift)
   const set = (p: Partial<Draft>) => {
     const d = { ...draft, ...p };

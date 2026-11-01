@@ -65,6 +65,24 @@ export async function GET(req: NextRequest) {
     for (const [orgId, tz] of orgs) await fillSeries(db, orgId, tz).catch((e) => console.error("[cron/sync] regular shifts:", e));
   } catch (e) { console.error("[cron/sync] regular shifts:", e); }
 
+  // Café roster payslips from Xero Payroll (daily full run only)
+  if (!only.length) try {
+    const { data: xs } = await db.from("integrations").select("organisation_id, scopes").eq("provider", "xero").in("status", ["connected", "syncing", "error"]);
+    const { syncPayslips } = await import("@/lib/roster/payslips");
+    for (const x of (xs ?? []) as { organisation_id: string; scopes: string[] | null }[]) {
+      if (!(x.scopes ?? []).includes("payroll.payslip.read")) continue;
+      const ctx = await buildContext(db, "service", x.organisation_id, "xero", null).catch(() => null);
+      if (ctx) await syncPayslips(db, ctx, x.organisation_id).catch((e) => console.error("[cron/sync] payslips:", e));
+    }
+  } catch (e) { console.error("[cron/sync] payslips:", e); }
+
+  // Café roster: "running late?" texts and shift reminders (quietly nothing before the 0087 update)
+  let rosterJobs: unknown = null;
+  try {
+    const { runRosterJobs } = await import("@/lib/roster/jobs");
+    rosterJobs = await runRosterJobs(db);
+  } catch (e) { rosterJobs = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Course bookings: reminders, thank-yous, scheduled gift certificates, unpaid seat holds (quietly nothing before the 0049 update)
   let bookingJobs: unknown = null;
   try {
@@ -212,5 +230,5 @@ export async function GET(req: NextRequest) {
       hosting = out;
     }
   } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
-  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, roster: rosterJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, classbento, learn });
 }

@@ -6,6 +6,7 @@ import { addDaysISO, todayISO } from "@/lib/format";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { weekOf } from "@/lib/roster/award";
 import { RosterTabs } from "../tabs";
+import { AbaCard, AreaQualsCard, AutomationCard, ChecklistsCard, StaffDetailsCard, type StaffExtra } from "./extras";
 import { AreasCard, HolidaysCard, PastPayCard, TextsCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
 
 export const metadata = { title: "Roster setup" };
@@ -79,6 +80,31 @@ export default async function RosterSetup() {
   type P = { id: string; name: string; email: string | null; role: string | null; on_roster: boolean; employment_type: "casual" | "part_time" | "full_time"; default_area_id: string | null; hourly_rate: number | null; xero_employee_id: string | null; kiosk_pin_hash: string | null };
   const list = ((people ?? []) as P[]).map(({ kiosk_pin_hash, ...p }) => ({ ...p, hourly_rate: p.hourly_rate == null ? null : Number(p.hourly_rate), has_pin: !!kiosk_pin_hash, flat: settings.flat.includes(p.id) }));
 
+  // staff details (0087): documents, notes, bank details (Wages), checklists, what areas need
+  const roster = list.filter((p) => p.on_roster);
+  const [qR, nR, bR, cR, aR] = await Promise.all([
+    supabase.from("staff_qualifications").select("id, crew_member_id, name, reference, expires_on, file_path").eq("organisation_id", org.id).order("name"),
+    supabase.from("staff_notes").select("id, crew_member_id, body, author_name, created_at").eq("organisation_id", org.id).order("created_at", { ascending: false }).limit(500),
+    supabase.from("staff_bank_accounts").select("crew_member_id, account_name, bsb, account_number").eq("organisation_id", org.id),
+    supabase.from("roster_checklists").select("id, name, area_id, weekdays, due_by, items").eq("organisation_id", org.id).eq("active", true).order("position").order("name"),
+    supabase.from("roster_areas").select("id, name, required_quals, active").eq("organisation_id", org.id).order("position"),
+  ]);
+  const extrasReady = !qR.error;
+  type Q = { id: string; crew_member_id: string; name: string; reference: string | null; expires_on: string | null; file_path: string | null };
+  const quals = (qR.data ?? []) as Q[];
+  const docUrl = new Map<string, string>();
+  const paths = quals.map((x) => x.file_path).filter((x): x is string => !!x);
+  if (paths.length) { const { data: signed } = await supabase.storage.from("staff-docs").createSignedUrls(paths, 3600); for (const x of signed ?? []) if (x.path && x.signedUrl) docUrl.set(x.path, x.signedUrl); }
+  const notes = (nR.data ?? []) as { id: string; crew_member_id: string; body: string; author_name: string | null; created_at: string }[];
+  const banks = new Map(((bR.data ?? []) as { crew_member_id: string; account_name: string; bsb: string; account_number: string }[]).map((x) => [x.crew_member_id, { name: x.account_name, bsb: x.bsb, last: x.account_number.slice(-3) }]));
+  const extras: StaffExtra[] = roster.map((p) => ({
+    id: p.id, name: p.name, onPayroll: !!p.xero_employee_id, manager: settings.app_managers.includes(p.id),
+    quals: quals.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, name: x.name, reference: x.reference, expires_on: x.expires_on, url: x.file_path ? docUrl.get(x.file_path) ?? null : null })),
+    notes: notes.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, body: x.body, author: x.author_name, at: x.created_at })),
+    bank: banks.get(p.id) ?? null,
+  }));
+  const activeAreas = ((aR.data ?? []) as { id: string; name: string; required_quals?: string[]; active: boolean }[]).filter((x) => x.active);
+
   return (
     <div>
       <PageHeader title="Roster" subtitle="Who's on the café roster, where they work, how clocking on works, and how hours go to Xero Payroll." />
@@ -90,6 +116,13 @@ export default async function RosterSetup() {
         {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
         <PayRulesCard rules={settings.rules} />
         <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} />
+        {extrasReady ? <>
+          <StaffDetailsCard people={extras} today={today} />
+          <AreaQualsCard areas={activeAreas.map((x) => ({ id: x.id, name: x.name, required_quals: x.required_quals ?? [] }))} />
+          <ChecklistsCard lists={(cR.data ?? []) as { id: string; name: string; area_id: string | null; weekdays: number[]; due_by: string | null; items: string[] }[]} areas={activeAreas.map((x) => ({ id: x.id, name: x.name }))} />
+        </> : <Card><EmptyState title="One database update to go">Run 0087_roster_extras.sql in Supabase for staff documents, notes, checklists, late texts and the bank file.</EmptyState></Card>}
+        <AutomationCard v={{ late: settings.late, reminders: settings.reminders, auto_approve: settings.auto_approve, limits: settings.limits }} smsOn={smsOn} />
+        <AbaCard v={settings.aba} />
         <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null, email: p.email }))} monday={weekOf(today)} smsOn={smsOn} />
         <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
       </div>

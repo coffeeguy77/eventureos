@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
 import { LeafletMap } from "@/components/maps/leaflet-map";
-import { setHomeArea, ratesFromXeroAll, findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { fetchPayslips, setHomeArea, ratesFromXeroAll, findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -333,10 +333,12 @@ type PastPay = { periods: { start: string | null; end: string | null; paid: stri
 
 /** What the last pay runs in Xero paid each person — the rates and earnings rates to copy. */
 export function PastPayCard({ past }: { past: PastPay | null }) {
+  const { pending, run, note } = useAct();
   return (
     <Card>
-      <CardHeader title="Past pay runs (from Xero)" subtitle={past?.periods.length ? `The last ${past.periods.length} posted pay runs${past.periods[past.periods.length - 1]?.start ? `, from ${fmtDate(past.periods[past.periods.length - 1].start)}` : ""}. Use these rates for each person's base rate, and to match the earnings rates above.` : undefined} />
+      <CardHeader action={past ? <Button size="sm" disabled={pending} onClick={() => run(() => fetchPayslips())}>{pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Send payslips to the staff app</Button> : undefined} title="Past pay runs (from Xero)" subtitle={past?.periods.length ? `The last ${past.periods.length} posted pay runs${past.periods[past.periods.length - 1]?.start ? `, from ${fmtDate(past.periods[past.periods.length - 1].start)}` : ""}. Use these rates for each person's base rate, and to match the earnings rates above.` : undefined} />
       <div className="border-t border-line px-5 py-4 text-[0.8125rem]">
+        {note && <div className="mb-3">{note}</div>}
         {!past ? (
           <div className="space-y-2"><p className="text-ink-muted">EventureOS needs one more Xero permission to read past pay runs and payslips.</p>
             <a href="/api/integrations/xero/connect?payroll=1" className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-3 text-[0.8125rem] font-medium text-white hover:bg-brand-700">Reconnect Xero Payroll</a></div>

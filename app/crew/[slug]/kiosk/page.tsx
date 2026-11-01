@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { todayISO } from "@/lib/format";
 import { kioskOrg } from "@/lib/roster/kiosk";
 import { Kiosk } from "./ui";
@@ -16,6 +17,8 @@ export default async function KioskPage({ params, searchParams }: { params: Prom
   const k = await kioskOrg(slug, token);
   if (!k) return <div className="py-20 text-center"><p className="text-[1.125rem] font-semibold text-ink">This link isn&apos;t set up</p><p className="mt-1 text-[0.875rem] text-ink-muted">Ask the office for the café iPad link (Roster → Setup).</p></div>;
   const today = todayISO(k.org.timezone);
+  // the iPad refreshes every minute: a good moment for "running late?" texts and reminders
+  after(async () => { const { runRosterJobsSoon } = await import("@/lib/roster/jobs"); await runRosterJobsSoon(k.db, k.org.id); });
   const [{ data: people }, { data: open }, { data: shifts }] = await Promise.all([
     k.db.from("crew_members").select("id, name").eq("organisation_id", k.org.id).eq("active", true).eq("on_roster", true).order("name"),
     k.db.from("staff_time_entries").select("crew_member_id, break_started_at").eq("organisation_id", k.org.id).is("clock_out", null),
@@ -30,5 +33,7 @@ export default async function KioskPage({ params, searchParams }: { params: Prom
     .sort((a, b) => Number(!!b.shift) - Number(!!a.shift) || a.name.localeCompare(b.name));
   const { readRosterSettings } = await import("@/lib/roster/settings");
   const st = readRosterSettings(k.org.settings);
-  return <Kiosk slug={slug} token={token} business={k.name} people={list} photo={st.clock.photo} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} />;
+  const { todaysChecklists } = await import("@/lib/roster/checklists");
+  const checklists = await todaysChecklists(k.db, k.org);
+  return <Kiosk checklists={checklists} slug={slug} token={token} business={k.name} people={list} photo={st.clock.photo} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} />;
 }

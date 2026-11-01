@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { breakRules, distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
-import { shiftBreak } from "./breaks";
+import { breakFlag, shiftBreak } from "./breaks";
 import { shiftSpan, toLocal } from "./time";
 import { paidTimes } from "./paid";
 
@@ -13,11 +13,11 @@ import { paidTimes } from "./paid";
  * minutes. The office can change them before approving.
  */
 export interface ClockOrg { id: string; timezone: string; settings: unknown }
-export interface OpenEntry { id: string; clock_in: string; break_minutes: number; break_started_at: string | null; staff_shift_id: string | null; work_date: string; event_crew_id?: string | null; breaks?: { start: string; end: string }[] }
+export interface OpenEntry { id: string; clock_in: string; break_minutes: number; break_started_at: string | null; staff_shift_id: string | null; work_date: string; event_crew_id?: string | null; breaks?: { start: string; end: string }[]; in_photo?: string | null }
 export interface TodayShift { id: string; shift_date: string; start_time: string; finish_time: string; break_minutes: number; area: string | null }
 
 export async function openEntry(db: SupabaseClient, orgId: string, memberId: string): Promise<OpenEntry | null> {
-  let r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id, breaks").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle();
+  let r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id, breaks, in_photo").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle();
   if (r.error) r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date, event_crew_id").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle() as typeof r;
   if (r.error) r = await db.from("staff_time_entries").select("id, clock_in, break_minutes, break_started_at, staff_shift_id, work_date").eq("organisation_id", orgId).eq("crew_member_id", memberId).is("clock_out", null).maybeSingle() as typeof r;
   return (r.data as OpenEntry | null) ?? null;
@@ -146,6 +146,18 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   if (error) throw new Error(error.message);
   // what was actually clocked, for the office (database update 0086)
   await db.from("staff_time_entries").update({ break_taken: e.event_crew_id ? null : taken, ...(breaks ? { breaks } : {}) }).eq("id", e.id).then(() => undefined, () => undefined);
+  // auto-approve: matches the roster to the minute (after rounding / grace), has its photos, and the break is fine
+  let auto = false;
+  if (settings.auto_approve && rostered && !e.event_crew_id) {
+    const span = shiftSpan(rostered.shift_date, rostered.start_time, rostered.finish_time);
+    const matches = toLocal(paid.start, org.timezone) === span.start && toLocal(paid.finish, org.timezone) === span.finish;
+    const photos = !settings.clock.photo || (!!e.in_photo && !!photo);
+    if (matches && photos && !breakFlag(spanMin, taken, breakRules(settings))) {
+      await db.from("staff_time_entries").update({ status: "approved", approved_at: new Date().toISOString(), note: "Approved automatically — matched the roster" }).eq("id", e.id);
+      auto = true;
+    }
+  }
+  void auto;
   const hours = Math.max(0, (Date.parse(paid.finish) - Date.parse(paid.start)) / 3_600_000 - brk / 60);
   return `Clocked off — ${Math.round(hours * 100) / 100} paid hours${brk ? ` after your ${brk} min unpaid break` : ""}. Thanks!`;
 }
