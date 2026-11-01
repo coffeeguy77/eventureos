@@ -64,3 +64,8 @@ export const ROLE_SUMMARY: Record<Exclude<OrgRole, "customer">, string> = {
   sales: "Enquiries, clients, events and quotes. No invoices, payments, reports or settings.",
   staff: "Only the jobs they're rostered on. Never sees prices or invoices.",
 };
+
+/** The sections this business actually has: drops apps it hasn't got (pass a path → allowed check) and Events if it doesn't run events. */
+export function businessSections(hasPath: (path: string) => boolean, usesEvents: boolean) {
+  return SECTIONS.filter((x) => (x.key !== "/events" || usesEvents) && hasPath(x.key));
+}

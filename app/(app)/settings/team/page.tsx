@@ -14,7 +14,7 @@ import { CrewList, type CrewMember } from "./crew-list";
 import { staffMinHours } from "@/lib/crew/shifts";
 import { AccessEditor } from "@/components/settings/access-editor";
 import { SetPassword } from "@/components/settings/set-password";
-import { ACCESS_PRESETS, SECTIONS } from "@/lib/access";
+import { ACCESS_PRESETS, SECTIONS, businessSections } from "@/lib/access";
 
 export const metadata = { title: "Team" };
 
@@ -85,7 +85,13 @@ export default async function TeamPage() {
   }[];
   const ownerCount = members.filter((m) => m.role === "owner").length;
   const roleOrder: StaffRole[] = ["owner", "admin", "manager", "sales", "staff"];
-  const toggles = (kind: "member" | "invite", id: string, auto: boolean, sees: boolean) => (
+  // what this business has: its apps, and Events only if it runs events
+  const { orgAppAccess } = await import("@/lib/apps-server");
+  const { appAllowed, appForPath } = await import("@/lib/apps");
+  const appsOn = await orgAppAccess(org.id);
+  const usesEvents = ((org.settings ?? {}) as { uses_events?: unknown }).uses_events !== false;
+  const available = businessSections((p) => { const a = appForPath(p); return !a || appAllowed(appsOn, a); }, usesEvents).map((x) => x.key);
+  const toggles = (kind: "member" | "invite", id: string, auto: boolean, sees: boolean) => !usesEvents ? <span className="text-[0.75rem] text-ink-faint">—</span> : (
     <div className="space-y-1">
       <RosterToggle kind={kind} id={id} field="auto_add_to_events" value={auto} label="Add to every event" disabled={!canAdmin} />
       <RosterToggle kind={kind} id={id} field="sees_job_details" value={sees} label="Can see what's included" disabled={!canAdmin} />
@@ -135,8 +141,8 @@ export default async function TeamPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-2 pl-[44px]">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</div>
-                {accessReady && m.role !== "owner" && m.role !== "staff" && <div className="mt-2 pl-[44px]"><AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} /></div>}
+                {usesEvents && <div className="mt-2 pl-[44px]">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</div>}
+                {accessReady && m.role !== "owner" && m.role !== "staff" && <div className="mt-2 pl-[44px]"><AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} available={available} /></div>}
                 {(editable || (canAdmin && !isMe && m.role !== "owner")) && (
                   <div className="mt-2.5 flex items-start gap-2 pl-[44px]">
                     {editable && (
@@ -173,8 +179,8 @@ export default async function TeamPage() {
               <tr className="text-left text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                 <th className="px-5 py-2.5 font-medium">Name</th>
                 <th className="px-3 py-2.5 font-medium">Role</th>
-                <th className="px-3 py-2.5 font-medium">Access</th>
-                <th className="px-3 py-2.5 font-medium">Rostering</th>
+                <th className="px-3 py-2.5 font-medium">Apps they see</th>
+                {usesEvents && <th className="px-3 py-2.5 font-medium">Rostering</th>}
                 <th className="px-3 py-2.5 font-medium">Joined</th>
                 <th className="px-5 py-2.5" />
               </tr>
@@ -220,8 +226,8 @@ export default async function TeamPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3">{m.role === "owner" ? <span className="text-[0.75rem] text-ink-muted">Everything</span> : m.role === "staff" ? <span className="text-[0.75rem] text-ink-muted">My jobs</span> : accessReady ? <AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} /> : <span className="text-[0.75rem] text-ink-muted">All sections</span>}</td>
-                    <td className="px-3 py-3">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</td>
+                    <td className="px-3 py-3">{m.role === "owner" ? <span className="text-[0.75rem] text-ink-muted">Everything</span> : m.role === "staff" ? <span className="text-[0.75rem] text-ink-muted">My jobs</span> : accessReady ? <AccessEditor kind="member" id={m.id} initial={accessOf.get(m.id) ?? null} disabled={!canAdmin || isMe} available={available} /> : <span className="text-[0.75rem] text-ink-muted">All sections</span>}</td>
+                    {usesEvents && <td className="px-3 py-3">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</td>}
                     <td className="px-3 py-3 text-ink-muted" title={fmtDateTime(m.created_at, org.timezone)}>{fmtDateTime(m.created_at, org.timezone, "date")}</td>
                     <td className="px-5 py-3 text-right">
                       {canAdmin && !isMe && m.role !== "owner" && <div className="mb-1 flex justify-end"><SetPassword memberId={m.id} name={name} /></div>}
@@ -291,10 +297,10 @@ export default async function TeamPage() {
                 </Select>
                 <p className="mt-1 text-[0.7188rem] text-ink-faint">Choose exact sections any time after with the key button next to their name.</p>
               </div>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.7812rem] text-ink">
+              {usesEvents && <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.7812rem] text-ink">
                 <label className="flex items-center gap-2"><input type="checkbox" name="auto_add" className="h-4 w-4 rounded" />Add to every event (e.g. whoever does the rosters)</label>
                 <label className="flex items-center gap-2"><input type="checkbox" name="sees_details" className="h-4 w-4 rounded" />Can see what's included on their jobs (hours, coffees, catering — never prices)</label>
-              </div>
+              </div>}
             </ActionForm>
           </div>
           <div className="border-t border-line">
@@ -312,8 +318,8 @@ export default async function TeamPage() {
                         {" · "}{i.last_sent_at ? `emailed ${relative(i.last_sent_at)}` : <span className="text-amber-700">not emailed yet</span>}
                       </div>
                     </div>
-                    {accessReady && i.role !== "staff" && <AccessEditor kind="invite" id={i.id} initial={accessOf.get(i.id) ?? null} />}
-                    <div className="ml-auto mr-2 hidden sm:block">{toggles("invite", i.id, i.auto_add_to_events, i.sees_job_details)}</div>
+                    {accessReady && i.role !== "staff" && <AccessEditor kind="invite" id={i.id} initial={accessOf.get(i.id) ?? null} available={available} />}
+                    {usesEvents && <div className="ml-auto mr-2 hidden sm:block">{toggles("invite", i.id, i.auto_add_to_events, i.sees_job_details)}</div>}
                     <ActionButton action={resendInvitation.bind(null, i.id)} variant="secondary" className="h-10 sm:h-8">
                       {i.last_sent_at ? "Email again" : "Send email"}
                     </ActionButton>

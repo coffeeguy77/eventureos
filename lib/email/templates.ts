@@ -216,3 +216,11 @@ export function rosterEmail(o: { businessName: string; firstName: string; subjec
   const text = `${paragraphs.join("\n\n")}\n\nOpen the staff app: ${o.url}`;
   return { subject: o.subject, html, text };
 }
+
+/** An appointment: booked, changed, waiting for a reply, or cancelled — with the details and a button (manage / portal). */
+export function appointmentEmail(o: { businessName: string; heading: string; intro: string; details: string[]; button: { label: string; url: string }; extra?: string | null; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = [o.intro, ...o.details, ...(o.extra ? [o.extra] : [])];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: o.heading, paragraphs, button: o.button, footer: `Sent by ${o.businessName}. The calendar file is attached — open it to add this to your calendar.` });
+  const text = `${paragraphs.join("\n\n")}\n\n${o.button.label}: ${o.button.url}`;
+  return { html, text };
+}

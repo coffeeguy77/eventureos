@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { NotConnected } from "@/components/ui/connect-link";
 import { useCallback, useMemo, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, Plus, Users } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button, ButtonLink, buttonClass } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -22,9 +22,9 @@ export interface EventOption {
 }
 export interface GoogleStatus { connected: boolean; status: string; account: string | null; lastSync: string | null; error: string | null }
 
-export function CalendarShell({ view, date, today, nowMin, days, resources, entries, eventOptions, google, canManage, initialAddEventId }: {
+export function CalendarShell({ view, date, today, nowMin, days, resources, entries, eventOptions, google, canManage, initialAddEventId, usesEvents = true }: {
   view: CalView; date: string; today: string; nowMin: number; days: string[]; resources: Resource[]; entries: Entry[];
-  eventOptions: EventOption[]; google: GoogleStatus; canManage: boolean; initialAddEventId: string | null;
+  eventOptions: EventOption[]; google: GoogleStatus; canManage: boolean; initialAddEventId: string | null; usesEvents?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ eventId: string | null } | null>(initialAddEventId ? { eventId: initialAddEventId } : null);
@@ -59,11 +59,15 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <h1 className="text-[1.25rem] font-semibold tracking-tight text-ink sm:text-[1.375rem]">Calendar</h1>
-          <p className="mt-1 text-[0.8438rem] text-ink-muted">Every booking, hold and setup across every resource.</p>
+          <p className="mt-1 text-[0.8438rem] text-ink-muted">{usesEvents ? "Every booking, hold and setup across every resource." : "Client meetings, site visits and time you're busy."}</p>
         </div>
-        <Button variant="primary" onClick={() => setAdding({ eventId: null })} disabled={!resources.length} className="h-10 w-full sm:h-9 sm:w-auto">
-          <Plus className="h-4 w-4" /> Add entry
-        </Button>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+          <ButtonLink href="/calendar/appointments" className="h-10 sm:h-9"><CalendarClock className="h-4 w-4" /> Appointments</ButtonLink>
+          <ButtonLink href="/calendar/appointments?book=1" variant="primary" className="h-10 sm:h-9"><Users className="h-4 w-4" /> Book a meeting</ButtonLink>
+          <Button onClick={() => setAdding({ eventId: null })} disabled={!resources.length} className="col-span-2 h-10 sm:h-9">
+            <Plus className="h-4 w-4" /> Add entry
+          </Button>
+        </div>
       </div>
 
       {pairs.length > 0 && (
@@ -163,7 +167,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
             )}
           </Card>
 
-          <Card>
+          {usesEvents && <Card>
             <CardHeader title="Not on the calendar" subtitle={unscheduled.length ? "Upcoming events without a booking entry" : "Every upcoming event is on a calendar"} />
             {unscheduled.length > 0 && (
               <ul className="divide-y divide-line border-t border-line">
@@ -178,7 +182,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
                 ))}
               </ul>
             )}
-          </Card>
+          </Card>}
 
           <Card className="p-4">
             <p className="text-[0.7812rem] font-medium text-ink">Legend</p>
@@ -202,7 +206,7 @@ export function CalendarShell({ view, date, today, nowMin, days, resources, entr
       )}
       {adding && (
         <AddEntryPanel key={adding.eventId ?? "new"} resources={resources} events={eventOptions} google={google}
-          defaultDate={defaultAddDate} initialEventId={adding.eventId} onClose={closeAdd} />
+          defaultDate={defaultAddDate} initialEventId={adding.eventId} onClose={closeAdd} usesEvents={usesEvents} />
       )}
     </div>
   );

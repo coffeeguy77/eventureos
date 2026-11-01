@@ -57,6 +57,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   }));
 
   const rows = (calRes.data ?? []) as unknown as CalRow[];
+  const usesEvents = (org.settings as { uses_events?: boolean } | null)?.uses_events !== false;
+  // client meetings (Appointments) — linked by calendar_event_id; quietly empty before migration 0091
+  const apptByCal = new Map<string, string>();
+  const meetIds = rows.filter((r) => (r.kind as string) === "meeting").map((r) => r.id);
+  if (meetIds.length) {
+    const { data: ap } = await supabase.from("appointments").select("id, calendar_event_id").eq("organisation_id", org.id).in("calendar_event_id", meetIds);
+    for (const a of ap ?? []) if (a.calendar_event_id) apptByCal.set(a.calendar_event_id as string, a.id as string);
+  }
   const conflicts = findConflicts(rows.map((r) => ({ id: r.id, resourceId: r.calendar_connection_id, startsAt: r.starts_at, endsAt: r.ends_at })));
 
   const entries: Entry[] = rows.map((r) => {
@@ -65,7 +73,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     const segs = segmentsFor(r.starts_at, r.ends_at, days, tz);
     const spanDays = r.all_day ? Math.max(1, Math.round((Date.parse(r.ends_at) - Date.parse(r.starts_at)) / 86400e3)) : 0;
     return {
-      id: r.id, title: (r.kind as string) === "shift" ? `Shift: ${r.title}` : r.title, kind: (["event", "site_visit", "setup", "hold", "other"].includes(r.kind) ? r.kind : "other") as EntryKind, startsAt: r.starts_at, endsAt: r.ends_at, allDay: r.all_day,
+      id: r.id, title: (r.kind as string) === "shift" ? `Shift: ${r.title}` : r.title, kind: (["event", "site_visit", "setup", "hold", "other", "meeting"].includes(r.kind) ? r.kind : "other") as EntryKind, appointmentId: apptByCal.get(r.id) ?? null, startsAt: r.starts_at, endsAt: r.ends_at, allDay: r.all_day,
       lane: r.all_day || long ? "allday" : "timed", location: r.location,
       resourceId: r.calendar_connection_id, eventId: r.event_id, eventName: r.event?.name ?? null, eventNumber: r.event?.number ?? null,
       customerName: r.event?.customer?.name ?? null, syncStatus: r.sync_status, externalEventId: r.external_event_id, lastSyncedAt: r.last_synced_at ? fmtDateTime(r.last_synced_at, tz) : null,
@@ -82,7 +90,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
   // Jobs with a date in this view that aren't booked on the calendar yet (e.g. still being quoted) — shown dashed
   const defaultRes = resources.find((r) => r.isDefault) ?? resources[0];
-  if (defaultRes) {
+  if (defaultRes && usesEvents) {
     const { data: unbooked } = await supabase.from("events")
       .select("id, number, name, event_date, start_time, finish_time, venue, status, customer:customers(name), calendar_events(id, kind)")
       .eq("organisation_id", org.id).gte("event_date", range.start).lt("event_date", range.end).not("status", "in", "(cancelled)").limit(300);
@@ -134,6 +142,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       eventOptions={eventOptions}
       google={google}
       canManage={canManage(role)}
+      usesEvents={usesEvents}
       initialAddEventId={sp.add && /^[0-9a-f-]{36}$/i.test(sp.add) ? sp.add : null}
     />
   );

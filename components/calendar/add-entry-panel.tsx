@@ -16,6 +16,7 @@ const KIND_HINT: Record<EntryKind, string> = {
   site_visit: "Visit the venue with the customer or planner.",
   setup: "Bump-in, delivery or pack-down time.",
   other: "Anything else that ties up a resource.",
+  meeting: "A client meeting — book it from Appointments.",
 };
 
 const addHours = (hhmm: string, h: number) => {
@@ -24,8 +25,8 @@ const addHours = (hhmm: string, h: number) => {
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
 
-export function AddEntryPanel({ resources, events, google, defaultDate, initialEventId, onClose }: {
-  resources: Resource[]; events: EventOption[]; google: GoogleStatus; defaultDate: string; initialEventId: string | null; onClose: () => void;
+export function AddEntryPanel({ resources, events, google, defaultDate, initialEventId, onClose, usesEvents = true }: {
+  resources: Resource[]; events: EventOption[]; google: GoogleStatus; defaultDate: string; initialEventId: string | null; onClose: () => void; usesEvents?: boolean;
 }) {
   const initialEvent = events.find((e) => e.id === initialEventId) ?? null;
   const defaultRes = resources.find((r) => r.isDefault) ?? resources[0];
@@ -67,11 +68,11 @@ export function AddEntryPanel({ resources, events, google, defaultDate, initialE
         <div>
           <Label>Type</Label>
           <div className="flex flex-wrap gap-1.5" role="radiogroup">
-            {KIND_ORDER.map((k) => (
+            {KIND_ORDER.filter((k) => usesEvents || k !== "event").map((k) => (
               <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}
                 className={cn("rounded-full px-3 py-2 text-[0.7812rem] font-medium ring-1 ring-inset sm:py-1.5",
                   kind === k ? "bg-ink text-surface ring-ink" : "bg-surface text-ink-muted ring-line-strong hover:text-ink")}>
-                {k === "event" ? "Event booking" : KIND_LABEL[k]}
+                {k === "event" ? "Event booking" : !usesEvents && k === "hold" ? "Hold / busy" : KIND_LABEL[k]}
               </button>
             ))}
           </div>

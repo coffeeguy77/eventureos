@@ -63,6 +63,11 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
       </>
     }>
       <div className="space-y-5 px-4 py-4 sm:px-5">
+        {entry.appointmentId && (
+          <Link href={`/calendar/appointments?open=${entry.appointmentId}`} className="flex items-center justify-between rounded-lg bg-brand-50 px-3 py-3 text-[0.8125rem] font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-100">
+            Open the meeting — client, notes, confirm or move <span aria-hidden>→</span>
+          </Link>
+        )}
         {others.length > 0 && (
           <div className="rounded-lg bg-rose-50 p-3 ring-1 ring-inset ring-rose-200">
             <p className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-rose-800">

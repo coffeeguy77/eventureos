@@ -10,9 +10,9 @@ export const VIEWS: { key: CalView; label: string }[] = [
   { key: "agenda", label: "Agenda" },
 ];
 
-export type EntryKind = "event" | "site_visit" | "setup" | "hold" | "other";
+export type EntryKind = "event" | "site_visit" | "setup" | "hold" | "other" | "meeting";
 export const KIND_LABEL: Record<EntryKind, string> = {
-  event: "Event", site_visit: "Site visit", setup: "Setup", hold: "Hold", other: "Other",
+  event: "Event", site_visit: "Site visit", setup: "Setup", hold: "Hold", other: "Other", meeting: "Meeting",
 };
 
 export type SyncStatus = "local" | "pending" | "synced" | "error";
@@ -38,6 +38,8 @@ export interface Entry {
   timeLabel: string; dateLabel: string; conflictsWith: string[]; segments: Segment[];
   /** A job with a date that isn't booked on the calendar yet (shown dashed so it can still be seen and staffed) */
   ghost?: { status: string };
+  /** A client meeting booked through Appointments */
+  appointmentId?: string | null;
 }
 
 export const AGENDA_DAYS = 60;

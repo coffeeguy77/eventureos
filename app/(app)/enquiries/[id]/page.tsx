@@ -137,6 +137,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
               ? <TicketFromEnquiry enquiryId={e.id} className="col-span-2 h-10 sm:h-9" />
               : cta.cta === "event" ? <ConvertToEvent id={e.id} defaultName={e.title} /> : null)
           )}
+          {!["lost", "archived", "spam"].includes(e.status) && <ButtonLink href={`/calendar/appointments?book=1&enquiry=${e.id}`} className="col-span-2 h-10 sm:h-9">Book a meeting</ButtonLink>}
         </div>
       </div>
 

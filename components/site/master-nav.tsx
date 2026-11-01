@@ -1,3 +1,4 @@
+import { readApptSettings } from "@/lib/appointments/core";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
@@ -14,8 +15,11 @@ import { MobileMenu, type MobileItem } from "./mobile-menu";
 import { ThemeStyle } from "./theme-style";
 
 /** One menu bar above every public section of the business's site. Built from what's switched on, arranged in Website → Menus. Also runs the anonymous analytics tracker. */
-export async function MasterNav({ org, active, cta }: { org: PublicOrg; active?: SiteSection; /** @deprecated the colour is set in Website → Menus and per page in the page editor */ tone?: "dark" | "light"; /** A button at the end of the menu */ cta?: { href: string; label: string } }) {
+export async function MasterNav({ org, active, cta: ctaIn }: { org: PublicOrg; active?: SiteSection; /** @deprecated the colour is set in Website → Menus and per page in the page editor */ tone?: "dark" | "light"; /** A button at the end of the menu */ cta?: { href: string; label: string } }) {
   const pm = await currentPageMenu(org);
+  // "Book a meeting" (Calendar → Appointments → Booking settings) is the menu button when the page doesn't set its own
+  const appt = readApptSettings(org.rawSettings);
+  const cta = ctaIn ?? (appt.enabled && appt.on_website ? { href: `/meet/${org.slug}`, label: appt.title } : undefined);
   // The website theme decides the menu colour (Website → Look & feel); classic keeps the per-page light/dark setting
   const navStyle = org.theme && org.theme.preset !== "classic" ? org.theme.nav : null;
   const brandNav = navStyle === "brand";
