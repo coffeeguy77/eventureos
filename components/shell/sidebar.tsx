@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Wrench } from "lucide-react";
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Wrench, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
 import { BusinessRail, type OrgChip } from "./business-rail";
@@ -37,6 +37,7 @@ const NAV = [
   { href: "/invoices", label: "Invoices", icon: Receipt },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/accounts", label: "Accounts", icon: Banknote },
+  { href: "/roster", label: "Roster", icon: CalendarClock },
   { href: "/wages", label: "Wages", icon: Wallet },
   { href: "/portal", label: "Customer Portal", icon: Globe },
   { href: "/reports", label: "Reports", icon: BarChart3 },

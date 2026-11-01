@@ -71,7 +71,9 @@ async function loadCustomWageShifts(db: SupabaseClient, orgId: string, opts: { u
   if (opts.unpaidOnly) q = q.is("payment_id", null);
   if (opts.paymentIds) q = q.in("payment_id", opts.paymentIds.length ? opts.paymentIds : ["00000000-0000-0000-0000-000000000000"]);
   if (opts.crewId) q = q.eq("crew_member_id", opts.crewId);
-  const { data, error } = await q.limit(2000);
+  // café roster shifts are paid through payroll (Roster → Timesheets), not here
+  const { data: withRoster, error: rErr } = await q.eq("roster", false).limit(2000);
+  const { data, error } = rErr ? await q.limit(2000) : { data: withRoster, error: null };
   if (error) return [];
   type Row = { id: string; crew_member_id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; notes: string | null; series_id: string | null; hours_override: number | null; rate_override: number | null; payment_id: string | null; member: { name: string; hourly_rate: number | null } | null };
   const list = (data ?? []) as unknown as Row[];

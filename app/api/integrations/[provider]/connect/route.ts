@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const back = (msg: string) => NextResponse.redirect(new URL(`/settings/integrations?error=${encodeURIComponent(msg)}`, request.url));
   if (!isLiveProvider(provider)) return back("That integration isn't available yet.");
 
-  const { org, role, user } = await requireOrg();
+  const { org, role, user, supabase } = await requireOrg();
   if (!canManage(role)) return back("Only owners, admins and managers can connect integrations.");
   const missing = missingEnv(provider);
   if (missing.length) return back(`Connecting is disabled until ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} set in the environment variables.`);
@@ -20,7 +20,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const nonce = newNonce();
     const verifier = OAUTH[provider].pkce ? newCodeVerifier() : "";
     const state = signState({ p: provider, o: org.id, u: user.id, n: nonce, t: Date.now() });
-    const url = buildAuthorizeUrl(provider, { redirectUri: redirectUri(provider, request.nextUrl.origin), state, codeVerifier: verifier || undefined });
+    // Xero Payroll (café roster timesheets) is asked for only when switched on, and kept on every reconnect after that
+    let extraScopes: string[] | undefined;
+    if (provider === "xero") {
+      const { PAYROLL_SCOPES } = await import("@/lib/integrations/xero-payroll");
+      const { data: cur } = await supabase.from("integrations").select("scopes").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle();
+      const had = Array.isArray(cur?.scopes) && (cur!.scopes as string[]).some((x) => x.startsWith("payroll."));
+      if (request.nextUrl.searchParams.get("payroll") === "1" || had) extraScopes = PAYROLL_SCOPES;
+    }
+    const url = buildAuthorizeUrl(provider, { redirectUri: redirectUri(provider, request.nextUrl.origin), state, codeVerifier: verifier || undefined, extraScopes });
     const res = NextResponse.redirect(url);
     res.cookies.set(oauthCookieName(provider), `${nonce}.${verifier}`, {
       httpOnly: true, secure: request.nextUrl.protocol === "https:", sameSite: "lax",

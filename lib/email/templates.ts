@@ -207,3 +207,12 @@ export function statementEmail(o: { businessName: string; customerName: string; 
   const text = `${o.message}\n\n${o.lines.map((l) => `Invoice ${l.number} — ${l.amount} (${l.due})`).join("\n")}\nTotal owing: ${o.total}\n\nView your statement and pay: ${o.url}`;
   return { html, text };
 }
+
+/** To a staff member: their roster for the week was published or changed (one line per shift). */
+export function rosterEmail(o: { businessName: string; firstName: string; subject: string; intro: string; lines: string[]; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const paragraphs = [`Hi ${o.firstName},`, o.intro, ...(o.lines.length ? o.lines : ["No shifts this week."])];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: o.subject, paragraphs,
+    button: { label: "Open the staff app", url: o.url }, footer: `Sent by ${o.businessName} because you're on the roster.` });
+  const text = `${paragraphs.join("\n\n")}\n\nOpen the staff app: ${o.url}`;
+  return { subject: o.subject, html, text };
+}

@@ -97,7 +97,7 @@ export const APPS: AppInfo[] = [
     for: "Caterers and event kitchens",
   },
   {
-    key: "wages", name: "Wages", paths: ["/wages"], icon: "wallet",
+    key: "wages", name: "Wages", paths: ["/wages", "/roster"], icon: "wallet",
     tagline: "Staff hours and pay, without the spreadsheet.",
     description: "Shifts from your events and roster, extra hours staff add on the day, and what's owed to each person.",
     features: ["Shifts and rosters", "Extra hours for approval", "What's owed and what's paid", "Staff see their own pay"],

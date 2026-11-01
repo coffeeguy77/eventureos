@@ -31,7 +31,7 @@ export default async function PastJobsPage({ searchParams }: { searchParams: Pro
     supabase.from("calendar_events").select("id, title, starts_at, ends_at, all_day, location").eq("organisation_id", org.id).is("event_id", null).eq("kind", "other")
       .gte("starts_at", `${from}T00:00:00Z`).lte("starts_at", `${addDaysISO(today, 1)}T00:00:00Z`).order("starts_at", { ascending: false }).limit(500),
     supabase.from("staff_shifts").select("id, crew_member_id, title, shift_date, start_time, finish_time, location, payment_id, source_calendar_event_id, member:crew_members(name)")
-      .eq("organisation_id", org.id).gte("shift_date", from).lte("shift_date", today),
+      .eq("organisation_id", org.id).eq("roster", false).gte("shift_date", from).lte("shift_date", today),
   ]);
   const staff = (staffRows ?? []) as { id: string; name: string }[];
   type Sh = { id: string; crew_member_id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; payment_id: string | null; source_calendar_event_id: string | null; member: { name: string } | null };

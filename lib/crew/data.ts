@@ -50,13 +50,19 @@ export async function myShifts(s: CrewSession, opts: { from?: string; to?: strin
 
 /** Shifts the office set up that aren't event shifts (a regular delivery round, a one-off). */
 async function customShifts(s: CrewSession, opts: { from?: string; to?: string }): Promise<Shift[]> {
-  let q = s.db.from("staff_shifts").select("id, title, shift_date, start_time, finish_time, location, hours_override, rate_override, payment_id").eq("organisation_id", s.org.id).eq("crew_member_id", s.member.id);
-  if (opts.from) q = q.gte("shift_date", opts.from);
-  if (opts.to) q = q.lte("shift_date", opts.to);
-  const { data, error } = await q.limit(500);
-  if (error) return []; // before the database update
-  type Row = { id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; hours_override: number | null; rate_override: number | null; payment_id: string | null };
-  const rows = (data ?? []) as Row[];
+  const cols = "id, title, shift_date, start_time, finish_time, location, hours_override, rate_override, payment_id";
+  const build = (c: string) => {
+    let q = s.db.from("staff_shifts").select(c).eq("organisation_id", s.org.id).eq("crew_member_id", s.member.id);
+    if (opts.from) q = q.gte("shift_date", opts.from);
+    if (opts.to) q = q.lte("shift_date", opts.to);
+    return q.limit(500);
+  };
+  // café roster shifts show once the roster is published (and come with their break); before the 0084 update, the plain columns
+  let res = await build(`${cols}, roster, published_at, break_minutes`);
+  if (res.error) res = await build(cols);
+  if (res.error) return []; // before the database update
+  type Row = { id: string; title: string; shift_date: string; start_time: string | null; finish_time: string | null; location: string | null; hours_override: number | null; rate_override: number | null; payment_id: string | null; roster?: boolean; published_at?: string | null; break_minutes?: number };
+  const rows = ((res.data ?? []) as unknown as Row[]).filter((r) => !r.roster || r.published_at);
   const claims = new Map<string, { approved: number; pending: number }>();
   if (rows.length) {
     const { data: cl } = await s.db.from("staff_hour_claims").select("staff_shift_id, hours, status").in("staff_shift_id", rows.map((r) => r.id));
@@ -72,6 +78,8 @@ async function customShifts(s: CrewSession, opts: { from?: string; to?: string }
     const p = plannedShift(job);
     const pay = shiftPay({ event: job, hoursOverride: r.hours_override == null ? null : Number(r.hours_override), approvedExtra: c.approved,
       rateOverride: r.rate_override == null ? null : Number(r.rate_override), memberRate: s.member.hourly_rate, orgRate: s.org.staff_hourly_rate, minHours: s.org.staff_min_hours });
+    // roster shifts: hours less the unpaid break, and pay comes through payroll (award rates), not a flat amount here
+    if (r.roster) { pay.hours = p.hours == null ? null : Math.max(0, Math.round((p.hours - (r.break_minutes ?? 0) / 60) * 100) / 100); pay.amount = null; }
     return { kind: "custom" as const, id: r.id, status: "confirmed" as const, role: null, boardPostedAt: null, boardNote: null, calendarResponse: null, paymentId: r.payment_id,
       job, start: p.start, finish: p.finish, hours: pay.hours, amount: pay.amount, rate: pay.rate, extraApproved: c.approved, extraPending: c.pending };
   });
