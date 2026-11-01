@@ -9,6 +9,7 @@ import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NextActionBanner } from "@/components/records/next-action";
 import { TicketControls, Composer, Checklist, BillTime, DeleteTicket } from "@/components/nerdherd/ticket-tools";
+import { TicketTabs, type TabRow } from "@/components/nerdherd/ticket-tabs";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,11 @@ type Ticket = {
 };
 type Update = { id: string; kind: string; body: string | null; minutes: number | null; billable: boolean; billed_invoice_id: string | null; public: boolean; author_name: string | null; created_at: string };
 
-export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TicketPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { id } = await params;
+  const tabParam = (await searchParams).tab ?? null;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org, role } = await requireOrg();
+  const { supabase, org, role, user } = await requireOrg();
   const { data, error } = await supabase.from("support_tickets")
     .select("*, customers(id, name, email, phone), websites(id, domain, admin_url, platform), invoices!support_tickets_invoice_id_fkey(id, number, status, total, balance, due_date), recurring_invoices(id, name)")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
@@ -36,15 +38,25 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const tk = data as unknown as Ticket;
   const today = todayISO(org.timezone);
   const [{ data: ups }, members, { data: clients }, { data: sites }, { data: history }] = await Promise.all([
-    supabase.from("support_ticket_updates").select("id, kind, body, minutes, billable, billed_invoice_id, public, author_name, created_at").eq("ticket_id", id).order("created_at"),
+    (async () => {
+      const cols = "id, kind, body, minutes, billable, billed_invoice_id, public, author_name, created_at";
+      const r = await supabase.from("support_ticket_updates").select(`${cols}, tab_id`).eq("ticket_id", id).order("created_at");
+      return r.error ? supabase.from("support_ticket_updates").select(cols).eq("ticket_id", id).order("created_at") : r;
+    })(),
     getMembers(org.id),
     supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
     supabase.from("websites").select("id, domain, customer_id").eq("organisation_id", org.id).neq("status", "archived").order("domain").limit(5000),
     tk.customer_id ? supabase.from("support_tickets").select("id, number, subject, status, created_at").eq("organisation_id", org.id).eq("customer_id", tk.customer_id).neq("id", id).order("created_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] }),
   ]);
-  const updates = (ups ?? []) as Update[];
-  const minutes = updates.reduce((a, u) => a + Number(u.minutes ?? 0), 0);
-  const unbilled = updates.filter((u) => u.billable && !u.billed_invoice_id).reduce((a, u) => a + Number(u.minutes ?? 0), 0);
+  const allUpdates = (ups ?? []) as (Update & { tab_id?: string | null })[];
+  const { data: tabRows, error: tabErr } = await supabase.from("support_ticket_tabs").select("id, name, assigned_to, done").eq("ticket_id", id).order("position");
+  const tabs = tabErr ? [] : (tabRows ?? []) as TabRow[];
+  const contactId = (data as { contact_id?: string | null }).contact_id ?? null;
+  const asked = contactId ? ((await supabase.from("contacts").select("first_name, last_name, email, phone, position").eq("id", contactId).maybeSingle()).data as { first_name: string; last_name: string | null; email: string | null; phone: string | null; position: string | null } | null) : null;
+  const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam : null;
+  const updates = activeTab ? allUpdates.filter((u) => u.tab_id === activeTab) : allUpdates;
+  const minutes = allUpdates.reduce((a, u) => a + Number(u.minutes ?? 0), 0);
+  const unbilled = allUpdates.filter((u) => u.billable && !u.billed_invoice_id).reduce((a, u) => a + Number(u.minutes ?? 0), 0);
   const checklist = readChecklist(tk.checklist);
   const s = readNerd(org.settings);
   const manage = canManage(role);
@@ -84,8 +96,14 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               <div className="border-t border-line px-5 py-4"><Checklist id={tk.id} items={checklist} locked={tk.status === "awaiting_payment"} /></div>
             </Card>
           )}
+          {!tabErr && (
+            <Card>
+              <CardHeader title="Tabs" subtitle="One tab per issue — e.g. Domain, Hosting, Updates — each with its own person." />
+              <div className="border-t border-line px-5 py-4"><TicketTabs ticketId={tk.id} tabs={tabs} active={activeTab} members={members.map((m) => ({ id: m.id, name: m.full_name ?? m.email }))} me={user.id} /></div>
+            </Card>
+          )}
           <Card>
-            <CardHeader title="Conversation and work log" subtitle="Replies marked for the client show in their portal. Notes and time stay internal." />
+            <CardHeader title={activeTab ? `${tabs.find((t) => t.id === activeTab)?.name} — conversation and work log` : "Conversation and work log"} subtitle="Replies marked for the client show in their portal. Notes and time stay internal." />
             <div className="border-t border-line">
               {!updates.length ? <EmptyState title="Nothing logged yet" /> : (
                 <ol className="divide-y divide-line">
@@ -107,7 +125,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
                 </ol>
               )}
             </div>
-            <div className="border-t border-line px-5 py-4"><Composer id={tk.id} status={tk.status} hasClient={!!tk.customer_id} /></div>
+            <div className="border-t border-line px-5 py-4"><Composer id={tk.id} status={tk.status} hasClient={!!tk.customer_id} tabId={activeTab} /></div>
           </Card>
         </div>
 
@@ -138,7 +156,8 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
             <Card>
               <CardHeader title="Client" action={<Link href={`/clients/${tk.customers.id}?tab=web`} className="text-[0.75rem] font-medium text-brand-600">Account</Link>} />
               <div className="space-y-3 border-t border-line px-5 py-4">
-                <Field label="Contact">{[tk.customers.email, tk.customers.phone].filter(Boolean).join(" · ") || "—"}</Field>
+                {asked && <Field label="Asked by">{[`${asked.first_name} ${asked.last_name ?? ""}`.trim() + (asked.position ? ` (${asked.position})` : ""), asked.email, asked.phone].filter(Boolean).join(" · ")}</Field>}
+                <Field label={asked ? "Client contact" : "Contact"}>{[tk.customers.email, tk.customers.phone].filter(Boolean).join(" · ") || "—"}</Field>
                 {tk.websites?.admin_url && <Field label="Site admin"><a href={tk.websites.admin_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-600 hover:underline">Open <ExternalLink className="h-3 w-3" /></a></Field>}
                 {(history ?? []).length > 0 && (
                   <Field label="Other tickets">

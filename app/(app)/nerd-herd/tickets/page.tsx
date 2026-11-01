@@ -7,6 +7,7 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { TICKET_SELECT, TicketRow, type TicketListRow } from "@/components/nerdherd/ticket-row";
 import { cn } from "@/lib/cn";
+import { isMine, isUnassigned, openJobs } from "@/lib/nerdherd/assignments";
 
 export const dynamic = "force-dynamic";
 
@@ -30,8 +31,10 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
   let rows = (data ?? []) as unknown as TicketListRow[];
   if (view === "new") rows = rows.filter((r) => r.status === "new");
   if (view === "ready") rows = rows.filter((r) => ["open", "in_progress", "scheduled"].includes(r.status));
-  if (view === "mine") rows = rows.filter((r) => r.assigned_to === user.id);
-  if (view === "unassigned") rows = rows.filter((r) => !r.assigned_to);
+  if (view === "mine" || view === "unassigned") {
+    const jobs = new Map((await openJobs(supabase, org.id)).map((j) => [j.id, j]));
+    rows = rows.filter((r) => { const j = jobs.get(r.id); return view === "mine" ? (j ? isMine(j, user.id) : r.assigned_to === user.id) : (j ? isUnassigned(j) : !r.assigned_to); });
+  }
   if (view === "late") rows = rows.filter((r) => r.due_date && r.due_date < today && r.status !== "awaiting_payment");
   if (view === "awaiting_payment" || view === "waiting_customer") rows = rows.filter((r) => r.status === view);
   const text = (sp.q ?? "").trim().toLowerCase();

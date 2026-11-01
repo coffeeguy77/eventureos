@@ -6,6 +6,8 @@ import { OPEN_STATUSES } from "@/lib/nerdherd/core";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { Kpi } from "@/components/records/kpi";
+import { JobsBoard } from "@/components/nerdherd/jobs-board";
+import { isMine, isUnassigned, openJobs } from "@/lib/nerdherd/assignments";
 import { TICKET_SELECT, TicketRow, type TicketListRow } from "@/components/nerdherd/ticket-row";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,7 @@ export default async function NerdHerdDesk() {
     supabase.from("invoices").select("customer_id, balance, due_date, customers(name)").eq("organisation_id", org.id).in("status", ["awaiting_payment", "overdue"]).gt("balance", 0).lt("due_date", today).limit(5000),
   ]);
   if (error) throw new Error(`Couldn't load tickets: ${error.message}`);
+  const jobs = await openJobs(supabase, org.id);
   const all = (open ?? []) as unknown as TicketListRow[];
   const ready = all.filter((r) => r.status === "open" || r.status === "in_progress" || r.status === "scheduled");
   const fresh = all.filter((r) => r.status === "new");
@@ -54,6 +57,7 @@ export default async function NerdHerdDesk() {
         <p className="text-[0.8125rem] text-ink-muted">{fresh.length ? <><strong className="text-ink">{fresh.length} new ticket{fresh.length === 1 ? "" : "s"}</strong> to look at first.</> : "No new tickets waiting."}</p>
         <ButtonLink href="/nerd-herd/tickets/new" variant="primary"><Plus className="h-4 w-4" />New ticket</ButtonLink>
       </div>
+      <JobsBoard mine={jobs.filter((j) => isMine(j, user.id))} all={jobs} unassigned={jobs.filter(isUnassigned)} me={user.id} today={today} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Kpi label="New" value={fresh.length} href="/nerd-herd/tickets?v=new" alert={fresh.length > 0} />
         <Kpi label="Ready to do" value={ready.length} sub="paid or ready to start" href="/nerd-herd/tickets?v=ready" />
@@ -66,7 +70,6 @@ export default async function NerdHerdDesk() {
         <div className="space-y-5">
           {list("New", fresh, "No new tickets", "Read, set a priority and assign")}
           {list("Ready to do", ready, "Nothing waiting to be worked on", "Paid maintenance and open support jobs")}
-          {mine.length > 0 && list("Assigned to me", mine, "Nothing assigned to you")}
           {list("Waiting on the client", waitingClient, "Not waiting on anyone")}
         </div>
         <div className="space-y-5">

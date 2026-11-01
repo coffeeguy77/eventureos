@@ -17,6 +17,8 @@ import { DocumentsList, type DocRow } from "@/components/records/documents-list"
 import { ActivityFeed } from "@/components/records/activity-feed";
 import { NextActionBanner } from "@/components/records/next-action";
 import { AssignSelect, ConvertToEvent, DetailsEditor, StatusSelect } from "./controls";
+import { TicketFromEnquiry } from "@/components/nerdherd/ticket-from-enquiry";
+import { readEnquiryCta } from "@/lib/enquiry-cta";
 import { TagEditor } from "@/components/enquiries/tag-editor";
 import { addNote, createTask } from "@/app/(app)/record-actions";
 import { enquiryNextAction } from "@/lib/next-action";
@@ -90,6 +92,12 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
   const gmailConnected = gmailRes.data?.status === "connected";
 
   const star = e as { starred_at?: string | null; star_note?: string | null; starred_by?: string | null };
+  // the main button: convert to an event, or create a support ticket (Settings → Enquiries)
+  const { orgAppAccess } = await import("@/lib/apps-server");
+  const { appAllowed } = await import("@/lib/apps");
+  const cta = readEnquiryCta(org.settings, appAllowed(await orgAppAccess(org.id), "nerdherd"));
+  const ticketId = (e as { ticket_id?: string | null }).ticket_id ?? null;
+  const linkedTicket = ticketId ? ((await supabase.from("support_tickets").select("id, number").eq("id", ticketId).maybeSingle()).data as { id: string; number: number } | null) : null;
   const displayName = e.customer?.name ?? e.contact_name ?? e.contact_email ?? "Unknown sender";
 
   // tags in use across enquiries, to suggest (none before the 0071 database update)
@@ -122,8 +130,12 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           <StatusSelect id={e.id} status={e.status} />
           {e.event ? (
             <ButtonLink href={`/events/${e.event.id}`} variant="primary" className="col-span-2 h-10 sm:h-9">Open event EV-{e.event.number} <ArrowUpRight className="h-4 w-4" /></ButtonLink>
+          ) : linkedTicket ? (
+            <ButtonLink href={`/nerd-herd/tickets/${linkedTicket.id}`} variant="primary" className="col-span-2 h-10 sm:h-9">Open ticket #{linkedTicket.number} <ArrowUpRight className="h-4 w-4" /></ButtonLink>
           ) : (
-            !["lost", "archived", "spam"].includes(e.status) && <ConvertToEvent id={e.id} defaultName={e.title} />
+            !["lost", "archived", "spam"].includes(e.status) && (cta.cta === "ticket"
+              ? <TicketFromEnquiry enquiryId={e.id} className="col-span-2 h-10 sm:h-9" />
+              : cta.cta === "event" ? <ConvertToEvent id={e.id} defaultName={e.title} /> : null)
           )}
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { JobsBoard } from "@/components/nerdherd/jobs-board";
 import Link from "next/link";
 import { NotConnected } from "@/components/ui/connect-link";
 import { ArrowUpRight } from "lucide-react";
@@ -33,7 +34,18 @@ function must<T>(res: { data: T | null; error: { message: string } | null }, wha
 }
 
 export default async function DashboardPage() {
-  const { supabase, org, profile, role } = await requireOrg();
+  const { supabase, org, profile, role, user } = await requireOrg();
+  // support desks (Nerd Herd): my jobs / all open / unassigned, right at the top
+  const supportJobs = await (async () => {
+    if (role === "staff" || role === "customer") return null;
+    const { orgAppAccess } = await import("@/lib/apps-server");
+    const { appAllowed } = await import("@/lib/apps");
+    if (!appAllowed(await orgAppAccess(org.id), "nerdherd")) return null;
+    const { openJobs, isMine, isUnassigned } = await import("@/lib/nerdherd/assignments");
+    const jobs = await openJobs(supabase, org.id);
+    const me = user.id;
+    return { mine: jobs.filter((j) => isMine(j, me)), all: jobs, unassigned: jobs.filter(isUnassigned), me, today: todayISO(org.timezone) };
+  })();
   const tz = org.timezone;
   const today = todayISO(tz);
   const in7 = addDaysISO(today, 6);
@@ -240,6 +252,8 @@ export default async function DashboardPage() {
           </ul>
         </div>
       )}
+
+      {supportJobs && <div className="mb-6"><JobsBoard {...supportJobs} /></div>}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="New enquiries" value={newEnquiries.length} href="/enquiries?status=new"

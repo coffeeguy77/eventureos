@@ -7,6 +7,8 @@ import { updateOrganisation } from "./actions";
 import { HireSwitch } from "@/components/rentals/hire-switch";
 import { readHireSettings } from "@/lib/hire/core";
 import { orgAppAccess } from "@/lib/apps-server";
+import { readEnquiryCta } from "@/lib/enquiry-cta";
+import { EnquiryCtaSetting } from "@/components/settings/enquiry-cta";
 import { BUSINESS_TYPES, CURRENCIES, PLAN_LABEL, ROLE_LABEL, TIMEZONES } from "./constants";
 
 export const metadata = { title: "Settings" };
@@ -21,6 +23,9 @@ export default async function OrganisationSettingsPage() {
   if (error) throw new Error(`Could not load organisation: ${error.message}`);
 
   const canEdit = role === "owner" || role === "admin";
+  const { appAllowed } = await import("@/lib/apps");
+  const cta = readEnquiryCta(o.settings, appAllowed(await orgAppAccess(org.id), "nerdherd"));
+  const ctaSettings = { cta: cta.cta, usesEvents: cta.usesEvents, canTicket: cta.canTicket };
   const abn = ((o.settings as { business?: { abn?: unknown } } | null)?.business?.abn as string | undefined) ?? "";
   const businessTypes = o.business_type && !BUSINESS_TYPES.includes(o.business_type) ? [o.business_type, ...BUSINESS_TYPES] : BUSINESS_TYPES;
   const currencies = CURRENCIES.includes(o.currency) ? CURRENCIES : [o.currency, ...CURRENCIES];
@@ -107,6 +112,11 @@ export default async function OrganisationSettingsPage() {
             </dl>
           )}
         </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Enquiries" subtitle="What the main button on an enquiry does." />
+        <EnquiryCtaSetting {...ctaSettings} canEdit={canEdit} />
       </Card>
 
       {!(await orgAppAccess(org.id)) && <Card>

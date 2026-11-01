@@ -690,3 +690,22 @@ export async function setMemberPassword(memberId: string, password: string): Pro
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/** What the main button on an enquiry does (event / ticket), and whether the business runs events. */
+export async function saveEnquiryCta(cta: "event" | "ticket" | null, usesEvents: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, role } = await requireOrg();
+    if (!isOwnerOrAdmin(role)) return { ok: false, error: "Only owners and admins can change this." };
+    const { orgAppAccess } = await import("@/lib/apps-server");
+    const { appAllowed } = await import("@/lib/apps");
+    const nerd = appAllowed(await orgAppAccess(org.id), "nerdherd");
+    if (cta === "ticket" && !nerd) return { ok: false, error: "Nerd Herd isn't switched on for this business." };
+    if (cta === "event" && !usesEvents) return { ok: false, error: "This business doesn't run events." };
+    const { data: cur } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const st = (cur?.settings ?? {}) as Record<string, unknown>;
+    const { error } = await supabase.from("organisations").update({ settings: { ...st, enquiry_cta: cta, uses_events: !!usesEvents } }).eq("id", org.id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/settings"); revalidatePath("/enquiries", "layout");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

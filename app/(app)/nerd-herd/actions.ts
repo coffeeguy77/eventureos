@@ -33,7 +33,7 @@ async function loadTicket(id: string) {
   const { data, error } = await ctx.supabase.from("support_tickets").select("*").eq("id", id).eq("organisation_id", ctx.org.id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("That ticket no longer exists.");
-  return { ctx, ticket: data as Record<string, unknown> & { id: string; number: number; subject: string; status: TicketStatus; customer_id: string | null; checklist: unknown } };
+  return { ctx, ticket: data as Record<string, unknown> & { id: string; number: number; subject: string; status: TicketStatus; customer_id: string | null; assigned_to: string | null; checklist: unknown } };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
   } catch (e) { return fail(e); }
 }
 
-export interface UpdateInput { kind: "comment" | "note" | "time"; body?: string | null; minutes?: number | null; billable?: boolean; public?: boolean; status?: TicketStatus | null }
+export interface UpdateInput { kind: "comment" | "note" | "time"; body?: string | null; minutes?: number | null; billable?: boolean; public?: boolean; status?: TicketStatus | null; tabId?: string | null }
 
 /** Add to a ticket's conversation: a reply the client sees in their portal, an internal note, or time worked. */
 export async function addUpdate(id: string, i: UpdateInput): Promise<R> {
@@ -127,10 +127,12 @@ export async function addUpdate(id: string, i: UpdateInput): Promise<R> {
     if (minutes !== null && !(minutes > 0 && minutes <= 6000)) throw new Error("Enter the minutes worked (1 to 6000).");
     if (!body && !minutes) throw new Error(i.kind === "time" ? "Enter the time worked." : "Write something first.");
     const kind = minutes && !body ? "time" : i.kind === "time" ? "time" : i.kind === "comment" ? "comment" : "note";
-    const { error } = await supabase.from("support_ticket_updates").insert({
+    const row: Record<string, unknown> = {
       organisation_id: org.id, ticket_id: id, kind, body, minutes, billable: i.billable !== false,
       public: kind === "comment" && i.public !== false, author_id: user.id, author_name: actorName(profile),
-    });
+    };
+    let { error } = await supabase.from("support_ticket_updates").insert(i.tabId && UUID.test(i.tabId) ? { ...row, tab_id: i.tabId } : row);
+    if (error && /tab_id/.test(error.message)) ({ error } = await supabase.from("support_ticket_updates").insert(row));
     if (error) throw new Error(`Couldn't save: ${error.message}`);
     const patch: Record<string, unknown> = { last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     if (i.status && isTicketStatus(i.status) && i.status !== ticket.status) {
@@ -281,6 +283,70 @@ export async function saveNerdSettings(i: { hourly_rate: number; account_code: s
     if (error) throw new Error(error.message);
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "settings.updated", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} updated Nerd Herd settings` });
     refresh();
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Tabs: split a ticket into issues (Domain, Hosting, Updates…), each with its own person
+// ------------------------------------------------------------------------------------------------
+
+async function logLine(ctx: Awaited<ReturnType<typeof desk>>, ticketId: string, body: string, tabId: string | null = null) {
+  const row: Record<string, unknown> = { organisation_id: ctx.org.id, ticket_id: ticketId, kind: "status", body, author_id: ctx.user.id, author_name: actorName(ctx.profile) };
+  const r = await ctx.supabase.from("support_ticket_updates").insert(tabId ? { ...row, tab_id: tabId } : row);
+  if (r.error && tabId) await ctx.supabase.from("support_ticket_updates").insert(row);
+  await ctx.supabase.from("support_tickets").update({ last_activity_at: new Date().toISOString() }).eq("id", ticketId);
+}
+const memberName = async (ctx: Awaited<ReturnType<typeof desk>>, id: string | null) => {
+  if (!id) return "nobody";
+  const { data } = await ctx.supabase.from("users").select("full_name, email").eq("id", id).maybeSingle();
+  return (data?.full_name as string | null) ?? (data?.email as string | null) ?? "someone";
+};
+
+export async function addTicketTab(ticketId: string, name: string, assignedTo: string | null): Promise<R<string>> {
+  try {
+    const { ctx, ticket } = await loadTicket(ticketId);
+    const n = t(name, 60);
+    if (!n) throw new Error("Name the tab, e.g. Domain.");
+    const { count } = await ctx.supabase.from("support_ticket_tabs").select("id", { count: "exact", head: true }).eq("ticket_id", ticketId);
+    const { data, error } = await ctx.supabase.from("support_ticket_tabs").insert({ organisation_id: ctx.org.id, ticket_id: ticketId, name: n, assigned_to: assignedTo && UUID.test(assignedTo) ? assignedTo : null, position: count ?? 0 }).select("id").single();
+    if (error) throw new Error(/support_ticket_tabs/.test(error.message) ? "Run the latest database update (0090) first." : error.message);
+    await logLine(ctx, ticketId, `${actorName(ctx.profile)} added the ${n} tab${assignedTo ? ` for ${await memberName(ctx, assignedTo)}` : ""}`, data.id as string);
+    if (!ticket.assigned_to && assignedTo) await ctx.supabase.from("support_tickets").update({ assigned_to: assignedTo }).eq("id", ticketId);
+    refresh(ticketId);
+    return { ok: true, data: data.id as string };
+  } catch (e) { return fail(e); }
+}
+
+export async function updateTicketTab(tabId: string, p: { assigned_to?: string | null; done?: boolean; name?: string }): Promise<R> {
+  try {
+    const ctx = await desk();
+    if (!UUID.test(tabId)) throw new Error("Refresh and try again.");
+    const { data: tab } = await ctx.supabase.from("support_ticket_tabs").select("id, ticket_id, name, assigned_to, done").eq("id", tabId).eq("organisation_id", ctx.org.id).maybeSingle();
+    if (!tab) throw new Error("That tab no longer exists.");
+    const patch: Record<string, unknown> = {};
+    const said: string[] = [];
+    if (p.assigned_to !== undefined) { const a = p.assigned_to && UUID.test(p.assigned_to) ? p.assigned_to : null; if (a !== tab.assigned_to) { patch.assigned_to = a; said.push(`gave ${tab.name} to ${await memberName(ctx, a)}`); } }
+    if (p.done !== undefined && p.done !== tab.done) { patch.done = p.done; patch.done_at = p.done ? new Date().toISOString() : null; said.push(p.done ? `marked ${tab.name} done` : `reopened ${tab.name}`); }
+    if (p.name !== undefined) { const n = t(p.name, 60); if (!n) throw new Error("The tab needs a name."); if (n !== tab.name) { patch.name = n; said.push(`renamed ${tab.name} to ${n}`); } }
+    if (!Object.keys(patch).length) return { ok: true, data: undefined };
+    const { error } = await ctx.supabase.from("support_ticket_tabs").update(patch).eq("id", tabId);
+    if (error) throw new Error(error.message);
+    await logLine(ctx, tab.ticket_id as string, `${actorName(ctx.profile)} ${said.join(", ")}`, tabId);
+    refresh(tab.ticket_id as string);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+export async function deleteTicketTab(tabId: string): Promise<R> {
+  try {
+    const ctx = await desk();
+    if (!UUID.test(tabId)) throw new Error("Refresh and try again.");
+    const { data: tab } = await ctx.supabase.from("support_ticket_tabs").select("ticket_id, name").eq("id", tabId).eq("organisation_id", ctx.org.id).maybeSingle();
+    if (!tab) return { ok: true, data: undefined };
+    await ctx.supabase.from("support_ticket_tabs").delete().eq("id", tabId);
+    await logLine(ctx, tab.ticket_id as string, `${actorName(ctx.profile)} removed the ${tab.name} tab`);
+    refresh(tab.ticket_id as string);
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
 }

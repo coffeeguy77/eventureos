@@ -57,7 +57,7 @@ export function TicketControls({ id, initial, members, clients, sites }: {
   );
 }
 
-export function Composer({ id, status, hasClient }: { id: string; status: TicketStatus; hasClient: boolean }) {
+export function Composer({ id, status, hasClient, tabId = null }: { id: string; status: TicketStatus; hasClient: boolean; tabId?: string | null }) {
   const router = useRouter();
   const [mode, setMode] = useState<"comment" | "note" | "time">(hasClient ? "comment" : "note");
   const [body, setBody] = useState("");
@@ -68,7 +68,7 @@ export function Composer({ id, status, hasClient }: { id: string; status: Ticket
   const [pending, start] = useTransition();
   const send = () => start(async () => {
     setError(null);
-    const r = await addUpdate(id, { kind: mode, body, minutes: mins ? Number(mins) : null, billable, public: mode === "comment", status: next || null });
+    const r = await addUpdate(id, { kind: mode, body, minutes: mins ? Number(mins) : null, billable, public: mode === "comment", status: next || null, tabId });
     if (!r.ok) { setError(r.error); return; }
     setBody(""); setMins(""); setNext("");
     router.refresh();
