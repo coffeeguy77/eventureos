@@ -28,3 +28,28 @@ export async function chefArchiveIngredient(slug: string, id: string, active: bo
 export async function chefSaveRecipe(slug: string, serviceId: string, lines: RecipeInput[]): Promise<Result> {
   return run(async () => { const s = await chef(slug); const m = await storeRecipe(s.db, s.org.id, serviceId, lines); done(slug); return m; });
 }
+
+/** Any staff member who can see the kitchen jobs: mark an item Ready / Issue (or clear it). */
+export async function kitchenSetItem(slug: string, eventId: string, day: string, item: string, status: "ready" | "issue" | null): Promise<{ ok: boolean; error?: string }> {
+  const r = await run(async () => {
+    const s = await crewSession(slug);
+    if (!s) throw new Error("Please sign in again.");
+    const { setItemState } = await import("@/lib/kitchen/status");
+    await setItemState(s.db, s.org.id, { eventId, day, item, status: status === "ready" || status === "issue" ? status : null, memberId: s.member.id, name: s.member.name });
+    done(slug);
+    return "ok";
+  });
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}
+
+export async function kitchenNoteItem(slug: string, eventId: string, day: string, item: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await run(async () => {
+    const s = await crewSession(slug);
+    if (!s) throw new Error("Please sign in again.");
+    const { addItemNote } = await import("@/lib/kitchen/status");
+    await addItemNote(s.db, s.org.id, { eventId, day, item, body, memberId: s.member.id, name: s.member.name });
+    done(slug);
+    return "ok";
+  });
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}

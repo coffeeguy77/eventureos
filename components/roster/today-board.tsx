@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, MessageSquare, Phone } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Board } from "@/lib/roster/today";
+import { wageColour } from "./wage-gauge";
 
 type Res = { ok: boolean; message?: string; error?: string };
 const money = (n: number) => `$${n.toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -34,7 +35,8 @@ export function TodayBoard({ board, onText, tz }: { board: Board; onText?: (shif
         <div className="rounded-xl bg-canvas px-2 py-2 ring-1 ring-line"><p className="text-[0.6875rem] uppercase tracking-wide text-ink-faint">Wages today</p><p className="text-[1.0625rem] font-bold text-ink">{money(board.wages.cost)}</p><p className="text-[0.6875rem] text-ink-faint">{board.wages.hours} h rostered</p></div>
         <div className="rounded-xl bg-canvas px-2 py-2 ring-1 ring-line"><p className="text-[0.6875rem] uppercase tracking-wide text-ink-faint">Sales so far</p><p className="text-[1.0625rem] font-bold text-ink">{board.sales == null ? "—" : money(board.sales)}</p><p className="text-[0.6875rem] text-ink-faint">Square</p></div>
         <div className="rounded-xl bg-canvas px-2 py-2 ring-1 ring-line"><p className="text-[0.6875rem] uppercase tracking-wide text-ink-faint">Wages %</p>
-          <p className={cn("text-[1.0625rem] font-bold", pct == null ? "text-ink" : pct > 40 ? "text-rose-700" : pct > 30 ? "text-orange-700" : "text-emerald-700")}>{pct == null ? "—" : `${pct}%`}</p><p className="text-[0.6875rem] text-ink-faint">of sales</p></div>
+          <p className="text-[1.0625rem] font-bold" style={{ color: wageColour(pct, board.target.good, board.target.bad) }}>{pct == null ? "—" : `${pct}%`}</p>
+          <span className="mx-auto mt-1 block h-1.5 w-full max-w-[6rem] rounded-full" style={{ background: `linear-gradient(90deg, #16a34a ${(board.target.good / (board.target.bad + 20)) * 100}%, #f59e0b, #dc2626 ${(board.target.bad / (board.target.bad + 20)) * 100}%)` }} /></div>
       </div>
       {board.salesNote && <p className="text-[0.7188rem] text-ink-faint">{board.salesNote}</p>}
 

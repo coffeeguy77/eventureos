@@ -88,7 +88,8 @@ export async function loadWeek(db: SupabaseClient, org: { id: string; settings: 
   for (const p of base.people) {
     const mine = base.shifts.filter((s) => s.crew_member_id === p.id).map((s) => ({ ...shiftSpan(s.shift_date, s.start_time, s.finish_time), breakMinutes: s.break_minutes }));
     const who = { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate ?? orgRate };
-    base.totals.set(p.id, totalsFor(hoursFor(mine, who, hol, settings.rules), who, settings.rules));
+    const t = totalsFor(hoursFor(mine, who, hol, settings.rules), who, settings.rules);
+    base.totals.set(p.id, settings.unpaid.includes(p.id) ? { ...t, cost: 0 } : t); // not paid through the roster: no wage cost
   }
   // qualifications (current on the day) and what each area needs — quietly nothing before database update 0087
   const [{ data: q, error: qe }, { data: aq, error: ae }] = await Promise.all([

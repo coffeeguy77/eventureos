@@ -82,3 +82,30 @@ export async function saveKitchenOrder(eventId: string, order: { days: { date: s
     return order ? "Kitchen order saved." : "Back to what the quote says.";
   });
 }
+
+/** Office: mark a catering item Ready / Issue (or clear it), and add notes — kept on the job. */
+export async function officeSetItem(eventId: string, day: string, item: string, status: "ready" | "issue" | null): Promise<{ ok: boolean; error?: string }> {
+  const r = await run(async () => {
+    const { supabase, org, profile } = await office();
+    if (!UUID.test(eventId)) throw new Error("Refresh and try again.");
+    const { setItemState } = await import("@/lib/kitchen/status");
+    const { actorName } = await import("@/lib/activity");
+    await setItemState(supabase, org.id, { eventId, day, item, status: status === "ready" || status === "issue" ? status : null, memberId: null, name: actorName(profile) });
+    revalidatePath("/kitchen"); revalidatePath(`/events/${eventId}`);
+    return "ok";
+  });
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}
+
+export async function officeNoteItem(eventId: string, day: string, item: string, body: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await run(async () => {
+    const { supabase, org, profile } = await office();
+    if (!UUID.test(eventId)) throw new Error("Refresh and try again.");
+    const { addItemNote } = await import("@/lib/kitchen/status");
+    const { actorName } = await import("@/lib/activity");
+    await addItemNote(supabase, org.id, { eventId, day, item, body, memberId: null, name: actorName(profile) });
+    revalidatePath("/kitchen"); revalidatePath(`/events/${eventId}`);
+    return "ok";
+  });
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
+}

@@ -27,6 +27,10 @@ export interface RosterSettings {
   place: { address: string | null } ;
   /** clock on from a phone only near the café (metres; 0 = anywhere) */
   geofence: { lat: number; lng: number; metres: number } | null;
+  /** on the roster but not paid through it (e.g. an owner) — left out of Xero timesheets, Wages and wage costs */
+  unpaid: string[];
+  /** wages as a % of sales: the range you aim for (green), and where it turns red */
+  wage_target: { good: number; bad: number };
   /** staff who see Today (who's on, late alerts, checklists, wage %) in the staff app */
   app_managers: string[];
   /** "running late?" texts: minutes after the start with no clock-on; minutes before a manager can resend; send automatically */
@@ -61,6 +65,8 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     breaks: (() => { const b = (r.breaks ?? {}) as Record<string, unknown>; return { max: n(b.max, 60), smart: b.smart === true, ipad_only: b.ipad_only !== false }; })(),
     place: { address: typeof (r.place as { address?: unknown } | undefined)?.address === "string" ? String((r.place as { address: string }).address) : null },
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    unpaid: Array.isArray(r.unpaid) ? (r.unpaid as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    wage_target: (() => { const w = (r.wage_target ?? {}) as Record<string, unknown>; const good = n(w.good, 30), bad = n(w.bad, 40); return { good, bad: Math.max(bad, good + 1) }; })(),
     app_managers: Array.isArray(r.app_managers) ? (r.app_managers as unknown[]).filter((x): x is string => typeof x === "string") : [],
     late: (() => { const l = (r.late ?? {}) as Record<string, unknown>; return { after: n(l.after, 10), cooldown: n(l.cooldown, 10), auto: l.auto !== false }; })(),
     reminders: (() => { const m = (r.reminders ?? {}) as Record<string, unknown>; return { night_before: m.night_before === true, at: typeof m.at === "string" && /^\d{2}:\d{2}$/.test(m.at) ? m.at : "17:00", hours_before: n(m.hours_before, 0) }; })(),

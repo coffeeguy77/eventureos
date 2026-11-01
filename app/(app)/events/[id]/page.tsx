@@ -160,6 +160,12 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const startDays = formDays({ ...e, days: evDays.days, fleet_dates: evDays.fleet_dates }, staffDays);
   const daysSaved = "days" in evDays;
   // Kitchen order: what the kitchen makes for this job, day by day (saved, or a draft from the quote / website order)
+  // what the kitchen ticked off / flagged for this job (0088)
+  const kitchenLog = await (async () => {
+    const { loadItemStates } = await import("@/lib/kitchen/status");
+    const st = await loadItemStates(supabase, org.id, [e.id]);
+    return Object.entries(st).map(([k, v]) => { const [, day, ...rest] = k.split("|"); return { day, item: rest.join("|"), ...v }; }).sort((a, b) => a.day.localeCompare(b.day) || a.item.localeCompare(b.item));
+  })();
   const kitchen = await (async () => {
     const { cateringMenu } = await import("@/lib/kitchen/jobs");
     const { draftKitchenOrder, readCateringDays, readKitchenOrder, compareWithQuote } = await import("@/lib/kitchen/split");
@@ -317,6 +323,20 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                   <CardHeader title="Kitchen order" subtitle="What the kitchen makes for this job — each day, ready-by time, items and notes" />
                   <KitchenOrderCard eventId={e.id} menu={kitchen.menu} saved={kitchen.saved} draft={kitchen.draft} warnings={kitchen.warnings} source={kitchen.source} ready={kitchen.ready}
                     canEdit={["owner", "admin", "manager", "sales"].includes(role)} />
+                </Card>
+              )}
+              {kitchenLog.length > 0 && (
+                <Card>
+                  <CardHeader title="Kitchen" subtitle="What the kitchen ticked off, and any issues — newest last" />
+                  <ul className="divide-y divide-line border-t border-line text-[0.8125rem]">
+                    {kitchenLog.map((k, i) => (
+                      <li key={i} className="px-5 py-2.5">
+                        <p className="flex flex-wrap items-center gap-2"><b className="text-ink">{k.item}</b><span className="text-ink-faint">{k.day}</span>
+                          {k.status && <span className={k.status === "ready" ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-emerald-800" : "rounded-full bg-rose-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-rose-800"}>{k.status === "ready" ? "Ready" : "Issue"}{k.by ? ` · ${k.by}` : ""}{k.at ? ` · ${new Date(k.at).toLocaleString("en-AU", { timeZone: tz, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : ""}</span>}</p>
+                        {k.notes.map((n, j) => <p key={j} className="mt-1 text-ink"><span className="whitespace-pre-line">{n.body}</span> <span className="text-[0.7188rem] text-ink-faint">— {n.by ?? "—"}, {new Date(n.at).toLocaleString("en-AU", { timeZone: tz, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</span></p>)}
+                      </li>
+                    ))}
+                  </ul>
                 </Card>
               )}
               <Card>

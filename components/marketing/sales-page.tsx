@@ -2,9 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight, ArrowUpRight, BarChart3, CalendarCheck2, Check, Clock3, CreditCard, Eye, FileText, Globe, Inbox, LayoutGrid, Lock, Mail,
-  MessageSquareText, ShieldCheck, Sparkles, Users,
+  MessageSquare, MessageSquareText, ShieldCheck, Sparkles, Store, Users,
 } from "lucide-react";
 import { mkSerif } from "./fonts";
+import { IntegrationLogos } from "./integration-logos";
 import { Reveal } from "./reveal";
 import { LookSwitcher, type Look } from "./look-switcher";
 import { HeroActivity, Showcase, WorkflowStory, type Stage } from "./interactive";
@@ -26,7 +27,7 @@ const FAQ: [string, string][] = [
   ["Can my staff use it without seeing our prices?", "Yes. Give people the role that fits — owner, admin, manager, sales or staff. Staff see only the jobs they’re rostered on, and never your figures unless you choose to show them what’s included."],
   ["What does the AI actually do?", "It sorts incoming email into enquiries, replies and junk, pulls out event details, and drafts replies in your voice for you to check and send. Prices always come from your own price list — never from the AI."],
   ["Does it work on a phone?", "Yes. EventureOS runs in the browser on phone, tablet and desktop, and you can add it to your home screen — handy for checking a job or approving a booking when you’re not at your desk."],
-  ["Which tools does it connect to?", "Today: Gmail, Google Calendar, Xero and Stripe. Outlook / Microsoft 365, MYOB and QuickBooks aren’t supported yet."],
+  ["Which tools does it connect to?", "Today: Gmail, Google Calendar, Xero, Stripe, Square (sales), Twilio (text messages) and Anthropic (the AI). Outlook / Microsoft 365, MYOB and QuickBooks aren’t supported yet."],
   ["How much does it cost?", "Plans are being finalised. Book a demo and we’ll talk you through access for your business."],
 ];
 
@@ -131,8 +132,9 @@ export function SalesPage() {
                 <a href="#product" className="mk-btn mk-btn-ghost w-full sm:w-auto">Explore the product</a>
               </div>
               <p data-reveal style={{ "--d": "320ms" } as React.CSSProperties} className="mk-faint mt-8 text-[0.8125rem]">
-                Connects with <span className="text-[rgb(var(--muted))]">Gmail</span> · <span className="text-[rgb(var(--muted))]">Google Calendar</span> · <span className="text-[rgb(var(--muted))]">Xero</span> · <span className="text-[rgb(var(--muted))]">Stripe</span>
+                Connects with
               </p>
+              <div className="mt-3 flex justify-center"><IntegrationLogos className="justify-center" /></div>
             </div>
             <div className="relative mx-auto mt-16 max-w-[1240px] lg:mt-20">
               <div className="mk-tilt"><DashboardMock /></div>
@@ -303,6 +305,9 @@ export function SalesPage() {
                 { n: "Google Calendar", i: CalendarCheck2, c: "#4285F4", d: "One calendar, always current", p: ["Confirmed events added with times and venue", "Rostered staff and client contacts invited", "Your existing bookings brought in for history"] },
                 { n: "Xero", i: FileText, c: "#13B5EA", d: "Your books stay your books", p: ["Clients matched to your Xero contacts", "Invoice, quote and payment history brought in", "Invoices sent to Xero, and card payments recorded there"] },
                 { n: "Stripe", i: CreditCard, c: "#635BFF", d: "Get paid by card", p: ["A secure payment link on every invoice", "Money goes straight to your own Stripe account", "Invoices marked paid automatically"] },
+                { n: "Square", i: Store, c: "#3E4348", d: "Sales next to your roster", p: ["Today's takings read from your Square point of sale", "Wages shown as a % of sales, live through the day", "Read-only — nothing is changed in Square"] },
+                { n: "Twilio", i: MessageSquare, c: "#F22F46", d: "Texts from your own sender name", p: ["Weekly rosters and shift reminders to staff", "\u201cRunning late?\u201d texts when someone hasn't clocked on", "Payment reminders and statement links to customers"] },
+                { n: "Anthropic", i: Sparkles, c: "#C15F3C", d: "The AI behind the smart parts", p: ["Sorts incoming email into enquiries, replies and junk", "Pulls out the date, guests and what they want", "Drafts replies in your voice — you check and send"] },
               ].map(({ n, i: I, c, d, p }, k) => (
                 <article key={n} data-reveal style={{ "--d": `${(k % 2) * 80}ms` } as React.CSSProperties} className="mk-card group relative overflow-hidden p-7 lg:p-9">
                   <div aria-hidden className="absolute -right-16 -top-16 h-48 w-48 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: c }} />
@@ -316,7 +321,7 @@ export function SalesPage() {
                 </article>
               ))}
             </div>
-            <p data-reveal className="mk-faint mt-8 text-center text-[0.875rem]">Gmail, Google Calendar, Xero and Stripe are trademarks of their owners. Outlook / Microsoft 365, MYOB and QuickBooks aren’t supported yet.</p>
+            <p data-reveal className="mk-faint mt-8 text-center text-[0.875rem]">Gmail, Google Calendar, Xero, Stripe, Square, Twilio and Anthropic are trademarks of their owners. Outlook / Microsoft 365, MYOB and QuickBooks aren’t supported yet.</p>
           </div>
         </section>
 

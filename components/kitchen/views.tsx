@@ -1,9 +1,11 @@
 /**
  * Kitchen views shared by the office Kitchen page and the chef's staff app: the run sheet and "make & order".
- * Server components — plain markup, no state.
+ * Server components; the item ticks are a small client component.
  */
 import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/card";
+import { ItemStatus, type ItemActions } from "./item-status";
+import { itemKey, type ItemState } from "@/lib/kitchen/status";
 import { amount, production, runSheet, shoppingList, type Delivery, type Ingredient, type RecipeLine } from "@/lib/kitchen/core";
 
 export const niceDate = (iso: string) => new Intl.DateTimeFormat("en-AU", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(iso + "T00:00:00Z"));
@@ -16,8 +18,10 @@ const tag = (d: Delivery) => d.firm
 /** Notes worth showing the kitchen: dietary lines if there are any, else the last line. */
 const kitchenNotes = (notes: string) => notes.length <= 400 ? notes : notes.split("\n").filter((l) => /customer notes|dietary|gluten|vegan|allerg/i.test(l)).join("\n") || notes.split("\n").slice(-1)[0];
 
-export function RunSheetView({ deliveries, jobHref, editHref, warnings = {}, changed = new Set<string>(), compact = false }: {
+export function RunSheetView({ deliveries, jobHref, editHref, warnings = {}, changed = new Set<string>(), compact = false, states, actions }: {
   deliveries: Delivery[]; jobHref?: (eventId: string) => string; editHref?: (eventId: string) => string; warnings?: Record<string, string[]>; changed?: Set<string>; compact?: boolean;
+  /** item ticks (Ready / Issue + notes) — when given, items can be ticked off */
+  states?: Record<string, ItemState>; actions?: ItemActions;
 }) {
   const sheet = runSheet(deliveries);
   return (
@@ -46,7 +50,9 @@ export function RunSheetView({ deliveries, jobHref, editHref, warnings = {}, cha
                 {(d.venue || d.address) && <p className="text-[0.8125rem] text-ink-muted">{[d.venue, d.address].filter(Boolean).join(" · ")}</p>}
                 {d.guests ? <p className="text-[0.75rem] text-ink-faint">{d.guests} guests</p> : null}
                 <ul className="mt-3 space-y-1 border-t border-line pt-3 text-[0.8125rem]">
-                  {d.items.map((it, k) => <li key={it.name + k} className="flex justify-between gap-3"><span><span className="mr-2 inline-block h-3 w-3 rounded border border-line-strong align-middle" />{it.name}{it.note && <span className="block pl-5 text-[0.75rem] font-medium text-amber-800">{it.note}</span>}</span><span className="font-semibold tabular-nums">{it.qty}</span></li>)}
+                  {d.items.map((it, k) => actions
+                    ? <ItemStatus key={it.name + k} eventId={d.event_id} day={d.date} item={it.name} qty={it.qty} note={it.note} state={states?.[itemKey(d.event_id, d.date, it.name)]} actions={actions} />
+                    : <li key={it.name + k} className="flex justify-between gap-3"><span><span className="mr-2 inline-block h-3 w-3 rounded border border-line-strong align-middle" />{it.name}{it.note && <span className="block pl-5 text-[0.75rem] font-medium text-amber-800">{it.note}</span>}</span><span className="font-semibold tabular-nums">{it.qty}</span></li>)}
                 </ul>
                 {d.notes && <p className="mt-3 whitespace-pre-line rounded-lg bg-amber-50 px-3 py-2 text-[0.75rem] text-amber-900">{kitchenNotes(d.notes)}</p>}
                 {(warnings[d.event_id] ?? []).length > 0 && <p className="mt-2 text-[0.7188rem] text-amber-700">{warnings[d.event_id].join(" · ")}</p>}

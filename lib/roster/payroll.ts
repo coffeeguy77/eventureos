@@ -51,6 +51,7 @@ export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: 
   const results: { name: string; ok: boolean; text: string }[] = [];
   for (const p of (people ?? []) as { id: string; name: string; employment_type: EmploymentType; xero_employee_id: string | null }[]) {
     try {
+      if (settings.unpaid.includes(p.id)) { results.push({ name: p.name, ok: true, text: "not paid through the roster — skipped" }); continue; }
       const emp = employees.find((e) => e.id === p.xero_employee_id);
       if (!emp) throw new Error("not matched to a Xero Payroll employee (Roster → Setup)");
       const cal = calendars.find((c) => c.id === emp.calendarId);

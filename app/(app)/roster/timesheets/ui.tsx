@@ -15,7 +15,7 @@ import { FLAG_LABEL, type BreakFlag } from "@/lib/roster/breaks";
 import { addEntry, deleteEntry, sendToXero, setEntriesStatus, updateEntry } from "../timesheet-actions";
 
 export interface PersonSheet {
-  id: string; name: string; type: string; xero: boolean; hours: number; cost: number; totals: Record<Category, number>;
+  id: string; name: string; type: string; xero: boolean; unpaid: boolean; hours: number; cost: number; totals: Record<Category, number>;
   approved: number; waiting: number; unsent: number; breakIssues: number;
   entries: { id: string; date: string; status: string; source: string; note: string | null; sent: boolean; clockIn: string; clockOut: string | null; paidStart: string; paidFinish: string | null; breakMinutes: number; rostered: string | null;
     /** minutes clocked on the iPad (null = none), the manager-only flag, smart-balanced, set by the office, each break's times */
@@ -74,7 +74,7 @@ export function Timesheets({ payPeriod, from, to, today, sheets, earningsReady, 
             <p className="text-[0.7188rem] text-ink-muted">Green = clocked on, red = clocked off{fence ? `, circle = the ${fence.metres} m sign-in area` : ""}. Only phone clock-ons with location turned on are saved — the iPad and phones with location off leave no point.{!pins.length ? " No points this period yet." : ""}</p>
           </div>
         )}
-        {!earningsReady && <p className="w-full text-[0.75rem] text-amber-800">Xero Payroll is connected, but no earnings rates are chosen yet — pick them in <Link href="/roster/setup" className="font-semibold underline">Setup → Xero Payroll</Link> (Ordinary at least) before sending.</p>}
+        {!earningsReady && <p className="w-full text-[0.75rem] text-amber-800">Xero Payroll is connected, but no earnings rates are chosen yet — pick them in <Link href="/roster/setup?section=pay" className="font-semibold underline">Setup → Pay &amp; Xero</Link> (Ordinary at least) before sending.</p>}
       </Card>
       {msg && <p className={cn("rounded-lg px-3 py-2 text-[0.8125rem]", msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800")}>{msg.text}</p>}
       {sheets.length === 0 && <Card><p className="px-5 py-6 text-[0.8125rem] text-ink-muted">No one is on the roster yet.</p></Card>}
@@ -94,7 +94,7 @@ function PersonCard({ s, today, pending, run, from, to, earningsReady, fence }: 
         {open ? <ChevronDown className="h-4 w-4 text-ink-faint" /> : <ChevronRight className="h-4 w-4 text-ink-faint" />}
         <span className="min-w-0 flex-1">
           <span className="font-semibold text-ink">{s.name}</span>
-          <span className="ml-2 text-[0.75rem] text-ink-muted">{s.hours} h · ~{money(s.cost)}{!s.xero ? " · not matched in Xero Payroll" : ""}</span>
+          <span className="ml-2 text-[0.75rem] text-ink-muted">{s.hours} h · ~{money(s.cost)}{s.unpaid ? " · not paid through the roster" : !s.xero ? " · not matched in Xero Payroll" : ""}</span>
         </span>
         {s.waiting > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-amber-800">{s.waiting} to approve</span>}
         {s.breakIssues > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-orange-800" title="Breaks not clocked, short or long — for a chat / training">{s.breakIssues} break{s.breakIssues === 1 ? "" : "s"} to check</span>}

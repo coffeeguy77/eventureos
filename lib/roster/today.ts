@@ -15,7 +15,7 @@ export interface BoardRow {
   alert: { at: string; by: string; ok: boolean; error: string | null } | null; resendAt: string | null;
 }
 export interface Board {
-  rows: BoardRow[]; breakMin: number; breakMax: number;
+  rows: BoardRow[]; breakMin: number; breakMax: number; target: { good: number; bad: number };
   wages: { cost: number; hours: number }; sales: number | null; salesNote: string | null;
   checklists: { id: string; name: string; dueBy: string | null; items: { text: string; done: boolean; by: string | null }[] }[];
   expiring: { name: string; qual: string; expires: string; expired: boolean }[];
@@ -66,6 +66,7 @@ export async function todayBoard(db: SupabaseClient, org: { id: string; timezone
   const holidays = new Set(((hol ?? []) as { holiday_date: string }[]).map((h) => h.holiday_date));
   let cost = 0, hours = 0;
   for (const x of shifts) {
+    if (st.unpaid.includes(x.crew_member_id)) continue; // not paid through the roster (e.g. an owner)
     const p = ppl.get(x.crew_member_id);
     const flat = st.flat.includes(x.crew_member_id), type = p?.employment_type ?? "casual";
     const byDay = hoursFor([{ ...shiftSpan(x.shift_date, x.start_time, x.finish_time), breakMinutes: x.break_minutes }], { type, flat }, holidays, st.rules);
@@ -99,5 +100,5 @@ export async function todayBoard(db: SupabaseClient, org: { id: string; timezone
   const { data: q, error: qErr } = await db.from("staff_qualifications").select("crew_member_id, name, expires_on").eq("organisation_id", org.id).not("expires_on", "is", null).lte("expires_on", addDaysISO(today, 30)).order("expires_on");
   if (!qErr) expiring = ((q ?? []) as { crew_member_id: string; name: string; expires_on: string }[]).map((x) => ({ name: ppl.get(x.crew_member_id)?.name ?? "—", qual: x.name, expires: x.expires_on, expired: x.expires_on < today }));
 
-  return { rows, breakMin: st.meal.minutes, breakMax: Math.max(st.breaks.max, st.meal.minutes), wages: { cost: Math.round(cost * 100) / 100, hours: Math.round(hours * 100) / 100 }, sales, salesNote, checklists, expiring };
+  return { rows, target: st.wage_target, breakMin: st.meal.minutes, breakMax: Math.max(st.breaks.max, st.meal.minutes), wages: { cost: Math.round(cost * 100) / 100, hours: Math.round(hours * 100) / 100 }, sales, salesNote, checklists, expiring };
 }

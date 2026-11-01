@@ -73,8 +73,8 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
     const tot = totalsFor(byDay, { type: p.employment_type, flat: settings.flat.includes(p.id), rate: p.hourly_rate == null ? orgRate : Number(p.hourly_rate) }, settings.rules);
     const totals = Object.fromEntries(CATEGORIES.map((c) => [c, Math.round([...byDay.values()].reduce((t, h) => t + h[c], 0) * 100) / 100])) as PersonSheet["totals"];
     return {
-      id: p.id, name: p.name, type: p.employment_type, xero: !!p.xero_employee_id,
-      hours: tot.hours, cost: tot.cost,
+      id: p.id, name: p.name, type: p.employment_type, xero: !!p.xero_employee_id && !settings.unpaid.includes(p.id), unpaid: settings.unpaid.includes(p.id),
+      hours: tot.hours, cost: settings.unpaid.includes(p.id) ? 0 : tot.cost,
       totals, approved: approved.length, waiting: mine.filter((e) => e.status === "pending" && !e.event_crew_id).length, unsent: approved.filter((e) => !e.sent_to_xero_at).length, breakIssues: [...brk.values()].filter((b) => b.flag).length,
       entries: mine.map((e) => {
         const sh = allShifts.find((s) => s.id === e.staff_shift_id);

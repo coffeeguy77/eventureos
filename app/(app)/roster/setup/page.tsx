@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireOrg } from "@/lib/context";
 import { Card, EmptyState } from "@/components/ui/card";
@@ -12,7 +13,16 @@ import { AreasCard, HolidaysCard, PastPayCard, TextsCard, OptionsCard, PayRulesC
 export const metadata = { title: "Roster setup" };
 export const dynamic = "force-dynamic";
 
-export default async function RosterSetup() {
+const SECTIONS = [
+  { key: "team", label: "Team" }, { key: "pay", label: "Pay & Xero" }, { key: "clocking", label: "Clocking & breaks" },
+  { key: "alerts", label: "Texts & alerts" }, { key: "checklists", label: "Checklists" }, { key: "bank", label: "Bank file" },
+] as const;
+type Section = (typeof SECTIONS)[number]["key"];
+
+export default async function RosterSetup({ searchParams }: { searchParams: Promise<{ section?: string }> }) {
+  const sec = ((await searchParams).section ?? "team") as Section;
+  const section: Section = SECTIONS.some((x) => x.key === sec) ? sec : "team";
+  const needXero = section === "team" || section === "pay";
   const { supabase, org, role, user } = await requireOrg();
   if (!["owner", "admin", "manager"].includes(role)) redirect("/dashboard");
   const probe = await supabase.from("roster_areas").select("id").eq("organisation_id", org.id).limit(1);
@@ -37,7 +47,8 @@ export default async function RosterSetup() {
   // kept for 15 minutes so opening Setup doesn't wait on Xero every time (Base rates from Xero / Save always read it fresh)
   type PayrollCache = { employees: { id: string; name: string; email: string | null }[]; rates: { id: string; name: string }[]; fetched_at: string };
   const cached = ((org.settings as { roster?: { payroll_cache?: PayrollCache } } | null)?.roster?.payroll_cache) ?? null;
-  if (payrollOn && cached?.fetched_at && (org.settings as { roster?: { pay_calendar?: unknown } } | null)?.roster?.pay_calendar && Date.now() - Date.parse(cached.fetched_at) < 15 * 60_000) payroll = { employees: cached.employees, rates: cached.rates };
+  if (!needXero) { /* Xero is only read on the Team and Pay sections */ }
+  else if (payrollOn && cached?.fetched_at && (org.settings as { roster?: { pay_calendar?: unknown } } | null)?.roster?.pay_calendar && Date.now() - Date.parse(cached.fetched_at) < 15 * 60_000) payroll = { employees: cached.employees, rates: cached.rates };
   else if (payrollOn) {
     try {
       const { buildContext } = await import("@/lib/integrations/sync-runner");
@@ -61,7 +72,7 @@ export default async function RosterSetup() {
   const payslipsOn = payrollOn && (xi!.scopes as string[]).includes("payroll.payslip.read");
   type Past = Awaited<ReturnType<typeof import("@/lib/integrations/xero-payroll").pastPay>> & { fetched_at?: string };
   let past = ((org.settings as { roster?: { past_pay?: Past } } | null)?.roster?.past_pay) ?? null;
-  if (payslipsOn && !payrollError && (!past?.fetched_at || Date.now() - Date.parse(past.fetched_at) > 12 * 3_600_000)) {
+  if (section === "pay" && payslipsOn && !payrollError && (!past?.fetched_at || Date.now() - Date.parse(past.fetched_at) > 12 * 3_600_000)) {
     try {
       const { buildContext } = await import("@/lib/integrations/sync-runner");
       const { pastPay } = await import("@/lib/integrations/xero-payroll");
@@ -90,6 +101,7 @@ export default async function RosterSetup() {
     supabase.from("roster_areas").select("id, name, required_quals, active").eq("organisation_id", org.id).order("position"),
   ]);
   const extrasReady = !qR.error;
+  const missing = <Card><EmptyState title="One database update to go">Run 0087_roster_extras.sql in Supabase for staff documents, notes, checklists, late texts and the bank file.</EmptyState></Card>;
   type Q = { id: string; crew_member_id: string; name: string; reference: string | null; expires_on: string | null; file_path: string | null };
   const quals = (qR.data ?? []) as Q[];
   const docUrl = new Map<string, string>();
@@ -98,7 +110,7 @@ export default async function RosterSetup() {
   const notes = (nR.data ?? []) as { id: string; crew_member_id: string; body: string; author_name: string | null; created_at: string }[];
   const banks = new Map(((bR.data ?? []) as { crew_member_id: string; account_name: string; bsb: string; account_number: string }[]).map((x) => [x.crew_member_id, { name: x.account_name, bsb: x.bsb, last: x.account_number.slice(-3) }]));
   const extras: StaffExtra[] = roster.map((p) => ({
-    id: p.id, name: p.name, onPayroll: !!p.xero_employee_id, manager: settings.app_managers.includes(p.id),
+    id: p.id, name: p.name, onPayroll: !!p.xero_employee_id, manager: settings.app_managers.includes(p.id), unpaid: settings.unpaid.includes(p.id),
     quals: quals.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, name: x.name, reference: x.reference, expires_on: x.expires_on, url: x.file_path ? docUrl.get(x.file_path) ?? null : null })),
     notes: notes.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, body: x.body, author: x.author_name, at: x.created_at })),
     bank: banks.get(p.id) ?? null,
@@ -109,22 +121,32 @@ export default async function RosterSetup() {
     <div>
       <PageHeader title="Roster" subtitle="Who's on the café roster, where they work, how clocking on works, and how hours go to Xero Payroll." />
       <RosterTabs active="setup" />
+      <nav className="-mx-1 mb-5 flex gap-1 overflow-x-auto px-1 pb-1 text-[0.8125rem]" aria-label="Setup sections">
+        {SECTIONS.map((x) => (
+          <Link key={x.key} href={x.key === "team" ? "/roster/setup" : `/roster/setup?section=${x.key}`}
+            className={x.key === section ? "whitespace-nowrap rounded-full bg-ink px-3 py-1.5 font-medium text-surface" : "whitespace-nowrap rounded-full px-3 py-1.5 font-medium text-ink-muted ring-1 ring-line hover:text-ink"}>{x.label}</Link>
+        ))}
+      </nav>
       <div className="space-y-6">
-        <PeopleCard people={list} areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} payroll={payroll?.employees ?? null} orgRate={orgRate} />
-        <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} home={settings.home_areas} />
-        <XeroPayrollCard xeroOn={xeroOn} payrollOn={payrollOn} error={payrollError} rates={payroll?.rates ?? []} earnings={settings.xero.earnings} status={settings.xero.status} />
-        {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
-        <PayRulesCard rules={settings.rules} />
-        <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} />
-        {extrasReady ? <>
-          <StaffDetailsCard people={extras} today={today} />
-          <AreaQualsCard areas={activeAreas.map((x) => ({ id: x.id, name: x.name, required_quals: x.required_quals ?? [] }))} />
-          <ChecklistsCard lists={(cR.data ?? []) as { id: string; name: string; area_id: string | null; weekdays: number[]; due_by: string | null; items: string[] }[]} areas={activeAreas.map((x) => ({ id: x.id, name: x.name }))} />
-        </> : <Card><EmptyState title="One database update to go">Run 0087_roster_extras.sql in Supabase for staff documents, notes, checklists, late texts and the bank file.</EmptyState></Card>}
-        <AutomationCard v={{ late: settings.late, reminders: settings.reminders, auto_approve: settings.auto_approve, limits: settings.limits }} smsOn={smsOn} />
-        <AbaCard v={settings.aba} />
-        <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null, email: p.email }))} monday={weekOf(today)} smsOn={smsOn} />
-        <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
+        {section === "team" && <>
+          <PeopleCard people={list} areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} payroll={payroll?.employees ?? null} orgRate={orgRate} />
+          {extrasReady ? <StaffDetailsCard people={extras} today={today} /> : missing}
+          <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} home={settings.home_areas} />
+          {extrasReady && <AreaQualsCard areas={activeAreas.map((x) => ({ id: x.id, name: x.name, required_quals: x.required_quals ?? [] }))} />}
+        </>}
+        {section === "pay" && <>
+          <XeroPayrollCard xeroOn={xeroOn} payrollOn={payrollOn} error={payrollError} rates={payroll?.rates ?? []} earnings={settings.xero.earnings} status={settings.xero.status} />
+          {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
+          <PayRulesCard rules={settings.rules} />
+          <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
+        </>}
+        {section === "clocking" && <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} />}
+        {section === "alerts" && <>
+          <AutomationCard v={{ late: settings.late, reminders: settings.reminders, auto_approve: settings.auto_approve, limits: settings.limits }} smsOn={smsOn} />
+          <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null, email: p.email }))} monday={weekOf(today)} smsOn={smsOn} />
+        </>}
+        {section === "checklists" && (extrasReady ? <ChecklistsCard lists={(cR.data ?? []) as { id: string; name: string; area_id: string | null; weekdays: number[]; due_by: string | null; items: string[] }[]} areas={activeAreas.map((x) => ({ id: x.id, name: x.name }))} /> : missing)}
+        {section === "bank" && <AbaCard v={settings.aba} />}
       </div>
     </div>
   );

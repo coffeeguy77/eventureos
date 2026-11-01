@@ -500,3 +500,23 @@ export async function fetchPayslips() {
     return r.added ? `${r.added} new payslip${r.added === 1 ? "" : "s"} — staff can see them in the app (Pay).` : "No new payslips.";
   });
 }
+
+/** Wages % of sales: green up to, red from. */
+export async function saveWageTarget(good: number, bad: number) {
+  return wrap(async () => {
+    const g = Math.max(1, Math.min(99, Math.round(Number(good) || 0))), b = Math.max(g + 1, Math.min(100, Math.round(Number(bad) || 0)));
+    await saveSettings({ wage_target: { good: g, bad: b } });
+    revalidatePath("/roster/sales");
+  });
+}
+
+/** On the roster but not paid through it (e.g. an owner): left out of Xero timesheets, Wages and wage costs. */
+export async function setUnpaid(id: string, unpaid: boolean) {
+  return wrap(async () => {
+    const { org } = await office();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const cur = readRosterSettings(org.settings).unpaid.filter((x) => x !== id);
+    await saveSettings({ unpaid: unpaid ? [...cur, id] : cur });
+    return unpaid ? "Not paid through the roster — left out of Xero, Wages and wage costs." : "Paid through the roster again.";
+  });
+}

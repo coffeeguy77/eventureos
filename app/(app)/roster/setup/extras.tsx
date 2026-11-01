@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { saveAba, saveAutomation, setAppManager } from "../actions";
+import { saveAba, saveAutomation, setAppManager, setUnpaid } from "../actions";
 import { addQualification, addStaffNote, archiveChecklist, deleteQualification, deleteStaffNote, saveBankAccount, saveChecklist, setAreaQuals } from "../people-actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
@@ -26,7 +26,7 @@ function useAct() {
 }
 
 export interface StaffExtra {
-  id: string; name: string; onPayroll: boolean; manager: boolean;
+  id: string; name: string; onPayroll: boolean; manager: boolean; unpaid: boolean;
   quals: { id: string; name: string; reference: string | null; expires_on: string | null; url: string | null }[];
   notes: { id: string; body: string; author: string | null; at: string }[];
   bank: { name: string; bsb: string; last: string } | null;
@@ -37,7 +37,7 @@ export function StaffDetailsCard({ people, today }: { people: StaffExtra[]; toda
   const [open, setOpen] = useState<string | null>(null);
   return (
     <Card>
-      <CardHeader title="Staff details" subtitle="Who sees Today in the staff app, documents and qualifications (with expiry), private manager notes, and bank details for people paid through Wages." />
+      <CardHeader title="Staff details" subtitle="Tap someone for their files: documents and qualifications (with expiry), private manager notes, bank details (Wages), whether they're paid through the roster, and who sees Today in the staff app." />
       <ul className="divide-y divide-line border-t border-line">
         {people.map((p) => {
           const exp = p.quals.filter((q) => q.expires_on && q.expires_on < today).length;
@@ -45,6 +45,7 @@ export function StaffDetailsCard({ people, today }: { people: StaffExtra[]; toda
             <li key={p.id}>
               <button onClick={() => setOpen(open === p.id ? null : p.id)} className="flex w-full flex-wrap items-center gap-2 px-5 py-3 text-left text-[0.8125rem]">
                 <span className="min-w-0 flex-1 font-medium text-ink">{p.name}</span>
+                {p.unpaid && <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-ink-muted">Not paid here</span>}
                 {p.manager && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.7188rem] font-semibold text-violet-800">Sees Today</span>}
                 <span className="text-[0.7188rem] text-ink-muted">{p.quals.length} doc{p.quals.length === 1 ? "" : "s"}{exp ? ` · ${exp} expired` : ""} · {p.notes.length} note{p.notes.length === 1 ? "" : "s"}{!p.onPayroll ? ` · bank ${p.bank ? "✓" : "—"}` : ""}</span>
               </button>
@@ -65,6 +66,7 @@ function PersonDetail({ p, today }: { p: StaffExtra; today: string }) {
   const [b, setB] = useState({ name: p.bank?.name ?? p.name, bsb: p.bank?.bsb ?? "", account: "" });
   return (
     <div className="space-y-4 bg-canvas px-5 py-4 text-[0.8125rem]">
+      <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={p.unpaid} disabled={pending} onChange={(e) => run(() => setUnpaid(p.id, e.target.checked))} />Not paid through the roster (e.g. an owner paid other ways) — left out of Xero timesheets, Wages and wage costs</label>
       <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={p.manager} disabled={pending} onChange={(e) => run(() => setAppManager(p.id, e.target.checked))} />Manager — sees <b>Today</b> in the staff app (who&apos;s on, late texts, wages %, checklists)</label>
 
       <div>

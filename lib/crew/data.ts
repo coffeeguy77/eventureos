@@ -72,6 +72,7 @@ async function customShifts(s: CrewSession, opts: { from?: string; to?: string }
   // on Xero Payroll: café shifts are paid there (award rates); otherwise through Wages at their hourly rate
   const { data: px } = rows.some((r) => r.roster) ? await s.db.from("crew_members").select("xero_employee_id, employment_type").eq("id", s.member.id).maybeSingle() : { data: null };
   const onPayroll = !!(px as { xero_employee_id?: string | null } | null)?.xero_employee_id;
+  const unpaidMe = rows.some((r) => r.roster) && (await import("@/lib/roster/settings")).readRosterSettings((await s.db.from("organisations").select("settings").eq("id", s.org.id).single()).data?.settings).unpaid.includes(s.member.id);
   // on payroll: estimate each café shift at award rates (Saturday, Sunday, public holiday…) from their base rate
   const award = onPayroll ? await (async () => {
     const [{ data: o }, { data: hol }] = await Promise.all([
@@ -101,7 +102,8 @@ async function customShifts(s: CrewSession, opts: { from?: string; to?: string }
     if (r.roster) {
       pay.hours = p.hours == null ? null : Math.max(0, Math.round((p.hours - (r.break_minutes ?? 0) / 60) * 100) / 100);
       pay.amount = pay.hours == null ? null : Math.round(pay.hours * pay.rate * 100) / 100;
-      if (award && r.start_time && r.finish_time) {
+      if (unpaidMe) pay.amount = null;
+      else if (award && r.start_time && r.finish_time) {
         const span = shiftSpan(r.shift_date, r.start_time, r.finish_time);
         const byDay = hoursFor([{ ...span, breakMinutes: r.break_minutes ?? 0 }], { type: award.type, flat: award.st.flat.includes(s.member.id) }, award.holidays, award.st.rules);
         pay.amount = totalsFor(byDay, { type: award.type, flat: award.st.flat.includes(s.member.id), rate: pay.rate }, award.st.rules).cost;

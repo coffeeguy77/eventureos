@@ -13,7 +13,7 @@ import { KitchenCalculator } from "@/components/kitchen/calculator";
 import { KitchenLabels } from "@/components/kitchen/labels";
 import { cn } from "@/lib/cn";
 import { Card } from "../parts";
-import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe } from "./actions";
+import { chefArchiveIngredient, chefSaveIngredient, chefSaveRecipe, kitchenNoteItem, kitchenSetItem } from "./actions";
 
 export const metadata = { title: "Kitchen" };
 export const dynamic = "force-dynamic";
@@ -63,7 +63,11 @@ export default async function CrewKitchen({ params, searchParams }: { params: Pr
     }
     if (!deliveries.length) body = <Card><p className="text-[0.9375rem] font-semibold text-ink">No confirmed catering {tab === "make" ? `in the next ${days} days` : "coming up"}</p><p className="mt-1 text-[0.8125rem] text-ink-muted">Confirmed catering jobs show here, and you&apos;ll get an email when one is added or changes.</p></Card>;
     else if (tab === "make") body = <MakeOrderView deliveries={deliveries} recipes={recipes} ingredients={ingredients} from={today} to={to} recipesHref={`${base}?tab=recipes`} />;
-    else body = <RunSheetView deliveries={deliveries} warnings={warnings} changed={changed} compact />;
+    else {
+      const { loadItemStates } = await import("@/lib/kitchen/status");
+      const states = await loadItemStates(s.db, s.org.id, ids);
+      body = <RunSheetView deliveries={deliveries} warnings={warnings} changed={changed} compact states={states} actions={{ set: kitchenSetItem.bind(null, slug), note: kitchenNoteItem.bind(null, slug) }} />;
+    }
   }
 
   return (

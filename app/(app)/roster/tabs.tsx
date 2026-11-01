@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 
-export function RosterTabs({ active }: { active: "week" | "timesheets" | "notices" | "setup" }) {
-  const tabs = [["week", "Roster", "/roster"], ["timesheets", "Timesheets", "/roster/timesheets"], ["notices", "Notices", "/roster/notices"], ["setup", "Setup", "/roster/setup"]] as const;
+export function RosterTabs({ active }: { active: "week" | "timesheets" | "sales" | "notices" | "setup" }) {
+  const tabs = [["week", "Roster", "/roster"], ["timesheets", "Timesheets", "/roster/timesheets"], ["sales", "Wages %", "/roster/sales"], ["notices", "Notices", "/roster/notices"], ["setup", "Setup", "/roster/setup"]] as const;
   return (
     <div className="mb-5 flex gap-1 overflow-x-auto rounded-lg bg-zinc-100 p-0.5 text-[0.7812rem] font-medium sm:inline-flex">
       {tabs.map(([k, label, href]) => (

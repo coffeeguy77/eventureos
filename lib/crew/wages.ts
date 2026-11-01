@@ -73,10 +73,12 @@ async function loadCustomWageShifts(db: SupabaseClient, orgId: string, opts: { u
   if (opts.crewId) q = q.eq("crew_member_id", opts.crewId);
   // café roster shifts are paid through Xero Payroll (Roster → Timesheets) — except for people who aren't on payroll
   // (e.g. subs off the books): theirs are paid here, once published, less the unpaid break
-  const withRoster = await db.from("staff_shifts").select("id, roster, published_at, break_minutes, member:crew_members(xero_employee_id)").eq("organisation_id", orgId).eq("roster", true).lte("shift_date", opts.until).limit(5000);
+  const { data: orgRow } = await db.from("organisations").select("settings").eq("id", orgId).maybeSingle();
+  const unpaid = new Set((await import("@/lib/roster/settings")).readRosterSettings(orgRow?.settings).unpaid);
+  const withRoster = await db.from("staff_shifts").select("id, roster, published_at, break_minutes, crew_member_id, member:crew_members(xero_employee_id)").eq("organisation_id", orgId).eq("roster", true).lte("shift_date", opts.until).limit(5000);
   const skip = new Set<string>(), breaks = new Map<string, number>();
-  if (!withRoster.error) for (const r of (withRoster.data ?? []) as unknown as { id: string; published_at: string | null; break_minutes: number; member: { xero_employee_id: string | null } | null }[]) {
-    if (!r.published_at || r.member?.xero_employee_id) skip.add(r.id); else breaks.set(r.id, r.break_minutes ?? 0);
+  if (!withRoster.error) for (const r of (withRoster.data ?? []) as unknown as { id: string; published_at: string | null; break_minutes: number; crew_member_id: string | null; member: { xero_employee_id: string | null } | null }[]) {
+    if (!r.published_at || r.member?.xero_employee_id || (r.crew_member_id && unpaid.has(r.crew_member_id))) skip.add(r.id); else breaks.set(r.id, r.break_minutes ?? 0);
   }
   const { data: all, error } = await q.limit(2000);
   if (error) return [];

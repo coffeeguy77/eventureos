@@ -22,7 +22,7 @@ export default async function CrewPay({ params }: { params: Promise<{ slug: stri
   const slips = (slipsRes.error ? [] : slipsRes.data ?? []) as Slip[];
   const worked = shifts.filter((x) => x.status === "confirmed").reverse();
   // café shifts for people on Xero Payroll are paid by payroll (see payslips), not owed here
-  const owed = worked.filter((x) => !x.paymentId && !(onPayroll && x.roster));
+  const owed = worked.filter((x) => !x.paymentId && !(x.roster && (onPayroll || x.amount == null)));
   const owedTotal = owed.reduce((t, x) => t + (x.amount ?? 0), 0);
   const owedHours = owed.reduce((t, x) => t + (x.hours ?? 0), 0);
   const cur = s.org.currency;
