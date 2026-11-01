@@ -6,6 +6,7 @@ import { shiftDetail } from "@/lib/crew/data";
 import { fmtHours } from "@/lib/crew/shifts";
 import { fmtDate, money, todayISO } from "@/lib/format";
 import { AcceptDecline, BoardControls, ExtraHours } from "../../ui";
+import { CoverControls } from "../../roster-ui";
 import { Card, Pill } from "../../parts";
 
 export const metadata = { title: "Shift" };
@@ -28,6 +29,14 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
   const past = !!d.job.event_date && d.job.event_date < today;
   const where = [d.job.venue, d.job.address].filter(Boolean).join(", ");
   const maps = where ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where)}` : null;
+  // a café roster shift: paid through payroll; ask for cover instead of the job board
+  const { data: rs } = d.kind === "custom" ? await s.db.from("staff_shifts").select("roster, break_minutes").eq("id", d.id).maybeSingle() : { data: null };
+  const roster = !!(rs as { roster?: boolean } | null)?.roster;
+  let offer: { id: string; status: string; to: string | null } | null = null;
+  if (roster) {
+    const { data: o } = await s.db.from("staff_shift_offers").select("id, status, to:crew_members!staff_shift_offers_to_member_id_organisation_id_fkey(name)").eq("staff_shift_id", d.id).in("status", ["open", "claimed"]).maybeSingle();
+    if (o) offer = { id: o.id as string, status: o.status as string, to: (o as unknown as { to: { name: string } | null }).to?.name ?? null };
+  }
 
   return (
     <div className="space-y-4">
@@ -117,7 +126,7 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
             <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-ink-faint">Your pay</p>
             <p className="text-[1.125rem] font-bold text-ink">{d.amount != null ? money(d.amount, s.org.currency, { cents: true }) : "—"}</p>
           </div>
-          <p className="-mt-2 text-[0.8125rem] text-ink-muted">{fmtHours(d.hours)} × {money(d.rate, s.org.currency, { cents: true })}/hr{d.paymentId ? " · Paid" : ""}</p>
+          <p className="-mt-2 text-[0.8125rem] text-ink-muted">{roster ? `${fmtHours(d.hours)}${(rs as { break_minutes?: number } | null)?.break_minutes ? ` after a ${(rs as { break_minutes: number }).break_minutes} min unpaid break` : ""} · paid through payroll` : <>{fmtHours(d.hours)} × {money(d.rate, s.org.currency, { cents: true })}/hr{d.paymentId ? " · Paid" : ""}</>}</p>
           {d.claims.length > 0 && (
             <ul className="space-y-1 text-[0.8125rem]">
               {d.claims.map((c) => (
@@ -128,9 +137,11 @@ export default async function ShiftPage({ params }: { params: Promise<{ slug: st
               ))}
             </ul>
           )}
-          {!d.paymentId && (past || d.job.event_date === today) && <ExtraHours slug={slug} shiftId={d.id} />}
+          {roster && d.job.event_date === today && <p className="text-[0.8125rem] text-ink-muted">Clock on and off in the <a href={`/crew/${slug}/clock`} className="font-semibold text-[var(--crew-brand)]">Clock on</a> tab — your hours come from that.</p>}
+          {!roster && !d.paymentId && (past || d.job.event_date === today) && <ExtraHours slug={slug} shiftId={d.id} />}
           {!past && d.job.event_date !== today && d.kind === "event" && <BoardControls slug={slug} shiftId={d.id} posted={!!d.boardPostedAt} />}
-          {!past && d.kind === "custom" && <p className="text-[0.8125rem] text-ink-muted">Can&apos;t make it? Let the office know{s.org.contact_phone ? <> — <a href={`tel:${s.org.contact_phone.replace(/\s+/g, "")}`} className="font-semibold text-[var(--crew-brand)]">call {s.org.contact_phone}</a></> : ""}.</p>}
+          {!past && roster && <CoverControls slug={slug} shiftId={d.id} offer={offer} />}
+          {!past && d.kind === "custom" && !roster && <p className="text-[0.8125rem] text-ink-muted">Can&apos;t make it? Let the office know{s.org.contact_phone ? <> — <a href={`tel:${s.org.contact_phone.replace(/\s+/g, "")}`} className="font-semibold text-[var(--crew-brand)]">call {s.org.contact_phone}</a></> : ""}.</p>}
         </Card>
       )}
     </div>
