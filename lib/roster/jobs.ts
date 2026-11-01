@@ -62,7 +62,7 @@ async function lateAlerts(db: SupabaseClient, org: Org) {
 
 async function reminders(db: SupabaseClient, org: Org) {
   const st = readRosterSettings(org.settings);
-  if (!st.reminders.night_before && !st.reminders.hours_before) return 0;
+  if (!st.reminders.night_before && !st.reminders.hours_before && !Object.values(st.member_reminders).some((m) => m.night)) return 0;
   const today = todayISO(org.timezone), nowL = toLocal(new Date(), org.timezone);
   const { data } = await db.from("staff_shifts").select("id, crew_member_id, area_id, shift_date, start_time, finish_time, reminder_sent_at, area:roster_areas(name), member:crew_members(name, phone)")
     .eq("organisation_id", org.id).eq("roster", true).not("published_at", "is", null).not("crew_member_id", "is", null).is("reminder_sent_at", null).in("shift_date", [today, addDaysISO(today, 1)]);
@@ -70,7 +70,7 @@ async function reminders(db: SupabaseClient, org: Org) {
   const list = ((data ?? []) as unknown as (Sh & { area_id?: string })[]).filter((s) => {
     const start = shiftSpan(s.shift_date, s.start_time, s.finish_time).start;
     if (start <= nowL) return false;
-    const evening = st.reminders.night_before && s.shift_date === addDaysISO(today, 1) && nowL.slice(11, 16) >= st.reminders.at && nowL.slice(11, 16) < "22:00";
+    const evening = (st.reminders.night_before || st.member_reminders[s.crew_member_id]?.night) && s.shift_date === addDaysISO(today, 1) && nowL.slice(11, 16) >= st.reminders.at && nowL.slice(11, 16) < "22:00";
     const soon = st.reminders.hours_before > 0 && Date.parse(`${start}:00Z`) - Date.parse(`${nowL}:00Z`) <= st.reminders.hours_before * 3_600_000;
     return evening || soon;
   });
@@ -92,6 +92,35 @@ async function reminders(db: SupabaseClient, org: Org) {
   return n;
 }
 
+/** Wake-up texts: per person, a set number of minutes before each shift (Setup → Team → Staff details). */
+async function wakeTexts(db: SupabaseClient, org: Org) {
+  const st = readRosterSettings(org.settings);
+  const who = Object.entries(st.member_reminders).filter(([, v]) => v.minutes > 0);
+  if (!who.length) return 0;
+  const today = todayISO(org.timezone), nowL = toLocal(new Date(), org.timezone);
+  const { data, error } = await db.from("staff_shifts").select("id, crew_member_id, shift_date, start_time, finish_time, area:roster_areas(name), member:crew_members(name, phone)")
+    .eq("organisation_id", org.id).eq("roster", true).not("published_at", "is", null).in("crew_member_id", who.map(([id]) => id)).is("wake_sent_at", null).in("shift_date", [today, addDaysISO(today, 1)]);
+  if (error) return 0; // before database update 0089
+  const due = ((data ?? []) as unknown as Sh[]).filter((s) => {
+    const start = shiftSpan(s.shift_date, s.start_time, s.finish_time).start;
+    const mins = (Date.parse(`${start}:00Z`) - Date.parse(`${nowL}:00Z`)) / 60_000;
+    return mins > 0 && mins <= (st.member_reminders[s.crew_member_id]?.minutes ?? 0);
+  });
+  if (!due.length) return 0;
+  const { loadTwilio, sendSms, smsNumber } = await import("@/lib/sms/twilio");
+  const cfg = await loadTwilio(db, org.id);
+  if (!cfg) return 0;
+  let n = 0;
+  for (const s of due) {
+    const to = s.member?.phone ? smsNumber(s.member.phone) : null;
+    if (!to) continue;
+    const { data: claim } = await db.from("staff_shifts").update({ wake_sent_at: new Date().toISOString() }).eq("id", s.id).is("wake_sent_at", null).select("id");
+    if (!claim?.length) continue;
+    try { await sendSms(cfg, to, `Hi ${s.member?.name?.split(" ")[0] ?? ""}, your shift at ${org.name} starts at ${t12(s.start_time)}. See you soon!`); n++; } catch { /* not resent */ }
+  }
+  return n;
+}
+
 /** Run the roster jobs for every business with a café roster today (or one business). */
 export async function runRosterJobs(db: SupabaseClient, onlyOrg?: string) {
   let q = db.from("staff_shifts").select("organisation_id").eq("roster", true).not("published_at", "is", null).gte("shift_date", addDaysISO(new Date().toISOString().slice(0, 10), -1)).lte("shift_date", addDaysISO(new Date().toISOString().slice(0, 10), 2)).limit(2000);
@@ -103,7 +132,7 @@ export async function runRosterJobs(db: SupabaseClient, onlyOrg?: string) {
     try {
       const { data: org } = await db.from("organisations").select("id, name, slug, timezone, settings, contact_phone").eq("id", id).single();
       if (!org) continue;
-      out[id] = { late: await lateAlerts(db, org as Org), reminders: await reminders(db, org as Org) };
+      out[id] = { late: await lateAlerts(db, org as Org), reminders: (await reminders(db, org as Org)) + (await wakeTexts(db, org as Org)) };
     } catch (e) { out[id] = { error: e instanceof Error ? e.message : String(e) }; }
   }
   return out;

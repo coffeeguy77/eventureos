@@ -1,6 +1,7 @@
 import { after } from "next/server";
-import { todayISO } from "@/lib/format";
 import { kioskOrg } from "@/lib/roster/kiosk";
+import { kioskPeople, homePlace } from "@/lib/roster/kiosk-data";
+import { readRosterSettings } from "@/lib/roster/settings";
 import { Kiosk } from "./ui";
 
 export async function generateMetadata({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ k?: string }> }) {
@@ -10,30 +11,21 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
 }
 export const dynamic = "force-dynamic";
 
-/** The café iPad: everyone on the roster, who's on now, and a PIN pad to clock on, take a break or clock off. */
+/** The café iPad: everyone on the roster and where they're at; tap your name, PIN, then clock on / break / clock off. */
 export default async function KioskPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ k?: string }> }) {
   const { slug } = await params;
   const token = (await searchParams).k ?? "";
   const k = await kioskOrg(slug, token);
-  if (!k) return <div className="py-20 text-center"><p className="text-[1.125rem] font-semibold text-ink">This link isn&apos;t set up</p><p className="mt-1 text-[0.875rem] text-ink-muted">Ask the office for the café iPad link (Roster → Setup).</p></div>;
-  const today = todayISO(k.org.timezone);
-  // the iPad refreshes every minute: a good moment for "running late?" texts and reminders
+  if (!k) return <div className="py-20 text-center"><p className="text-[1.125rem] font-semibold text-ink">This link isn&apos;t set up</p><p className="mt-1 text-[0.875rem] text-ink-muted">Ask the office for the café iPad link (Roster → Setup → Clocking & breaks).</p></div>;
   after(async () => { const { runRosterJobsSoon } = await import("@/lib/roster/jobs"); await runRosterJobsSoon(k.db, k.org.id); });
-  const [{ data: people }, { data: open }, { data: shifts }] = await Promise.all([
-    k.db.from("crew_members").select("id, name").eq("organisation_id", k.org.id).eq("active", true).eq("on_roster", true).order("name"),
-    k.db.from("staff_time_entries").select("crew_member_id, break_started_at").eq("organisation_id", k.org.id).is("clock_out", null),
-    k.db.from("staff_shifts").select("crew_member_id, start_time, finish_time").eq("organisation_id", k.org.id).eq("roster", true).eq("shift_date", today).not("published_at", "is", null),
-  ]);
-  const openRows = (open ?? []) as { crew_member_id: string; break_started_at: string | null }[];
-  const state = new Map(openRows.map((o) => [o.crew_member_id, o.break_started_at ? "break" : "on"]));
-  const breakSince = new Map(openRows.filter((o) => o.break_started_at).map((o) => [o.crew_member_id, o.break_started_at as string]));
-  const when = new Map<string, string>();
-  for (const s of (shifts ?? []) as { crew_member_id: string | null; start_time: string; finish_time: string }[]) if (s.crew_member_id) when.set(s.crew_member_id, `${s.start_time.slice(0, 5)}–${s.finish_time.slice(0, 5)}`);
-  const list = ((people ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name, state: (state.get(p.id) ?? "off") as "off" | "on" | "break", shift: when.get(p.id) ?? null, breakSince: breakSince.get(p.id) ?? null }))
-    .sort((a, b) => Number(!!b.shift) - Number(!!a.shift) || a.name.localeCompare(b.name));
-  const { readRosterSettings } = await import("@/lib/roster/settings");
   const st = readRosterSettings(k.org.settings);
-  const { todaysChecklists } = await import("@/lib/roster/checklists");
-  const checklists = await todaysChecklists(k.db, k.org);
-  return <Kiosk checklists={checklists} slug={slug} token={token} business={k.name} people={list} photo={st.clock.photo} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} />;
+  const [people, { data: areas }, checklists] = await Promise.all([
+    kioskPeople(k.db, k.org),
+    k.db.from("roster_areas").select("id, name").eq("organisation_id", k.org.id),
+    import("@/lib/roster/checklists").then((m) => m.todaysChecklists(k.db, k.org)),
+  ]);
+  return (
+    <Kiosk slug={slug} token={token} business={k.name} logo={k.logo && /^https:\/\//.test(k.logo) ? k.logo : null} place={homePlace(k.org.settings, (areas ?? []) as { id: string; name: string }[])}
+      tz={k.org.timezone} people={people} photo={st.clock.photo} breakMin={st.meal.minutes} breakMax={Math.max(st.breaks.max, st.meal.minutes)} checklists={checklists} />
+  );
 }

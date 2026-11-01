@@ -165,3 +165,22 @@ export async function tickChecklist(slug: string, checklistId: string, item: num
     await tickItem(s.db, s.org, checklistId, Number(item), s.member.id, !!done);
   });
 }
+
+/** Change my café iPad PIN (old PIN, then the new one twice). Forgotten it? Being signed in to the app (by text or email) is enough to set a new one. */
+export async function setMyPin(slug: string, current: string | null, pin: string, again: string) {
+  return act(slug, async (s) => {
+    if (!/^\d{4}$/.test(pin)) throw new Error("Your PIN is 4 numbers.");
+    if (pin !== again) throw new Error("The two new PINs don't match.");
+    if (/^(\d)\1{3}$/.test(pin) || ["1234", "4321", "0123"].includes(pin)) throw new Error("Pick a PIN that's harder to guess.");
+    const { pinHash } = await import("@/lib/roster/pin");
+    const { data: m } = await s.db.from("crew_members").select("kiosk_pin_hash").eq("id", s.member.id).maybeSingle();
+    const had = !!m?.kiosk_pin_hash;
+    if (had && current !== null) {
+      if (!/^\d{4}$/.test(current) || m!.kiosk_pin_hash !== pinHash(s.org.id, s.member.id, current)) throw new Error("Your current PIN isn't right — or tap \u201cForgot it?\u201d.");
+    }
+    const { error } = await s.db.from("crew_members").update({ kiosk_pin_hash: pinHash(s.org.id, s.member.id, pin) }).eq("id", s.member.id);
+    if (error) throw new Error(error.message);
+    if (had && current === null) await tellOffice(s, { type: "roster.pin_reset", title: `${s.member.name} reset their café iPad PIN in the staff app`, link: "/roster/setup" });
+    return had ? "PIN changed — use it on the café iPad." : "PIN set — use it on the café iPad.";
+  });
+}

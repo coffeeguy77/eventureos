@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Coffee, Loader2, LogIn, LogOut, Megaphone, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { btn, useRun } from "./ui";
-import { cancelLeave, cancelOffer, claimOffer, clock, offerShift, requestLeave, saveAvailability, takeOpenRosterShift } from "./roster-actions";
+import { cancelLeave, cancelOffer, claimOffer, clock, offerShift, requestLeave, saveAvailability, setMyPin, takeOpenRosterShift } from "./roster-actions";
 
 const field = "h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-[0.9375rem]";
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -212,4 +212,30 @@ export function ClaimOfferButton({ slug, offerId }: { slug: string; offerId: str
 export function TakeOpenRosterButton({ slug, shiftId }: { slug: string; shiftId: string }) {
   const { run, pending, toast } = useRun();
   return (<><button className={btn("primary", "w-full")} disabled={pending} onClick={() => run(() => takeOpenRosterShift(slug, shiftId))}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Take this shift</button>{toast}</>);
+}
+
+/** Change (or set) my café iPad PIN. */
+export function PinChange({ slug, hasPin }: { slug: string; hasPin: boolean }) {
+  const { run, pending, toast } = useRun();
+  const [open, setOpen] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [v, setV] = useState({ cur: "", pin: "", again: "" });
+  const box = "h-12 w-full rounded-xl border border-line-strong bg-surface px-3 text-center font-mono text-[1.25rem] tracking-[0.4em] text-ink";
+  const digits = (x: string) => x.replace(/\D/g, "").slice(0, 4);
+  if (!open) return <button className={btn("secondary", "w-full")} onClick={() => setOpen(true)}>{hasPin ? "Change my iPad PIN" : "Set my iPad PIN"}</button>;
+  return (
+    <div className="space-y-3 rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line">
+      {hasPin && !forgot && <label className="block text-[0.8125rem] font-medium text-ink-muted">Current PIN<input className={box} inputMode="numeric" type="password" value={v.cur} onChange={(e) => setV({ ...v, cur: digits(e.target.value) })} /></label>}
+      <label className="block text-[0.8125rem] font-medium text-ink-muted">New PIN<input className={box} inputMode="numeric" type="password" value={v.pin} onChange={(e) => setV({ ...v, pin: digits(e.target.value) })} /></label>
+      <label className="block text-[0.8125rem] font-medium text-ink-muted">New PIN again<input className={box} inputMode="numeric" type="password" value={v.again} onChange={(e) => setV({ ...v, again: digits(e.target.value) })} /></label>
+      <button className={btn("primary", "w-full")} disabled={pending || v.pin.length !== 4 || v.again.length !== 4 || (hasPin && !forgot && v.cur.length !== 4)}
+        onClick={() => run(() => setMyPin(slug, hasPin && !forgot ? v.cur : null, v.pin, v.again), () => { setOpen(false); setV({ cur: "", pin: "", again: "" }); })}>Save PIN</button>
+      <div className="flex justify-between text-[0.8125rem]">
+        {hasPin && <button className="text-[var(--crew-brand)]" onClick={() => setForgot(!forgot)}>{forgot ? "I know my current PIN" : "Forgot it?"}</button>}
+        <button className="text-ink-muted" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+      {forgot && <p className="text-[0.75rem] text-ink-faint">You signed in with your own mobile or email, so you can set a new PIN. The office is told it was reset.</p>}
+      {toast}
+    </div>
+  );
 }

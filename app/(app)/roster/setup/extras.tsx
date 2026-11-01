@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { saveAba, saveAutomation, setAppManager, setUnpaid } from "../actions";
+import { saveAba, saveAutomation, setAppManager, setMemberReminder, setUnpaid } from "../actions";
+import type { Punctuality } from "@/lib/roster/punctuality";
 import { addQualification, addStaffNote, archiveChecklist, deleteQualification, deleteStaffNote, saveBankAccount, saveChecklist, setAreaQuals } from "../people-actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
@@ -26,7 +27,7 @@ function useAct() {
 }
 
 export interface StaffExtra {
-  id: string; name: string; onPayroll: boolean; manager: boolean; unpaid: boolean;
+  id: string; name: string; onPayroll: boolean; manager: boolean; unpaid: boolean; reminder: { minutes: number; night: boolean };
   quals: { id: string; name: string; reference: string | null; expires_on: string | null; url: string | null }[];
   notes: { id: string; body: string; author: string | null; at: string }[];
   bank: { name: string; bsb: string; last: string } | null;
@@ -66,6 +67,13 @@ function PersonDetail({ p, today }: { p: StaffExtra; today: string }) {
   const [b, setB] = useState({ name: p.bank?.name ?? p.name, bsb: p.bank?.bsb ?? "", account: "" });
   return (
     <div className="space-y-4 bg-canvas px-5 py-4 text-[0.8125rem]">
+      <div className="flex flex-wrap items-end gap-3">
+        <div><Label hint="so they wake up and come in">Text them before each shift</Label>
+          <Select value={String(p.reminder.minutes)} onChange={(e) => run(() => setMemberReminder(p.id, Number(e.target.value), p.reminder.night))} disabled={pending}>
+            <option value="0">Off</option>{[30, 45, 60, 90, 120, 180].map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h`} before</option>)}
+          </Select></div>
+        <label className="flex items-center gap-2 pb-2 text-ink"><input type="checkbox" checked={p.reminder.night} disabled={pending} onChange={(e) => run(() => setMemberReminder(p.id, p.reminder.minutes, e.target.checked))} />Remind them the evening before (at the time in Texts &amp; alerts)</label>
+      </div>
       <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={p.unpaid} disabled={pending} onChange={(e) => run(() => setUnpaid(p.id, e.target.checked))} />Not paid through the roster (e.g. an owner paid other ways) — left out of Xero timesheets, Wages and wage costs</label>
       <label className="flex items-center gap-2 text-ink"><input type="checkbox" checked={p.manager} disabled={pending} onChange={(e) => run(() => setAppManager(p.id, e.target.checked))} />Manager — sees <b>Today</b> in the staff app (who&apos;s on, late texts, wages %, checklists)</label>
 
@@ -250,6 +258,40 @@ export function AbaCard({ v: init }: { v: Aba }) {
         <div className="flex items-end"><Button size="sm" variant="primary" disabled={pending} onClick={() => run(() => saveAba(v))}>Save</Button></div>
         <div className="sm:col-span-3">{note}</div>
       </div>
+    </Card>
+  );
+}
+
+/** Who turns up on time: last 90 days of clocked shifts against the roster. Managers only. */
+export function PunctualityCard({ rows }: { rows: Punctuality[] }) {
+  const list = rows.filter((r) => r.shifts > 0).sort((a, b) => (b.late + b.noShows * 2) / Math.max(1, b.shifts) - (a.late + a.noShows * 2) / Math.max(1, a.shifts));
+  return (
+    <Card>
+      <CardHeader title="Punctuality" subtitle="Last 90 days of clocked shifts against the roster (from when each person started clocking on). Only managers see this." />
+      {list.length === 0 ? <p className="border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted">Nothing yet — this fills in as staff clock on and off.</p> : (
+        <div className="overflow-x-auto border-t border-line">
+          <table className="w-full min-w-[640px] text-[0.8125rem]">
+            <thead className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint"><tr><th className="px-5 py-2">Who</th><th className="px-2 py-2 text-right">Shifts</th><th className="px-2 py-2 text-right">On time</th><th className="px-2 py-2 text-right">Late</th><th className="px-2 py-2 text-right">Avg late</th><th className="px-2 py-2 text-right">Worst</th><th className="px-2 py-2 text-right">No-shows</th><th className="px-5 py-2 text-right">Long breaks</th></tr></thead>
+            <tbody className="divide-y divide-line">
+              {list.map((r) => {
+                const pct = Math.round((r.onTime / Math.max(1, r.shifts)) * 100);
+                return (
+                  <tr key={r.id}>
+                    <td className="px-5 py-2 font-medium text-ink">{r.name}{r.lastLate && <span className="block text-[0.7188rem] font-normal text-ink-faint">last late {r.lastLate}</span>}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.shifts}</td>
+                    <td className={cn("px-2 py-2 text-right font-semibold tabular-nums", pct >= 90 ? "text-emerald-700" : pct >= 75 ? "text-amber-700" : "text-rose-700")}>{pct}%</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.late}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.late ? `${r.avgLate} min` : "—"}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{r.late ? `${r.worstLate} min` : "—"}</td>
+                    <td className={cn("px-2 py-2 text-right tabular-nums", r.noShows && "font-semibold text-rose-700")}>{r.noShows}</td>
+                    <td className="px-5 py-2 text-right tabular-nums">{r.longBreaks}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }

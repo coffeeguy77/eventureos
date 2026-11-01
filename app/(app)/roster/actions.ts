@@ -520,3 +520,16 @@ export async function setUnpaid(id: string, unpaid: boolean) {
     return unpaid ? "Not paid through the roster — left out of Xero, Wages and wage costs." : "Paid through the roster again.";
   });
 }
+
+/** Per person: a wake-up text before each shift (minutes, 0 = off) and an evening-before reminder. */
+export async function setMemberReminder(id: string, minutes: number, night: boolean) {
+  return wrap(async () => {
+    const { org } = await office();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const cur = { ...readRosterSettings(org.settings).member_reminders };
+    const m = Math.max(0, Math.min(600, Math.round(Number(minutes) || 0)));
+    if (!m && !night) delete cur[id]; else cur[id] = { minutes: m, night: !!night };
+    await saveSettings({ member_reminders: cur });
+    return m || night ? `Saved — ${[m ? `a text ${m} min before each shift` : null, night ? "a reminder the evening before" : null].filter(Boolean).join(" and ")}.` : "Their reminders are off (the settings for everyone still apply).";
+  });
+}

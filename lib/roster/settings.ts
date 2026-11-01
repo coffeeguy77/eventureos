@@ -31,6 +31,8 @@ export interface RosterSettings {
   unpaid: string[];
   /** wages as a % of sales: the range you aim for (green), and where it turns red */
   wage_target: { good: number; bad: number };
+  /** per person: a wake-up text this many minutes before each shift (0 = off), and an evening-before reminder */
+  member_reminders: Record<string, { minutes: number; night: boolean }>;
   /** staff who see Today (who's on, late alerts, checklists, wage %) in the staff app */
   app_managers: string[];
   /** "running late?" texts: minutes after the start with no clock-on; minutes before a manager can resend; send automatically */
@@ -67,6 +69,7 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
     unpaid: Array.isArray(r.unpaid) ? (r.unpaid as unknown[]).filter((x): x is string => typeof x === "string") : [],
     wage_target: (() => { const w = (r.wage_target ?? {}) as Record<string, unknown>; const good = n(w.good, 30), bad = n(w.bad, 40); return { good, bad: Math.max(bad, good + 1) }; })(),
+    member_reminders: (() => { const m = (r.member_reminders ?? {}) as Record<string, { minutes?: unknown; night?: unknown }>; return Object.fromEntries(Object.entries(m).filter(([k]) => /^[0-9a-f-]{36}$/i.test(k)).map(([k, v]) => [k, { minutes: n(v?.minutes, 0), night: v?.night === true }])); })(),
     app_managers: Array.isArray(r.app_managers) ? (r.app_managers as unknown[]).filter((x): x is string => typeof x === "string") : [],
     late: (() => { const l = (r.late ?? {}) as Record<string, unknown>; return { after: n(l.after, 10), cooldown: n(l.cooldown, 10), auto: l.auto !== false }; })(),
     reminders: (() => { const m = (r.reminders ?? {}) as Record<string, unknown>; return { night_before: m.night_before === true, at: typeof m.at === "string" && /^\d{2}:\d{2}$/.test(m.at) ? m.at : "17:00", hours_before: n(m.hours_before, 0) }; })(),

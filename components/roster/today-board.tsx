@@ -55,10 +55,10 @@ export function TodayBoard({ board, onText, tz }: { board: Board; onText?: (shif
                   </span>
                   <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.7188rem] font-semibold",
                     r.state === "on" && "bg-emerald-100 text-emerald-800",
-                    r.state === "break" && (b >= board.breakMax ? "bg-rose-100 text-rose-800" : b >= board.breakMin ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800"),
+                    r.state === "break" && (b >= board.breakMin ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"),
                     late && "bg-rose-100 text-rose-800", r.state === "unrostered" && "bg-sky-100 text-sky-800",
                     (r.state === "due" || r.state === "done") && "bg-zinc-100 text-ink-muted")}>
-                    {r.state === "on" ? `On since ${t(r.since!)}` : r.state === "break" ? `Break · ${b} min` : late ? `Late · ${mins(r.start)} min` : r.state === "done" ? "Done" : r.state === "unrostered" ? `On since ${t(r.since!)}` : "Later today"}
+                    {r.state === "on" ? `On since ${t(r.since!)}` : r.state === "break" ? (b >= board.breakMin ? `Late back · ${b} min break` : `On break · ${b} min`) : late ? `Late · ${mins(r.start)} min` : r.state === "done" ? "Done" : r.state === "unrostered" ? `On since ${t(r.since!)}` : "Later today"}
                   </span>
                 </div>
                 {(late || r.alert) && (

@@ -7,7 +7,8 @@ import { addDaysISO, todayISO } from "@/lib/format";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { weekOf } from "@/lib/roster/award";
 import { RosterTabs } from "../tabs";
-import { AbaCard, AreaQualsCard, AutomationCard, ChecklistsCard, StaffDetailsCard, type StaffExtra } from "./extras";
+import { AbaCard, AreaQualsCard, AutomationCard, ChecklistsCard, PunctualityCard, StaffDetailsCard, type StaffExtra } from "./extras";
+import { punctuality } from "@/lib/roster/punctuality";
 import { AreasCard, HolidaysCard, PastPayCard, TextsCard, OptionsCard, PayRulesCard, PeopleCard, XeroPayrollCard } from "./ui";
 
 export const metadata = { title: "Roster setup" };
@@ -110,7 +111,7 @@ export default async function RosterSetup({ searchParams }: { searchParams: Prom
   const notes = (nR.data ?? []) as { id: string; crew_member_id: string; body: string; author_name: string | null; created_at: string }[];
   const banks = new Map(((bR.data ?? []) as { crew_member_id: string; account_name: string; bsb: string; account_number: string }[]).map((x) => [x.crew_member_id, { name: x.account_name, bsb: x.bsb, last: x.account_number.slice(-3) }]));
   const extras: StaffExtra[] = roster.map((p) => ({
-    id: p.id, name: p.name, onPayroll: !!p.xero_employee_id, manager: settings.app_managers.includes(p.id), unpaid: settings.unpaid.includes(p.id),
+    id: p.id, name: p.name, onPayroll: !!p.xero_employee_id, manager: settings.app_managers.includes(p.id), unpaid: settings.unpaid.includes(p.id), reminder: settings.member_reminders[p.id] ?? { minutes: 0, night: false },
     quals: quals.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, name: x.name, reference: x.reference, expires_on: x.expires_on, url: x.file_path ? docUrl.get(x.file_path) ?? null : null })),
     notes: notes.filter((x) => x.crew_member_id === p.id).map((x) => ({ id: x.id, body: x.body, author: x.author_name, at: x.created_at })),
     bank: banks.get(p.id) ?? null,
@@ -131,6 +132,7 @@ export default async function RosterSetup({ searchParams }: { searchParams: Prom
         {section === "team" && <>
           <PeopleCard people={list} areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} payroll={payroll?.employees ?? null} orgRate={orgRate} />
           {extrasReady ? <StaffDetailsCard people={extras} today={today} /> : missing}
+          <PunctualityCard rows={await punctuality(supabase, org)} />
           <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} home={settings.home_areas} />
           {extrasReady && <AreaQualsCard areas={activeAreas.map((x) => ({ id: x.id, name: x.name, required_quals: x.required_quals ?? [] }))} />}
         </>}

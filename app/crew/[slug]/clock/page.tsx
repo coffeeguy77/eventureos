@@ -4,7 +4,7 @@ import { openEntry, shiftsToday } from "@/lib/roster/clock";
 import { readRosterSettings } from "@/lib/roster/settings";
 import { myTimesheets, rosterProfile } from "@/lib/roster/staff";
 import { myShifts } from "@/lib/crew/data";
-import { ClockPanel } from "../roster-ui";
+import { ClockPanel, PinChange } from "../roster-ui";
 import { ChecklistTicker } from "@/components/roster/checklist-ticker";
 import { todaysChecklists } from "@/lib/roster/checklists";
 import { tickChecklist } from "../roster-actions";
@@ -26,6 +26,7 @@ export default async function CrewClock({ params }: { params: Promise<{ slug: st
   const [open, today, sheets] = await Promise.all([openEntry(s.db, s.org.id, s.member.id), shiftsToday(s.db, o, s.member.id), myTimesheets(s, addDaysISO(todayISO(s.org.timezone), -14))]);
   const tz = s.org.timezone;
   const checklists = prof.onRoster ? await todaysChecklists(s.db, o) : [];
+  const hasPin = prof.onRoster ? !!(await s.db.from("crew_members").select("kiosk_pin_hash").eq("id", s.member.id).maybeSingle()).data?.kiosk_pin_hash : false;
   // today's confirmed event shifts (when clocking on for events is switched on)
   const events = settings.clock.events
     ? (await myShifts(s, { from: todayISO(tz), to: todayISO(tz) })).filter((x) => x.kind === "event" && x.status === "confirmed").map((x) => ({ id: x.id, name: x.job.name, start: x.start }))
@@ -36,6 +37,7 @@ export default async function CrewClock({ params }: { params: Promise<{ slug: st
       <p className="mb-5 text-[0.875rem] text-ink-muted">{today.length ? `Today: ${today.map((t) => `${t.start_time.slice(0, 5)}–${t.finish_time.slice(0, 5)}${t.area ? ` (${t.area})` : ""}`).join(", ")}` : "You're not rostered on today."}</p>
       <ClockPanel slug={slug} open={open} needsPlace={!!settings.geofence} cafePhone={prof.cafePhone && today.length > 0 || prof.cafePhone && !events.length} cafeIpad={prof.onRoster && settings.clock.cafe === "ipad"} events={events} photo={settings.clock.photo} phoneBreaks={!settings.breaks.ipad_only} />
       {checklists.length > 0 && <Section title="Today's checklists"><ChecklistTicker lists={checklists} onTick={tickChecklist.bind(null, slug)} /></Section>}
+      {prof.onRoster && <Section title="Café iPad PIN"><PinChange slug={slug} hasPin={hasPin} /></Section>}
       <Section title="Your hours — last 2 weeks">
         {sheets.length === 0 && <Card><p className="text-[0.875rem] text-ink-muted">Nothing yet.</p></Card>}
         {sheets.map((t) => {
