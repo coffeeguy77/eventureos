@@ -20,7 +20,9 @@ export const PAYROLL_SCOPES = ["payroll.employees.read", "payroll.settings.read"
 
 export interface PayrollEmployee { id: string; name: string; email: string | null; status: string; calendarId: string | null }
 export interface EarningsRate { id: string; name: string; type: string; rateType: string }
-export interface PayCalendar { id: string; name: string; type: string; start: string | null }
+import type { PayCalendar } from "@/lib/roster/period";
+export type { PayCalendar };
+export { periodFor, periodDates } from "@/lib/roster/period";
 
 export async function payrollEmployees(ctx: SyncContext): Promise<PayrollEmployee[]> {
   const out: PayrollEmployee[] = [];
@@ -41,31 +43,6 @@ export async function earningsRates(ctx: SyncContext): Promise<EarningsRate[]> {
 export async function payCalendars(ctx: SyncContext): Promise<PayCalendar[]> {
   const r = await get<{ PayrollCalendars?: { PayrollCalendarID: string; Name: string; CalendarType: string; StartDate?: string }[] }>(ctx, "/PayrollCalendars");
   return (r.PayrollCalendars ?? []).map((c) => ({ id: c.PayrollCalendarID, name: c.Name, type: c.CalendarType, start: xeroDate(c.StartDate) }));
-}
-
-const DAY = 86_400_000;
-const add = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
-
-/** The pay period (start, end) of a calendar that contains a date. Monthly calendars run on the start date's day of the month. */
-export function periodFor(cal: PayCalendar, date: string): { start: string; end: string } | null {
-  if (!cal.start) return null;
-  const len = cal.type === "WEEKLY" ? 7 : cal.type === "FORTNIGHTLY" ? 14 : cal.type === "FOURWEEKLY" ? 28 : 0;
-  if (len) {
-    const k = Math.floor((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${cal.start}T00:00:00Z`)) / (len * DAY));
-    const start = add(cal.start, k * len);
-    return { start, end: add(start, len - 1) };
-  }
-  if (cal.type === "MONTHLY") {
-    const day = Number(cal.start.slice(8, 10));
-    const [y, m] = date.split("-").map(Number);
-    const mk = (yy: number, mm: number) => { const last = new Date(Date.UTC(yy, mm, 0)).getUTCDate(); return `${yy}-${String(mm).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`; };
-    let start = mk(y, m);
-    if (start > date) start = m === 1 ? mk(y - 1, 12) : mk(y, m - 1);
-    const [sy, sm] = start.split("-").map(Number);
-    const next = sm === 12 ? mk(sy + 1, 1) : mk(sy, sm + 1);
-    return { start, end: add(next, -1) };
-  }
-  return null;
 }
 
 export interface TimesheetDraft { employeeId: string; start: string; end: string; status: "DRAFT" | "APPROVED"; lines: { earningsRateId: string; units: number[] }[] }
@@ -91,9 +68,3 @@ export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Prom
   } catch (e) { throw new Error(xeroReason(e)); }
 }
 
-/** The dates of a period, in order. */
-export function periodDates(start: string, end: string): string[] {
-  const out: string[] = [];
-  for (let d = start; d <= end && out.length < 62; d = add(d, 1)) out.push(d);
-  return out;
-}

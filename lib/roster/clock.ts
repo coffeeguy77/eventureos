@@ -1,9 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO, todayISO } from "@/lib/format";
-import { roundTime } from "./award";
 import { distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
-import { fromLocal, shiftSpan, toLocal } from "./time";
+import { shiftSpan, toLocal } from "./time";
+import { paidTimes } from "./paid";
 
 /**
  * Clocking on and off (staff app on a phone, or the café iPad). Everything runs as the server for one staff member.
@@ -102,16 +102,3 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   return `Clocked off — ${Math.round(hours * 100) / 100} hours${assumedBreak ? ` (your ${brk} min break was taken off)` : ""}. Thanks!`;
 }
 
-/** Paid start/finish: clock times rounded, or the rostered times when they clocked within the grace minutes. */
-export function paidTimes(settings: Pick<RosterSettings, "rounding" | "grace">, tz: string, clockIn: string, clockOut: string, shift: Pick<TodayShift, "shift_date" | "start_time" | "finish_time"> | null) {
-  const inL = toLocal(clockIn, tz), outL = toLocal(clockOut, tz);
-  let start = roundTime(inL, settings.rounding), finish = roundTime(outL, settings.rounding);
-  if (shift) {
-    const span = shiftSpan(shift.shift_date, shift.start_time, shift.finish_time);
-    const mins = (a: string, b: string) => Math.abs(Date.parse(`${a}:00Z`) - Date.parse(`${b}:00Z`)) / 60_000;
-    if (mins(inL, span.start) <= settings.grace) start = span.start;
-    if (mins(outL, span.finish) <= settings.grace) finish = span.finish;
-  }
-  if (finish <= start) finish = roundTime(outL, 1);
-  return { start: fromLocal(start, tz), finish: fromLocal(finish, tz) };
-}
