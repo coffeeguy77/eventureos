@@ -215,6 +215,17 @@ export async function saveRosterPerson(id: string, input: { onRoster: boolean; e
   });
 }
 
+/** An area at the usual workplace: shifts there don't say the area in staff texts. */
+export async function setHomeArea(id: string, home: boolean) {
+  return wrap(async () => {
+    const { org } = await office();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const cur = readRosterSettings(org.settings).home_areas.filter((x) => x !== id);
+    await saveSettings({ home_areas: home ? [...cur, id] : cur });
+    return home ? "Texts won't name this area." : "Texts will name this area.";
+  });
+}
+
 /** Set everyone matched in Xero Payroll to the rate Xero pays them. */
 export async function ratesFromXeroAll() {
   return wrap(async () => {

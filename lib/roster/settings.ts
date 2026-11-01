@@ -25,6 +25,8 @@ export interface RosterSettings {
   place: { address: string | null } ;
   /** clock on from a phone only near the café (metres; 0 = anywhere) */
   geofence: { lat: number; lng: number; metres: number } | null;
+  /** areas at the usual workplace — left off staff texts (only shifts somewhere else say where) */
+  home_areas: string[];
 }
 
 export function readRosterSettings(orgSettings: unknown): RosterSettings {
@@ -44,6 +46,7 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
     meal: (() => { const m = (r.meal ?? {}) as Record<string, unknown>; return { after_hours: n(m.after_hours, 5), minutes: n(m.minutes, 30) }; })(),
     place: { address: typeof (r.place as { address?: unknown } | undefined)?.address === "string" ? String((r.place as { address: string }).address) : null },
     flat: Array.isArray(r.flat) ? (r.flat as unknown[]).filter((x): x is string => typeof x === "string") : [],
+    home_areas: Array.isArray(r.home_areas) ? (r.home_areas as unknown[]).filter((x): x is string => typeof x === "string") : [],
     geofence: g && typeof g.lat === "number" && typeof g.lng === "number" && typeof g.metres === "number" && g.metres > 0 ? { lat: g.lat, lng: g.lng, metres: g.metres } : null,
   };
 }

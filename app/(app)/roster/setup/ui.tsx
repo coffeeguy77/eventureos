@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { CATEGORIES, CATEGORY_LABEL, RULE_PRESETS, type AwardRules, type Category, type EmploymentType } from "@/lib/roster/award";
 import { LeafletMap } from "@/components/maps/leaflet-map";
-import { ratesFromXeroAll, findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
+import { setHomeArea, ratesFromXeroAll, findAddress, testRosterEmail, disconnectPayroll, testRosterText, addHoliday, archiveArea, newKioskLink, removeHoliday, saveArea, saveAwardRules, saveRosterOptions, saveRosterPerson, saveXeroPayroll, setKioskPin } from "../actions";
 
 type Res = { ok: boolean; message?: string; error?: string };
 function useAct() {
@@ -89,15 +89,15 @@ function PersonRow({ p, areas, payroll, orgRate }: { p: Person; areas: Area[]; p
   );
 }
 
-export function AreasCard({ areas }: { areas: Area[] }) {
+export function AreasCard({ areas, home }: { areas: Area[]; home: string[] }) {
   const { pending, run, note } = useAct();
   const [name, setName] = useState("");
   const [colour, setColour] = useState("#6028EC");
   return (
     <Card>
-      <CardHeader title="Areas" subtitle="Where people work — each shift is in an area, and shows in its colour." />
+      <CardHeader title="Areas" subtitle="Where people work — each shift is in an area, and shows in its colour. Tick “At the café” for areas at your usual workplace: texts leave those out and only say where when a shift is somewhere else (e.g. Catering)." />
       <ul className="divide-y divide-line border-t border-line text-[0.8125rem]">
-        {areas.filter((a) => a.active).map((a) => <AreaRow key={a.id} a={a} />)}
+        {areas.filter((a) => a.active).map((a) => <AreaRow key={a.id} a={a} home={home.includes(a.id)} />)}
       </ul>
       <div className="flex flex-wrap items-end gap-2 border-t border-line px-5 py-3">
         <div className="min-w-[180px] flex-1"><Label htmlFor="new-area">New area</Label><Input id="new-area" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Barista, Floor, Kitchen" /></div>
@@ -109,7 +109,7 @@ export function AreasCard({ areas }: { areas: Area[] }) {
   );
 }
 
-function AreaRow({ a }: { a: Area }) {
+function AreaRow({ a, home }: { a: Area; home: boolean }) {
   const { pending, run, note } = useAct();
   const [name, setName] = useState(a.name);
   const [colour, setColour] = useState(a.colour ?? "#a1a1aa");
@@ -118,6 +118,7 @@ function AreaRow({ a }: { a: Area }) {
       <input type="color" value={colour} onChange={(e) => setColour(e.target.value)} className="h-8 w-10 rounded border border-line" aria-label="Colour" />
       <Input className="max-w-xs" value={name} onChange={(e) => setName(e.target.value)} />
       <Button size="sm" disabled={pending || (name === a.name && colour === (a.colour ?? "#a1a1aa"))} onClick={() => run(() => saveArea({ id: a.id, name, colour }))}>Save</Button>
+      <label className="flex items-center gap-1.5 text-[0.75rem] text-ink"><input type="checkbox" checked={home} disabled={pending} onChange={(e) => run(() => setHomeArea(a.id, e.target.checked))} />At the café (not in texts)</label>
       <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => archiveArea(a.id))}>Hide</Button>
       {note}
     </li>
@@ -362,7 +363,7 @@ export function TextsCard({ people, monday, smsOn }: { people: { id: string; nam
   const p = people.find((x) => x.id === who);
   return (
     <Card>
-      <CardHeader title="Texts and emails" subtitle="When you publish, tick “Email staff” and/or “Text staff”: each person gets their shifts for the week — one per line, with any shift notes — and a link to the staff app. Mobiles and emails come from Settings → Team." />
+      <CardHeader title="Texts and emails" subtitle="When you publish, tick “Email staff” and/or “Text staff”: each person gets their shifts for the week — one per line, the area only when it's away from the café, any shift notes — and a link to the staff app. Mobiles and emails come from Settings → Team." />
       <div className="space-y-4 border-t border-line px-5 py-4 text-[0.8125rem]">
         <div><Label>Whose roster (this week)</Label>
           <Select value={who} onChange={(e) => setWho(e.target.value)}>{people.map((x) => <option key={x.id} value={x.id}>{x.name}{!x.phone ? " — no mobile" : ""}{!x.email ? " — no email" : ""}</option>)}</Select></div>
@@ -377,11 +378,12 @@ export function TextsCard({ people, monday, smsOn }: { people: { id: string; nam
           <Button size="sm" variant="primary" disabled={pending || !who || (!mailTo.trim() && !p?.email)} onClick={() => run(() => testRosterEmail(who, monday, mailTo || null))}>Send a test email</Button>
         </div>
         <pre className="whitespace-pre-wrap rounded-lg bg-canvas px-3 py-2 font-sans text-[0.75rem] text-ink-muted ring-1 ring-line">{`A text reads like:
-Hi ${p?.name.split(" ")[0] ?? "Sam"}, your shifts at (your business) from Mon, 3 Nov:
-Mon 6:30am-3pm Cafe (30m unpaid break)
- > Note: (the shift's note)
-Wed 7am-11am Kitchen
-Roster, swaps & clock on: (link)`}</pre>
+Hi ${p?.name.split(" ")[0] ?? "Sam"}, your shifts at (your business) this week are:
+Tue 6:30am-3pm
+Fri 5am-10am Catering
+note: (the shift's note)
+Sat 9:30am-12pm
+view roster: (link)`}</pre>
         {note}
       </div>
     </Card>

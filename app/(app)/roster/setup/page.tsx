@@ -78,7 +78,7 @@ export default async function RosterSetup() {
       <RosterTabs active="setup" />
       <div className="space-y-6">
         <PeopleCard people={list} areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} payroll={payroll?.employees ?? null} orgRate={orgRate} />
-        <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} />
+        <AreasCard areas={(areas ?? []) as { id: string; name: string; colour: string | null; active: boolean }[]} home={settings.home_areas} />
         <XeroPayrollCard xeroOn={xeroOn} payrollOn={payrollOn} error={payrollError} rates={payroll?.rates ?? []} earnings={settings.xero.earnings} status={settings.xero.status} />
         {payrollOn && <PastPayCard past={payslipsOn ? past : null} />}
         <PayRulesCard rules={settings.rules} />

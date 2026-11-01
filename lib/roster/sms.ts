@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { appBaseUrl } from "@/lib/integrations/registry";
-import { addDaysISO, fmtDate } from "@/lib/format";
+import { addDaysISO, fmtDate, todayISO } from "@/lib/format";
 import { t12 } from "./notify";
 
 /**
@@ -12,34 +12,40 @@ import { t12 } from "./notify";
 const NOTE_MAX = 70;
 
 /**
- * Deputy-style: one shift per line (day, times, area, unpaid break), Cara's note for the shift on the line under it,
- * then the link. e.g.
- *   Hi Cara, your shifts at Bean Culture from Mon 3 Nov:
- *   Mon 6:30am-3pm Cafe (30m unpaid break)
- *    > Note: Open up, milk delivery
- *   Tue 7am-1pm Kitchen
- *   Roster, swaps & clock on: https://…
+ * Short and the same every week, so staff get used to opening the app:
+ *   Hi Cara, your shifts at Bean Culture this week are:
+ *   Tue 6:30am-3pm
+ *   Fri 5am-10am Catering
+ *   note: Tech One due 10am
+ *   view roster: https://…/crew/…
+ * One shift per line; the area only when it's not at the usual workplace (Setup → Areas); a shift's note on the line under it.
  */
 export async function rosterText(db: SupabaseClient, orgId: string, memberId: string, monday: string): Promise<{ to: string | null; body: string; name: string }> {
   const [{ data: org }, { data: m }, { data: shifts }] = await Promise.all([
-    db.from("organisations").select("name, slug").eq("id", orgId).single(),
+    db.from("organisations").select("name, slug, timezone, settings").eq("id", orgId).single(),
     db.from("crew_members").select("name, phone").eq("id", memberId).eq("organisation_id", orgId).single(),
-    db.from("staff_shifts").select("shift_date, start_time, finish_time, break_minutes, notes, area:roster_areas(name)").eq("organisation_id", orgId).eq("crew_member_id", memberId).eq("roster", true).not("published_at", "is", null)
+    db.from("staff_shifts").select("shift_date, start_time, finish_time, notes, area_id, area:roster_areas(name)").eq("organisation_id", orgId).eq("crew_member_id", memberId).eq("roster", true).not("published_at", "is", null)
       .gte("shift_date", monday).lte("shift_date", addDaysISO(monday, 6)).order("shift_date").order("start_time"),
   ]);
   const { smsNumber } = await import("@/lib/sms/twilio");
-  type S = { shift_date: string; start_time: string; finish_time: string; break_minutes: number; notes: string | null; area: { name: string } | null };
+  const { readRosterSettings } = await import("./settings");
+  const { weekOf } = await import("./award");
+  const home = new Set(readRosterSettings(org?.settings).home_areas);
+  type S = { shift_date: string; start_time: string; finish_time: string; notes: string | null; area_id: string | null; area: { name: string } | null };
   const lines = ((shifts ?? []) as unknown as S[]).flatMap((s) => {
     const day = fmtDate(s.shift_date, "weekday").split(" ")[0].replace(",", "");
-    const line = `${day} ${t12(s.start_time)}-${t12(s.finish_time)}${s.area?.name ? ` ${s.area.name}` : ""}${s.break_minutes ? ` (${s.break_minutes}m unpaid break)` : ""}`;
+    const where = s.area?.name && !(s.area_id && home.has(s.area_id)) ? ` ${s.area.name}` : "";
+    const line = `${day} ${t12(s.start_time)}-${t12(s.finish_time)}${where}`;
     const note = s.notes?.replace(/\s+/g, " ").trim();
-    return note ? [line, ` > Note: ${note.length > NOTE_MAX ? `${note.slice(0, NOTE_MAX - 1).trimEnd()}… (more in the app)` : note}`] : [line];
+    return note ? [line, `note: ${note.length > NOTE_MAX ? `${note.slice(0, NOTE_MAX - 1).trimEnd()}… (more in the app)` : note}`] : [line];
   });
+  const thisWeek = weekOf(todayISO(String(org?.timezone ?? "Australia/Sydney")));
+  const when = monday === thisWeek ? "this week" : monday === addDaysISO(thisWeek, 7) ? "next week" : `the week of ${fmtDate(monday, "short")}`;
   const first = String(m?.name ?? "").split(" ")[0];
   const url = `${appBaseUrl()}/crew/${org?.slug}`;
   const body = lines.length
-    ? [`Hi ${first}, your shifts at ${org?.name} from ${fmtDate(monday, "weekday")}:`, ...lines, `Roster, swaps & clock on: ${url}`].join("\n")
-    : `Hi ${first}, you're not rostered at ${org?.name} the week from ${fmtDate(monday, "weekday")}.\nOpen shifts & your roster: ${url}`;
+    ? [`Hi ${first}, your shifts at ${org?.name} ${when} are:`, ...lines, `view roster: ${url}`].join("\n")
+    : `Hi ${first}, you're not rostered at ${org?.name} ${when}.\nview roster: ${url}`;
   return { to: m?.phone ? smsNumber(String(m.phone)) : null, body, name: String(m?.name ?? "") };
 }
 
