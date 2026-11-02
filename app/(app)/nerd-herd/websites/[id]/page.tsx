@@ -38,7 +38,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(5000),
     supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
-    supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(8).then((r) => r, () => ({ data: [] })),
+    supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).neq("action", "check").order("created_at", { ascending: false }).limit(25).then((r) => r, () => ({ data: [] })),
   ]);
   type T = { id: string; number: number; subject: string; status: TicketStatus; kind: string; created_at: string; resolved_at: string | null };
   const tlist = (tickets ?? []) as T[];

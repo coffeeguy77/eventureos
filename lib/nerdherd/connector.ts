@@ -20,6 +20,7 @@ export type ConnectorStatus = {
   updates: { core: number; plugins: number; themes: number };
   plugins: { file: string; name: string; version: string; active: boolean; update: string | null; update_ok: boolean | null }[];
   themes: { slug: string; name: string; version: string; active: boolean; update: string | null }[];
+  lock?: { locked: boolean; since?: number } | null;
 };
 
 export type UpdateResult = {
@@ -52,7 +53,9 @@ export function normaliseSiteUrl(raw: string) {
 }
 
 export async function callConnector<T>(siteUrl: string, key: string, method: "GET" | "POST", path: string, body?: Record<string, unknown>, timeoutMs = 60_000): Promise<T> {
-  const route = `${NS}${path}`;
+  // The signature covers the route only (WordPress's get_route() has no query string); the query is sent as-is.
+  const [routePath, query = ""] = path.split("?");
+  const route = `${NS}${routePath}`;
   const raw = body ? JSON.stringify(body) : "";
   const ts = Math.floor(Date.now() / 1000).toString();
   const nonce = randomBytes(16).toString("hex");
@@ -73,10 +76,10 @@ export async function callConnector<T>(siteUrl: string, key: string, method: "GE
 
   let r;
   try {
-    r = await attempt(`${siteUrl}/wp-json${route}`);
+    r = await attempt(`${siteUrl}/wp-json${route}${query ? `?${query}` : ""}`);
     // Sites without pretty links: fall back to ?rest_route=
     if (r.res.status === 404 && !(r.json && typeof r.json === "object" && "code" in (r.json as object) && String((r.json as { code: string }).code).startsWith("wcc_"))) {
-      r = await attempt(`${siteUrl}/?rest_route=${encodeURIComponent(route)}`);
+      r = await attempt(`${siteUrl}/?rest_route=${encodeURIComponent(route)}${query ? `&${query}` : ""}`);
     }
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
@@ -102,6 +105,52 @@ export async function storeStatus(db: SupabaseClient, websiteId: string, s: Conn
     plugins: s.plugins.map((p) => ({ file: p.file, name: p.name, version: p.version, active: p.active, update: p.update, update_ok: p.update_ok })),
     themes: s.themes.map((t) => ({ slug: t.slug, name: t.name, version: t.version, active: t.active, update: t.update })),
     environment: s.environment, last_checked_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString(),
+    locked: !!s.lock?.locked, locked_since: s.lock?.locked && s.lock.since ? new Date(s.lock.since * 1000).toISOString() : null,
   }).eq("website_id", websiteId);
   if (error) throw new Error(error.message);
+}
+
+type LogEntry = { time: number; action: string; message: string; data?: unknown };
+type UpdData = { plugins?: { name: string; from: string | null; to: string | null; ok: boolean }[]; themes?: { slug: string; from: string; to: string; ok: boolean }[]; core?: { ok: boolean; from: string; to: string } | null; health_after?: { ok: boolean } };
+
+/** Plain-English summary of an update run, e.g. "Updated WordPress 7.1 → 7.1.4, WooCommerce 11.0.1 → 11.2.1 and 3 more". */
+export function describeUpdate(d: UpdData | null | undefined, fallback: string) {
+  if (!d) return fallback;
+  const done: string[] = [];
+  if (d.core?.ok) done.push(`WordPress ${d.core.from} → ${d.core.to}`);
+  for (const p of d.plugins ?? []) if (p.ok) done.push(`${p.name} ${p.from ?? ""} → ${p.to ?? ""}`.replace(/\s+/g, " ").trim());
+  for (const t of d.themes ?? []) if (t.ok) done.push(`${t.slug} theme ${t.from} → ${t.to}`);
+  const failed = [...(d.plugins ?? []).filter((p) => !p.ok).map((p) => p.name), ...(d.themes ?? []).filter((t) => !t.ok).map((t) => t.slug)];
+  if (!done.length && !failed.length) return fallback;
+  let s = done.length ? `Updated ${done.length} item${done.length === 1 ? "" : "s"}` : "No updates applied";
+  if (failed.length) s += ` · not updated: ${failed.join(", ")}`;
+  if (d.health_after && !d.health_after.ok) s += " · site check failed afterwards";
+  return s;
+}
+
+/** Copy the site's own maintenance log into website_maintenance_runs (skips entries already copied). */
+export async function syncLog(db: SupabaseClient, orgId: string, websiteId: string, url: string, key: string) {
+  const log = await callConnector<LogEntry[]>(url, key, "GET", "/log?limit=200");
+  if (!Array.isArray(log) || !log.length) return 0;
+  const map: Record<string, string> = { update: "update", cache: "purge", lock: "lock", unlock: "unlock" };
+  const rows = log.map((e) => {
+    const action = map[e.action] ?? "other";
+    const data = (e.data && typeof e.data === "object" ? e.data : null) as UpdData | null;
+    const items = action === "update" && data ? [
+      ...(data.core?.ok ? [{ name: "WordPress", from: data.core.from, to: data.core.to }] : []),
+      ...(data.plugins ?? []).filter((p) => p.ok).map((p) => ({ name: p.name, from: p.from, to: p.to })),
+      ...(data.themes ?? []).filter((t) => t.ok).map((t) => ({ name: `${t.slug} theme`, from: t.from, to: t.to })),
+    ] : null;
+    return {
+      organisation_id: orgId, website_id: websiteId, action, source: "site", public: action !== "other",
+      ok: action === "update" ? (data?.health_after?.ok ?? true) : true,
+      summary: (action === "update" ? describeUpdate(data, e.message) : e.message).slice(0, 2000),
+      detail: items ? { items, message: e.message } : { message: e.message },
+      external_key: `${e.time}:${e.action}:${e.message}`.slice(0, 500),
+      created_at: new Date(e.time * 1000).toISOString(),
+    };
+  });
+  const { error, count } = await db.from("website_maintenance_runs").upsert(rows, { onConflict: "website_id,external_key", ignoreDuplicates: true, count: "exact" });
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }

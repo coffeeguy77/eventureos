@@ -230,6 +230,8 @@ export async function recordCardPayment(db: SupabaseClient, orgId: string, cfg: 
     .then(() => undefined, () => undefined);
   // a follow-up reminder for this invoice closes itself once it's paid
   try { const { closePaidInvoiceTasks } = await import("@/lib/tasks/auto-close"); await closePaidInvoiceTasks(db, orgId, [inv.id as string]); } catch { /* the next sync does it */ }
+  // a suspended hosting site paid by this invoice comes back online now (not at the next daily check)
+  try { const { reopenPaidHosting } = await import("@/lib/hosting/server"); await reopenPaidHosting(db, orgId, inv.id as string); } catch { /* the daily hosting check does it */ }
   return `recorded ${amount} on ${inv.number ?? inv.id}${xeroId ? " (Xero)" : xeroErr ? ` (Xero failed: ${xeroErr})` : ""}`;
 }
 

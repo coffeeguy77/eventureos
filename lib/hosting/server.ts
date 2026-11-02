@@ -6,6 +6,7 @@ import {
   type HostingSettings, type Inv,
 } from "./core";
 import { whmAccounts, whmSuspend, whmTerminate, whmUnsuspend, whmVersion, type WhmServer } from "./whm";
+import { callConnector, syncLog } from "@/lib/nerdherd/connector";
 
 /**
  * Hosting (server side): sync accounts from WHM, work out who's paid (from the invoices table — Xero-synced or made
@@ -159,6 +160,7 @@ export async function suspendAccount(db: SupabaseClient, orgId: string, id: stri
   await db.from("hosting_accounts").update({ suspended: true, suspended_by_app: true, suspension_category: o.category, suspend_reason: withMarker(reason), suspended_at: now, updated_at: now }).eq("id", a.id);
   await checkBilling(db, orgId, s);
   let note = "";
+  if (server.kind !== "whm") note += await pushSiteLock(db, orgId, a.id, true, o.actor);
   if (o.notify) { const n = await sendNotice(db, orgId, a.id, "suspension_notice", o.actor); note = ` ${n.message}`; }
   return { ok: true, dryRun: false, message: `${a.domain} suspended.${note}` };
 }
@@ -182,6 +184,7 @@ export async function unsuspendAccount(db: SupabaseClient, orgId: string, id: st
   await db.from("hosting_accounts").update({ suspended: false, suspended_by_app: false, suspension_category: null, suspend_reason: null, updated_at: new Date().toISOString() }).eq("id", a.id);
   await checkBilling(db, orgId, s);
   let note = "";
+  if (server.kind !== "whm") note += await pushSiteLock(db, orgId, a.id, false, o.actor);
   if (o.notify) { const n = await sendNotice(db, orgId, a.id, "reactivation_notice", o.actor); note = ` ${n.message}`; }
   return { ok: true, dryRun: false, message: `${a.domain} is back on.${note}` };
 }
@@ -283,6 +286,64 @@ export async function runHosting(db: SupabaseClient, orgId: string, actor: strin
   const b = await checkBilling(db, orgId, s);
   const auto = await runAutomation(db, orgId, s);
   return { notes, billing: b, auto };
+}
+
+/**
+ * SiteGround (no Site Tools API): lock or unlock the website straight away through the Web Culture Connector
+ * plugin on any connected website linked to this hosting account. Visitors get a 503 "temporarily unavailable"
+ * page with the pay link; unlocking restores the site instantly. The older Web Culture status plugin (polling
+ * /api/public/hosting/status) keeps working alongside. Never throws — returns a note for the result message.
+ */
+export async function pushSiteLock(db: SupabaseClient, orgId: string, accountId: string, lock: boolean, actor: string | null): Promise<string> {
+  const { data: sites } = await db.from("websites").select("id, domain, website_connectors(site_url, website_connector_keys(key))").eq("organisation_id", orgId).eq("hosting_account_id", accountId);
+  type S = { id: string; domain: string; website_connectors: { site_url: string; website_connector_keys: { key: string } | null } | null };
+  const list = ((sites ?? []) as unknown as S[]).filter((w) => w.website_connectors?.site_url && w.website_connectors.website_connector_keys?.key);
+  if (!list.length) return "";
+  let payload: Record<string, unknown> = {};
+  if (lock) {
+    const { org, s } = await settingsFor(db, orgId);
+    const { data: a } = await db.from("hosting_accounts").select("invoice_id, amount_due").eq("id", accountId).maybeSingle();
+    type Inv = { number: string | null; pay_token: string | null; status: string };
+    let inv: Inv | null = null;
+    if (a?.invoice_id) { const { data } = await db.from("invoices").select("number, pay_token, status").eq("id", a.invoice_id).maybeSingle(); inv = (data as Inv | null) ?? null; }
+    payload = {
+      pay_url: inv?.pay_token && inv.status !== "paid" ? `${appBaseUrl()}/pay/${inv.pay_token}` : "",
+      message: s.suspendMessage || "", invoice: inv?.number ?? "", amount: a?.amount_due != null ? `$${Number(a.amount_due).toFixed(2)}` : "",
+      provider: s.brand ?? org.name, contact_email: s.replyTo ?? org.contact_email ?? "", reason: "billing",
+    };
+  }
+  const notes: string[] = [];
+  for (const w of list) {
+    const c = w.website_connectors!;
+    try {
+      await callConnector(c.site_url, c.website_connector_keys!.key, "POST", lock ? "/lock" : "/unlock", lock ? payload : { note: "hosting invoice paid" });
+      notes.push(`${w.domain} ${lock ? "locked" : "unlocked"} straight away`);
+      // the site logs the lock/unlock itself; copy its log into the history
+      await syncLog(db, orgId, w.id, c.site_url, c.website_connector_keys!.key).catch(() => 0);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      notes.push(`${w.domain}: couldn't ${lock ? "lock" : "unlock"} through the connector (${m})`);
+      await db.from("website_maintenance_runs").insert({ organisation_id: orgId, website_id: w.id, action: lock ? "lock" : "unlock", ok: false, summary: `Couldn't ${lock ? "lock" : "unlock"} the site: ${m}`, actor });
+      await logEvent(db, { orgId, accountId, action: lock ? "suspend" : "unsuspend", ok: false, detail: `Connector ${lock ? "lock" : "unlock"} failed for ${w.domain}: ${m}`, actor });
+    }
+  }
+  return notes.length ? ` ${notes.join("; ")}.` : "";
+}
+
+/** A hosting invoice was just paid: bring its suspended site(s) back now instead of waiting for the daily check. */
+export async function reopenPaidHosting(db: SupabaseClient, orgId: string, invoiceId: string) {
+  const { data: rows } = await db.from("hosting_accounts").select("id").eq("organisation_id", orgId).eq("invoice_id", invoiceId).eq("suspended", true).eq("suspended_by_app", true);
+  if (!rows?.length) return [];
+  const { s } = await settingsFor(db, orgId);
+  await checkBilling(db, orgId, s);
+  const out: string[] = [];
+  for (const r of rows as { id: string }[]) {
+    const { a } = await loadAccount(db, orgId, r.id);
+    const un = canAutoUnsuspend({ suspended: a.suspended, byApp: a.suspended_by_app, category: a.suspension_category, vip: a.vip, disputed: a.disputed, manual: a.manual_override, autoUnsuspend: a.auto_unsuspend, matchStatus: a.match_status, billingStatus: a.billing_status, amountDue: a.amount_due }, s.autoUnsuspend);
+    if (!un.ok) continue;
+    try { out.push((await unsuspendAccount(db, orgId, a.id, { actor: null, auto: true })).message); } catch (e) { out.push(e instanceof Error ? e.message : String(e)); }
+  }
+  return out;
 }
 
 /** For the SiteGround plugin: is this site switched off? */

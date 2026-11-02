@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Loader2, Plug, RefreshCw, Trash2, Wrench, Zap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Lock, Plug, RefreshCw, Trash2, Unlock, Wrench, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { checkSite, connectSite, disconnectSite, purgeSite, updateSite } from "@/app/(app)/nerd-herd/websites/[id]/connector-actions";
+import { checkSite, connectSite, disconnectSite, purgeSite, setSiteLock, updateSite } from "@/app/(app)/nerd-herd/websites/[id]/connector-actions";
 
 export type ConnectorRow = {
   site_url: string; connector_version: string | null; wp_version: string | null; wp_update: string | null; php_version: string | null;
@@ -14,6 +14,7 @@ export type ConnectorRow = {
   themes: { slug: string; name: string; version: string; active: boolean; update: string | null }[];
   environment: { https?: boolean; debug?: boolean; fs_method?: string; cron_late?: number } | null;
   last_checked_at: string | null; last_error: string | null; last_run_at: string | null; last_run_summary: string | null; last_run_ok: boolean | null;
+  locked?: boolean | null; locked_since?: string | null;
 };
 export type RunRow = { id: string; action: string; scope: string | null; ok: boolean; summary: string | null; created_at: string; when: string };
 
@@ -53,7 +54,7 @@ export function WpConnector({ websiteId, domain, connector, runs, canRun, checke
       <div className="space-y-3">
         {!connector && (
           <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-ink-muted">
-            <li>Install and activate the <span className="font-medium text-ink">Web Culture Connector</span> plugin on the site.</li>
+            <li>Install and activate the <a href="/downloads/webculture-connector.zip" className="font-medium text-brand-600 underline">Web Culture Connector</a> plugin on the site (WordPress → Plugins → Add New → Upload).</li>
             <li>On the site, open <span className="font-medium text-ink">Tools → Web Culture</span> and copy the connection key.</li>
             <li>Paste it below. EventureOS checks it works before saving it.</li>
           </ol>
@@ -95,6 +96,12 @@ export function WpConnector({ websiteId, domain, connector, runs, canRun, checke
         <Tile label="Checks" value={env.https === false ? "No HTTPS" : env.debug ? "Debug on" : "OK"} tone={env.https === false || env.debug ? "red" : "green"} sub={`Files: ${env.fs_method ?? "—"}${env.cron_late ? ` · ${env.cron_late} late cron` : ""}`} />
       </div>
 
+      {c.locked && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-800">
+          <span className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 shrink-0" />Locked for visitors — they see the "temporarily unavailable" page with the pay link. It unlocks automatically when the hosting invoice is paid.</span>
+          {canRun && <Button size="sm" variant="secondary" disabled={pending} onClick={() => run("unlock", () => setSiteLock(websiteId, false), `Unlock ${domain} now?`)}>{spin("unlock") ?? <Unlock className="h-3.5 w-3.5" />}Unlock now</Button>}
+        </div>
+      )}
       {c.last_error && <p className="flex items-start gap-2 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />Last check failed: {c.last_error}</p>}
       {c.last_run_summary && (
         <p className={`flex items-start gap-2 rounded-lg px-3 py-2 text-[0.7812rem] ${c.last_run_ok ? "bg-canvas text-ink-muted" : "bg-rose-50 text-rose-800"}`}>
@@ -157,6 +164,7 @@ export function WpConnector({ websiteId, domain, connector, runs, canRun, checke
         <span className="min-w-0 break-all">{c.site_url} · connector {c.connector_version ?? "—"}{checkedLabel ? ` · checked ${checkedLabel}` : ""}</span>
         {canRun && (
           <span className="flex flex-wrap gap-1">
+            {!c.locked && <Button size="sm" variant="ghost" disabled={pending} onClick={() => run("lock", () => setSiteLock(websiteId, true), `Lock ${domain}? Visitors will see a "temporarily unavailable" page until it's unlocked (logged-in admins still see the site).`)}>{spin("lock") ?? <Lock className="h-3.5 w-3.5" />}Lock site</Button>}
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => setRekey(true)}><Plug className="h-3.5 w-3.5" />Change key</Button>
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => run("disconnect", () => disconnectSite(websiteId), `Disconnect ${domain} from command ops? The plugin stays on the site.`)}><Trash2 className="h-3.5 w-3.5" />Disconnect</Button>
           </span>
