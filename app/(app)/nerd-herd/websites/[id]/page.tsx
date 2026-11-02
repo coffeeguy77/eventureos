@@ -2,16 +2,19 @@ import Link from "next/link";
 import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react";
-import { requireOrg } from "@/lib/context";
-import { fmtDate, fmtDateTime, money } from "@/lib/format";
+import { canManage, requireOrg } from "@/lib/context";
+import { fmtDate, fmtDateTime, money, relative } from "@/lib/format";
 import { PLAN_LABEL, PLATFORM_LABEL, SITE_STATUS, TICKET_STATUS, planCategory, type TicketStatus } from "@/lib/nerdherd/core";
 import { describeSchedule, type Unit } from "@/lib/recurring/core";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { WebsiteForm } from "@/components/nerdherd/website-form";
+import { WpConnector, type ConnectorRow } from "@/components/nerdherd/wp-connector";
 
 export const dynamic = "force-dynamic";
+// Updates run through server actions on this page and can take a few minutes on a big site.
+export const maxDuration = 300;
 
 type Site = {
   id: string; domain: string; name: string | null; platform: string; status: string; customer_id: string | null; admin_url: string | null; launched_on: string | null; notes: string | null; hosting_account_id: string | null;
@@ -22,18 +25,20 @@ type Site = {
 export default async function WebsitePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org } = await requireOrg();
+  const { supabase, org, role } = await requireOrg();
   const { data, error } = await supabase.from("websites")
     .select("*, customers(id, name), hosting_accounts(id, domain, username, plan, suspended, billing_status, amount_due, disk_used_mb, disk_limit_mb, hosting_servers(name))")
     .eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (error) throw new Error(`Couldn't load the website: ${error.message}`);
   if (!data) notFound();
   const w = data as unknown as Site;
-  const [{ data: plans }, { data: tickets }, { data: clients }, { data: hosting }] = await Promise.all([
+  const [{ data: plans }, { data: tickets }, { data: clients }, { data: hosting }, { data: connector }, { data: runs }] = await Promise.all([
     supabase.from("recurring_invoices").select("id, name, category, creates_ticket, status, total, every, unit, next_date").eq("organisation_id", org.id).eq("website_id", id).order("next_date"),
     supabase.from("support_tickets").select("id, number, subject, status, kind, created_at, resolved_at").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(100),
     supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(5000),
+    supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
+    supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(8).then((r) => r, () => ({ data: [] })),
   ]);
   type T = { id: string; number: number; subject: string; status: TicketStatus; kind: string; created_at: string; resolved_at: string | null };
   const tlist = (tickets ?? []) as T[];
@@ -62,6 +67,17 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-5">
+          {(w.platform === "wordpress" || w.platform === "woocommerce") && (
+            <Card>
+              <CardHeader title="WordPress command ops" subtitle="Updates, versions and caches through the Web Culture Connector plugin" />
+              <div className="border-t border-line px-5 py-4">
+                <WpConnector websiteId={w.id} domain={w.domain} canRun={canManage(role)}
+                  connector={(connector ?? null) as ConnectorRow | null}
+                  checkedLabel={connector && (connector as ConnectorRow).last_checked_at ? relative((connector as ConnectorRow).last_checked_at) : null}
+                  runs={((runs ?? []) as { id: string; action: string; scope: string | null; ok: boolean; summary: string | null; created_at: string }[]).map((r) => ({ ...r, when: fmtDateTime(r.created_at, org.timezone) }))} />
+              </div>
+            </Card>
+          )}
           <Card>
             <CardHeader title="Website & email check" subtitle="Is it still pointing at us, does email work, when do the domain and SSL run out" />
             <div className="border-t border-line px-5 py-4"><SiteDoctor domain={w.domain} /></div>
