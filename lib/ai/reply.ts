@@ -23,7 +23,7 @@ const clip = (s: string | null | undefined, n: number) => {
   return t.length > n ? t.slice(0, n) + "…" : t;
 };
 
-async function callClaudeRaw(key: string | null, system: string, user: string, maxTokens: number, timeoutMs: number) {
+export async function callClaudeRaw(key: string | null, system: string, user: string, maxTokens: number, timeoutMs: number) {
   if (!key) throw new Error("AI drafting needs a Claude API key — add one in Settings → Integrations.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);

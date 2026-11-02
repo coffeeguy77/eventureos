@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { NextActionBanner } from "@/components/records/next-action";
 import { TicketControls, Composer, Checklist, BillTime, DeleteTicket } from "@/components/nerdherd/ticket-tools";
 import { TicketTabs, type TabRow } from "@/components/nerdherd/ticket-tabs";
+import { TicketQuotes, type QuoteView, type ViewRow } from "@/components/nerdherd/ticket-quotes";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,16 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   const tabs = tabErr ? [] : (tabRows ?? []) as TabRow[];
   const contactId = (data as { contact_id?: string | null }).contact_id ?? null;
   const asked = contactId ? ((await supabase.from("contacts").select("first_name, last_name, email, phone, position").eq("id", contactId).maybeSingle()).data as { first_name: string; last_name: string | null; email: string | null; phone: string | null; position: string | null } | null) : null;
+  // Quotes & variations (hours, rate and Claude's notes are for the team only)
+  const [qRes, vRes] = await Promise.all([
+    supabase.from("support_ticket_quotes").select("id, seq, kind, title, description, hours, rate, amount, status, ai_hours, ai_notes, ai_description, sent_at, send_count, first_viewed_at, last_viewed_at, view_count, accepted_at, accepted_by, paid_at, completed_at, client_notified_at, invoices(id, number, status), support_ticket_quote_tasks(id, label, hours, done_at, done_by, position)").eq("ticket_id", id).order("seq"),
+    supabase.from("support_ticket_views").select("who, what, at, quote_id").eq("ticket_id", id).order("at", { ascending: false }).limit(200),
+  ]);
+  const quotes: QuoteView[] = ((qRes.data ?? []) as unknown as (Omit<QuoteView, "tasks" | "invoice"> & { invoices: QuoteView["invoice"]; support_ticket_quote_tasks: (QuoteView["tasks"][number] & { position: number })[] })[]).map((q) => ({
+    ...q, hours: Number(q.hours), rate: Number(q.rate), amount: Number(q.amount), ai_hours: q.ai_hours == null ? null : Number(q.ai_hours), invoice: q.invoices,
+    tasks: [...q.support_ticket_quote_tasks].sort((a, b) => a.position - b.position).map((t) => ({ id: t.id, label: t.label, hours: Number(t.hours), done_at: t.done_at, done_by: t.done_by })),
+  }));
+  const views = (vRes.data ?? []) as ViewRow[];
   const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam : null;
   const updates = activeTab ? allUpdates.filter((u) => u.tab_id === activeTab) : allUpdates;
   const minutes = allUpdates.reduce((a, u) => a + Number(u.minutes ?? 0), 0);
@@ -90,6 +101,10 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
+          <Card>
+            <CardHeader title="Quote & payment" subtitle="Quote the fix, send it, and start once it's paid — red until paid, green when it's ready to do." />
+            <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} /></div>
+          </Card>
           {tk.kind === "maintenance" && (
             <Card>
               <CardHeader title="Maintenance checklist" subtitle={tk.recurring_invoices ? <>From plan <Link className="underline" href={`/hosting/recurring/${tk.recurring_invoices.id}`}>{tk.recurring_invoices.name}</Link></> : undefined} />

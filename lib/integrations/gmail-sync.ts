@@ -491,7 +491,7 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   try {
     const { ticketFromEmail } = await import("@/lib/nerdherd/email");
     await ticketFromEmail(ctx, {
-      threadId: thread.id, gmailMessageId: pm.gmailId, outbound, bulk: !!bulk, classification: thread.classification,
+      threadId: thread.id, gmailThreadId: pm.threadId, gmailMessageId: pm.gmailId, outbound, bulk: !!bulk, classification: thread.classification,
       customerId: (patch.customer_id as string | undefined) ?? thread.customer_id ?? null, enquiryCreated: res.enquiryCreated,
       subject: pm.subject, body: bodyClean, fromName: pm.from.name, fromEmail: pm.from.email, sentAt: pm.sentAt,
     });

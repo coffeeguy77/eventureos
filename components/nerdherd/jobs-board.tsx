@@ -6,12 +6,13 @@ import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 
-type Job = { id: string; number: number; subject: string; status: string; priority: string; due_date: string | null; customer: string | null; domain: string | null; assignee: string | null; tabs: { id: string; name: string; who: string | null; done: boolean; assigned_to: string | null }[] };
+type Job = { id: string; number: number; subject: string; status: string; priority: string; due_date: string | null; customer: string | null; domain: string | null; assignee: string | null; money?: "paid" | "unpaid" | null; tabs: { id: string; name: string; who: string | null; done: boolean; assigned_to: string | null }[] };
 
 /** My jobs / All open / Unassigned — with who has each ticket (and each tab on it). */
 export function JobsBoard({ mine, all, unassigned, me, today }: { mine: Job[]; all: Job[]; unassigned: Job[]; me: string; today: string }) {
-  const [view, setView] = useState<"mine" | "all" | "unassigned">(mine.length ? "mine" : unassigned.length ? "unassigned" : "all");
-  const list = view === "mine" ? mine : view === "all" ? all : unassigned;
+  const [view, setView] = useState<"mine" | "all" | "unassigned" | "paid" | "unpaid">(mine.length ? "mine" : unassigned.length ? "unassigned" : "all");
+  const paid = all.filter((j) => j.money === "paid"), unpaid = all.filter((j) => j.money === "unpaid");
+  const list = view === "mine" ? mine : view === "all" ? all : view === "paid" ? paid : view === "unpaid" ? unpaid : unassigned;
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
@@ -19,6 +20,8 @@ export function JobsBoard({ mine, all, unassigned, me, today }: { mine: Job[]; a
         {([["mine", "My jobs", mine.length], ["all", "All open", all.length], ["unassigned", "Unassigned", unassigned.length]] as const).map(([k, l, n]) => (
           <button key={k} onClick={() => setView(k)} className={cn("rounded-full px-3 py-1.5 text-[0.7812rem] font-medium ring-1", view === k ? "bg-ink text-surface ring-ink" : "bg-surface text-ink-muted ring-line hover:text-ink", k === "unassigned" && n > 0 && view !== k && "text-amber-700")}>{l} ({n})</button>
         ))}
+        {paid.length > 0 && <button onClick={() => setView("paid")} className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium ring-1", view === "paid" ? "bg-emerald-600 text-white ring-emerald-600" : "bg-surface text-emerald-700 ring-emerald-500/40 dark:text-emerald-300")}><span className="h-2 w-2 rounded-full bg-emerald-500" />Paid — ready to start ({paid.length})</button>}
+        {unpaid.length > 0 && <button onClick={() => setView("unpaid")} className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.7812rem] font-medium ring-1", view === "unpaid" ? "bg-rose-600 text-white ring-rose-600" : "bg-surface text-rose-700 ring-rose-500/40 dark:text-rose-300")}><span className="h-2 w-2 rounded-full bg-rose-500" />Quoted, not paid ({unpaid.length})</button>}
         <Link href="/nerd-herd/tickets" className="ml-auto text-[0.75rem] font-medium text-brand-600">All tickets</Link>
       </div>
       {list.length === 0 ? <p className="border-t border-line px-5 py-5 text-[0.8125rem] text-ink-muted">{view === "mine" ? "Nothing assigned to you." : view === "unassigned" ? "Everything has someone on it." : "No open tickets."}</p> : (
@@ -29,7 +32,7 @@ export function JobsBoard({ mine, all, unassigned, me, today }: { mine: Job[]; a
             return (
               <li key={j.id}>
                 <Link href={`/nerd-herd/tickets/${j.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-canvas">
-                  <span className="w-12 shrink-0 pt-0.5 text-[0.75rem] text-ink-faint">#{j.number}</span>
+                  <span className="flex w-12 shrink-0 items-center gap-1.5 pt-0.5 text-[0.75rem] text-ink-faint">{j.money && <span title={j.money === "paid" ? "Paid — ready to start" : "Quoted — not paid yet, don't start"} className={cn("h-2.5 w-2.5 shrink-0 rounded-full", j.money === "paid" ? "bg-emerald-500" : "bg-rose-500")} />}#{j.number}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[0.875rem] font-medium text-ink">{j.subject}</span>
                     <span className="block truncate text-[0.75rem] text-ink-muted">{[j.customer ?? "No client", j.domain, j.status.replace(/_/g, " ")].filter(Boolean).join(" · ")}{late ? <span className="font-medium text-rose-700"> · past due</span> : null}</span>

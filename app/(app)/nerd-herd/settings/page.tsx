@@ -23,7 +23,7 @@ export default async function NerdSettingsPage() {
       <Card>
         <CardHeader title="Billing time and tickets" />
         <div className="border-t border-line px-5 py-4">
-          <NerdSettingsForm initial={{ hourly_rate: s.hourlyRate, account_code: s.accountCode, email_tickets: s.emailTickets, support_email: s.supportEmail ?? "" }} />
+          <NerdSettingsForm initial={{ hourly_rate: s.hourlyRate, account_code: s.accountCode, email_tickets: s.emailTickets, support_email: s.supportEmail ?? "", staff_alerts: s.staffAlerts }} />
         </div>
       </Card>
       <div className="space-y-5">

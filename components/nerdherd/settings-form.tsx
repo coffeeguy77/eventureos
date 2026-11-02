@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormError, Input, Label } from "@/components/ui/form";
 import { saveNerdSettings } from "@/app/(app)/nerd-herd/actions";
 
-export function NerdSettingsForm({ initial }: { initial: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string } }) {
+export function NerdSettingsForm({ initial }: { initial: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts: boolean } }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export function NerdSettingsForm({ initial }: { initial: { hourly_rate: number; 
       </div>
       <div><Label htmlFor="ns-email" hint="the address clients write to">Support email</Label><Input id="ns-email" type="email" value={f.support_email} onChange={(e) => set({ support_email: e.target.value })} placeholder="hello@yourdomain.com.au" /></div>
       <label className="flex items-start gap-2 text-[0.8125rem]"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.email_tickets} onChange={(e) => set({ email_tickets: e.target.checked })} /><span><span className="font-medium text-ink">Turn client emails into tickets</span><span className="block text-[0.7188rem] text-ink-muted">A new email from a client (not spam, not a supplier) opens a ticket; their replies land on the same ticket.</span></span></label>
+      <label className="flex items-start gap-2 text-[0.8125rem]"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.staff_alerts} onChange={(e) => set({ staff_alerts: e.target.checked })} /><span><span className="font-medium text-ink">Email the team about ticket activity</span><span className="block text-[0.7188rem] text-ink-muted">When a client replies, opens or accepts a quote, or pays — the person on the ticket (or the managers, if nobody is) gets an email.</span></span></label>
       <FormError message={error} />
       <div className="flex items-center gap-3">
         <Button variant="primary" disabled={pending} onClick={() => start(async () => { setError(null); const r = await saveNerdSettings(f); if (!r.ok) { setError(r.error); return; } setSaved(true); router.refresh(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save</Button>

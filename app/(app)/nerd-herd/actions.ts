@@ -269,7 +269,7 @@ export async function setPlanOptions(id: string, o: { creates_ticket?: boolean; 
   } catch (e) { return fail(e); }
 }
 
-export async function saveNerdSettings(i: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string }): Promise<R> {
+export async function saveNerdSettings(i: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts?: boolean }): Promise<R> {
   try {
     const { supabase, org, role, user, profile } = await desk();
     if (!canManage(role)) throw new Error("Only owners, admins and managers can change settings.");
@@ -277,10 +277,15 @@ export async function saveNerdSettings(i: { hourly_rate: number; account_code: s
     if (!(rate > 0 && rate < 10000)) throw new Error("Enter the hourly rate (ex GST).");
     const email = (i.support_email ?? "").trim().toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("That support email address doesn't look right.");
-    const nerdherd = { hourly_rate: rate, account_code: t(i.account_code, 10) ?? "6664", email_tickets: !!i.email_tickets, support_email: email || null };
-    const settings = { ...(org.settings as Record<string, unknown>), nerdherd };
-    const { error } = await supabase.from("organisations").update({ settings }).eq("id", org.id);
+    const nerdherd = { hourly_rate: rate, account_code: t(i.account_code, 10) ?? "6664", email_tickets: !!i.email_tickets, support_email: email || null, staff_alerts: i.staff_alerts !== false };
+    // managers may change these (checked above); the organisations table only lets owners/admins write, so save with the service role
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { data: cur } = await db.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = { ...((cur?.settings as Record<string, unknown>) ?? {}), nerdherd };
+    const { data: done, error } = await db.from("organisations").update({ settings }).eq("id", org.id).select("id");
     if (error) throw new Error(error.message);
+    if (!done?.length) throw new Error("Couldn't save — please try again.");
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "settings.updated", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} updated Nerd Herd settings` });
     refresh();
     return { ok: true, data: undefined };

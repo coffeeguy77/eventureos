@@ -24,7 +24,7 @@ async function nerdOn(ctx: SyncContext): Promise<boolean> {
 }
 
 export interface EmailForTicket {
-  threadId: string; gmailMessageId: string; outbound: boolean; bulk: boolean; classification: string;
+  threadId: string; gmailThreadId?: string | null; gmailMessageId: string; outbound: boolean; bulk: boolean; classification: string;
   customerId: string | null; enquiryCreated: boolean; subject: string | null; body: string; fromName: string | null; fromEmail: string; sentAt: string;
 }
 
@@ -32,9 +32,20 @@ export async function ticketFromEmail(ctx: SyncContext, m: EmailForTicket): Prom
   if (!(await nerdOn(ctx))) return;
   if (m.bulk || ["spam", "supplier"].includes(m.classification)) return;
   const db = ctx.db, org = ctx.org.id;
-  const { data: existing } = await db.from("support_tickets").select("id, status, number").eq("organisation_id", org).eq("email_thread_id", m.threadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  let { data: existing } = await db.from("support_tickets").select("id, status, number").eq("organisation_id", org).eq("email_thread_id", m.threadId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!existing && m.gmailThreadId) {
+    // a conversation we started from the ticket (quote, reply): link the inbox thread to it
+    const r = await db.from("support_tickets").select("id, status, number").eq("organisation_id", org).eq("gmail_thread_id", m.gmailThreadId).limit(1).maybeSingle();
+    if (!r.error && r.data) { existing = r.data; await db.from("support_tickets").update({ email_thread_id: m.threadId }).eq("id", r.data.id).is("email_thread_id", null); }
+  }
   const { data: msg } = await db.from("email_messages").select("id").eq("organisation_id", org).eq("gmail_message_id", m.gmailMessageId).maybeSingle();
   const body = m.body.trim().slice(0, 20000) || null;
+
+  if (existing && m.outbound) {
+    // sent from the ticket itself — it's already logged; just connect it to the stored email
+    const { data: mine, error: gErr } = await db.from("support_ticket_updates").select("id").eq("ticket_id", existing.id).eq("gmail_id", m.gmailMessageId).maybeSingle();
+    if (!gErr && mine) { if (msg?.id) await db.from("support_ticket_updates").update({ email_message_id: msg.id }).eq("id", mine.id); return; }
+  }
 
   if (existing) {
     const { error } = await db.from("support_ticket_updates").insert({
@@ -52,6 +63,8 @@ export async function ticketFromEmail(ctx: SyncContext, m: EmailForTicket): Prom
         organisation_id: org, type: "ticket.reply", title: `Reply on #${existing.number} from ${m.fromName ?? m.fromEmail}`.slice(0, 200),
         body: (body ?? "").slice(0, 140), link: `/nerd-herd/tickets/${existing.id}`, entity_type: "support_ticket", entity_id: existing.id,
       });
+      const { alertStaff } = await import("./mail");
+      if (Date.parse(m.sentAt) > Date.now() - 2 * 86_400_000) await alertStaff(db, org, existing.id as string, `${m.fromName ?? m.fromEmail} replied`, [(body ?? "").slice(0, 600)]);
     }
     return;
   }
@@ -80,4 +93,6 @@ export async function ticketFromEmail(ctx: SyncContext, m: EmailForTicket): Prom
     organisation_id: org, type: "ticket.new", title: `New ticket #${t.number} from ${m.fromName ?? m.fromEmail}`.slice(0, 200),
     body: subject.slice(0, 140), link: `/nerd-herd/tickets/${t.id}`, entity_type: "support_ticket", entity_id: t.id,
   });
+  const { alertStaff } = await import("./mail");
+  await alertStaff(db, org, t.id as string, `New ticket from ${m.fromName ?? m.fromEmail}`, [subject, (body ?? "").slice(0, 600)]);
 }

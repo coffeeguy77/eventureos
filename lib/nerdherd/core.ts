@@ -154,7 +154,7 @@ export function timeLine(minutes: number, hourlyExGst: number, description: stri
 }
 
 /** Nerd Herd settings (organisations.settings.nerdherd). */
-export interface NerdSettings { hourlyRate: number; accountCode: string; emailTickets: boolean; supportEmail: string | null }
+export interface NerdSettings { hourlyRate: number; accountCode: string; emailTickets: boolean; supportEmail: string | null; staffAlerts: boolean }
 export function readNerd(settings: unknown): NerdSettings {
   const n = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).nerdherd : null) ?? {}) as Record<string, unknown>;
   const rate = Number(n.hourly_rate);
@@ -163,5 +163,6 @@ export function readNerd(settings: unknown): NerdSettings {
     accountCode: typeof n.account_code === "string" && n.account_code.trim() ? n.account_code.trim() : "6664",
     emailTickets: n.email_tickets !== false,
     supportEmail: typeof n.support_email === "string" && n.support_email.includes("@") ? n.support_email.trim().toLowerCase() : null,
+    staffAlerts: n.staff_alerts !== false,
   };
 }

@@ -224,3 +224,23 @@ export function appointmentEmail(o: { businessName: string; heading: string; int
   const text = `${paragraphs.join("\n\n")}\n\n${o.button.label}: ${o.button.url}`;
   return { html, text };
 }
+
+/** A personal-looking email from the support team (ticket replies, quotes, nudges): the message, an optional button, then the sender's signature. */
+export function ticketMail(o: { message: string; button?: { label: string; url: string } | null; signatureHtml?: string | null; signatureText?: string | null; brand?: string | null; footer?: string | null }) {
+  const colour = safeColour(o.brand);
+  const font = "font:400 15px/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#27272a";
+  const paras = o.message.trim().split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;${font}">${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+  const btn = o.button ? `<p style="margin:6px 0 20px"><a href="${esc(o.button.url)}" style="display:inline-block;background:${colour};color:#ffffff;text-decoration:none;font:600 15px/1 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:13px 20px;border-radius:10px">${esc(o.button.label)}</a></p>` : "";
+  const sig = o.signatureHtml ? `<div style="margin-top:18px">${o.signatureHtml}</div>` : "";
+  const foot = o.footer ? `<p style="margin:22px 0 0;font:400 12px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#a1a1aa">${esc(o.footer)}</p>` : "";
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:20px 16px;background:#ffffff"><div style="max-width:600px">${paras}${btn}${sig}${foot}</div></body></html>`;
+  const text = `${o.message.trim()}${o.button ? `\n\n${o.button.label}: ${o.button.url}` : ""}${o.signatureText ? `\n\n${o.signatureText}` : ""}${o.footer ? `\n\n${o.footer}` : ""}`;
+  return { html, text };
+}
+
+/** Tell a team member something happened on a ticket (client replied, viewed or accepted the quote, paid…). */
+export function staffTicketAlert(o: { businessName: string; heading: string; lines: string[]; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: o.heading, paragraphs: o.lines, button: { label: "Open the ticket", url: o.url }, footer: `EventureOS · Nerd Herd alerts for ${o.businessName}. Turn these off in Nerd Herd → Settings.` });
+  const text = `${o.heading}\n\n${o.lines.join("\n\n")}\n\nOpen the ticket: ${o.url}`;
+  return { html, text };
+}

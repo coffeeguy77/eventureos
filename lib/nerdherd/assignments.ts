@@ -10,6 +10,8 @@ export interface Job {
   id: string; number: number; subject: string; status: string; priority: string; due_date: string | null; last_activity_at: string;
   customer: string | null; domain: string | null; assigned_to: string | null; assignee: string | null;
   tabs: { id: string; name: string; assigned_to: string | null; who: string | null; done: boolean }[];
+  /** quoted work: green = paid, ready to start; red = quoted but not paid (don't start) */
+  money: "paid" | "unpaid" | null;
 }
 
 export async function openJobs(db: SupabaseClient, orgId: string): Promise<Job[]> {
@@ -23,7 +25,16 @@ export async function openJobs(db: SupabaseClient, orgId: string): Promise<Job[]
       tabs.set(x.ticket_id, [...(tabs.get(x.ticket_id) ?? []), { id: x.id, name: x.name, assigned_to: x.assigned_to, who: x.who ? (x.who.full_name ?? x.who.email) : null, done: x.done }]);
     }
   }
-  return rows.map((r) => ({ id: r.id, number: r.number, subject: r.subject, status: r.status, priority: r.priority, due_date: r.due_date, last_activity_at: r.last_activity_at,
+  // quoted work on these tickets: paid (green) beats unpaid (red); quietly nothing before database update 0092
+  const money = new Map<string, "paid" | "unpaid">();
+  if (rows.length) {
+    const { data: q, error } = await db.from("support_ticket_quotes").select("ticket_id, status").in("ticket_id", rows.map((r) => r.id)).in("status", ["sent", "accepted", "paid"]);
+    if (!error) for (const x of (q ?? []) as { ticket_id: string; status: string }[]) {
+      if (x.status === "paid") money.set(x.ticket_id, "paid");
+      else if (!money.has(x.ticket_id)) money.set(x.ticket_id, "unpaid");
+    }
+  }
+  return rows.map((r) => ({ money: money.get(r.id) ?? null, id: r.id, number: r.number, subject: r.subject, status: r.status, priority: r.priority, due_date: r.due_date, last_activity_at: r.last_activity_at,
     customer: r.customers?.name ?? null, domain: r.websites?.domain ?? null, assigned_to: r.assigned_to, assignee: r.assignee ? (r.assignee.full_name ?? r.assignee.email) : null, tabs: tabs.get(r.id) ?? [] }));
 }
 
