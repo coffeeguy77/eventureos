@@ -133,3 +133,6 @@ html:has(.mk) { scroll-behavior: smooth; scroll-padding-top: 88px; }
 .mk[data-look="editorial"] .mk-h1 em, .mk[data-look="editorial"] .mk-h2 .mk-grad-text { -webkit-text-fill-color: rgb(var(--accent)); background: none; }
 .mk[data-look="editorial"] .mk-card { box-shadow: none; }
 .mk[data-look="studio"] .mk-card { box-shadow: 0 1px 2px rgb(22 21 29 / .04), 0 12px 32px -18px rgb(22 21 29 / .18); }
+
+/* black brand wordmarks (Square, Anthropic) turn white on the dark look */
+.mk[data-look="midnight"] .logo-mono { filter: brightness(0) invert(1); }
