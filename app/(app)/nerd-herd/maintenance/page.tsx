@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/context";
-import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
+import { addDaysISO, fmtDate, money, relative, todayISO } from "@/lib/format";
 import { readChecklist } from "@/lib/nerdherd/core";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,10 +18,12 @@ export default async function MaintenancePage() {
   const { supabase, org } = await requireOrg();
   const today = todayISO(org.timezone);
   const since = addDaysISO(today, -45);
-  const [{ data, error }, { data: upcoming }] = await Promise.all([
+  const [{ data, error }, { data: upcoming }, { data: wp }] = await Promise.all([
     supabase.from("support_tickets").select("id, number, subject, status, due_date, checklist, resolved_at, customers(id, name), websites(domain), invoices!support_tickets_invoice_id_fkey(id, number, status, balance, due_date)")
       .eq("organisation_id", org.id).eq("kind", "maintenance").or(`status.not.in.(resolved,closed),resolved_at.gte.${since}`).order("created_at", { ascending: false }).limit(1000),
     supabase.from("recurring_invoices").select("id, name, status, next_date, total, creates_ticket, customers(name), websites(domain)").eq("organisation_id", org.id).eq("creates_ticket", true).neq("status", "ended").order("next_date").limit(500),
+    supabase.from("website_connectors").select("website_id, wp_version, wp_update, updates_core, updates_plugins, updates_themes, last_checked_at, last_error, last_run_ok, websites(domain, customers(name))")
+      .eq("organisation_id", org.id).limit(1000).then((r) => r, () => ({ data: [] })),
   ]);
   if (error) throw new Error(`Couldn't load maintenance: ${error.message}`);
   const all = (data ?? []) as unknown as T[];
@@ -52,8 +54,33 @@ export default async function MaintenancePage() {
   type U = { id: string; name: string; status: string; next_date: string; total: number; customers: { name: string } | null; websites: { domain: string } | null };
   const soon = ((upcoming ?? []) as unknown as U[]).filter((u) => u.next_date <= addDaysISO(today, 45));
 
+  type W = { website_id: string; wp_version: string | null; wp_update: string | null; updates_core: number; updates_plugins: number; updates_themes: number; last_checked_at: string | null; last_error: string | null; last_run_ok: boolean | null; websites: { domain: string; customers: { name: string } | null } | null };
+  const sites = ((wp ?? []) as unknown as W[]).map((w) => ({ ...w, total: w.updates_core + w.updates_plugins + w.updates_themes }))
+    .sort((a, b) => Number(!!b.last_error) - Number(!!a.last_error) || b.total - a.total || (a.websites?.domain ?? "").localeCompare(b.websites?.domain ?? ""));
+  const waiting = sites.reduce((n, w) => n + w.total, 0);
+
   return (
     <div className="space-y-5">
+      <Card>
+        <CardHeader title="WordPress command ops" subtitle={sites.length ? `${sites.length} connected site${sites.length === 1 ? "" : "s"} · ${waiting} update${waiting === 1 ? "" : "s"} waiting` : "Connect a WordPress site from its page in Websites"} />
+        {sites.length ? (
+          <div className="divide-y divide-line border-t border-line">
+            {sites.map((w) => (
+              <Link key={w.website_id} href={`/nerd-herd/websites/${w.website_id}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-2.5 hover:bg-canvas">
+                <span className="min-w-0">
+                  <span className="block truncate text-[0.8125rem] font-medium text-ink">{w.websites?.domain ?? "—"}{w.websites?.customers ? <span className="font-normal text-ink-muted"> · {w.websites.customers.name}</span> : null}</span>
+                  <span className="block text-[0.7188rem] text-ink-muted">WordPress {w.wp_version ?? "—"}{w.wp_update ? ` → ${w.wp_update}` : ""} · checked {relative(w.last_checked_at)}</span>
+                </span>
+                <span className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  {w.last_error && <Badge tone="red">Can't reach</Badge>}
+                  {w.last_run_ok === false && <Badge tone="red">Last update had a problem</Badge>}
+                  <Badge tone={w.total ? "amber" : "green"}>{w.total ? `${w.total} update${w.total === 1 ? "" : "s"}` : "Up to date"}</Badge>
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </Card>
       <p className="text-[0.8125rem] text-ink-muted">When a maintenance plan's invoice is raised, its job appears under <strong className="text-ink">Awaiting payment</strong>. The moment the invoice is paid (by card, or in Xero) it moves to <strong className="text-ink">Ready to do</strong> and the team is notified.</p>
       <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-4">
         {col("Awaiting payment", "Billed — waiting for the money", all.filter((t) => t.status === "awaiting_payment"), "amber")}
