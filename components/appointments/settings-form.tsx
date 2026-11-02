@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Copy, ExternalLink, Loader2, MapPin, Phone, Plus, Trash2, Video } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,18 @@ export function ApptSettingsForm({ initial, canEdit, bookingUrl, tz }: { initial
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
   const [block, setBlock] = useState({ from: "", to: "", reason: "" });
-  const set = <K extends keyof ApptSettings>(k: K, v: ApptSettings[K]) => { setS({ ...s, [k]: v }); setMsg(null); };
+  const set = <K extends keyof ApptSettings>(k: K, v: ApptSettings[K]) => { setS({ ...s, [k]: v }); };
   const setDay = (d: string, ranges: [string, string][]) => set("weekly", { ...s.weekly, [d]: ranges });
-  const save = () => start(async () => { const r = await saveApptSettings(s); setMsg(r.ok ? { ok: "Saved." } : { error: r.error }); });
+  const save = () => start(async () => { setMsg({ ok: "Saving…" }); const r = await saveApptSettings(s); setMsg(r.ok ? { ok: "Saved ✓" } : { error: r.error }); });
+  // every change saves itself (a moment after you stop) — no hunting for a Save button
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (!canEdit) return;
+    const t = setTimeout(save, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s]);
   const dis = !canEdit;
 
   return (
@@ -41,7 +50,7 @@ export function ApptSettingsForm({ initial, canEdit, bookingUrl, tz }: { initial
       <div className="mb-5">
         <p className="text-[0.75rem] font-medium text-ink-faint"><Link href="/calendar" className="hover:text-ink">Calendar</Link> / <Link href="/calendar/appointments" className="hover:text-ink">Appointments</Link> / Settings</p>
         <h1 className="text-[1.375rem] font-semibold tracking-tight text-ink">Booking settings</h1>
-        <p className="mt-1 text-[0.8438rem] text-ink-muted">When clients can book a meeting with you. Times are {tz.replace("_", " ")}. Anything already on your calendar is never offered.</p>
+        <p className="mt-1 text-[0.8438rem] text-ink-muted">Changes save automatically. When clients can book a meeting with you. Times are {tz.replace("_", " ")}. Anything already on your calendar is never offered.</p>
       </div>
       {!canEdit && <p className="mb-4 rounded-xl bg-amber-500/15 px-4 py-3 text-[0.875rem] text-amber-700 dark:text-amber-300">Only owners, admins and managers can change these.</p>}
 
@@ -133,7 +142,7 @@ export function ApptSettingsForm({ initial, canEdit, bookingUrl, tz }: { initial
         <div className="pb-safe sticky bottom-0 z-30 mt-6 rounded-2xl border border-line bg-surface/95 px-4 py-3 shadow-pop backdrop-blur">
           <div className="flex items-center justify-end gap-3">
             {msg && <span className={cn("text-[0.8125rem] font-medium", msg.error ? "text-rose-600" : "text-emerald-600")}>{msg.error ?? msg.ok}</span>}
-            <Button variant="primary" className="h-11 px-8" disabled={pending} onClick={save}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save</Button>
+            <Button variant="primary" className="h-11 px-8" disabled={pending} onClick={save}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Save now</Button>
           </div>
         </div>
       )}

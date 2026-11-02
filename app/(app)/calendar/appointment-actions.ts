@@ -135,13 +135,17 @@ export async function apptMove(id: string, date: string, time: string, o: { emai
 /** Save the booking settings (hours, notice, blocked days…). Managers only. */
 export async function saveApptSettings(s: ApptSettings): Promise<R<{ when?: string }>> {
   try {
-    const { supabase, org, role } = await requireOrg();
+    const { org, role } = await requireOrg();
     if (!canManage(role)) throw new Error("Only owners, admins and managers can change booking settings.");
     const clean = readApptSettings({ appointments: s });
-    const { data: cur } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    // managers may change booking settings (checked above); the organisations table itself only lets owners/admins write
+    const db = createServiceClient();
+    const { data: cur, error: rErr } = await db.from("organisations").select("settings").eq("id", org.id).single();
+    if (rErr) throw new Error(rErr.message);
     const settings = { ...((cur?.settings as Record<string, unknown>) ?? {}), appointments: clean };
-    const { error } = await supabase.from("organisations").update({ settings }).eq("id", org.id);
+    const { data: done, error } = await db.from("organisations").update({ settings }).eq("id", org.id).select("id");
     if (error) throw new Error(error.message);
+    if (!done?.length) throw new Error("Couldn't save — please try again.");
     revalidatePath("/calendar/appointments"); revalidatePath("/calendar/appointments/settings");
     return { ok: true };
   } catch (e) { return fail(e); }
