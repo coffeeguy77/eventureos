@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { WebsiteForm } from "@/components/nerdherd/website-form";
 import { WpConnector, type ConnectorRow } from "@/components/nerdherd/wp-connector";
+import { SiteSignIn } from "@/components/nerdherd/site-sign-in";
 
 export const dynamic = "force-dynamic";
 // Updates run through server actions on this page and can take a few minutes on a big site.
@@ -40,6 +41,8 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
     supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).neq("action", "check").order("created_at", { ascending: false }).limit(25).then((r) => r, () => ({ data: [] })),
   ]);
+  // saved logins for this site (only counted — the vault shows them once unlocked); nothing before update 0095
+  const { count: savedLogins } = await supabase.from("nerd_vault_items").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("website_id", id).then((r) => r, () => ({ count: 0 }));
   type T = { id: string; number: number; subject: string; status: TicketStatus; kind: string; created_at: string; resolved_at: string | null };
   const tlist = (tickets ?? []) as T[];
   const maint = tlist.filter((t) => t.kind === "maintenance");
@@ -67,6 +70,10 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="space-y-5">
+          <Card>
+            <CardHeader title="Sign in & passwords" subtitle="One-click WordPress sign-in (with your vault PIN) and this site's saved logins" />
+            <div className="border-t border-line px-5 py-4"><SiteSignIn websiteId={w.id} connected={!!connector && (w.platform === "wordpress" || w.platform === "woocommerce")} saved={savedLogins ?? 0} /></div>
+          </Card>
           {(w.platform === "wordpress" || w.platform === "woocommerce") && (
             <Card>
               <CardHeader title="WordPress command ops" subtitle="Updates, versions and caches through the Web Culture Connector plugin" />

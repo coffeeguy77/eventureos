@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/nerd-herd/tickets", label: "Tickets" },
   { href: "/nerd-herd/maintenance", label: "Maintenance" },
   { href: "/nerd-herd/websites", label: "Websites" },
+  { href: "/nerd-herd/vault", label: "Vault" },
   { href: "/nerd-herd/plans", label: "Plans" },
   { href: "/nerd-herd/settings", label: "Settings" },
 ];
