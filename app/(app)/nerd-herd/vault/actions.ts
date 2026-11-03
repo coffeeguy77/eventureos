@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { headers } from "next/headers";
 import { requireOrg } from "@/lib/context";
 import { actorName } from "@/lib/activity";
@@ -195,10 +196,8 @@ export async function supportSignIn(websiteId: string): Promise<R<{ url: string;
       c.db.from("website_connector_keys").select("key").eq("website_id", websiteId).maybeSingle(),
     ]);
     if (!conn || !k?.key) throw new Error("Connect the Web Culture Connector on this site first (WordPress command ops).");
-    const ver = String(conn.connector_version ?? "0").split(".").map(Number);
-    if ((ver[0] ?? 0) * 1000 + (ver[1] ?? 0) < 1002) throw new Error(`OLD_CONNECTOR:${conn.connector_version ?? "unknown"}`);
     const { callConnector } = await import("@/lib/nerdherd/connector");
-    let r: { url: string; expires_in: number; as: string };
+    let r: { url: string; expires_in: number; as: string; connector?: string };
     try { r = await callConnector(conn.site_url as string, k.key as string, "POST", "/login-link", { who: actorName(c.profile), to: "/wp-admin/" }, 20_000); }
     catch (e) {
       const m = e instanceof Error ? e.message : String(e);
@@ -207,6 +206,13 @@ export async function supportSignIn(websiteId: string): Promise<R<{ url: string;
     const base = new URL(conn.site_url as string);
     const got = new URL(r.url);
     if (got.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "") || got.protocol !== "https:" && base.protocol === "https:") throw new Error("The site returned an unexpected sign-in address.");
+    // the site told us its Connector version — keep ours in step (the full status refreshes in the background)
+    if (r.connector && /^\d+\.\d+\.\d+$/.test(r.connector)) await c.db.from("website_connectors").update({ connector_version: r.connector }).eq("website_id", websiteId);
+    else if (conn.connector_version !== "1.2.0") await c.db.from("website_connectors").update({ connector_version: "1.2.0" }).eq("website_id", websiteId).lt("connector_version", "1.2.0");
+    after(async () => {
+      try { const { storeStatus } = await import("@/lib/nerdherd/connector"); const s = await callConnector<import("@/lib/nerdherd/connector").ConnectorStatus>(conn.site_url as string, k.key as string, "GET", "/status", undefined, 60_000); await storeStatus(c.db, websiteId, s); } catch { /* next check catches up */ }
+    });
+    revalidatePath(`/nerd-herd/websites/${websiteId}`);
     await c.db.from("website_maintenance_runs").insert({ organisation_id: c.org.id, website_id: websiteId, action: "login", ok: true, summary: `Support sign-in by ${actorName(c.profile)} (as ${r.as})`, actor: c.user.id, public: false }).then(() => undefined, () => undefined);
     await log(c, "login", { websiteId, detail: `${site.domain} as ${r.as}` });
     return { ok: true, data: { url: got.toString(), as: r.as } };

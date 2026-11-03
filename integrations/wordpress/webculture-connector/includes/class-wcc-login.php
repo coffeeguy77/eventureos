@@ -74,6 +74,7 @@ class WCC_Login {
 			'url'        => add_query_arg( 'wcc_login', $token, home_url( '/' ) ),
 			'expires_in' => self::TTL,
 			'as'         => $user->user_login,
+			'connector'  => WCC_VERSION,
 		);
 	}
 

@@ -1,5 +1,5 @@
 === Web Culture Connector ===
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GPLv2 or later

@@ -1,8 +1,8 @@
 {
   "name": "Web Culture Connector",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "package": "https://www.eventureos.com.au/downloads/webculture-connector.zip",
   "requires": "6.0",
   "tested": "7.1",
-  "changelog": "1.2.0 – One-click support sign-in from the command centre (single-use 60-second links, logged; can be switched off in Tools → Web Culture). 1.1.1 – Neutral plugin description. 1.1.0 – Hosting administration (lock/unlock from EventureOS, pay page for visitors); self-updates from EventureOS. 1.0.0 – Status, updates, cache purge, maintenance log."
+  "changelog": "1.2.1 – No more “new version available” for the version you already have; tells the command centre its version on sign-in. 1.2.0 – One-click support sign-in from the command centre (single-use 60-second links, logged; can be switched off in Tools → Web Culture). 1.1.1 – Neutral plugin description. 1.1.0 – Hosting administration (lock/unlock from EventureOS, pay page for visitors); self-updates from EventureOS. 1.0.0 – Status, updates, cache purge, maintenance log."
 }

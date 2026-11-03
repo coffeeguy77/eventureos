@@ -17,6 +17,9 @@ class WCC_Updater {
 	public static function init() {
 		add_filter( 'pre_set_site_transient_update_plugins', array( __CLASS__, 'inject' ) );
 		add_filter( 'plugins_api', array( __CLASS__, 'info' ), 20, 3 );
+		// after an update (or a manual upload) WordPress can keep showing "new version available" for the version
+		// already installed — drop that stale notice whenever the update list is read
+		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'clean' ) );
 	}
 
 	private static function manifest() {
@@ -53,6 +56,14 @@ class WCC_Updater {
 				'requires'    => $m['requires'] ?? '',
 			);
 		} elseif ( isset( $transient->response[ $file ] ) ) {
+			unset( $transient->response[ $file ] );
+		}
+		return $transient;
+	}
+
+	public static function clean( $transient ) {
+		$file = plugin_basename( WCC_FILE );
+		if ( is_object( $transient ) && isset( $transient->response[ $file ] ) && version_compare( (string) ( $transient->response[ $file ]->new_version ?? '0' ), WCC_VERSION, '<=' ) ) {
 			unset( $transient->response[ $file ] );
 		}
 		return $transient;
