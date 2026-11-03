@@ -16,22 +16,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { supabase, org, realProfile: profile, memberships, isSupportSession, current, role, access: sections } = await requireOrg();
   const path = (await headers()).get("x-pathname") ?? "";
   if (path && !canOpen(role, path, sections)) redirect(homeFor(role));
-  const admin = await isSuperAdmin();
-
-  // apps EventureOS hasn't given this business are hidden and locked
-  const access = await orgAppAccess(org.id);
-  const app = path ? appForPath(path) : null;
-  if (app && !appAllowed(access, app)) redirect(`/settings/apps?locked=${app}`);
-  const flags = {
-    franchise: appAllowed(access, "franchise") && readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
-    hire: hireOn(access, org.settings),
-    // apps this business doesn't have — and Events when it doesn't run events (Settings → Enquiries)
-    locked: [...APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths), ...(((org.settings ?? {}) as { uses_events?: unknown }).uses_events === false ? ["/events"] : [])],
-    sections,
-    labels: { "/hosting": readHosting(org.settings).menuLabel },
-  };
+  // apps EventureOS hasn't given this business are hidden and locked (both lookups at once)
   const endOfToday = new Date(Date.now() + 86_400_000).toISOString();
-  const [notif, unread, openEnquiries, dueTasks] = await Promise.all([
+  const [admin, access, notif, unread, openEnquiries, dueTasks] = await Promise.all([isSuperAdmin(), orgAppAccess(org.id),
     supabase
       .from("notifications")
       .select("id, title, body, link, created_at, read_at, type")
@@ -51,6 +38,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // To-do badge: open tasks due by tomorrow (overdue included)
     supabase.from("tasks").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).neq("status", "done").lte("due_at", endOfToday),
   ]);
+  const app = path ? appForPath(path) : null;
+  if (app && !appAllowed(access, app)) redirect(`/settings/apps?locked=${app}`);
+  const flags = {
+    franchise: appAllowed(access, "franchise") && readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
+    hire: hireOn(access, org.settings),
+    // apps this business doesn't have — and Events when it doesn't run events (Settings → Enquiries)
+    locked: [...APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths), ...(((org.settings ?? {}) as { uses_events?: unknown }).uses_events === false ? ["/events"] : [])],
+    sections,
+    labels: { "/hosting": readHosting(org.settings).menuLabel },
+  };
   if (notif.error) throw new Error(`Could not load notifications: ${notif.error.message}`);
 
   // the other businesses this person works in: a dot when something's new there (unread notifications or new enquiries)

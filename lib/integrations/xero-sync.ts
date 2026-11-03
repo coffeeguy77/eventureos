@@ -251,7 +251,8 @@ export async function syncXero(ctx: SyncContext, opts: { full?: boolean } = {}) 
 
   // 5. Link emails and enquiries to customers by exact address
   let linkedMail = { enquiries: 0, threads: 0 };
-  if (R && (R.created || R.linkedByEmail || done)) {
+  // (heavy: ~2 s of database time — only when this sync added or linked clients, or on the daily full run)
+  if (R && (R.created || R.linkedByEmail || (done && opts.full))) {
     const { data, error } = await ctx.db.rpc("link_customer_emails", { p_org: ctx.org.id });
     if (error) notes.push(`Linking emails: ${error.message}`);
     else linkedMail = data as typeof linkedMail;

@@ -20,7 +20,7 @@ export function TodayBoard({ board, onText, tz }: { board: Board; onText?: (shif
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); const r = setInterval(() => router.refresh(), 60_000); return () => { clearInterval(t); clearInterval(r); }; }, [router]);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); const r = setInterval(() => { if (document.visibilityState === "visible") router.refresh(); }, 60_000); return () => { clearInterval(t); clearInterval(r); }; }, [router]);
   const mins = (iso: string | null) => (iso ? Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000)) : 0);
   const t = (iso: string) => new Date(iso).toLocaleTimeString("en-AU", { timeZone: tz, hour: "numeric", minute: "2-digit" });
   const pct = board.sales && board.sales > 0 ? Math.round((board.wages.cost / board.sales) * 100) : null;

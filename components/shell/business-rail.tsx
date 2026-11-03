@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { NavLink as Link } from "./nav-link";
 import { useTransition } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { switchOrganisation } from "@/app/(app)/shell-actions";
