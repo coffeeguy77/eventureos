@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 const ITEMS = [
   { href: "/nerd-herd", label: "Help desk" },
   { href: "/nerd-herd/tickets", label: "Tickets" },
-  { href: "/nerd-herd/maintenance", label: "Maintenance" },
+  { href: "/nerd-herd/maintenance", label: "Maintenance jobs" },
   { href: "/nerd-herd/websites", label: "Websites" },
   { href: "/nerd-herd/vault", label: "Vault" },
   { href: "/nerd-herd/plans", label: "Plans" },

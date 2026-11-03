@@ -25,7 +25,14 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
       db.from("website_connectors").select("website_id").eq("organisation_id", org.id),
     ]);
     const conn = new Set(((cn.data ?? []) as { website_id: string }[]).map((x) => x.website_id));
-    items = ((it.data ?? []) as unknown as (Omit<VaultItemRow, "client" | "domain" | "connected"> & { customers: { name: string } | null; websites: { domain: string } | null })[]).map((x) => ({ ...x, client: x.customers?.name ?? null, domain: x.websites?.domain ?? null, connected: !!x.website_id && conn.has(x.website_id) }));
+    const siteRows = (st.data ?? []) as { id: string; domain: string; customer_id: string | null }[];
+    const hostOf = (u: string | null) => { try { return u ? new URL(u).hostname.toLowerCase().replace(/^www\./, "") : null; } catch { return null; } };
+    items = ((it.data ?? []) as unknown as (Omit<VaultItemRow, "client" | "domain" | "connected" | "sign_in_site"> & { customers: { name: string } | null; websites: { domain: string } | null })[]).map((x) => {
+      // the site to sign in to: the linked website, or the one whose domain the saved address is on
+      const h = hostOf(x.url);
+      const site = x.website_id ?? siteRows.find((s) => h && (h === s.domain.toLowerCase().replace(/^www\./, "") || h.endsWith(`.${s.domain.toLowerCase()}`)))?.id ?? null;
+      return { ...x, client: x.customers?.name ?? null, domain: x.websites?.domain ?? (site ? siteRows.find((s) => s.id === site)?.domain ?? null : null), connected: !!site && conn.has(site), sign_in_site: site };
+    });
     log = (lg.data ?? []) as VaultLogRow[];
     clients = (cl.data ?? []) as { id: string; name: string }[];
     sites = ((st.data ?? []) as { id: string; domain: string; customer_id: string | null }[]).map((s) => ({ ...s, connected: conn.has(s.id) }));

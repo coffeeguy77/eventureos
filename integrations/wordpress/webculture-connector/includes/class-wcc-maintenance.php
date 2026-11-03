@@ -60,6 +60,7 @@ class WCC_Maintenance {
 		delete_site_transient( 'update_core' );
 		delete_site_transient( 'update_plugins' );
 		delete_site_transient( 'update_themes' );
+		delete_site_transient( 'wcc_update_manifest' ); // see a new Connector version straight away
 		wp_version_check( array(), true );
 		wp_update_plugins();
 		wp_update_themes();

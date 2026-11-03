@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrg } from "@/lib/context";
 import { addDaysISO, fmtDate, money, relative, todayISO } from "@/lib/format";
-import { readChecklist } from "@/lib/nerdherd/core";
+import { planCategory, readChecklist } from "@/lib/nerdherd/core";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,7 +28,7 @@ export default async function MaintenancePage() {
   if (error) throw new Error(`Couldn't load maintenance: ${error.message}`);
   const all = (data ?? []) as unknown as T[];
   const col = (title: string, hint: string, rows: T[], tone: "amber" | "blue" | "brand" | "green") => (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader title={`${title} (${rows.length})`} subtitle={hint} />
       {rows.length ? (
         <div className="divide-y divide-line border-t border-line">
@@ -58,11 +58,20 @@ export default async function MaintenancePage() {
   const sites = ((wp ?? []) as unknown as W[]).map((w) => ({ ...w, total: w.updates_core + w.updates_plugins + w.updates_themes }))
     .sort((a, b) => Number(!!b.last_error) - Number(!!a.last_error) || b.total - a.total || (a.websites?.domain ?? "").localeCompare(b.websites?.domain ?? ""));
   const waiting = sites.reduce((n, w) => n + w.total, 0);
+  // same rule as Websites → On maintenance plan
+  const { data: allPlans } = await supabase.from("recurring_invoices").select("website_id, category, creates_ticket, name").eq("organisation_id", org.id).neq("status", "ended").not("website_id", "is", null).limit(5000);
+  const planSites = new Set(((allPlans ?? []) as { website_id: string; category: string | null; creates_ticket: boolean; name: string }[]).filter((p) => planCategory(p) === "maintenance").map((p) => p.website_id)).size;
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardHeader title="WordPress command ops" subtitle={sites.length ? `${sites.length} connected site${sites.length === 1 ? "" : "s"} · ${waiting} update${waiting === 1 ? "" : "s"} waiting` : "Connect a WordPress site from its page in Websites"} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Link href="/nerd-herd/websites?v=plan" className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line transition hover:ring-2"><p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Sites on a maintenance plan</p><p className="mt-1 text-[1.75rem] font-bold leading-none text-ink">{planSites}</p><p className="mt-1 text-[0.75rem] text-brand-600">See them in Websites →</p></Link>
+        <Link href="/nerd-herd/websites?v=ops" className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line transition hover:ring-2"><p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Connected for command ops</p><p className="mt-1 text-[1.75rem] font-bold leading-none text-ink">{sites.length}</p><p className="mt-1 text-[0.75rem] text-brand-600">{waiting} update{waiting === 1 ? "" : "s"} waiting →</p></Link>
+        <div className="rounded-2xl bg-surface p-4 shadow-card ring-1 ring-line"><p className="text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Jobs waiting on payment</p><p className="mt-1 text-[1.75rem] font-bold leading-none text-amber-600">{all.filter((t) => t.status === "awaiting_payment").length}</p><p className="mt-1 text-[0.75rem] text-ink-muted">Work starts once paid</p></div>
+      </div>
+      <p className="text-[0.8125rem] text-ink-muted">This page is the <strong className="text-ink">maintenance jobs</strong> your plans create — one per billing run. To see <em>which sites</em> are on a plan, use <Link href="/nerd-herd/websites?v=plan" className="font-medium text-brand-600">Websites → On maintenance plan</Link>.</p>
+      <Card className="overflow-hidden">
+        <CardHeader title="WordPress command ops" action={<Link href="/nerd-herd/websites?v=ops" className="text-[0.75rem] font-medium text-brand-600">All connected sites</Link>} subtitle={sites.length ? `${sites.length} connected site${sites.length === 1 ? "" : "s"} · ${waiting} update${waiting === 1 ? "" : "s"} waiting` : "Connect a WordPress site from its page in Websites"} />
         {sites.length ? (
           <div className="divide-y divide-line border-t border-line">
             {sites.map((w) => (
@@ -81,14 +90,14 @@ export default async function MaintenancePage() {
           </div>
         ) : null}
       </Card>
-      <p className="text-[0.8125rem] text-ink-muted">When a maintenance plan's invoice is raised, its job appears under <strong className="text-ink">Awaiting payment</strong>. The moment the invoice is paid (by card, or in Xero) it moves to <strong className="text-ink">Ready to do</strong> and the team is notified.</p>
+      <p className="text-[0.8125rem] text-ink-muted">When a maintenance plan&apos;s invoice is raised, its job appears under <strong className="text-ink">Awaiting payment</strong>. The moment the invoice is paid (by card, or in Xero) it moves to <strong className="text-ink">Ready to do</strong> and the team is notified.</p>
       <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-4">
         {col("Awaiting payment", "Billed — waiting for the money", all.filter((t) => t.status === "awaiting_payment"), "amber")}
         {col("Ready to do", "Paid — do the checks", all.filter((t) => ["open", "new", "scheduled"].includes(t.status)), "blue")}
         {col("In progress", "Checks under way", all.filter((t) => ["in_progress", "waiting_customer"].includes(t.status)), "brand")}
         {col("Done", "Last 45 days", all.filter((t) => t.status === "resolved"), "green")}
       </div>
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader title="Coming up" subtitle="Maintenance plans due in the next 45 days — each raises its invoice and opens a job on the day" action={<Link href="/nerd-herd/plans" className="text-[0.75rem] font-medium text-brand-600">All plans</Link>} />
         {soon.length ? (
           <div className="divide-y divide-line border-t border-line">

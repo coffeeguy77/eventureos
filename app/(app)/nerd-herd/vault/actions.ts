@@ -191,16 +191,18 @@ export async function supportSignIn(websiteId: string): Promise<R<{ url: string;
     const { data: site } = await c.db.from("websites").select("id, domain").eq("id", websiteId).eq("organisation_id", c.org.id).maybeSingle();
     if (!site) throw new Error("That website no longer exists.");
     const [{ data: conn }, { data: k }] = await Promise.all([
-      c.db.from("website_connectors").select("site_url").eq("website_id", websiteId).eq("organisation_id", c.org.id).maybeSingle(),
+      c.db.from("website_connectors").select("site_url, connector_version").eq("website_id", websiteId).eq("organisation_id", c.org.id).maybeSingle(),
       c.db.from("website_connector_keys").select("key").eq("website_id", websiteId).maybeSingle(),
     ]);
     if (!conn || !k?.key) throw new Error("Connect the Web Culture Connector on this site first (WordPress command ops).");
+    const ver = String(conn.connector_version ?? "0").split(".").map(Number);
+    if ((ver[0] ?? 0) * 1000 + (ver[1] ?? 0) < 1002) throw new Error(`OLD_CONNECTOR:${conn.connector_version ?? "unknown"}`);
     const { callConnector } = await import("@/lib/nerdherd/connector");
     let r: { url: string; expires_in: number; as: string };
     try { r = await callConnector(conn.site_url as string, k.key as string, "POST", "/login-link", { who: actorName(c.profile), to: "/wp-admin/" }, 20_000); }
     catch (e) {
       const m = e instanceof Error ? e.message : String(e);
-      throw new Error(/no route|rest_no_route|404/i.test(m) ? "This site's Connector is older than 1.2.0 — update it (Update everything) to use one-click sign-in." : m);
+      throw new Error(/isn't installed or active|no route|rest_no_route|404/i.test(m) ? "OLD_CONNECTOR:unknown" : m);
     }
     const base = new URL(conn.site_url as string);
     const got = new URL(r.url);

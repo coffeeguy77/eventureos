@@ -11,7 +11,7 @@ import { deleteVaultItem, lockVault, revealVaultSecret, saveVaultItem, setVaultM
 
 export interface VaultItemRow {
   id: string; label: string; kind: string; url: string | null; username: string | null; has_password: boolean; has_notes: boolean; customer_id: string | null; website_id: string | null;
-  updated_at: string; password_changed_at: string | null; last_revealed_at: string | null; client: string | null; domain: string | null; connected: boolean;
+  updated_at: string; password_changed_at: string | null; last_revealed_at: string | null; client: string | null; domain: string | null; connected: boolean; sign_in_site: string | null;
 }
 export interface VaultLogRow { id: string; actor: string | null; action: string; detail: string | null; at: string }
 
@@ -83,12 +83,17 @@ function Unlocked(p: Parameters<typeof VaultScreen>[0]) {
   const [client, setClient] = useState(p.focusClient ?? "");
   const [editing, setEditing] = useState<VaultItemRow | "new" | null>(null);
   const [tab, setTab] = useState<"logins" | "log">("logins");
+  const [siteF, setSiteF] = useState<string | null>(p.focusSite);
+  const focus = siteF ? p.sites.find((s) => s.id === siteF) ?? null : null;
+  // a login belongs to the site when it's linked to it — or its address is on the site's domain
+  const onSite = (i: VaultItemRow) => !focus || i.website_id === focus.id || i.sign_in_site === focus.id || (!!i.url && new RegExp(`(^|[/.])${focus.domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(/|:|$)`, "i").test(i.url.replace(/^https?:\/\//, "")));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return p.items.filter((i) => (!client || i.customer_id === client) && (!p.focusSite || i.website_id === p.focusSite || !!q || !!client) && (!t || [i.label, i.url, i.username, i.client, i.domain].some((x) => x?.toLowerCase().includes(t))));
-  }, [p.items, q, client, p.focusSite]);
+    return p.items.filter((i) => (!client || i.customer_id === client) && onSite(i) && (!t || [i.label, i.url, i.username, i.client, i.domain].some((x) => x?.toLowerCase().includes(t))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.items, q, client, focus]);
   const groups = useMemo(() => {
     const m = new Map<string, VaultItemRow[]>();
     for (const i of list) { const k = i.client ?? "No client"; m.set(k, [...(m.get(k) ?? []), i]); }
@@ -103,6 +108,7 @@ function Unlocked(p: Parameters<typeof VaultScreen>[0]) {
         <Button onClick={() => start(async () => { await lockVault(); router.refresh(); })} disabled={pending}><Lock className="h-4 w-4" />Lock</Button>
       </div>
       <p className="flex items-center gap-1.5 text-[0.75rem] text-emerald-600"><ShieldCheck className="h-3.5 w-3.5" />Unlocked on this device — locks after 15 minutes without use. Passwords are encrypted; every view and copy is logged.</p>
+      {focus && <p className="flex flex-wrap items-center gap-2 rounded-lg bg-brand-500/10 px-3 py-2 text-[0.8125rem] text-ink">Showing logins for <strong>{focus.domain}</strong><button onClick={() => setSiteF(null)} className="font-medium text-brand-600 underline">Show all</button></p>}
       {msg && <p className={cn("text-[0.8125rem] font-medium", msg.ok ? "text-emerald-600" : "text-rose-600")}>{msg.text}</p>}
       <div className="flex gap-1 rounded-xl bg-canvas p-1 ring-1 ring-line sm:inline-flex">
         {([["logins", `Logins (${p.items.length})`], ["log", "Activity"]] as const).map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={cn("flex-1 rounded-lg px-3 py-2 text-[0.8125rem] font-medium sm:flex-none", tab === k ? "bg-surface text-ink shadow-sm" : "text-ink-muted")}>{l}</button>)}
@@ -119,7 +125,7 @@ function Unlocked(p: Parameters<typeof VaultScreen>[0]) {
           <ul className="divide-y divide-line border-t border-line">{rows.map((i) => <ItemRow key={i.id} i={i} onEdit={() => setEditing(i)} onMsg={setMsg} />)}</ul>
         </Card>
       ))}
-      {editing && <ItemEditor item={editing === "new" ? null : editing} clients={p.clients} sites={p.sites} defaults={{ site: p.focusSite, client: client || p.focusClient }} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
+      {editing && <ItemEditor item={editing === "new" ? null : editing} clients={p.clients} sites={p.sites} defaults={{ site: siteF, client: client || p.focusClient }} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); router.refresh(); }} />}
     </>
   );
 }
@@ -141,8 +147,8 @@ export function ItemRow({ i, onEdit, onMsg, compact }: { i: VaultItemRow; onEdit
   });
   const signIn = () => start(async () => {
     const w = window.open("about:blank", "_blank");
-    const r = await supportSignIn(i.website_id!);
-    if (!r.ok) { w?.close(); onMsg({ ok: false, text: r.error }); return; }
+    const r = await supportSignIn(i.sign_in_site!);
+    if (!r.ok) { w?.close(); onMsg({ ok: false, text: r.error.startsWith("OLD_CONNECTOR") ? `${i.domain} needs Connector 1.2.0 for one-click sign-in — open the website page and press “Update Connector now”.` : r.error }); return; }
     if (w) w.location.href = r.data.url; else window.location.href = r.data.url;
     onMsg({ ok: true, text: `Signing you in to ${i.domain} as ${r.data.as}…` });
   });
@@ -154,7 +160,7 @@ export function ItemRow({ i, onEdit, onMsg, compact }: { i: VaultItemRow; onEdit
           {i.url && <a href={i.url} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-[0.8125rem] text-brand-600 hover:underline">{i.url.replace(/^https?:\/\//, "")}<ExternalLink className="h-3 w-3 shrink-0" /></a>}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {i.kind === "wordpress" && i.website_id && i.connected && <Button size="sm" variant="primary" disabled={pending} onClick={signIn}><LogIn className="h-3.5 w-3.5" />Sign in</Button>}
+          {i.kind === "wordpress" && i.sign_in_site && i.connected && <Button size="sm" variant="primary" disabled={pending} onClick={signIn}><LogIn className="h-3.5 w-3.5" />Sign in</Button>}
           {onEdit && <Button size="sm" variant="ghost" onClick={onEdit} aria-label="Edit"><Pencil className="h-3.5 w-3.5" /></Button>}
         </div>
       </div>

@@ -176,3 +176,23 @@ export async function setSiteLock(websiteId: string, lock: boolean): Promise<R<s
     return { ok: true, data: lock ? "Site locked — visitors now see the unavailable page." : "Site unlocked — it's back online." };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** Bring the Web Culture Connector plugin itself up to date (needed for one-click sign-in, 1.2.0+). */
+export async function updateConnectorPlugin(websiteId: string): Promise<R<string>> {
+  try {
+    const c = await ctx(websiteId);
+    const { url, key } = await connection(c.db, c.org.id, websiteId);
+    const s = await callConnector<ConnectorStatus>(url, key, "POST", "/check", undefined, 90_000);
+    await storeStatus(c.db, websiteId, s);
+    const me = (s.plugins ?? []).find((p) => /^webculture-connector\//.test(p.file));
+    if (!me) throw new Error("Couldn't find the Connector in the site's plugin list.");
+    if (!me.update) {
+      const [a, b] = me.version.split(".").map(Number);
+      if ((a || 0) > 1 || ((a || 0) === 1 && (b || 0) >= 2)) return { ok: true, data: `The Connector is already up to date (${me.version}).` };
+      throw new Error(`The site hasn't picked up the new Connector yet (it checks every few hours). Try again later — or install it now in WordPress: Plugins → Add New → Upload, with https://www.eventureos.com.au/downloads/webculture-connector.zip`);
+    }
+    const r = await updateSite(websiteId, "plugins", [me.file]);
+    if (!r.ok) return r;
+    return { ok: true, data: `Connector updated ${me.version} → ${me.update}.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
