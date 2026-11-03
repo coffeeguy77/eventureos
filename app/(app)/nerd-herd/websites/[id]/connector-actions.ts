@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { logActivity } from "@/lib/activity";
-import { callConnector, KEY_PATTERN, normaliseSiteUrl, sameSite, storeStatus, type ConnectorStatus, type UpdateResult } from "@/lib/nerdherd/connector";
+import { callConnector, describeUpdate, KEY_PATTERN, normaliseSiteUrl, sameSite, storeStatus, syncLog, type ConnectorStatus, type UpdateResult } from "@/lib/nerdherd/connector";
 
 /**
  * WordPress command ops for a website (Nerd Herd → Websites → a site): connect the Web Culture Connector plugin,
@@ -36,10 +36,10 @@ async function connection(db: ReturnType<typeof createServiceClient>, orgId: str
   return { url: conn.site_url as string, key: k.key as string };
 }
 
-async function record(db: ReturnType<typeof createServiceClient>, r: { orgId: string; websiteId: string; action: string; scope?: string | null; ok: boolean; summary: string; detail?: unknown; actor: string }) {
+async function record(db: ReturnType<typeof createServiceClient>, r: { orgId: string; websiteId: string; action: string; scope?: string | null; ok: boolean; summary: string; detail?: unknown; actor: string; isPublic?: boolean }) {
   await db.from("website_maintenance_runs").insert({
     organisation_id: r.orgId, website_id: r.websiteId, action: r.action, scope: r.scope ?? null, ok: r.ok,
-    summary: r.summary.slice(0, 2000), detail: r.detail ?? null, actor: r.actor,
+    summary: r.summary.slice(0, 2000), detail: r.detail ?? null, actor: r.actor, public: r.isPublic ?? !["check", "connect", "disconnect"].includes(r.action),
   });
 }
 
@@ -66,6 +66,7 @@ export async function connectSite(websiteId: string, siteUrlInput: string, keyIn
     const total = status.updates.core + status.updates.plugins + status.updates.themes;
     const summary = `Connected ${url} — WordPress ${status.environment.wp}, ${total} update${total === 1 ? "" : "s"} waiting`;
     await record(db, { orgId: org.id, websiteId: site.id, action: "connect", ok: true, summary, actor: user.id });
+    try { await syncLog(db, org.id, site.id, url, key); } catch { /* history import is best effort */ }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "website.connector_connected", entityType: "website", entityId: site.id, customerId: site.customer_id, summary: `Connected ${site.domain} to command ops` });
     done(site.id);
     return { ok: true, data: summary };
@@ -82,8 +83,11 @@ export async function checkSite(websiteId: string): Promise<R<string>> {
     await storeStatus(c.db, websiteId, status);
     const total = status.updates.core + status.updates.plugins + status.updates.themes;
     const summary = total ? `${total} update${total === 1 ? "" : "s"} waiting` : "Everything is up to date";
-    await record(c.db, { orgId: c.org.id, websiteId, action: "check", ok: true, summary, actor: c.user.id });
+    let imported = 0;
+    try { imported = await syncLog(c.db, c.org.id, websiteId, url, key); } catch { /* best effort */ }
+    await record(c.db, { orgId: c.org.id, websiteId, action: "check", ok: true, summary, actor: c.user.id, isPublic: false });
     done(websiteId);
+    if (imported) return { ok: true, data: `${summary} · ${imported} history entr${imported === 1 ? "y" : "ies"} brought in from the site` };
     return { ok: true, data: summary };
   } catch (e) {
     if (c) await c.db.from("website_connectors").update({ last_error: err(e), updated_at: new Date().toISOString() }).eq("website_id", websiteId).then(() => undefined, () => undefined);
@@ -102,8 +106,9 @@ export async function updateSite(websiteId: string, scope: "all" | "plugins" | "
     const r = await callConnector<UpdateResult>(url, key, "POST", "/update", { type: scope, items: clean }, 280_000);
     const failed = [...(r.plugins ?? []).filter((p) => !p.ok).map((p) => p.name), ...(r.themes ?? []).filter((t) => !t.ok).map((t) => t.slug), ...(r.core && !r.core.ok && r.core.error !== "Already up to date." ? ["WordPress"] : [])];
     const ok = !!r.health_after?.ok;
-    const summary = `${r.summary}${failed.length ? ` Didn't update: ${failed.join(", ")}.` : ""}`;
-    await record(c.db, { orgId: c.org.id, websiteId, action: "update", scope, ok, summary, detail: r, actor: c.user.id });
+    const summary = describeUpdate(r, r.summary);
+    // the site logs the run itself (with every plugin's old → new version); copy it in rather than writing a second row
+    try { await syncLog(c.db, c.org.id, websiteId, url, key); } catch { await record(c.db, { orgId: c.org.id, websiteId, action: "update", scope, ok, summary, detail: r, actor: c.user.id }); }
     await c.db.from("website_connectors").update({ last_run_at: new Date().toISOString(), last_run_summary: summary, last_run_ok: ok, updated_at: new Date().toISOString() }).eq("website_id", websiteId);
     try {
       const status = await callConnector<ConnectorStatus>(url, key, "GET", "/status", undefined, 60_000);
@@ -124,7 +129,7 @@ export async function purgeSite(websiteId: string): Promise<R<string>> {
     const { url, key } = await connection(c.db, c.org.id, websiteId);
     const r = await callConnector<{ purged: string[] }>(url, key, "POST", "/cache/purge");
     const summary = `Caches purged: ${(r.purged ?? []).join(", ") || "none found"}`;
-    await record(c.db, { orgId: c.org.id, websiteId, action: "purge", ok: true, summary, actor: c.user.id });
+    try { await syncLog(c.db, c.org.id, websiteId, url, key); } catch { await record(c.db, { orgId: c.org.id, websiteId, action: "purge", ok: true, summary, actor: c.user.id }); }
     done(websiteId);
     return { ok: true, data: summary };
   } catch (e) { return { ok: false, error: err(e) }; }
@@ -138,5 +143,36 @@ export async function disconnectSite(websiteId: string): Promise<R<string>> {
     await logActivity(c.supabase, { orgId: c.org.id, actorId: c.user.id, action: "website.connector_disconnected", entityType: "website", entityId: websiteId, customerId: c.site.customer_id, summary: `Disconnected ${c.site.domain} from command ops` });
     done(websiteId);
     return { ok: true, data: "Disconnected." };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/**
+ * Lock or unlock the site by hand. Locking uses the linked hosting account's overdue invoice for the pay button
+ * (if there is one). Normally Hosting does this automatically: suspend → lock, paid → unlock.
+ */
+export async function setSiteLock(websiteId: string, lock: boolean): Promise<R<string>> {
+  try {
+    const c = await ctx(websiteId);
+    const { url, key } = await connection(c.db, c.org.id, websiteId);
+    let payload: Record<string, unknown> = { note: "unlocked by hand" };
+    if (lock) {
+      const { data: w } = await c.db.from("websites").select("hosting_account_id").eq("id", websiteId).maybeSingle();
+      const { data: org } = await c.db.from("organisations").select("name, contact_email").eq("id", c.org.id).single();
+      payload = { provider: org?.name ?? "Web Culture", contact_email: org?.contact_email ?? "", reason: "manual" };
+      if (w?.hosting_account_id) {
+        const { data: h } = await c.db.from("hosting_accounts").select("invoice_id, amount_due").eq("id", w.hosting_account_id).maybeSingle();
+        if (h?.invoice_id) {
+          const { data: inv } = await c.db.from("invoices").select("number, pay_token, status").eq("id", h.invoice_id).maybeSingle();
+          const { appBaseUrl } = await import("@/lib/integrations/registry");
+          if (inv?.pay_token && inv.status !== "paid") payload = { ...payload, pay_url: `${appBaseUrl()}/pay/${inv.pay_token}`, invoice: inv.number ?? "", amount: h.amount_due != null ? `$${Number(h.amount_due).toFixed(2)}` : "" };
+        }
+      }
+    }
+    await callConnector(url, key, "POST", lock ? "/lock" : "/unlock", payload);
+    try { await syncLog(c.db, c.org.id, websiteId, url, key); } catch { /* best effort */ }
+    try { await storeStatus(c.db, websiteId, await callConnector<ConnectorStatus>(url, key, "GET", "/status")); } catch { /* best effort */ }
+    await logActivity(c.supabase, { orgId: c.org.id, actorId: c.user.id, action: lock ? "website.locked" : "website.unlocked", entityType: "website", entityId: websiteId, customerId: c.site.customer_id, summary: `${lock ? "Locked" : "Unlocked"} ${c.site.domain} for visitors` });
+    done(websiteId);
+    return { ok: true, data: lock ? "Site locked — visitors now see the unavailable page." : "Site unlocked — it's back online." };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

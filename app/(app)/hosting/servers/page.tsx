@@ -40,7 +40,8 @@ export default async function HostingServersPage() {
         <Card>
           <CardHeader title="SiteGround: the Web Culture status plugin" subtitle="SiteGround's Site Tools has no API for suspending, so each WordPress site checks with EventureOS instead." />
           <div className="space-y-2 border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted">
-            <p>1. Download <a className="font-medium text-brand-600 underline" href="/downloads/webculture-status.zip">webculture-status.zip</a> and upload it in the site's WordPress → Plugins → Add New → Upload.</p>
+            <p className="rounded-lg bg-canvas px-3 py-2 text-ink"><strong>Recommended:</strong> install the <a className="font-medium text-brand-600 underline" href="/downloads/webculture-connector.zip">Web Culture Connector</a> instead, connect the site under Nerd Herd → Websites and link the website to its hosting account. Suspending then locks the site <em>instantly</em>, paying the invoice unlocks it instantly, and the same plugin runs the site's updates.</p>
+            <p>Older option — 1. Download <a className="font-medium text-brand-600 underline" href="/downloads/webculture-status.zip">webculture-status.zip</a> and upload it in the site's WordPress → Plugins → Add New → Upload.</p>
             <p>2. Activate it, then in Settings → Web Culture status paste the site's key (open the site in Accounts to copy it).</p>
             <p>3. When you suspend the site here, visitors see your suspension page (with the pay link) within 10 minutes; logged-in admins still see the site and wp-admin. Switch it back on and it clears the same way.</p>
             <p className="text-[0.75rem]">If someone deactivates the plugin, the suspension stops — it's a polite switch, not a lock. For a hard lock on SiteGround you'd use Site Tools by hand.</p>
