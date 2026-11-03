@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/nerd-herd/maintenance", label: "Maintenance jobs" },
   { href: "/nerd-herd/websites", label: "Websites" },
   { href: "/nerd-herd/vault", label: "Vault" },
+  { href: "/nerd-herd/connector", label: "Connector" },
   { href: "/nerd-herd/plans", label: "Plans" },
   { href: "/nerd-herd/settings", label: "Settings" },
 ];
