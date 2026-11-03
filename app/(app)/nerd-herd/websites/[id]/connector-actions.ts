@@ -196,3 +196,40 @@ export async function updateConnectorPlugin(websiteId: string): Promise<R<string
     return { ok: true, data: `Connector updated ${me.version} → ${me.update}.` };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/**
+ * The Connector shows the site is on SiteGround: add it to your SiteGround hosting (a SiteGround server is created
+ * the first time) and link the website to it — so it counts as hosted with you and can be billed / locked.
+ */
+export async function linkDetectedHosting(websiteId: string): Promise<R<string>> {
+  try {
+    const c = await ctx(websiteId);
+    const { data: conn } = await c.db.from("website_connectors").select("plugins").eq("website_id", websiteId).maybeSingle();
+    const { detectHost } = await import("@/lib/nerdherd/host-detect");
+    if (detectHost((conn?.plugins ?? []) as { file: string; name?: string }[]) !== "siteground") throw new Error("The Connector doesn't show this site on SiteGround — check for updates first.");
+    const domain = c.site.domain.toLowerCase().replace(/^www\./, "");
+    let { data: sv } = await c.db.from("hosting_servers").select("id, name").eq("organisation_id", c.org.id).eq("kind", "siteground").order("created_at").limit(1).maybeSingle();
+    if (!sv) {
+      const { data, error } = await c.db.from("hosting_servers").insert({ organisation_id: c.org.id, name: "SiteGround", kind: "siteground", active: true }).select("id, name").single();
+      if (error) throw new Error(`Couldn't add the SiteGround server: ${error.message}`);
+      sv = data;
+    }
+    let { data: acct } = await c.db.from("hosting_accounts").select("id, server_id, customer_id").eq("organisation_id", c.org.id).in("domain", [domain, `www.${domain}`]).limit(1).maybeSingle();
+    if (acct && acct.server_id !== sv.id) {
+      // it moved (e.g. off an old cPanel server): this is the account to link, but say where it is
+      const { data: old } = await c.db.from("hosting_servers").select("name, kind").eq("id", acct.server_id).maybeSingle();
+      if (old?.kind === "whm") throw new Error(`${domain} is still listed on ${old.name}. If it has moved to SiteGround, remove it there (Hosting → the account → Remove record) and try again.`);
+    }
+    if (!acct) {
+      const { billingReference } = await import("@/lib/hosting/core");
+      const { data, error } = await c.db.from("hosting_accounts").insert({ organisation_id: c.org.id, server_id: sv.id, domain, billing_reference: billingReference(domain), customer_id: c.site.customer_id }).select("id, server_id, customer_id").single();
+      if (error) throw new Error(`Couldn't add the hosting account: ${error.message}`);
+      acct = data;
+    } else if (!acct.customer_id && c.site.customer_id) await c.db.from("hosting_accounts").update({ customer_id: c.site.customer_id }).eq("id", acct.id);
+    const { error: wErr } = await c.db.from("websites").update({ hosting_account_id: acct.id, updated_at: new Date().toISOString() }).eq("id", websiteId).eq("organisation_id", c.org.id);
+    if (wErr) throw new Error(wErr.message);
+    await logActivity(c.supabase, { orgId: c.org.id, actorId: c.user.id, action: "website.updated", entityType: "website", entityId: websiteId, customerId: c.site.customer_id, summary: `Linked ${domain} to ${sv.name} hosting (detected by the Web Culture Connector)` });
+    done(websiteId); revalidatePath("/hosting");
+    return { ok: true, data: `${domain} is now on your ${sv.name} hosting.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

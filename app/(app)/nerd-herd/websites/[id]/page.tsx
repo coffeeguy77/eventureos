@@ -12,6 +12,8 @@ import { ButtonLink } from "@/components/ui/button";
 import { WebsiteForm } from "@/components/nerdherd/website-form";
 import { WpConnector, type ConnectorRow } from "@/components/nerdherd/wp-connector";
 import { SiteSignIn } from "@/components/nerdherd/site-sign-in";
+import { LinkHosting } from "@/components/nerdherd/link-hosting";
+import { detectHost, HOST_LABEL } from "@/lib/nerdherd/host-detect";
 
 export const dynamic = "force-dynamic";
 // Updates run through server actions on this page and can take a few minutes on a big site.
@@ -141,7 +143,10 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
                 <Field label="Plan">{h.plan ?? "—"}</Field>
                 <Field label="Billing">{h.billing_status ?? "—"}{Number(h.amount_due) > 0 ? ` · ${money(h.amount_due, org.currency)} owing` : ""}</Field>
                 {h.disk_used_mb != null && <Field label="Disk">{Math.round(Number(h.disk_used_mb))} MB{h.disk_limit_mb ? ` of ${Math.round(Number(h.disk_limit_mb))} MB` : ""}</Field>}
-              </> : <p className="text-[0.8125rem] text-ink-muted">Not hosted on your servers.</p>}
+              </> : (() => {
+                const det = detectHost((connector as ConnectorRow | null)?.plugins);
+                return det ? <LinkHosting websiteId={w.id} host={HOST_LABEL[det]} canRun={canManage(role)} /> : <p className="text-[0.8125rem] text-ink-muted">Not hosted on your servers.</p>;
+              })()}
             </dl>
           </Card>
           <Card>

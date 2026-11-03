@@ -7,6 +7,7 @@ import { Card, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { detectHost, HOST_LABEL } from "@/lib/nerdherd/host-detect";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ type Row = {
   customers: { name: string } | null;
   hosting_accounts: { suspended: boolean; billing_status: string | null; hosting_servers: { name: string } | null } | null;
 };
-type Conn = { website_id: string; connector_version: string | null; wp_version: string | null; wp_update: string | null; updates_core: number; updates_plugins: number; updates_themes: number; last_checked_at: string | null; last_error: string | null; last_run_ok: boolean | null; locked?: boolean | null };
+type Conn = { plugins?: { file: string; name?: string }[] | null; website_id: string; connector_version: string | null; wp_version: string | null; wp_update: string | null; updates_core: number; updates_plugins: number; updates_themes: number; last_checked_at: string | null; last_error: string | null; last_run_ok: boolean | null; locked?: boolean | null };
 type P = { website_id: string | null; customer_id: string; category: string; creates_ticket: boolean; name: string; status: string; total: number; every: number; unit: "week" | "month"; next_date: string | null };
 
 /** Every client website: what plans it's on, whether it's connected for command ops, and its hosting. */
@@ -115,10 +116,11 @@ export default async function WebsitesPage({ searchParams }: { searchParams: Pro
               <Link key={r.id} href={`/nerd-herd/websites/${r.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-canvas">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[0.875rem] font-medium text-ink">{r.domain}</p>
-                  <p className="truncate text-[0.75rem] text-ink-muted">{!r.customer_id && <span className="mr-1 rounded bg-ink/10 px-1 text-ink-faint">no client</span>}{[r.customers?.name, PLATFORM_LABEL[r.platform] ?? r.platform, r.hosting_accounts ? r.hosting_accounts.hosting_servers?.name : "not hosted with us"].filter(Boolean).join(" · ")}</p>
+                  <p className="truncate text-[0.75rem] text-ink-muted">{!r.customer_id && <span className="mr-1 rounded bg-ink/10 px-1 text-ink-faint">no client</span>}{[r.customers?.name, PLATFORM_LABEL[r.platform] ?? r.platform, r.hosting_accounts ? r.hosting_accounts.hosting_servers?.name : c && detectHost(c.plugins) ? `${HOST_LABEL[detectHost(c.plugins)!]} (not linked)` : "not hosted with us"].filter(Boolean).join(" · ")}</p>
                   <span className="mt-1 flex flex-wrap gap-1">
                     {[...new Set(ps.map((p) => planCategory(p)))].map((k: PlanCategory) => <span key={k} className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-sky-700 ring-1 ring-inset ring-sky-500/30 dark:text-sky-300">{PLAN_LABEL[k]}</span>)}
                     {r.status === "live" && !cats(r.id).has("maintenance") && view !== "ops" && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:text-amber-300">no maintenance plan</span>}
+                    {!r.hosting_accounts && c && detectHost(c.plugins) && <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-sky-700 ring-1 ring-inset ring-sky-500/30 dark:text-sky-300">on {HOST_LABEL[detectHost(c.plugins)!]} — not linked</span>}
                     {c && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/30 dark:text-emerald-300"><Plug className="h-3 w-3" />Connected{c.connector_version ? ` ${c.connector_version}` : ""}</span>}
                   </span>
                   {view === "ops" && c && <span className="mt-1 block text-[0.7188rem] text-ink-muted">WordPress {c.wp_version ?? "—"}{c.wp_update ? ` → ${c.wp_update}` : ""} · checked {c.last_checked_at ? relative(c.last_checked_at) : "never"}</span>}
