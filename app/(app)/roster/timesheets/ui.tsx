@@ -76,7 +76,14 @@ export function Timesheets({ payPeriod, from, to, today, sheets, earningsReady, 
         )}
         {!earningsReady && <p className="w-full text-[0.75rem] text-amber-800">Xero Payroll is connected, but no earnings rates are chosen yet — pick them in <Link href="/roster/setup?section=pay" className="font-semibold underline">Setup → Pay &amp; Xero</Link> (Ordinary at least) before sending.</p>}
       </Card>
-      {msg && <p className={cn("rounded-lg px-3 py-2 text-[0.8125rem]", msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800")}>{msg.text}</p>}
+      {msg && (
+        <div role="status" className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-50 mx-auto max-w-xl lg:bottom-6">
+          <div className={cn("flex items-start gap-3 rounded-xl px-4 py-3 text-[0.875rem] shadow-pop ring-1", msg.ok ? "bg-surface text-emerald-600 ring-emerald-500/40" : "bg-surface text-rose-600 ring-rose-500/40")}>
+            <span className="min-w-0 flex-1 whitespace-pre-line">{msg.text}</span>
+            <button onClick={() => setMsg(null)} className="shrink-0 text-ink-faint hover:text-ink" aria-label="Close">✕</button>
+          </div>
+        </div>
+      )}
       {sheets.length === 0 && <Card><p className="px-5 py-6 text-[0.8125rem] text-ink-muted">No one is on the roster yet.</p></Card>}
       {sheets.map((s) => <PersonCard key={s.id} s={s} today={today} pending={pending} run={run} from={from} to={to} earningsReady={earningsReady} fence={fence} />)}
     </div>

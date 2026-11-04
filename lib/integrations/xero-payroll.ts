@@ -53,7 +53,7 @@ export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Prom
   const where = encodeURIComponent(`EmployeeID==Guid("${t.employeeId}")&&StartDate==DateTime(${t.start.replace(/-/g, ",")})`);
   const existing = await get<{ Timesheets?: { TimesheetID: string; Status: string }[] }>(ctx, `/Timesheets?where=${where}`).catch(() => ({ Timesheets: [] }));
   const cur = existing.Timesheets?.[0];
-  if (cur && cur.Status === "PROCESSED") throw new Error("Xero has already paid this period's timesheet — change it in Xero.");
+  if (cur && cur.Status === "PROCESSED") throw new Error("this period's timesheet is already in a pay run in Xero, so it can't be changed from here. Add the hours on their payslip in the Xero pay run (or delete the draft pay run, send again, then create the pay run again).");
   const body = [{
     ...(cur ? { TimesheetID: cur.TimesheetID } : {}),
     EmployeeID: t.employeeId, StartDate: t.start, EndDate: t.end, Status: t.status,
