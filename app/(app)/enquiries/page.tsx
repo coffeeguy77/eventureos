@@ -22,6 +22,7 @@ import { SpamList, type SpamRow } from "@/components/enquiries/spam-list";
 import { BlockedList, type BlockRow } from "@/components/enquiries/blocked-list";
 import { SpamRules } from "@/components/enquiries/spam-rules";
 import { DEFAULT_SPAM_PHRASES } from "@/lib/integrations/spam";
+import { GmailCheck } from "@/components/enquiries/gmail-check";
 
 export const metadata = { title: "Enquiries" };
 
@@ -33,11 +34,13 @@ export default async function EnquiriesPage({ searchParams }: {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
   const folder = sp.folder === "spam" || sp.folder === "blocked" || sp.folder === "archived" ? sp.folder : "inbox";
-  const [{ count: spamCount }, { count: blockedCount }, { count: archivedCount }] = await Promise.all([
+  const [{ count: spamCount }, { count: blockedCount }, { count: archivedCount }, { data: gmail }] = await Promise.all([
     supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "spam"),
     supabase.from("email_blocklist").select("id", { count: "exact", head: true }).eq("organisation_id", org.id),
     supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "archived"),
+    supabase.from("integrations").select("status, last_sync_at").eq("organisation_id", org.id).eq("provider", "gmail").maybeSingle(),
   ]);
+  const gmailOn = !!gmail && ["connected", "syncing", "error"].includes(gmail.status as string);
   const folders = (
     <div className="mb-4 flex gap-1 border-b border-line">
       {([["inbox", "Inbox", Inbox, null], ["archived", "Archived", Archive, archivedCount ?? 0], ["spam", "Spam", ShieldAlert, spamCount ?? 0], ["blocked", "Blocked", Ban, blockedCount ?? 0]] as const).map(([key, label, Icon, n]) => (
@@ -53,7 +56,7 @@ export default async function EnquiriesPage({ searchParams }: {
     <PageHeader
       title="Enquiries"
       subtitle={folder === "spam" ? "Junk and unwanted email — nothing here is lost; move it back if it's real." : folder === "blocked" ? "Senders that are never imported again." : folder === "archived" ? "Past enquiries kept for history — out of the inbox, still on each client's record and in search." : "Every new lead, from every channel, in one inbox."}
-      actions={<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink>}
+      actions={<div className="flex flex-wrap items-center gap-2">{gmailOn && role !== "customer" && <GmailCheck lastSync={(gmail?.last_sync_at as string | null) ?? null} />}<ButtonLink href="/enquiries/new" variant="primary">New enquiry</ButtonLink></div>}
     />
   );
 
