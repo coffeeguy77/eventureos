@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { CalendarCheck, CalendarOff, ChefHat, Check, Download, Hand, Loader2, Megaphone, Share, Timer, Wallet, X } from "lucide-react";
+import { CalendarCheck, CalendarOff, ChefHat, Truck, Check, Download, Hand, Loader2, Megaphone, Share, Timer, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   acceptShift, addAway, claimExtraHours, crewLinkSignIn, crewSignIn, declineShift, postToBoard, removeAway, setInterest, takeOffBoard, takeOpenShift, takeSwap,
@@ -38,7 +38,7 @@ export function useRun() {
 }
 
 /* ---------------- navigation ---------------- */
-export function BottomNav({ slug, kitchen = false, roster = false }: { slug: string; kitchen?: boolean; roster?: boolean }) {
+export function BottomNav({ slug, kitchen = false, roster = false, delivery = false }: { slug: string; kitchen?: boolean; roster?: boolean; delivery?: boolean }) {
   const path = usePathname();
   const base = `/crew/${slug}`;
   const tabs = [
@@ -47,13 +47,14 @@ export function BottomNav({ slug, kitchen = false, roster = false }: { slug: str
     { href: `${base}/away`, label: "Away", icon: CalendarOff, on: path.startsWith(`${base}/away`) },
     { href: `${base}/pay`, label: "Pay", icon: Wallet, on: path.startsWith(`${base}/pay`) },
   ];
+  if (delivery) tabs.splice(1, 0, { href: `${base}/deliveries`, label: "Deliveries", icon: Truck, on: path.startsWith(`${base}/deliveries`) });
   if (kitchen) tabs.splice(1, 0, { href: `${base}/kitchen`, label: "Kitchen", icon: ChefHat, on: path.startsWith(`${base}/kitchen`) });
   if (roster) tabs.splice(1, 0, { href: `${base}/clock`, label: "Clock on", icon: Timer, on: path.startsWith(`${base}/clock`) });
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-      <div className={cn("mx-auto grid max-w-xl", tabs.length >= 6 ? "grid-cols-6" : tabs.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+      <div className={cn("mx-auto grid max-w-xl", tabs.length >= 7 ? "grid-cols-7" : tabs.length === 6 ? "grid-cols-6" : tabs.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {tabs.map((t) => (
-          <Link key={t.href} href={t.href} className={cn("flex h-16 flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium", t.on ? "text-[var(--crew-brand)]" : "text-ink-faint")}>
+          <Link key={t.href} href={t.href} className={cn("flex h-16 min-w-0 flex-col items-center justify-center gap-1 truncate font-medium", tabs.length >= 7 ? "text-[0.625rem]" : "text-[0.6875rem]", t.on ? "text-[var(--crew-brand)]" : "text-ink-faint")}>
             <t.icon className="h-6 w-6" strokeWidth={t.on ? 2.2 : 1.8} />{t.label}
           </Link>
         ))}

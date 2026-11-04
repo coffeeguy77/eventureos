@@ -66,7 +66,7 @@ export function CrewList({ rows, canEdit, canAdmin = false, app }: { rows: CrewM
                   {r.role && <span className="font-normal text-ink-muted">· {r.role}</span>}
                   {r.always_invite && <Badge tone="brand">On every job&apos;s invite</Badge>}
                   {r.on_roster && <Badge tone="green">Café roster</Badge>}
-                  {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : k === "kitchen" ? "amber" : "brand"}>{skillLabel(k)}</Badge>)}
+                  {(r.skills ?? []).map((k) => <Badge key={k} tone={k === "roster" ? "slate" : k === "driver" ? "green" : k === "kitchen" || k === "delivery" ? "amber" : "brand"}>{skillLabel(k)}</Badge>)}
                   {!r.active && <Badge tone="slate">Inactive</Badge>}
                 </p>
                 <p className="break-words text-[0.75rem] text-ink-faint">{[r.email ?? "No email", ...(r.extra_emails ?? []), r.phone].filter(Boolean).join(" · ")}</p>

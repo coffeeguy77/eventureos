@@ -9,6 +9,7 @@ export const STAFF_SKILLS = [
   { key: "equipment", label: "Equipment hire" },
   { key: "catering", label: "Catering service (serving at events)", short: "Catering" },
   { key: "kitchen", label: "Kitchen / chef — gets confirmed catering jobs, recipes and stock in the staff app", short: "Kitchen" },
+  { key: "delivery", label: "Wholesale deliveries — gets the Deliveries tab in the staff app to tick off this week's orders", short: "Deliveries" },
   { key: "driver", label: "Licence — can drive the van", short: "Licence" },
   { key: "roster", label: "Rosters / office only — not event staff", short: "Rosters only" },
 ] as const;
@@ -25,6 +26,9 @@ export const skillLabel = (k: string) => {
 
 /** Kitchen people (the chef) get catering jobs sent to them and the Kitchen tab in the staff app. */
 export const isKitchen = (skills: readonly string[] | null | undefined) => !!skills?.includes("kitchen");
+
+/** Delivery drivers get the Deliveries tab in the staff app (wholesale orders to drop off, ticked off with time and place). */
+export const isDelivery = (skills: readonly string[] | null | undefined) => !!skills?.includes("delivery");
 
 /** Rostering / office people are never counted as people working the job. */
 export const isRosterOnly = (skills: readonly string[] | null | undefined) => !!skills?.includes("roster");

@@ -4,9 +4,10 @@ import { requireOrg } from "@/lib/context";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OrderStatusButtons, RunActions } from "@/components/wholesale/run-actions";
-import { fmtDate, money } from "@/lib/format";
+import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { currentRun, runTotals, shiftRun } from "@/lib/wholesale/rules";
 import { readWholesale } from "@/lib/wholesale/settings";
+import { standingDeliveries, type DeliveryLogRow } from "@/lib/wholesale/deliveries";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ export default async function RunSheetPage({ searchParams }: { searchParams: Pro
   const kg = totals.reduce((t, r) => t + (r.kg ?? 0), 0);
   const value = orders.reduce((t, o) => t + Number(o.total), 0);
   const { count: pending } = await supabase.from("wholesale_orders").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).gt("delivery_date", run).in("status", ["placed"]);
+  const { data: dlog } = orders.length ? await supabase.from("wholesale_delivery_log").select("order_id, action, at, by_name, lat, lng, accuracy_m, geo_error, note").eq("organisation_id", org.id).in("order_id", orders.map((o) => o.id)) : { data: [] };
+  const proof = standingDeliveries((dlog ?? []) as DeliveryLogRow[]);
   const address = (o: Row) => o.ship_to?.text || [o.customer?.address1, o.customer?.address2, [o.customer?.suburb, o.customer?.state, o.customer?.postcode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 
   return (
@@ -73,6 +76,7 @@ export default async function RunSheetPage({ searchParams }: { searchParams: Pro
                         {o.customer ? <Link href={`/wholesale/customers/${o.customer.id}`} className="text-[0.9375rem] font-semibold text-ink hover:text-brand-700">{o.customer.name}</Link> : <span className="text-[0.9375rem] font-semibold text-ink">Unknown customer</span>}
                         <Link href={`/wholesale/orders/${o.id}`} className="text-[0.75rem] text-ink-faint hover:underline">{o.number}</Link>
                         <Badge tone={st.tone}>{st.label}</Badge>
+                        {o.status === "delivered" && proof.get(o.id) && <Link href={`/wholesale/orders/${o.id}`} className="text-[0.75rem] text-ink-muted hover:underline">{fmtDateTime(proof.get(o.id)!.at, org.timezone)} · {proof.get(o.id)!.by_name}{proof.get(o.id)!.lat == null ? " · no location" : ""}</Link>}
                         {o.source === "eventureos" && <Badge tone="brand">Direct</Badge>}
                         {o.payment_status === "unpaid" && o.payment_mode === "invoice" && <Badge tone="slate">On account</Badge>}
                         {o.payment_status === "paid" && o.source === "eventureos" && <Badge tone="green">Paid</Badge>}

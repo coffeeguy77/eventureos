@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { crewOrg, crewSession } from "@/lib/crew/server";
 import { BottomNav, InstallPrompt, RegisterSW } from "./ui";
 import { crewSignOut } from "./actions";
-import { isKitchen } from "@/lib/crew/skills";
+import { isDelivery, isKitchen } from "@/lib/crew/skills";
 import { rosterProfile } from "@/lib/roster/staff";
 import Link from "next/link";
 import { Activity, Bell } from "lucide-react";
@@ -61,7 +61,7 @@ export default async function CrewLayout({ children, params }: { children: React
         {s && <InstallPrompt appName="Roster" />}
         {children}
       </main>
-      {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} roster={await rosterProfile(s).then((r) => r.onRoster || r.clockEvents)} />}
+      {s && <BottomNav slug={slug} kitchen={isKitchen(s.member.skills)} delivery={isDelivery(s.member.skills)} roster={await rosterProfile(s).then((r) => r.onRoster || r.clockEvents)} />}
     </div>
   );
 }

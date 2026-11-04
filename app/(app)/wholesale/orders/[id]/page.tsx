@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, MapPin } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { OrderEdit } from "@/components/wholesale/order-edit";
 import { fmtDate, fmtDateTime, money } from "@/lib/format";
+import { accuracyWords, mapPin } from "@/lib/wholesale/deliveries";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,9 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
   const c = o.customer as { id: string; name: string; business_name: string | null; phone: string | null; email: string | null; address1: string | null; address2: string | null; suburb: string | null; state: string | null; postcode: string | null; delivery_instructions: string | null } | null;
   const lines = ((o.lines ?? []) as { name: string; sku: string | null; quantity: number; unit_price: number; tax_rate: number; line_total: number; comment: string | null; position: number }[]).sort((a, b) => a.position - b.position);
   const cur = org.currency;
+  // Delivery proof from the driver's staff app (works before migration 0096 — the card just doesn't show)
+  const { data: dlog } = await supabase.from("wholesale_delivery_log").select("id, action, at, by_name, lat, lng, accuracy_m, geo_error, device_time, note").eq("organisation_id", org.id).eq("order_id", o.id).order("at", { ascending: false }).limit(20);
+  const proof = (dlog ?? []) as { id: string; action: "delivered" | "undone"; at: string; by_name: string; lat: number | null; lng: number | null; accuracy_m: number | null; geo_error: string | null; device_time: string | null; note: string | null }[];
   const direct = o.source === "eventureos";
   return (
     <div>
@@ -58,6 +62,23 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
         </Card>
         <div className="space-y-6">
           <Card className="p-5"><OrderEdit id={o.id} status={o.status} delivery={o.delivery_date} payment={o.payment_status} note={o.office_note} needsCheck={o.needs_check} direct={direct} /></Card>
+          {proof.length > 0 && (
+            <Card>
+              <CardHeader title="Delivery proof" subtitle="Ticked off in the driver's staff app — time and phone location" />
+              <ul className="divide-y divide-line border-t border-line">
+                {proof.map((p) => (
+                  <li key={p.id} className="px-5 py-3 text-[0.8125rem]">
+                    <p className="font-medium text-ink">{p.action === "delivered" ? "Delivered" : "Tick undone"} · {fmtDateTime(p.at, org.timezone)} · {p.by_name}</p>
+                    {p.action === "delivered" && (p.lat != null && p.lng != null
+                      ? <a href={mapPin({ lat: p.lat, lng: p.lng })} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-brand-700 hover:underline"><MapPin className="h-3.5 w-3.5" />Show on map ({accuracyWords(p.accuracy_m)})</a>
+                      : <p className="mt-0.5 text-rose-700">No location — {p.geo_error ?? "the phone didn't share it"}</p>)}
+                    {p.note && <p className="mt-0.5 text-ink-muted">Note: {p.note}</p>}
+                    {p.device_time && Math.abs(Date.parse(p.device_time) - Date.parse(p.at)) > 5 * 60_000 && <p className="mt-0.5 text-[0.75rem] text-ink-faint">Phone clock said {fmtDateTime(p.device_time, org.timezone)}</p>}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           {c && (
             <Card>
               <CardHeader title={<Link href={`/wholesale/customers/${c.id}`} className="hover:text-brand-700">{c.name}</Link>} subtitle={c.business_name ?? undefined} />
