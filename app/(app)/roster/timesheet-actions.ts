@@ -50,6 +50,33 @@ export async function updateEntry(id: string, v: { start: string; finish: string
   });
 }
 
+/**
+ * "No break taken" (too busy — e.g. the chef worked straight through): the shift is paid with no unpaid break.
+ * Or put the normal unpaid break back. Logged on the entry's note.
+ */
+export async function setNoBreak(id: string, noBreak: boolean) {
+  return wrap(async () => {
+    const { supabase, org, user, profile } = await office();
+    if (!UUID.test(id)) throw new Error("Refresh and try again.");
+    const { data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status, note, paid_start, paid_finish, clock_in, work_date").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    if (!e) throw new Error("That entry no longer exists.");
+    if (!e.clock_out) throw new Error("They're still clocked on — wait until they clock off.");
+    const { readRosterSettings } = await import("@/lib/roster/settings");
+    const { meal } = readRosterSettings(org.settings);
+    const hrs = (Date.parse((e.paid_finish ?? e.clock_out) as string) - Date.parse((e.paid_start ?? e.clock_in) as string)) / 3_600_000;
+    const tag = "No break taken (too busy)";
+    const note = noBreak
+      ? [String(e.note ?? "").replace(tag, "").trim(), tag].filter(Boolean).join(" · ").slice(0, 500)
+      : String(e.note ?? "").replace(` · ${tag}`, "").replace(tag, "").trim() || null;
+    const row = { break_minutes: noBreak ? 0 : meal.minutes > 0 && hrs >= meal.after_hours ? meal.minutes : 0, note, status: e.status === "approved" ? "pending" : e.status, sent_to_xero_at: null, updated_at: new Date().toISOString() };
+    let { error } = await supabase.from("staff_time_entries").update({ ...row, break_locked: noBreak }).eq("id", id);
+    if (error && /break_locked/.test(error.message)) ({ error } = await supabase.from("staff_time_entries").update(row).eq("id", id));
+    if (error) throw new Error(error.message);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "roster.no_break", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} ${noBreak ? "marked no break taken" : "put the unpaid break back"} on ${e.work_date}` });
+    return noBreak ? "No break — paid straight through. Approve it when it's right." : "Unpaid break put back.";
+  });
+}
+
 export async function setEntriesStatus(ids: string[], status: "approved" | "pending" | "rejected") {
   return wrap(async () => {
     const { supabase, org, user, profile } = await office();

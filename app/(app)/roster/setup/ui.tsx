@@ -258,6 +258,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
           <div><Label hint="minutes">Unpaid meal break</Label><Input type="number" min={0} max={120} step={5} value={v.meal.minutes} onChange={(e) => setV({ ...v, meal: { ...v.meal, minutes: Number(e.target.value) } })} /></div>
           <div><Label hint="hours">…on shifts this long or longer</Label><Input type="number" min={0} max={12} step={0.5} value={v.meal.after_hours} onChange={(e) => setV({ ...v, meal: { ...v.meal, after_hours: Number(e.target.value) } })} /></div>
         </div>
+        <p className="text-[0.75rem] text-ink-muted">{v.rounding === 0 && v.grace === 0 ? "Paid exactly from clock-on to clock-off, to the minute (like Deputy) — 3 minutes late is 3 minutes less pay." : "Clock times are rounded and/or snapped to the roster before they're paid. Set both to 0 to pay exactly from clock-on to clock-off."}</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <div><Label hint="minutes">Longest break allowed</Label><Input type="number" min={v.meal.minutes} max={240} step={5} value={v.breaks.max} onChange={(e) => setV({ ...v, breaks: { ...v.breaks, max: Number(e.target.value) } })} /></div>
           <label className="flex items-end gap-2 pb-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.breaks.ipad_only} onChange={(e) => setV({ ...v, breaks: { ...v.breaks, ipad_only: e.target.checked } })} />Breaks only on the café iPad (not phones)</label>

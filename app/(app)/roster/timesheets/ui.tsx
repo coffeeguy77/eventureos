@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 import { addDaysISO, fmtDate, money } from "@/lib/format";
 import { CATEGORY_LABEL, type Category } from "@/lib/roster/award";
 import { FLAG_LABEL, type BreakFlag } from "@/lib/roster/breaks";
-import { addEntry, deleteEntry, sendToXero, setEntriesStatus, updateEntry } from "../timesheet-actions";
+import { addEntry, deleteEntry, sendToXero, setEntriesStatus, setNoBreak, updateEntry } from "../timesheet-actions";
 
 export interface PersonSheet {
   id: string; name: string; type: string; xero: boolean; unpaid: boolean; hours: number; cost: number; totals: Record<Category, number>;
@@ -181,6 +181,11 @@ function EntryRow({ e, pending, run, fence }: { e: PersonSheet["entries"][number
               <span className="text-ink-muted">Break: {e.breakTaken == null ? "none clocked" : `${e.breakTaken} min clocked${e.breaks.length ? ` (${e.breaks.join(", ")})` : ""}`} → {e.breakMinutes} min unpaid{e.breakBalanced ? " (smart: balanced over the week)" : ""}{e.breakLocked ? " (set by the office)" : ""}</span>
               {e.breakFlag && <span className={cn("rounded-full px-2 py-0.5 font-semibold", e.breakFlag === "over" || e.breakFlag === "long" ? "bg-rose-100 text-rose-800" : "bg-orange-100 text-orange-800")}>{FLAG_LABEL[e.breakFlag]}{e.breakTaken != null ? ` · ${e.breakTaken}m` : ""}</span>}
             </span>
+          )}
+          {e.clockOut && !e.event && e.status !== "rejected" && (
+            e.breakMinutes > 0
+              ? <button disabled={pending} onClick={() => run(() => setNoBreak(e.id, true))} className="mt-1.5 inline-flex h-8 items-center rounded-lg px-2.5 text-[0.75rem] font-medium text-ink ring-1 ring-line hover:bg-canvas">No break taken — pay it</button>
+              : e.breakLocked && <button disabled={pending} onClick={() => run(() => setNoBreak(e.id, false))} className="mt-1.5 inline-flex h-8 items-center rounded-lg px-2.5 text-[0.75rem] font-medium text-ink-muted ring-1 ring-line hover:bg-canvas">Put the unpaid break back</button>
           )}
           {e.event && <span className="mt-0.5 block text-[0.7188rem] font-medium text-violet-700">Event shift: {e.event} — paid from the job, not this timesheet</span>}
           {e.source !== "office" && (

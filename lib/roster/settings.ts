@@ -56,8 +56,8 @@ export function readRosterSettings(orgSettings: unknown): RosterSettings {
   const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : d);
   return {
     rules: readRules(r.rules),
-    rounding: n(r.rounding, 15),
-    grace: n(r.grace, 10),
+    rounding: n(r.rounding, 0),
+    grace: n(r.grace, 0),
     google_calendar: r.google_calendar === true,
     xero: { earnings: x.earnings ?? {}, status: x.status === "DRAFT" ? "DRAFT" : "APPROVED" },
     kiosk_hash: typeof r.kiosk_hash === "string" ? r.kiosk_hash : null,
