@@ -54,19 +54,33 @@ export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Prom
   const existing = await get<{ Timesheets?: { TimesheetID: string; Status: string }[] }>(ctx, `/Timesheets?where=${where}`).catch(() => ({ Timesheets: [] }));
   const cur = existing.Timesheets?.[0];
   if (cur && cur.Status === "PROCESSED") throw new Error("this period's timesheet is already in a pay run in Xero, so it can't be changed from here. Add the hours on their payslip in the Xero pay run (or delete the draft pay run, send again, then create the pay run again).");
-  const body = [{
+  const post = (b: unknown) => apiJSON<{ Timesheets?: { TimesheetID: string }[] }>(ctx, `${API}/Timesheets`, {
+    method: "POST", headers: { "xero-tenant-id": tenantId(ctx), "content-type": "application/json" }, body: JSON.stringify(b),
+  }, "Xero Payroll timesheet");
+  const body = (status: string) => [{
     ...(cur ? { TimesheetID: cur.TimesheetID } : {}),
-    EmployeeID: t.employeeId, StartDate: t.start, EndDate: t.end, Status: t.status,
+    EmployeeID: t.employeeId, StartDate: t.start, EndDate: t.end, Status: status,
     TimesheetLines: t.lines.map((l) => ({ EarningsRateID: l.earningsRateId, NumberOfUnits: l.units })),
   }];
   try {
-    const r = await apiJSON<{ Timesheets?: { TimesheetID: string }[] }>(ctx, `${API}/Timesheets`, {
-      method: "POST", headers: { "xero-tenant-id": tenantId(ctx), "content-type": "application/json" }, body: JSON.stringify(body),
-    }, "Xero Payroll timesheet");
+    let r;
+    try { r = await post(body(t.status)); }
+    catch (first) {
+      // Xero won't change an approved timesheet's hours: put it back to draft, change it, then approve it again
+      if (!cur || cur.Status !== "APPROVED") throw first;
+      console.error("[xero-payroll] timesheet update refused, retrying via draft:", xeroReason(first));
+      await post([{ TimesheetID: cur.TimesheetID, EmployeeID: t.employeeId, StartDate: t.start, EndDate: t.end, Status: "DRAFT" }]);
+      r = await post(body("DRAFT"));
+      if (t.status === "APPROVED") r = await post([{ TimesheetID: cur.TimesheetID, EmployeeID: t.employeeId, StartDate: t.start, EndDate: t.end, Status: "APPROVED" }]);
+    }
     const id = r.Timesheets?.[0]?.TimesheetID;
     if (!id) throw new Error("Xero didn't return a timesheet id");
     return { id, replaced: !!cur };
-  } catch (e) { throw new Error(xeroReason(e)); }
+  } catch (e) {
+    const why = xeroReason(e);
+    console.error("[xero-payroll] timesheet", t.start, "→", why);
+    throw new Error(cur ? `${why} — Xero kept the timesheet it already has (${cur.Status.toLowerCase()}). In Xero → Payroll → Timesheets, open it and choose Revert to draft (or Delete), then send again.` : why);
+  }
 }
 
 

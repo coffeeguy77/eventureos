@@ -84,6 +84,7 @@ export async function sendTimesheets(db: SupabaseClient, ctx: SyncContext, org: 
       }
       results.push({ name: p.name, ok: true, text: `${Math.round(hours * 100) / 100} h sent (${periods.size} pay period${periods.size === 1 ? "" : "s"})` });
     } catch (e) {
+      console.error("[roster] send to Xero failed for", p.name, e instanceof Error ? e.message : e);
       results.push({ name: p.name, ok: false, text: e instanceof Error ? e.message : String(e) });
     }
   }
