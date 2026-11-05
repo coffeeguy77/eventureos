@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAttachment, getMessage, header, listMessages, parseAddressList, type GmailMessage, type GmailPart } from "@/lib/integrations/gmail";
 import { ReconnectRequired, type SyncContext } from "@/lib/integrations/runtime";
 import { DEFAULT_GREEN_SENDERS, NOT_READ_YET, fileKind, greenQuery, supplierFor } from "./purchases";
-import { readGreenInvoice } from "./purchase-read";
+import { readGreenInvoice, readGreenSpreadsheet } from "./purchase-read";
 
 /**
  * Green coffee invoices from Gmail → Roastery purchases. Searches every email (all years) from the importers with a PDF,
@@ -78,10 +78,10 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
       // only PDFs are read for now; other files are listed so we can see what each importer sends
       // email signature logos (image001.png …) — nothing to read
       if (kind === "image" && ((part.body?.size ?? 0) < 60_000 || /^image\d{3}\./i.test(name))) { await record(db, orgId, msg, from, name, "skipped", null, "Email signature image"); out.skipped++; continue; }
-      if (kind !== "pdf") { await record(db, orgId, msg, from, name, "skipped", null, `${NOT_READ_YET} (${kind}${part.mimeType ? `, ${part.mimeType}` : ""}, ${Math.round((part.body?.size ?? 0) / 1024)} KB)`); out.skipped++; continue; }
+      if (kind !== "pdf" && kind !== "spreadsheet" && kind !== "csv") { await record(db, orgId, msg, from, name, "skipped", null, `${NOT_READ_YET} (${kind}${part.mimeType ? `, ${part.mimeType}` : ""}, ${Math.round((part.body?.size ?? 0) / 1024)} KB)`); out.skipped++; continue; }
       try {
         const bytes = part.body?.attachmentId ? await getAttachment(ctx, id, part.body.attachmentId) : new Uint8Array(Buffer.from(part.body?.data ?? "", "base64url"));
-        const inv = await readGreenInvoice(bytes, opts.aiKey!);
+        const inv = kind === "pdf" ? await readGreenInvoice(bytes, opts.aiKey!) : await readGreenSpreadsheet(bytes, name, opts.aiKey!);
         if (inv.document !== "invoice") { await record(db, orgId, msg, from, name, "skipped", null, `Not an invoice (${inv.document.replace(/_/g, " ")})`); out.skipped++; continue; }
         if (!inv.lines.length) { await record(db, orgId, msg, from, name, "skipped", null, inv.warnings.join(" ") || "No coffee lines"); out.skipped++; continue; }
         const supplier = supplierFor(from, inv.supplier);
@@ -91,13 +91,24 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
           coffee_ex_gst: coffee, freight_ex_gst: inv.freight, total_inc_gst: inv.totalIncGst, source: "gmail", gmail_message_id: id, attachment_name: name,
           read_by: "ai", warnings: [...new Set(inv.warnings)].slice(0, 10),
         }).select("id").single();
+        let pid = p?.id as string | undefined;
         if (error) {
-          if (error.code === "23505") { await record(db, orgId, msg, from, name, "duplicate", null, `${supplier} ${inv.invoiceNumber} is already in`); out.duplicates++; continue; }
-          throw new Error(error.message);
+          if (error.code !== "23505") throw new Error(error.message);
+          // an amended / revised / corrected invoice replaces the copy already in; a plain repeat is just a duplicate
+          if (!/amend|revis|correct|replac/i.test(`${name} ${header(msg, "Subject") ?? ""}`)) { await record(db, orgId, msg, from, name, "duplicate", null, `${supplier} ${inv.invoiceNumber} is already in`); out.duplicates++; continue; }
+          await db.from("roastery_purchases").delete().eq("organisation_id", orgId).eq("supplier", supplier).eq("invoice_number", inv.invoiceNumber!);
+          const again = await db.from("roastery_purchases").insert({
+            organisation_id: orgId, supplier, invoice_number: inv.invoiceNumber, invoice_date: inv.invoiceDate ?? received(msg)?.slice(0, 10) ?? null,
+            coffee_ex_gst: coffee, freight_ex_gst: inv.freight, total_inc_gst: inv.totalIncGst, source: "gmail", gmail_message_id: id, attachment_name: name,
+            read_by: "ai", warnings: [...new Set(["Amended invoice — replaced the earlier copy", ...inv.warnings])].slice(0, 10),
+          }).select("id").single();
+          if (again.error) throw new Error(again.error.message);
+          pid = again.data.id as string;
         }
-        const { error: lErr } = await db.from("roastery_purchase_lines").insert(inv.lines.map((l, k) => ({ ...l, organisation_id: orgId, purchase_id: p.id, line_no: k + 1 })));
-        if (lErr) { await db.from("roastery_purchases").delete().eq("id", p.id); throw new Error(lErr.message); }
-        await record(db, orgId, msg, from, name, "imported", p.id as string, `${supplier} ${inv.invoiceNumber ?? ""} · ${inv.lines.length} coffee${inv.lines.length === 1 ? "" : "s"}`);
+        const p2 = { id: pid! };
+        const { error: lErr } = await db.from("roastery_purchase_lines").insert(inv.lines.map((l, k) => ({ ...l, organisation_id: orgId, purchase_id: p2.id, line_no: k + 1 })));
+        if (lErr) { await db.from("roastery_purchases").delete().eq("id", p2.id); throw new Error(lErr.message); }
+        await record(db, orgId, msg, from, name, "imported", p2.id, `${supplier} ${inv.invoiceNumber ?? ""} · ${inv.lines.length} coffee${inv.lines.length === 1 ? "" : "s"}`);
         out.imported++;
       } catch (e) {
         if (e instanceof ReconnectRequired) throw e;

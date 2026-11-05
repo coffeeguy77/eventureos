@@ -31,16 +31,45 @@ export interface ReadInvoice {
   lines: CleanLine[]; freight: number; totalIncGst: number | null; warnings: string[];
 }
 
-export async function readGreenInvoice(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
+type Block = { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } } | { type: "text"; text: string };
+
+/** A PDF invoice. */
+export function readGreenInvoice(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
+  return withRetry(() => readOnce([
+    { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
+    { type: "text", text: "Copy out this document as JSON." },
+  ], key));
+}
+
+/** A spreadsheet invoice (.xls / .xlsx / .csv): each sheet as text, read with the same rules. */
+export async function readGreenSpreadsheet(bytes: Uint8Array, filename: string, key: string): Promise<ReadInvoice> {
+  const text = await spreadsheetText(bytes);
+  if (!text.trim()) throw new Error("The spreadsheet is empty.");
+  return withRetry(() => readOnce([{ type: "text", text: `This is the spreadsheet "${filename}", each sheet as CSV:\n\n${text}\n\nCopy out this document as JSON.` }], key));
+}
+
+/** Every sheet as CSV (values only — no formulas or HTML), capped so a huge workbook can't run away. */
+export async function spreadsheetText(bytes: Uint8Array): Promise<string> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(bytes, { type: "array", cellFormula: false, cellHTML: false, cellStyles: false, sheetRows: 400, dense: true });
+  const parts: string[] = [];
+  for (const name of wb.SheetNames.slice(0, 6)) {
+    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false, strip: true });
+    if (csv.trim()) parts.push(`--- Sheet: ${name} ---\n${csv}`);
+  }
+  return parts.join("\n\n").slice(0, 60_000);
+}
+
+async function withRetry(run: () => Promise<ReadInvoice>): Promise<ReadInvoice> {
   // a reply that comes back cut short or garbled is asked for once more
-  try { return await readOnce(bytes, key); }
+  try { return await run(); }
   catch (e) {
-    if (e instanceof Error && /JSON|Expected|Unexpected/i.test(e.message)) return readOnce(bytes, key);
+    if (e instanceof Error && /JSON|Expected|Unexpected/i.test(e.message)) return run();
     throw e;
   }
 }
 
-async function readOnce(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
+async function readOnce(content: Block[], key: string): Promise<ReadInvoice> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 60_000);
   try {
@@ -48,10 +77,7 @@ async function readOnce(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
       method: "POST", signal: ctrl.signal, headers: anthropicHeaders(key),
       body: JSON.stringify({
         model: replyModel(), max_tokens: 12000, system: SYSTEM,
-        messages: [{ role: "user", content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
-          { type: "text", text: "Copy out this document as JSON." },
-        ] }],
+        messages: [{ role: "user", content }],
       }),
     });
     if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 200)}`);
