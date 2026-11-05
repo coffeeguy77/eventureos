@@ -28,11 +28,24 @@ export function supplierFor(fromEmail: string | null | undefined, printed?: stri
   return printed?.trim().slice(0, 120) || domain || "Unknown supplier";
 }
 
-/** Gmail search for every invoice email with a PDF from these senders, all time. */
+/** Gmail search for every email with an attachment from these senders, all time (PDFs are read; other files are listed). */
 export function greenQuery(senders: string[]): string | null {
   const s = senders.map((x) => x.trim().toLowerCase()).filter((x) => /^[^\s"()]+$/.test(x));
-  return s.length ? `from:(${s.join(" OR ")}) has:attachment filename:pdf` : null;
+  return s.length ? `from:(${s.join(" OR ")}) has:attachment` : null;
 }
+
+/** What kind of file an attachment is, from its name and type. */
+export function fileKind(name: string, mime: string | null | undefined): "pdf" | "spreadsheet" | "csv" | "image" | "word" | "other" {
+  const n = name.toLowerCase(), m = (mime ?? "").toLowerCase();
+  if (n.endsWith(".pdf") || m === "application/pdf") return "pdf";
+  if (/\.(xlsx|xlsm|xls|ods)$/.test(n) || /spreadsheet|excel/.test(m)) return "spreadsheet";
+  if (n.endsWith(".csv") || m === "text/csv") return "csv";
+  if (/\.(png|jpe?g|gif|heic|webp|tiff?)$/.test(n) || m.startsWith("image/")) return "image";
+  if (/\.(docx?|odt|rtf)$/.test(n) || /word/.test(m)) return "word";
+  return "other";
+}
+/** Attachments not read yet are logged with this, and looked at again once that kind of file can be read. */
+export const NOT_READ_YET = "Not read yet";
 
 /* ---------------- origins ---------------- */
 const COUNTRIES: [RegExp, string][] = [

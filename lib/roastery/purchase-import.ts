@@ -1,8 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAttachment, getMessage, header, listMessages, parseAddressList, pdfParts, type GmailMessage } from "@/lib/integrations/gmail";
+import { getAttachment, getMessage, header, listMessages, parseAddressList, type GmailMessage, type GmailPart } from "@/lib/integrations/gmail";
 import { ReconnectRequired, type SyncContext } from "@/lib/integrations/runtime";
-import { DEFAULT_GREEN_SENDERS, greenQuery, supplierFor } from "./purchases";
+import { DEFAULT_GREEN_SENDERS, NOT_READ_YET, fileKind, greenQuery, supplierFor } from "./purchases";
 import { readGreenInvoice } from "./purchase-read";
 
 /**
@@ -22,6 +22,14 @@ export function greenSenders(settings: unknown): string[] {
 export function greenImportState(settings: unknown): { done: boolean; lastRun: string | null } {
   const r = ((((settings ?? {}) as Record<string, unknown>).roastery ?? {}) as Record<string, unknown>).green_import as Record<string, unknown> | undefined;
   return { done: r?.done === true, lastRun: typeof r?.last_run === "string" ? r.last_run : null };
+}
+
+/** Every attached file in a message (any depth), not inline signature images. */
+function attachments(part: GmailPart | undefined): GmailPart[] {
+  if (!part) return [];
+  const disp = (part.headers ?? []).find((h) => h.name.toLowerCase() === "content-disposition")?.value ?? "";
+  const mine = part.filename && (part.body?.attachmentId || part.body?.data) && !(/^inline/i.test(disp) && (part.mimeType ?? "").startsWith("image/")) ? [part] : [];
+  return [...mine, ...(part.parts ?? []).flatMap(attachments)];
 }
 
 const received = (m: GmailMessage) => (m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null);
@@ -47,10 +55,10 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
   // what's already been looked at (failed reads are tried again)
   const seen = new Set<string>(), seenMsg = new Set<string>();
   for (let c = 0; c < ids.length; c += 200) {
-    const { data: rows, error } = await db.from("roastery_purchase_emails").select("gmail_message_id, attachment_name, status").eq("organisation_id", orgId).in("gmail_message_id", ids.slice(c, c + 200));
+    const { data: rows, error } = await db.from("roastery_purchase_emails").select("gmail_message_id, attachment_name, status, message").eq("organisation_id", orgId).in("gmail_message_id", ids.slice(c, c + 200));
     if (error) throw new Error(error.message);
     for (const r of (rows ?? []) as { gmail_message_id: string; attachment_name: string; status: string }[]) {
-      if (r.status === "failed") continue;
+      if (r.status === "failed" || (r.status === "skipped" && (r as { message?: string }).message?.startsWith(NOT_READ_YET))) continue;
       seen.add(`${r.gmail_message_id}|${r.attachment_name}`);
       seenMsg.add(r.gmail_message_id);
     }
@@ -62,10 +70,13 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
   const one = async (id: string) => {
     const msg = await getMessage(ctx, id);
     const from = parseAddressList(header(msg, "From"))[0]?.email?.toLowerCase() ?? null;
-    const pdfs = pdfParts(msg.payload).filter((p) => !seen.has(`${id}|${p.filename || "invoice.pdf"}`));
-    if (!pdfs.length) { await record(db, orgId, msg, from, "(none)", "skipped", null, "No PDF attached"); out.skipped++; return; }
-    for (const part of pdfs) {
-      const name = (part.filename || "invoice.pdf").slice(0, 200);
+    const files = attachments(msg.payload).filter((p) => !seen.has(`${id}|${(p.filename || "attachment").slice(0, 200)}`));
+    if (!files.length) { await record(db, orgId, msg, from, "(none)", "skipped", null, "No attachment"); out.skipped++; return; }
+    for (const part of files) {
+      const name = (part.filename || "attachment").slice(0, 200);
+      const kind = fileKind(name, part.mimeType);
+      // only PDFs are read for now; other files are listed so we can see what each importer sends
+      if (kind !== "pdf") { await record(db, orgId, msg, from, name, "skipped", null, `${NOT_READ_YET} (${kind}${part.mimeType ? `, ${part.mimeType}` : ""}, ${Math.round((part.body?.size ?? 0) / 1024)} KB)`); out.skipped++; continue; }
       try {
         const bytes = part.body?.attachmentId ? await getAttachment(ctx, id, part.body.attachmentId) : new Uint8Array(Buffer.from(part.body?.data ?? "", "base64url"));
         const inv = await readGreenInvoice(bytes, opts.aiKey!);

@@ -12,7 +12,7 @@ test("supplierFor maps senders to importer names", () => {
 });
 
 test("greenQuery", () => {
-  assert.equal(greenQuery(["orders@projectorigin.com.au", "volcafe.com"]), "from:(orders@projectorigin.com.au OR volcafe.com) has:attachment filename:pdf");
+  assert.equal(greenQuery(["orders@projectorigin.com.au", "volcafe.com"]), "from:(orders@projectorigin.com.au OR volcafe.com) has:attachment");
   assert.equal(greenQuery([]), null);
 });
 
