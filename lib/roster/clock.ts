@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { breakRules, distanceMetres, readRosterSettings, type RosterSettings } from "./settings";
-import { breakFlag, shiftBreak } from "./breaks";
+import { breakFlag, shiftBreak, skipsBreak } from "./breaks";
 import { shiftSpan, toLocal } from "./time";
 import { paidTimes } from "./paid";
 
@@ -135,7 +135,7 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
   const recorded = brk;
   const taken = (e.breaks?.length ?? 0) > 0 || e.break_started_at || recorded > 0 ? recorded : null;
   const spanMin = (Date.parse(paid.finish) - Date.parse(paid.start)) / 60_000;
-  if (!e.event_crew_id) brk = shiftBreak(spanMin, taken, breakRules(settings), rostered?.break_minutes ?? 0);
+  if (!e.event_crew_id) brk = shiftBreak(spanMin, taken, breakRules(settings, memberId, e.work_date), skipsBreak(settings.meal.skip, memberId, e.work_date) ? 0 : rostered?.break_minutes ?? 0);
   const breaks = e.break_started_at ? [...(e.breaks ?? []), { start: e.break_started_at, end: now.toISOString() }] : null;
   const photo = await takePhoto(db, settings, opts, { orgId: org.id, memberId, workDate: e.work_date, entryId: e.id, which: "out" });
   const { error } = await db.from("staff_time_entries").update({
@@ -152,7 +152,7 @@ export async function clockOff(db: SupabaseClient, org: ClockOrg, memberId: stri
     const span = shiftSpan(rostered.shift_date, rostered.start_time, rostered.finish_time);
     const matches = toLocal(paid.start, org.timezone) === span.start && toLocal(paid.finish, org.timezone) === span.finish;
     const photos = !settings.clock.photo || (!!e.in_photo && !!photo);
-    if (matches && photos && !breakFlag(spanMin, taken, breakRules(settings))) {
+    if (matches && photos && !breakFlag(spanMin, taken, breakRules(settings, memberId, e.work_date))) {
       await db.from("staff_time_entries").update({ status: "approved", approved_at: new Date().toISOString(), note: "Approved automatically — matched the roster" }).eq("id", e.id);
       auto = true;
     }

@@ -5,7 +5,7 @@ import { type DayHours, type EmploymentType } from "./award";
 import { hoursFor } from "./pay";
 import { timesheetLines } from "./paid";
 import { breakRules, readRosterSettings } from "./settings";
-import { effectiveBreaks, type BreakResult } from "./breaks";
+import { effectiveBreaks, skipsBreak, type BreakResult } from "./breaks";
 import { toLocal } from "./time";
 
 /**
@@ -31,6 +31,7 @@ export function withBreaks<T extends Entry & BreakFields>(entries: T[], orgSetti
     id: e.id, work_date: e.work_date, stored: e.break_minutes, taken: e.break_taken ?? null,
     spanMinutes: (Date.parse((e.paid_finish ?? e.clock_out)!) - Date.parse(e.paid_start ?? e.clock_in)) / 60_000,
     tracked: (e.source === "kiosk" || e.source === "phone") && !e.break_locked && !e.event_crew_id && e.break_taken !== undefined,
+    exempt: skipsBreak(st.meal.skip, e.crew_member_id, e.work_date),
   })), breakRules(st));
   return { entries: entries.map((e) => (info.has(e.id) ? { ...e, break_minutes: info.get(e.id)!.minutes } : e)), info };
 }

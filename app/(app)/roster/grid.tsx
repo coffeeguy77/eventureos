@@ -1,5 +1,6 @@
 "use client";
 
+import { mealFor, type BreakSkip } from "@/lib/roster/breaks";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,7 +25,7 @@ const len = (s: { start_time: string; finish_time: string; break_minutes: number
 };
 const hrs = (n: number) => `${Math.round(n * 100) / 100}h`;
 
-export function RosterGrid({ week, today, prev, next, smsOn = false, meal = { after_hours: 5, minutes: 30 } }: { week: PlainWeek; today: string; prev: string; next: string; smsOn?: boolean; meal?: { after_hours: number; minutes: number } }) {
+export function RosterGrid({ week, today, prev, next, smsOn = false, meal = { after_hours: 5, minutes: 30 } }: { week: PlainWeek; today: string; prev: string; next: string; smsOn?: boolean; meal?: { after_hours: number; minutes: number; skip?: BreakSkip[] } }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -50,7 +51,7 @@ export function RosterGrid({ week, today, prev, next, smsOn = false, meal = { af
     setMsg(null);
     const p = week.people.find((x) => x.id === crewId);
     setDraft(s ? { id: s.id, crewId: s.crew_member_id, areaId: s.area_id, date: s.shift_date, start: t5(s.start_time), finish: t5(s.finish_time), breakMinutes: s.break_minutes, notes: s.notes ?? "", also: [] }
-      : { id: null, crewId, areaId: p?.default_area_id ?? areas[0]?.id ?? null, date, start: "07:00", finish: "15:00", breakMinutes: 30, notes: "", also: [] });
+      : { id: null, crewId, areaId: p?.default_area_id ?? areas[0]?.id ?? null, date, start: "07:00", finish: "15:00", breakMinutes: mealFor(meal, crewId, date).minutes, notes: "", also: [] });
   };
   const run = (fn: () => Promise<{ ok: boolean; message?: string; error?: string }>, close = false) => start(async () => {
     const r: { ok: boolean; message?: string; error?: string } = await fn().catch(() => ({ ok: false, error: "Couldn't reach the server." }));
@@ -152,14 +153,17 @@ export function RosterGrid({ week, today, prev, next, smsOn = false, meal = { af
 }
 
 function ShiftDialog({ meal, week, draft, setDraft, pending, onSave, onDelete, onClose }: {
-  meal: { after_hours: number; minutes: number }; week: PlainWeek; draft: Draft; setDraft: (d: Draft) => void; pending: boolean; onSave: () => void; onDelete: () => void; onClose: () => void;
+  meal: { after_hours: number; minutes: number; skip?: BreakSkip[] }; week: PlainWeek; draft: Draft; setDraft: (d: Draft) => void; pending: boolean; onSave: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const [sure, setSure] = useState(false);
   const warn = shiftWarnings(week, { id: draft.id, crew_member_id: draft.crewId, area_id: draft.areaId, shift_date: draft.date, start_time: draft.start, finish_time: draft.finish, break_minutes: draft.breakMinutes });
   // changing the times puts the award's unpaid meal break in (or takes it out for a short shift)
   const set = (p: Partial<Draft>) => {
     const d = { ...draft, ...p };
-    if ((p.start !== undefined || p.finish !== undefined) && meal.minutes > 0 && /^\d{2}:\d{2}$/.test(d.start) && /^\d{2}:\d{2}$/.test(d.finish)) {
+    // a no-break rule (e.g. Saturdays, or this person on this day) takes the automatic break out
+    const m0 = mealFor(meal, d.crewId, d.date);
+    if (m0.skipped && (p.start !== undefined || p.finish !== undefined || p.crewId !== undefined || p.date !== undefined) && d.breakMinutes === meal.minutes) d.breakMinutes = 0;
+    if ((p.start !== undefined || p.finish !== undefined) && !m0.skipped && meal.minutes > 0 && /^\d{2}:\d{2}$/.test(d.start) && /^\d{2}:\d{2}$/.test(d.finish)) {
       const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
       let span = m(d.finish) - m(d.start); if (span <= 0) span += 1440;
       d.breakMinutes = span >= meal.after_hours * 60 ? Math.max(d.breakMinutes, meal.minutes) : d.breakMinutes === meal.minutes ? 0 : d.breakMinutes;

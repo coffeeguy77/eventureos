@@ -1,5 +1,6 @@
 "use server";
 
+import { cleanSkips, mealFor } from "@/lib/roster/breaks";
 import { createHash, randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
@@ -44,7 +45,7 @@ export async function saveRosterShift(input: RosterShiftInput) {
     let brk = Math.max(0, Math.min(240, Math.round(Number(input.breakMinutes) || 0)));
     {
       // the award's unpaid meal break: a shift longer than the set hours always has at least the set break
-      const { meal } = readRosterSettings(org.settings);
+      const meal = mealFor(readRosterSettings(org.settings).meal, input.crewId, input.date);
       const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
       let span = m(input.finish) - m(input.start); if (span <= 0) span += 1440;
       if (meal.minutes > 0 && span >= meal.after_hours * 60) brk = Math.max(brk, meal.minutes);
@@ -312,7 +313,7 @@ async function saveSettings(patch: Record<string, unknown>) {
 
 export async function saveRosterOptions(input: {
   rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null;
-  clock?: { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean }; meal?: { after_hours: number; minutes: number }; address?: string | null;
+  clock?: { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean }; meal?: { after_hours: number; minutes: number; skip?: { day: number | null; member: string | null }[] }; address?: string | null;
   breaks?: { max: number; smart: boolean; ipad_only: boolean };
 }) {
   return wrap(async () => {
@@ -322,7 +323,7 @@ export async function saveRosterOptions(input: {
       ? { lat: Math.round(g.lat * 1e6) / 1e6, lng: Math.round(g.lng * 1e6) / 1e6, metres: Math.max(20, Math.min(5000, Math.round(g.metres))) } : null;
     const patch: Record<string, unknown> = { rounding: n(input.rounding, 60), grace: n(input.grace, 60), google_calendar: !!input.googleCalendar, geofence: fence };
     if (input.clock) patch.clock = { cafe: ["ipad", "phone", "both"].includes(input.clock.cafe) ? input.clock.cafe : "both", events: !!input.clock.events, photo: !!input.clock.photo };
-    if (input.meal) patch.meal = { after_hours: Math.max(0, Math.min(12, Number(input.meal.after_hours) || 0)), minutes: n(input.meal.minutes, 120) };
+    if (input.meal) patch.meal = { after_hours: Math.max(0, Math.min(12, Number(input.meal.after_hours) || 0)), minutes: n(input.meal.minutes, 120), skip: cleanSkips(input.meal.skip) };
     if (input.breaks) patch.breaks = { max: Math.max(n(input.meal?.minutes ?? 30, 120), n(input.breaks.max, 240)), smart: !!input.breaks.smart, ipad_only: !!input.breaks.ipad_only };
     if (input.address !== undefined) patch.place = { address: input.address?.trim().slice(0, 200) || null };
     await saveSettings(patch);

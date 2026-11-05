@@ -1,5 +1,6 @@
 "use client";
 
+import { DAY_NAMES, type BreakSkip } from "@/lib/roster/breaks";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, MapPin, Plus } from "lucide-react";
@@ -222,9 +223,10 @@ export function PayRulesCard({ rules }: { rules: AwardRules }) {
 }
 
 type ClockHow = { cafe: "ipad" | "phone" | "both"; events: boolean; photo: boolean };
-export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug, clock, meal, address, breaks }: {
+export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSet, slug, clock, meal, address, breaks, staff = [] }: {
   rounding: number; grace: number; googleCalendar: boolean; geofence: { lat: number; lng: number; metres: number } | null; kioskSet: boolean; slug: string;
-  clock: ClockHow; meal: { after_hours: number; minutes: number }; address: string | null; breaks: { max: number; smart: boolean; ipad_only: boolean };
+  clock: ClockHow; meal: { after_hours: number; minutes: number; skip: BreakSkip[] }; address: string | null; breaks: { max: number; smart: boolean; ipad_only: boolean };
+  staff?: { id: string; name: string }[];
 }) {
   const { pending, run, note, setMsg } = useAct();
   const [v, setV] = useState({ rounding, grace, googleCalendar, geofence, clock, meal, address: address ?? "", breaks });
@@ -269,6 +271,7 @@ export function OptionsCard({ rounding, grace, googleCalendar, geofence, kioskSe
           {v.breaks.smart ? ` Smart breaks: each week, the unpaid time is the larger of ${v.meal.minutes} min × shifts and what they actually took — so a 20 min break on a busy day is balanced by a 40 min one on a quiet day.` : ""}
           {" "}Only managers see the break flags (none clocked, short, long) on Timesheets; change any break there to override it. Event shifts are paid from the job, so none of this applies to them.
         </p>
+        <NoBreakRules skip={v.meal.skip} staff={staff} minutes={v.meal.minutes} onChange={(skip) => setV({ ...v, meal: { ...v.meal, skip } })} />
         <label className="flex items-center gap-2 text-[0.75rem] text-ink"><input type="checkbox" checked={v.googleCalendar} onChange={(e) => setV({ ...v, googleCalendar: e.target.checked })} />Also put published shifts on Google Calendar</label>
 
         <div className="space-y-2 rounded-lg bg-zinc-50 px-3 py-3">
@@ -399,5 +402,49 @@ view roster: (link)`}</pre>
         {note}
       </div>
     </Card>
+  );
+}
+
+
+/** Shifts with no automatic unpaid break: a day (everyone), a person (every day), or a person on a day. */
+function NoBreakRules({ skip, staff, minutes, onChange }: { skip: BreakSkip[]; staff: { id: string; name: string }[]; minutes: number; onChange: (s: BreakSkip[]) => void }) {
+  const [day, setDay] = useState<string>("6");
+  const [member, setMember] = useState<string>("");
+  const name = (id: string | null) => (id ? staff.find((p) => p.id === id)?.name ?? "Someone who's left" : "Everyone");
+  const add = () => {
+    const r: BreakSkip = { day: day === "" ? null : Number(day), member: member || null };
+    if (r.day == null && r.member == null) return;
+    if (skip.some((x) => x.day === r.day && x.member === r.member)) return;
+    onChange([...skip, r]);
+  };
+  return (
+    <div className="space-y-2 rounded-lg bg-zinc-50 px-3 py-3">
+      <p className="font-medium text-ink">No automatic break</p>
+      <p className="text-[0.75rem] text-ink-muted">Shifts where nobody stops — the {minutes} min unpaid break isn&apos;t taken off (and no &ldquo;no break&rdquo; flag). Pick a day for everyone, one person every day, or one person on one day. A break they actually clock still comes off.</p>
+      {skip.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {skip.map((r, i) => (
+            <li key={i} className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1 text-[0.75rem] text-ink ring-1 ring-inset ring-line">
+              {r.member ? name(r.member) : "Everyone"} · {r.day == null ? "every day" : `${DAY_NAMES[r.day]}s`}
+              <button type="button" onClick={() => onChange(skip.filter((_, k) => k !== i))} className="-mr-1 grid h-6 w-6 place-items-center rounded-full text-ink-faint hover:bg-zinc-100 hover:text-rose-700" aria-label="Remove this rule">×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[140px] flex-1"><Label>Day</Label>
+          <Select value={day} onChange={(e) => setDay(e.target.value)}>
+            <option value="">Every day</option>
+            {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </Select></div>
+        <div className="min-w-[160px] flex-1"><Label>Who</Label>
+          <Select value={member} onChange={(e) => setMember(e.target.value)}>
+            <option value="">Everyone</option>
+            {staff.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select></div>
+        <Button size="sm" disabled={day === "" && !member} onClick={add}>Add rule</Button>
+      </div>
+      <p className="text-[0.7188rem] text-ink-faint">Press Save below to keep the rules. They apply to new shifts and to clock-offs from now on — fix a past timesheet with &ldquo;No break taken — pay it&rdquo; on Timesheets.</p>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { mealFor } from "@/lib/roster/breaks";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
@@ -28,12 +29,13 @@ export async function updateEntry(id: string, v: { start: string; finish: string
     if (!LOCAL.test(v.start) || !LOCAL.test(v.finish)) throw new Error("Check the start and finish.");
     if (v.finish <= v.start) throw new Error("The finish is before the start.");
     let brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
-    let { data: e, error: selErr } = await supabase.from("staff_time_entries").select("id, clock_out, status, event_crew_id").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    let { data: e, error: selErr } = await supabase.from("staff_time_entries").select("id, clock_out, status, event_crew_id, crew_member_id, work_date").eq("id", id).eq("organisation_id", org.id).maybeSingle();
     if (selErr) ({ data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status").eq("id", id).eq("organisation_id", org.id).maybeSingle());
     if (!e) throw new Error("That entry no longer exists.");
     if (!(e as { event_crew_id?: string | null }).event_crew_id) {
       const { readRosterSettings } = await import("@/lib/roster/settings");
-      const { meal } = readRosterSettings(org.settings);
+      const ee = e as { crew_member_id?: string; work_date?: string };
+      const meal = mealFor(readRosterSettings(org.settings).meal, ee.crew_member_id, ee.work_date);
       const hrs = (Date.parse(fromLocal(v.finish, org.timezone)) - Date.parse(fromLocal(v.start, org.timezone))) / 3_600_000;
       if (meal.minutes > 0 && hrs >= meal.after_hours) brk = Math.max(brk, meal.minutes);
     }
@@ -58,11 +60,11 @@ export async function setNoBreak(id: string, noBreak: boolean) {
   return wrap(async () => {
     const { supabase, org, user, profile } = await office();
     if (!UUID.test(id)) throw new Error("Refresh and try again.");
-    const { data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status, note, paid_start, paid_finish, clock_in, work_date").eq("id", id).eq("organisation_id", org.id).maybeSingle();
+    const { data: e } = await supabase.from("staff_time_entries").select("id, clock_out, status, note, paid_start, paid_finish, clock_in, work_date, crew_member_id").eq("id", id).eq("organisation_id", org.id).maybeSingle();
     if (!e) throw new Error("That entry no longer exists.");
     if (!e.clock_out) throw new Error("They're still clocked on — wait until they clock off.");
     const { readRosterSettings } = await import("@/lib/roster/settings");
-    const { meal } = readRosterSettings(org.settings);
+    const meal = mealFor(readRosterSettings(org.settings).meal, e.crew_member_id as string, e.work_date as string);
     const hrs = (Date.parse((e.paid_finish ?? e.clock_out) as string) - Date.parse((e.paid_start ?? e.clock_in) as string)) / 3_600_000;
     const tag = "No break taken (too busy)";
     const note = noBreak
@@ -102,7 +104,7 @@ export async function addEntry(v: { crewId: string; start: string; finish: strin
     if (v.shiftId && !UUID.test(v.shiftId)) throw new Error("Refresh and try again.");
     const s = fromLocal(v.start, org.timezone), f = fromLocal(v.finish, org.timezone);
     const { readRosterSettings } = await import("@/lib/roster/settings");
-    const { meal } = readRosterSettings(org.settings);
+    const meal = mealFor(readRosterSettings(org.settings).meal, v.crewId, v.start.slice(0, 10));
     let brk = Math.max(0, Math.min(600, Math.round(Number(v.breakMinutes) || 0)));
     if (meal.minutes > 0 && (Date.parse(f) - Date.parse(s)) / 3_600_000 >= meal.after_hours) brk = Math.max(brk, meal.minutes);
     const { error } = await supabase.from("staff_time_entries").insert({

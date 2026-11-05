@@ -1,5 +1,6 @@
 "use server";
 
+import { mealFor } from "@/lib/roster/breaks";
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { checkPass, kioskOrg, managerPass } from "@/lib/roster/kiosk";
 import { pinHash } from "@/lib/roster/pin";
@@ -118,7 +119,8 @@ export async function kioskManagerSave(slug: string, token: string, pass: string
     const st = readRosterSettings(k.org.settings);
     const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
     let span = mins(v.finish) - mins(v.start); if (span <= 0) span += 1440;
-    const brk = st.meal.minutes > 0 && span >= st.meal.after_hours * 60 ? st.meal.minutes : 0;
+    const meal = mealFor(st.meal, v.memberId, v.date);
+    const brk = meal.minutes > 0 && span >= meal.after_hours * 60 ? meal.minutes : 0;
     let title = "Shift";
     if (v.areaId) { const { data: a } = await k.db.from("roster_areas").select("name").eq("id", v.areaId).eq("organisation_id", k.org.id).maybeSingle(); if (!a) throw new Error("That area no longer exists."); title = a.name as string; }
     const row = { crew_member_id: v.memberId, area_id: v.areaId, title, shift_date: v.date, start_time: v.start, finish_time: v.finish, break_minutes: brk, notes: v.notes.trim().slice(0, 2000) || null, published_at: new Date().toISOString(), changed_since_publish: false, updated_at: new Date().toISOString() };

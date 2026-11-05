@@ -21,6 +21,8 @@ export interface BreakEntry {
   stored: number;
   /** clocked by the person (iPad / phone), not set by the office, not an event shift */
   tracked: boolean;
+  /** a no-break rule covers this shift (e.g. Saturdays): no automatic break, no "no break" flag */
+  exempt?: boolean;
 }
 export interface BreakResult { minutes: number; flag: BreakFlag | null; taken: number | null; balanced: boolean }
 
@@ -46,10 +48,10 @@ const mondayOf = (d: string) => { const t = new Date(`${d}T00:00:00Z`); return n
 /** The break each entry is paid with. Untracked entries keep what's saved; with smart breaks, each week is balanced. */
 export function effectiveBreaks(list: BreakEntry[], r: BreakRules): Map<string, BreakResult> {
   const out = new Map<string, BreakResult>();
-  for (const e of list) out.set(e.id, { minutes: e.stored, flag: e.tracked ? breakFlag(e.spanMinutes, e.taken, r) : null, taken: e.taken, balanced: false });
+  for (const e of list) out.set(e.id, { minutes: e.stored, flag: e.tracked ? breakFlag(e.spanMinutes, e.taken, e.exempt ? { ...r, min: 0 } : r) : null, taken: e.taken, balanced: false });
   if (!r.smart) return out;
   const weeks = new Map<string, BreakEntry[]>();
-  for (const e of list) if (e.tracked && qualifies(e.spanMinutes, r)) { const k = mondayOf(e.work_date); weeks.set(k, [...(weeks.get(k) ?? []), e]); }
+  for (const e of list) if (e.tracked && !e.exempt && qualifies(e.spanMinutes, r)) { const k = mondayOf(e.work_date); weeks.set(k, [...(weeks.get(k) ?? []), e]); }
   for (const group of weeks.values()) {
     const base = group.map((e) => ({ e, m: e.taken ?? r.min }));
     let short = group.length * r.min - base.reduce((t, x) => t + x.m, 0);
@@ -63,3 +65,38 @@ export function effectiveBreaks(list: BreakEntry[], r: BreakRules): Map<string, 
 }
 
 export const FLAG_LABEL: Record<BreakFlag, string> = { none: "No break clocked", short: "Short break", long: "Long break", over: "Over the break limit" };
+
+/* ---------------- no-break rules ---------------- */
+/**
+ * Shifts that don't get the automatic unpaid break (e.g. Saturdays — nobody stops; the chef on Mondays).
+ * A rule is a day (0 = Sunday … 6 = Saturday), a staff member, or both. Breaks they actually clock still count.
+ */
+export interface BreakSkip { day: number | null; member: string | null }
+export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function cleanSkips(v: unknown): BreakSkip[] {
+  const out: BreakSkip[] = [];
+  for (const x of Array.isArray(v) ? v : []) {
+    const r = (x ?? {}) as Record<string, unknown>;
+    const day = Number.isInteger(r.day) && Number(r.day) >= 0 && Number(r.day) <= 6 ? Number(r.day) : null;
+    const member = typeof r.member === "string" && /^[0-9a-f-]{36}$/i.test(r.member) ? r.member : null;
+    if (day == null && member == null) continue; // "everyone, every day" would switch breaks off altogether — that's the minutes field
+    if (!out.some((o) => o.day === day && o.member === member)) out.push({ day, member });
+  }
+  return out.slice(0, 40);
+}
+
+const weekdayOf = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).getUTCDay();
+
+/** Does this person's shift on this date skip the automatic break? */
+export function skipsBreak(skips: readonly BreakSkip[] | null | undefined, memberId: string | null | undefined, workDate: string | null | undefined): boolean {
+  if (!skips?.length || !workDate || !/^\d{4}-\d{2}-\d{2}/.test(workDate)) return false;
+  const d = weekdayOf(workDate);
+  return skips.some((r) => (r.day == null || r.day === d) && (r.member == null || r.member === memberId));
+}
+
+/** The meal-break rule for one shift: no automatic break when a no-break rule matches. */
+export function mealFor<M extends { after_hours: number; minutes: number; skip?: BreakSkip[] }>(meal: M, memberId: string | null | undefined, workDate: string | null | undefined): { after_hours: number; minutes: number; skipped: boolean } {
+  const skipped = skipsBreak(meal.skip, memberId, workDate);
+  return { after_hours: meal.after_hours, minutes: skipped ? 0 : meal.minutes, skipped };
+}

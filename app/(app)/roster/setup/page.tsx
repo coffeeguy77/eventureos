@@ -142,7 +142,7 @@ export default async function RosterSetup({ searchParams }: { searchParams: Prom
           <PayRulesCard rules={settings.rules} />
           <HolidaysCard holidays={(holidays ?? []) as { holiday_date: string; name: string }[]} />
         </>}
-        {section === "clocking" && <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} />}
+        {section === "clocking" && <OptionsCard rounding={settings.rounding} grace={settings.grace} googleCalendar={settings.google_calendar} geofence={settings.geofence} kioskSet={!!settings.kiosk_hash} slug={org.slug} clock={settings.clock} meal={settings.meal} address={settings.place.address} breaks={settings.breaks} staff={list.map((p) => ({ id: p.id, name: p.name }))} />}
         {section === "alerts" && <>
           <AutomationCard v={{ late: settings.late, reminders: settings.reminders, auto_approve: settings.auto_approve, limits: settings.limits }} smsOn={smsOn} />
           <TextsCard people={list.filter((p) => p.on_roster).map((p) => ({ id: p.id, name: p.name, phone: phones.get(p.id) ?? null, email: p.email }))} monday={weekOf(today)} smsOn={smsOn} />
