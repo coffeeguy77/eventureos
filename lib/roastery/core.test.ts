@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { greenFor, lossByCoffee, lossFor, parseRecorderIndex, stockByCoffee } from "./core";
+import { cleanCurve, curveFromCsv, greenFor, lossByCoffee, lossFor, parseRecorderIndex, rorOf, stockByCoffee } from "./core";
 
 // Bean Culture's weighed 30 kg batches (3 Nov 2026)
 const W = [25.8, 25.95, 25.95, 25.95].map((r) => ({ coffee_id: "brazil", green_kg: 30, roasted_kg: r }))
@@ -47,4 +47,20 @@ test("recorder index.csv", () => {
   assert.equal(p.rows.length, 1);
   assert.deepEqual([p.rows[0].coffee, p.rows[0].batch_kg, p.rows[0].roasted_kg, p.rows[0].first_crack_s, p.rows[0].notes], ["PNG", 30, 25.6, 699, "choc, plum"]);
   assert.throws(() => parseRecorderIndex("a,b\n1,2"));
+});
+
+test("curve from a recorder roast CSV", () => {
+  const rows = ["timestamp,unix_time,t_roast_s,bean_temp_c,air_temp_c,air_temp_sp_c,burner_pct,burner_sp_raw,burner_sp_pct"];
+  for (let t = 0; t <= 60; t++) rows.push(`x,0,${t}.0,${(200 - t).toFixed(2)},${180 + t},240,${t < 20 ? 0 : 100},1,${t < 20 ? 0 : 100}`);
+  const c = curveFromCsv(rows.join("\n"), 2)!;
+  assert.equal(c.step, 2);
+  assert.equal(c.bt.length, 31);
+  assert.equal(c.bt[0], 200);
+  assert.equal(c.bt[30], 140);
+  assert.equal(c.burner_sp![5], 0);
+  assert.equal(c.burner_sp![15], 100);
+  assert.equal(c.air_sp![0], 240);
+  assert.equal(rorOf(c)[30], -60);
+  assert.equal(curveFromCsv("a,b\n1,2"), null);
+  assert.equal(cleanCurve({ step: 2, bt: [1, 2] }), null);
 });

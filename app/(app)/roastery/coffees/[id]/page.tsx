@@ -56,7 +56,7 @@ export default async function CoffeePage({ params }: { params: Promise<{ id: str
             <ul className="divide-y divide-line border-t border-line">
               {mine.slice(0, 100).map((r) => (
                 <li key={r.id} className="px-4 py-2.5 text-[0.8125rem]">
-                  <span className="text-ink">{fmtDateTime(r.roasted_at, org.timezone)}</span>
+                  <a href={`/roastery/roasts/${r.id}`} className="text-ink hover:underline">{fmtDateTime(r.roasted_at, org.timezone)}</a>{r.has_curve && <a href={`/roastery/roasts/${r.id}`} className="ml-2 text-[0.75rem] font-medium text-brand-700 hover:underline">graph</a>}
                   <span className="text-ink-muted tabular"> · {r.green_kg} kg → {r.roasted_kg != null ? `${r.roasted_kg} kg (loss ${r.loss_pct?.toFixed(1)} %)` : "not weighed"}{r.first_crack_s != null ? ` · FC ${mmss(r.first_crack_s)}` : ""}{r.dtr_pct != null ? ` · DTR ${r.dtr_pct} %` : ""}{r.drop_c != null ? ` · drop ${r.drop_c} °C` : ""}{r.score != null ? ` · score ${r.score}` : ""}</span>
                 </li>
               ))}

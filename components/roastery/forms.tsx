@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { addWeighedBatches, deleteRoast, importRecorder, logRoast, moveStock, saveCoffee, updateRoast, type CoffeeInput } from "@/app/(app)/roastery/actions";
+import { addWeighedBatches, deleteRoast, importRoasts, logRoast, moveStock, saveCoffee, updateRoast, type CoffeeInput } from "@/app/(app)/roastery/actions";
+import { curveFromCsv, parseRecorderIndex, type ImportRoast } from "@/lib/roastery/core";
 
 export interface CoffeeOpt { id: string; name: string; batch_kg: number; lossPct: number | null; lossOwn: boolean }
 type Res = { ok: true } | { ok: false; error: string };
@@ -153,25 +154,58 @@ export function RoastEdit({ id, green, roasted, score, notes, lossPct }: { id: s
 }
 
 /* ---------------------------------------------------------------- roast recorder import */
+/**
+ * Choose files from Documents\RoastRecorder\roasts on the roaster PC: index.csv plus the roast files (W45A_….csv) for
+ * their graphs, or an import file (.json). Everything is read here in the browser and sent one roast at a time.
+ */
 export function RecorderImport() {
+  const router = useRouter();
   const [deduct, setDeduct] = useState(true);
-  const { pending, msg, run } = useRun();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const go = async (files: File[]) => {
+    setMsg(null);
+    try {
+      const list: ImportRoast[] = [];
+      const csvs = new Map(files.filter((f) => /\.csv$/i.test(f.name) && f.name.toLowerCase() !== "index.csv").map((f) => [f.name, f]));
+      let skipped = 0;
+      for (const f of files.filter((x) => /\.json$/i.test(x.name))) {
+        const j = JSON.parse(await f.text()) as { roasts?: ImportRoast[] };
+        if (!Array.isArray(j.roasts)) throw new Error(`${f.name} isn't a roast import file.`);
+        list.push(...j.roasts);
+      }
+      const index = files.find((f) => f.name.toLowerCase() === "index.csv");
+      if (index) {
+        const p = parseRecorderIndex(await index.text());
+        skipped = p.skipped;
+        for (const r of p.rows) {
+          const file = csvs.get(`${r.name}.csv`);
+          list.push({ name: r.name, charge: r.charge, coffee: r.coffee, batch_kg: r.batch_kg!, roasted_kg: r.roasted_kg, profile: r.followed, charge_bean_c: r.charge_bean_c,
+            turning_point_s: r.turning_point_s, first_crack_s: r.first_crack_s, first_crack_bean_c: r.first_crack_bean_c, end_s: r.end_s, drop_bean_c: r.drop_bean_c,
+            dtr_pct: r.dtr_pct, score: r.score, notes: r.notes, curve: file ? curveFromCsv(await file.text()) : null });
+        }
+      } else if (csvs.size) throw new Error("Choose index.csv together with the roast files: it says which coffee and batch each roast was.");
+      if (!list.length) throw new Error(skipped ? `None of the ${skipped} roasts have a coffee and batch weight (set them in the advisor before the roast).` : "No roasts found in those files.");
+      let added = 0, curves = 0, already = 0; const newCoffees: string[] = [];
+      for (let i = 0; i < list.length; i++) {
+        setBusy(`Importing ${i + 1} of ${list.length}…`);
+        const r = await importRoasts([list[i]], deduct);
+        if (!r.ok) throw new Error(`${list[i].name}: ${r.error}`);
+        added += r.data.added; curves += r.data.curves; already += r.data.already; newCoffees.push(...r.data.newCoffees);
+      }
+      setMsg({ ok: true, text: `${added} roast${added === 1 ? "" : "s"} added` + (curves ? `, ${curves} roast graph${curves === 1 ? "" : "s"}` : "") + (already ? `, ${already} already here` : "") + (skipped ? `, ${skipped} skipped (no coffee or batch weight set)` : "") + (newCoffees.length ? `. New coffees: ${newCoffees.join(", ")}.` : ".") });
+      router.refresh();
+    } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) }); }
+    finally { setBusy(null); }
+  };
   return (
     <Card>
-      <CardHeader title="Import from the roast recorder" subtitle="Choose roasts\index.csv from Documents\RoastRecorder on the roaster PC. Each roast is added once, so import as often as you like." />
+      <CardHeader title="Import from the roast recorder" subtitle="On the roaster PC open Documents\RoastRecorder\roasts, select everything (Ctrl+A) and choose. index.csv says which coffee each roast was; the roast files add their graphs. Each roast is added once, so import as often as you like." />
       <div className="space-y-3 border-t border-line px-5 py-4">
         <label className="flex items-center gap-2 text-[0.8125rem] text-ink"><input type="checkbox" className="h-4 w-4" checked={deduct} onChange={(e) => setDeduct(e.target.checked)} />Take each new roast&apos;s green weight off stock</label>
-        <label className={cn("inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-surface px-3.5 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50", pending && "opacity-60")}>
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Choose index.csv
-          <input type="file" accept=".csv,text/csv" className="sr-only" disabled={pending} onChange={async (e) => {
-            const file = e.target.files?.[0]; e.target.value = "";
-            if (!file) return;
-            const text = await file.text();
-            run(() => importRecorder(text, deduct), (d) => {
-              const x = d as { added: number; skipped: number; already: number; newCoffees: string[] };
-              return `${x.added} roast${x.added === 1 ? "" : "s"} added` + (x.already ? `, ${x.already} already here` : "") + (x.skipped ? `, ${x.skipped} skipped (no coffee or batch weight set)` : "") + (x.newCoffees.length ? `. New coffees: ${x.newCoffees.join(", ")}.` : ".");
-            });
-          }} />
+        <label className={cn("inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-surface px-3.5 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50", busy && "opacity-60")}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{busy ?? "Choose files"}
+          <input type="file" multiple accept=".csv,.json,text/csv,application/json" className="sr-only" disabled={!!busy} onChange={(e) => { const f = [...(e.target.files ?? [])]; e.target.value = ""; if (f.length) go(f); }} />
         </label>
         <Msg msg={msg} />
       </div>
