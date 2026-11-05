@@ -11,7 +11,8 @@ import { customerFor } from "./woo";
  * booking system. Nothing is sent to customers, and WooCommerce itself is never changed.
  * Settings: organisations.settings.shop_import = { enabled, subjects: [...], since: "YYYY-MM-DD", skipped: [gmail ids] }.
  */
-export interface ShopImportSettings { enabled: boolean; subjects: string[]; since: string | null; skipped: string[] }
+export interface ShopImportLog { id: string; at: string; subject: string; sent: string | null; result: "imported" | "duplicate" | "bookings" | "unreadable" | "error"; detail: string | null; number: number | null }
+export interface ShopImportSettings { enabled: boolean; subjects: string[]; since: string | null; skipped: string[]; log: ShopImportLog[] }
 export function readShopImport(settings: unknown, orgName: string): ShopImportSettings {
   const r = (((settings ?? {}) as Record<string, unknown>).shop_import ?? {}) as Record<string, unknown>;
   const subjects = (Array.isArray(r.subjects) ? r.subjects : []).filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.trim().slice(0, 120)).slice(0, 6);
@@ -20,10 +21,11 @@ export function readShopImport(settings: unknown, orgName: string): ShopImportSe
     subjects: subjects.length ? subjects : [`[${orgName}]: New order`, `[${orgName}] New subscription renewal order`],
     since: typeof r.since === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.since) ? r.since : null,
     skipped: (Array.isArray(r.skipped) ? r.skipped : []).filter((x): x is string => typeof x === "string").slice(-400),
+    log: (Array.isArray(r.log) ? r.log : []).filter((x): x is ShopImportLog => !!x && typeof x === "object" && typeof (x as ShopImportLog).id === "string").slice(0, 40),
   };
 }
 
-export interface ShopImportResult { found: number; imported: number; bookings: number; flagged: number; error?: string }
+export interface ShopImportResult { found: number; imported: number; bookings: number; flagged: number; unreadable?: number; error?: string }
 
 const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
 const toAddress = (a: WooEmailAddress | null): Address | Record<string, never> => a
@@ -70,15 +72,22 @@ export async function importShopOrderEmails(db: SupabaseClient, orgId: string, o
   };
   const cache = new Map<string, string>();
   const newlySkipped: string[] = [];
+  // What happened to each email, so the shop settings can show why one didn't come in
+  const log: ShopImportLog[] = [];
+  const note = (id: string, subject: string, sent: string | null, result: ShopImportLog["result"], detail: string | null, number: number | null = null) =>
+    log.push({ id, at: new Date().toISOString(), subject: subject.slice(0, 200), sent, result, detail: detail?.slice(0, 300) ?? null, number });
 
   for (const id of todo) {
     let pm;
-    try { pm = parseMessage(await getMessage(ctx, id)); } catch { continue; }
-    const o = pm.html ? parseWooOrderEmail(pm.subject ?? "", pm.html) : null;
-    if (!o) { newlySkipped.push(id); continue; }
-    if (!o.items.length) { newlySkipped.push(id); if (o.bookingItems) res.bookings++; continue; } // bookings / gift cards: the booking system's
+    try { pm = parseMessage(await getMessage(ctx, id)); }
+    catch (e) { note(id, "(couldn't open the email)", null, "error", e instanceof Error ? e.message : String(e)); continue; }
+    const subj = pm.subject ?? "";
+    const o = pm.html ? parseWooOrderEmail(subj, pm.html) : null;
+    // Not readable as an order: NOT skipped for good — it's tried again next time and listed in the shop settings to check
+    if (!o) { res.unreadable = (res.unreadable ?? 0) + 1; note(id, subj, pm.sentAt, "unreadable", pm.html ? "The email didn't look like a WooCommerce order (layout not recognised)" : "The email has no HTML part"); console.error("[shop email import] unreadable order email", id, subj); continue; }
+    if (!o.items.length) { newlySkipped.push(id); if (o.bookingItems) res.bookings++; note(id, subj, pm.sentAt, "bookings", o.bookingItems ? `${o.bookingItems} booking item(s) — left for the booking system` : o.giftCardItems ? "Emailed gift card(s) only" : "No products found in the email", o.number); continue; } // bookings / gift cards: the booking system's
     const { data: have } = await db.from("shop_orders").select("id").eq("organisation_id", orgId).eq("woo_id", o.number).maybeSingle();
-    if (have) { newlySkipped.push(id); continue; }
+    if (have) { newlySkipped.push(id); note(id, subj, pm.sentAt, "duplicate", "Already in the shop", o.number); continue; }
 
     const flags = [...o.problems];
     if (o.bookingItems) flags.push(`${o.bookingItems} booking item${o.bookingItems === 1 ? "" : "s"} left for the booking system`);
@@ -122,8 +131,9 @@ export async function importShopOrderEmails(db: SupabaseClient, orgId: string, o
       const { data: num } = await db.rpc("shop_next_order_number", { p_org: orgId });
       ins = await db.from("shop_orders").insert({ ...row, number: num as number, office_note: `WooCommerce order #${o.number}\n${row.office_note}`.slice(0, 2000) }).select("id").single();
     }
-    if (ins.error) { console.error("[shop email import]", o.number, ins.error.message); continue; }
+    if (ins.error) { console.error("[shop email import]", o.number, ins.error.message); note(id, subj, pm.sentAt, "error", `Couldn't save order #${o.number}: ${ins.error.message}`, o.number); continue; }
     res.imported++; if (flags.length) res.flagged++;
+    note(id, subj, pm.sentAt, "imported", flags.length ? `Check: ${flags.join("; ")}` : null, o.number);
     await db.from("notifications").insert({
       organisation_id: orgId, type: "shop.order", title: `Shop order #${o.number} — ${name ?? "customer"}`.slice(0, 200),
       body: items.map((i) => `${i.qty} × ${i.name}${i.variant ? ` ${i.variant}` : ""}${i.grind_label ? ` (${i.grind_label})` : ""}`).join(", ").slice(0, 500),
@@ -131,13 +141,15 @@ export async function importShopOrderEmails(db: SupabaseClient, orgId: string, o
     }).then(() => null, () => null);
   }
 
-  if (newlySkipped.length) {
-    // Remember emails with nothing to post so they aren't read again
+  if (newlySkipped.length || log.length) {
+    // Remember emails with nothing to post so they aren't read again; keep the latest results for the settings page
     const { data: fresh } = await db.from("organisations").select("settings").eq("id", orgId).single();
     const settings = (fresh?.settings ?? {}) as Record<string, unknown>;
     const cur = (settings.shop_import ?? {}) as Record<string, unknown>;
     const list = [...new Set([...(Array.isArray(cur.skipped) ? (cur.skipped as string[]) : []), ...newlySkipped])].slice(-400);
-    await db.from("organisations").update({ settings: { ...settings, shop_import: { ...cur, skipped: list } } }).eq("id", orgId);
+    const prevLog = (Array.isArray(cur.log) ? (cur.log as ShopImportLog[]) : []).filter((x) => !log.some((n) => n.id === x.id));
+    // an unreadable email tried again every run shouldn't push everything else off the list
+    await db.from("organisations").update({ settings: { ...settings, shop_import: { ...cur, skipped: list, log: [...log.reverse(), ...prevLog].slice(0, 40) } } }).eq("id", orgId);
   }
   return res;
 }

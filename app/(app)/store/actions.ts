@@ -255,7 +255,8 @@ export async function importShopEmailsNow(): Promise<Result> {
     const { importShopOrderEmails } = await import("@/lib/shop/email-import");
     const r = await importShopOrderEmails(createServiceClient(), org.id, { max: 80 });
     revalidatePath("/store");
-    return r.imported ? `${r.imported} new order${r.imported === 1 ? "" : "s"}${r.flagged ? ` (${r.flagged} to check)` : ""}.` : "No new orders.";
+    const bad = r.unreadable ? ` ${r.unreadable} order email${r.unreadable === 1 ? "" : "s"} couldn't be read — see “Recent order emails” below.` : "";
+    return (r.imported ? `${r.imported} new order${r.imported === 1 ? "" : "s"}${r.flagged ? ` (${r.flagged} to check)` : ""}.` : `No new orders (${r.found} matching email${r.found === 1 ? "" : "s"} in Gmail since the last one).`) + bad;
   });
 }
 
