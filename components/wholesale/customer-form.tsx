@@ -56,12 +56,18 @@ export function CustomerForm({ id, initial, groups, defaultDay, canEdit }: { id:
               <option value="invoice">On account — pay by invoice</option>
             </Select></div>
           {v.payment_mode === "invoice" && <div><Label htmlFor="wc-terms" hint="days after ordering">Payment terms</Label><Input id="wc-terms" type="number" min={0} max={120} value={v.payment_terms_days} onChange={(e) => set("payment_terms_days", Number(e.target.value))} disabled={!canEdit} /></div>}
-          <div><Label htmlFor="wc-day">Delivery day</Label>
+          <div><Label htmlFor="wc-ful" hint="pickup: no delivery fee or minimum">Delivery or pickup</Label>
+            <Select id="wc-ful" value={v.fulfilment ?? "delivery"} onChange={(e) => set("fulfilment", e.target.value as "delivery" | "pickup" | "either")} disabled={!canEdit}>
+              <option value="delivery">We deliver</option>
+              <option value="pickup">They pick up</option>
+              <option value="either">They choose each order</option>
+            </Select></div>
+          <div><Label htmlFor="wc-day">{v.fulfilment === "pickup" ? "Ready day" : "Delivery day"}</Label>
             <Select id="wc-day" value={v.delivery_weekday ?? ""} onChange={(e) => set("delivery_weekday", e.target.value === "" ? null : Number(e.target.value))} disabled={!canEdit}>
               <option value="">Usual run ({WEEKDAYS[defaultDay]})</option>
               {WEEKDAYS.map((d, i) => i === defaultDay ? null : <option key={d} value={i}>{d}</option>)}
             </Select></div>
-          <div><Label htmlFor="wc-min" hint="before GST, 0 = none">Minimum order $</Label><Input id="wc-min" type="number" min={0} step="0.01" value={v.min_order} onChange={(e) => set("min_order", Number(e.target.value))} disabled={!canEdit} /></div>
+          <div><Label htmlFor="wc-min" hint={v.fulfilment === "pickup" ? "not used for pickup" : "before GST, 0 = none"}>Minimum order $</Label><Input id="wc-min" type="number" min={0} step="0.01" value={v.min_order} onChange={(e) => set("min_order", Number(e.target.value))} disabled={!canEdit} /></div>
         </div>
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">

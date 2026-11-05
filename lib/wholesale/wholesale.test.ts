@@ -130,3 +130,23 @@ test("readWholesale: box size, categories and price groups", async () => {
   assert.equal(readWholesale({}).boxKg, 10);
   assert.deepEqual(mergeNames(["Husk"], ["husk", "Cafe", null]), ["Cafe", "Husk"]);
 });
+
+import { checkoutLines, orderFulfilment, cleanFulfilment } from "./rules";
+
+test("checkoutLines: items at GST-inclusive prices plus delivery, adding up to the total", () => {
+  const l = checkoutLines([{ name: "Parliament Blend 1 kg", quantity: 2, unit_price: 35, tax_rate: 0 }], 40, 11400);
+  assert.deepEqual(l, [
+    { name: "Parliament Blend 1 kg", unitCents: 3500, quantity: 2, description: "GST-free" },
+    { name: "Delivery", unitCents: 4400, quantity: 1, description: "Includes GST" },
+  ]);
+  assert.equal(checkoutLines([{ name: "Syrup", quantity: 3, unit_price: 10, tax_rate: 10 }], 0, 3300)?.[0].unitCents, 1100);
+  assert.equal(checkoutLines([{ name: "Odd", quantity: 3, unit_price: 3.33, tax_rate: 10 }], 0, 1099), null, "rounding mismatch falls back");
+});
+
+test("orderFulfilment", () => {
+  assert.equal(orderFulfilment("pickup", "delivery"), "pickup");
+  assert.equal(orderFulfilment("delivery", "pickup"), "delivery");
+  assert.equal(orderFulfilment("either", "pickup"), "pickup");
+  assert.equal(orderFulfilment("either", undefined), "delivery");
+  assert.equal(cleanFulfilment("junk"), "delivery");
+});

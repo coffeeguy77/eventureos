@@ -6,7 +6,7 @@ import { appBaseUrl } from "@/lib/integrations/registry";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { wholesaleLinkEmail, wholesaleOrderEmail } from "@/lib/email/templates";
 import { fmtDate, money } from "@/lib/format";
-import { WEEKDAYS, deliveryDateFor, orderTotals, priceFor, type GroupPrice } from "./rules";
+import { WEEKDAYS, checkoutLines, cleanFulfilment, deliveryDateFor, orderFulfilment, orderTotals, priceFor, type CustomerFulfilment, type GroupPrice, type OrderFulfilment } from "./rules";
 import { readWholesale } from "./settings";
 
 /**
@@ -17,16 +17,28 @@ import { readWholesale } from "./settings";
 export interface WsCustomer {
   id: string; organisation_id: string; name: string; email: string | null; billing_email: string | null; price_group: string | null;
   payment_mode: "card" | "invoice"; payment_terms_days: number; delivery_weekday: number | null; min_order: number; active: boolean; order_token: string;
+  fulfilment: CustomerFulfilment;
 }
 export interface WsOrg { id: string; name: string; slug: string; currency: string; timezone: string; brand_colour: string | null; logo_url: string | null; contact_email: string | null; settings: Record<string, unknown> | null }
 export interface CatalogueItem { id: string; sku: string | null; name: string; description: string | null; category: string | null; price: number; tax_rate: number; min_qty: number }
 
 const CUST_COLS = "id, organisation_id, name, email, billing_email, price_group, payment_mode, payment_terms_days, delivery_weekday, min_order, active, order_token";
 
+/** Pickup needs migration 0097 — until it's run, everything behaves as delivery. Remembered once it's there. */
+let pickupOn = false;
+export async function pickupReady(db: SupabaseClient): Promise<boolean> {
+  if (pickupOn) return true;
+  const { error } = await db.from("wholesale_orders").select("fulfilment, collected_at").limit(1);
+  pickupOn = !error;
+  return pickupOn;
+}
+
 export async function customerByToken(db: SupabaseClient, token: string) {
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
-  const { data: c } = await db.from("wholesale_customers").select(CUST_COLS).eq("order_token", token).maybeSingle();
-  if (!c) return null;
+  const pickup = await pickupReady(db);
+  const { data: raw } = await db.from("wholesale_customers").select(pickup ? `${CUST_COLS}, fulfilment` : CUST_COLS).eq("order_token", token).maybeSingle();
+  if (!raw) return null;
+  const c = { ...(raw as unknown as WsCustomer), fulfilment: cleanFulfilment((raw as { fulfilment?: unknown }).fulfilment) };
   const { data: org } = await db.from("organisations").select("id, name, slug, currency, timezone, brand_colour, logo_url, contact_email, settings").eq("id", c.organisation_id).single();
   return { customer: c as WsCustomer, org: org as WsOrg };
 }
@@ -44,15 +56,19 @@ export async function catalogueFor(db: SupabaseClient, c: Pick<WsCustomer, "orga
 export const todayIn = (tz: string) => new Intl.DateTimeFormat("en-CA", { timeZone: tz || "Australia/Sydney" }).format(new Date());
 
 export function orderLink(token: string) { return `${appBaseUrl()}/order/${token}`; }
+/** The pickup pass: the customer shows its QR at the counter; staff scanning it see the verified order (no sign-in). */
+export function pickupPassLink(viewToken: string) { return `${appBaseUrl()}/order/pickup/${viewToken}`; }
 
 export type PlaceResult = { ok: true; redirect?: string; number: string } | { ok: false; error: string };
 
 /** Place an order from the ordering link. Card customers go to Stripe; account customers' orders go straight through. */
-export async function placeOrder(db: SupabaseClient, token: string, items: { product_id: string; quantity: number }[], note: string | null): Promise<PlaceResult> {
+export async function placeOrder(db: SupabaseClient, token: string, items: { product_id: string; quantity: number }[], note: string | null, chosen?: string | null): Promise<PlaceResult> {
   const found = await customerByToken(db, token);
   if (!found || !found.customer.active) return { ok: false, error: "This ordering link isn't active — please contact us." };
   const { customer: c, org } = found;
   const ws = readWholesale(org.settings);
+  const how: OrderFulfilment = orderFulfilment(c.fulfilment, chosen);
+  const pickup = how === "pickup";
   if (!ws.ordering) return { ok: false, error: `Online ordering isn't open yet — please contact ${org.name}.` };
   const cat = new Map((await catalogueFor(db, c)).map((p) => [p.id, p]));
   const lines = [];
@@ -67,8 +83,9 @@ export async function placeOrder(db: SupabaseClient, token: string, items: { pro
   }
   if (!lines.length) return { ok: false, error: "Add something to your order first." };
   const goods = lines.reduce((t, l) => t + l.q * l.p.price, 0);
-  if (c.min_order > 0 && goods < c.min_order) return { ok: false, error: `The minimum order is ${money(c.min_order, org.currency)} (before GST).` };
-  const freight = ws.freight > 0 && !(ws.freeFreightOver > 0 && goods >= ws.freeFreightOver) ? ws.freight : 0;
+  if (!pickup && c.min_order > 0 && goods < c.min_order) return { ok: false, error: `The minimum order is ${money(c.min_order, org.currency)} (before GST).` };
+  // Pickup: no delivery charge (and no minimum, above)
+  const freight = !pickup && ws.freight > 0 && !(ws.freeFreightOver > 0 && goods >= ws.freeFreightOver) ? ws.freight : 0;
   const t = orderTotals(lines.map((l) => ({ quantity: l.q, unit_price: l.p.price, tax_rate: l.p.tax_rate })), freight);
   const today = todayIn(org.timezone);
   const delivery = deliveryDateFor(today, c.delivery_weekday ?? ws.deliveryWeekday);
@@ -82,6 +99,7 @@ export async function placeOrder(db: SupabaseClient, token: string, items: { pro
     organisation_id: org.id, customer_id: c.id, number, seq, source: "eventureos", status: card ? "pending" : "placed",
     order_date: today, delivery_date: delivery, subtotal: t.subtotal, freight: t.freight, gst: t.gst, total: t.total,
     payment_mode: c.payment_mode, payment_status: "unpaid", due_date: due.toISOString().slice(0, 10), customer_note: note?.trim().slice(0, 1000) || null,
+    ...(pickup ? { fulfilment: "pickup" } : {}),
   }).select("id, view_token").single();
   if (error) return { ok: false, error: error.code === "23505" ? "Someone else just ordered — please press the button again." : "Couldn't place the order — please try again." };
   await db.from("wholesale_order_lines").insert(lines.map((l, i) => ({
@@ -93,8 +111,11 @@ export async function placeOrder(db: SupabaseClient, token: string, items: { pro
   try {
     const cfg = await loadStripe(db, org.id);
     if (!cfg) throw new Error("card payments aren't set up");
+    // Itemised on the payment page (each product at its price, then delivery) when the cents add up exactly
+    const itemised = checkoutLines(lines.map((l) => ({ name: l.p.name, quantity: l.q, unit_price: l.p.price, tax_rate: l.p.tax_rate })), t.freight, toCents(t.total));
+    if (itemised?.[0]) itemised[0].description = `Order ${number}${pickup ? " · pickup" : ""} · ${itemised[0].description ?? ""}`.replace(/ · $/, "");
     const cs = await createCheckout(cfg.secretKey, {
-      amountCents: toCents(t.total), currency: org.currency, name: `${org.name} order ${number}`, email: c.billing_email || c.email,
+      amountCents: toCents(t.total), currency: org.currency, name: `${org.name} order ${number}`, email: c.billing_email || c.email, lines: itemised,
       description: lines.map((l) => `${l.q} × ${l.p.name}`).join(", ").slice(0, 400),
       successUrl: `${orderLink(token)}?placed=${order.view_token}`, cancelUrl: `${orderLink(token)}?cancelled=1`,
       metadata: { eventureos_wholesale_order: order.id as string, eventureos_org_id: org.id }, idempotencyKey: `wholesale-${order.id}`, account: cfg.account,
@@ -131,11 +152,15 @@ export async function settleFromReturn(db: SupabaseClient, orgId: string, viewTo
 }
 
 async function orderPlaced(db: SupabaseClient, org: WsOrg, orderId: string, how: "card" | "account") {
-  const { data: o } = await db.from("wholesale_orders").select("number, total, delivery_date, due_date, customer:wholesale_customers(name, email, billing_email, order_token), lines:wholesale_order_lines(name, quantity, line_total, position)").eq("id", orderId).single();
+  const pickupCols = (await pickupReady(db)) ? ", fulfilment" : "";
+  const { data: o } = await db.from("wholesale_orders").select(`number, total, delivery_date, due_date, view_token${pickupCols}, customer:wholesale_customers(name, email, billing_email, order_token), lines:wholesale_order_lines(name, quantity, line_total, position)`).eq("id", orderId).single<Record<string, unknown> & { number: string; total: number; delivery_date: string | null; due_date: string | null; view_token: string; fulfilment?: string }>();
   if (!o) return;
+  const pickup = o.fulfilment === "pickup";
   const cust = o.customer as unknown as { name: string; email: string | null; billing_email: string | null; order_token: string } | null;
   const lines = ((o.lines ?? []) as { name: string; quantity: number; line_total: number; position: number }[]).sort((a, b) => a.position - b.position);
-  const delivery = o.delivery_date ? fmtDate(o.delivery_date as string, "long") : "on the next run";
+  const delivery = pickup
+    ? (o.delivery_date ? `pickup — ready from ${fmtDate(o.delivery_date as string, "long")}` : "pickup")
+    : o.delivery_date ? fmtDate(o.delivery_date as string, "long") : "on the next run";
   await db.from("notifications").insert({
     organisation_id: org.id, type: "wholesale.order", title: `Wholesale order ${o.number} — ${cust?.name ?? ""}`.slice(0, 200),
     body: `${lines.map((l) => `${Number(l.quantity)} × ${l.name}`).join(", ")} · ${money(o.total, org.currency)}${how === "card" ? " paid by card" : " on account"}`.slice(0, 500),
@@ -149,6 +174,7 @@ async function orderPlaced(db: SupabaseClient, org: WsOrg, orderId: string, how:
       businessName: org.name, customerName: cust.name, number: o.number as string, delivery, lines: lines.map((l) => `${Number(l.quantity)} × ${l.name} — ${money(l.line_total, org.currency, { cents: true })}`),
       total: money(o.total, org.currency, { cents: true }), paidNote: how === "card" ? "Paid by card — thank you." : `On your account${o.due_date ? `, due ${fmtDate(o.due_date as string, "long")}` : ""}.`,
       url: orderLink(cust.order_token), brand: org.brand_colour, logoUrl: org.logo_url,
+      pickupUrl: pickup ? pickupPassLink(o.view_token) : null,
     });
     await sendEmail({ to, ...m, replyTo: org.contact_email, fromName: org.name }).catch((e) => console.error("[wholesale] confirmation email:", e));
   }

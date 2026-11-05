@@ -129,12 +129,13 @@ export function wholesaleLinkEmail(o: { businessName: string; customerName: stri
 }
 
 /** Confirmation to the customer when a wholesale order is placed (and paid, when paying by card). */
-export function wholesaleOrderEmail(o: { businessName: string; customerName: string; number: string; delivery: string; lines: string[]; total: string; paidNote: string; url: string; brand?: string | null; logoUrl?: string | null }) {
+export function wholesaleOrderEmail(o: { businessName: string; customerName: string; number: string; delivery: string; lines: string[]; total: string; paidNote: string; url: string; brand?: string | null; logoUrl?: string | null; pickupUrl?: string | null }) {
   const subject = `Order ${o.number} confirmed — ${o.businessName}`;
-  const paragraphs = [`Hi ${o.customerName},`, `Thanks — we've got your order ${o.number} for delivery ${o.delivery}.`, ...o.lines, `Total ${o.total}. ${o.paidNote}`];
+  const paragraphs = [`Hi ${o.customerName},`, o.pickupUrl ? `Thanks — we've got your order ${o.number} for ${o.delivery}.` : `Thanks — we've got your order ${o.number} for delivery ${o.delivery}.`, ...o.lines, `Total ${o.total}. ${o.paidNote}`,
+    ...(o.pickupUrl ? ["When you come to collect, open your pickup pass and show the QR code at the counter."] : [])];
   const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: `Order ${o.number}`, paragraphs,
-    button: { label: "Order again", url: o.url }, footer: `Sent by ${o.businessName}. Reply to this email if anything needs changing.` });
-  const text = `${paragraphs.join("\n\n")}\n\nOrder again: ${o.url}`;
+    button: o.pickupUrl ? { label: "Open my pickup pass", url: o.pickupUrl } : { label: "Order again", url: o.url }, footer: `Sent by ${o.businessName}. Reply to this email if anything needs changing.` });
+  const text = `${paragraphs.join("\n\n")}${o.pickupUrl ? `\n\nPickup pass: ${o.pickupUrl}` : ""}\n\nOrder again: ${o.url}`;
   return { subject, html, text };
 }
 

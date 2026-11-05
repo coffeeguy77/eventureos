@@ -10,31 +10,49 @@ export interface FormItem { id: string; name: string; description: string | null
 const fmt = (n: number, cur: string) => n.toLocaleString("en-AU", { style: "currency", currency: cur });
 
 /** Quantities, running total and Place order. Prices are before GST; GST is added on the products that have it. */
-export function OrderForm({ token, items, currency, brand, last, payNote, freight, freeOver, minOrder }: {
+export function OrderForm({ token, items, currency, brand, last, payNote, freight, freeOver, minOrder, fulfilment = "delivery", deliveryLabel, pickupLabel }: {
   token: string; items: FormItem[]; currency: string; brand: string; last: Record<string, number>; payNote: string; freight: number; freeOver: number; minOrder: number;
+  /** delivery / pickup (always) / either (they choose here) */
+  fulfilment?: "delivery" | "pickup" | "either"; deliveryLabel?: string; pickupLabel?: string;
 }) {
   const router = useRouter();
   const [qty, setQty] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [mode, setMode] = useState<"delivery" | "pickup">(fulfilment === "pickup" ? "pickup" : "delivery");
+  const pickup = mode === "pickup";
+  // pickup: no delivery charge, no minimum
+  const feeRate = pickup ? 0 : freight;
+  const minimum = pickup ? 0 : minOrder;
   const cats = useMemo(() => [...new Set(items.map((i) => i.category || "Other"))], [items]);
   const chosen = items.filter((i) => (qty[i.id] ?? 0) > 0);
   const goods = chosen.reduce((t, i) => t + i.price * qty[i.id], 0);
-  const fr = freight > 0 && !(freeOver > 0 && goods >= freeOver) && goods > 0 ? freight : 0;
+  const fr = feeRate > 0 && !(freeOver > 0 && goods >= freeOver) && goods > 0 ? feeRate : 0;
   const gst = chosen.reduce((t, i) => t + (i.price * qty[i.id] * i.tax_rate) / 100, 0) + fr * 0.1;
   const total = goods + fr + gst;
   const setQ = (id: string, n: number) => setQty((x) => ({ ...x, [id]: Math.max(0, Math.min(1000, Math.round(n) || 0)) }));
   const hasLast = Object.keys(last).length > 0;
   const submit = () => start(async () => {
     setErr(null);
-    const r = await placeWholesaleOrder(token, chosen.map((i) => ({ product_id: i.id, quantity: qty[i.id] })), note).catch(() => ({ ok: false as const, error: "Couldn't reach us — check your connection and try again." }));
+    const r = await placeWholesaleOrder(token, chosen.map((i) => ({ product_id: i.id, quantity: qty[i.id] })), note, mode).catch(() => ({ ok: false as const, error: "Couldn't reach us — check your connection and try again." }));
     if (!r.ok) { setErr(r.error); return; }
     if (r.redirect) { window.location.href = r.redirect; return; }
     router.push(`/order/${token}?ok=${encodeURIComponent(r.number)}`);
   });
   return (
     <div className="pb-40">
+      {fulfilment === "either" && (
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-zinc-200" role="radiogroup" aria-label="Delivery or pickup">
+          {(["delivery", "pickup"] as const).map((m) => (
+            <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}
+              className={`min-h-12 rounded-xl px-3 py-2 text-[0.875rem] font-semibold ${mode === m ? "text-white" : "text-zinc-700 hover:bg-zinc-50"}`} style={mode === m ? { background: brand } : undefined}>
+              {m === "delivery" ? "Deliver it" : "I'll pick it up"}
+              <span className={`block text-[0.75rem] font-normal ${mode === m ? "text-white/85" : "text-zinc-500"}`}>{m === "delivery" ? deliveryLabel : pickupLabel}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {hasLast && (
         <button type="button" onClick={() => setQty(Object.fromEntries(Object.entries(last).filter(([id]) => items.some((i) => i.id === id))))}
           className="mb-4 inline-flex h-11 items-center gap-2 rounded-xl bg-white px-4 text-[0.875rem] font-medium text-zinc-900 shadow-sm ring-1 ring-zinc-200 hover:bg-zinc-50">
@@ -66,7 +84,7 @@ export function OrderForm({ token, items, currency, brand, last, payNote, freigh
         </section>
       ))}
       <label className="block text-[0.8125rem] font-medium text-zinc-700">Note for this order (optional)
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={2} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[1rem]" placeholder="e.g. leave at the back door" />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} rows={2} className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[1rem]" placeholder={pickup ? "e.g. Sam will collect" : "e.g. leave at the back door"} />
       </label>
       <div className="pb-safe fixed inset-x-0 bottom-0 z-10 border-t border-zinc-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-2xl px-4 py-3">
@@ -74,9 +92,9 @@ export function OrderForm({ token, items, currency, brand, last, payNote, freigh
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1 text-[0.8125rem] text-zinc-500">
               <p className="text-[1.0625rem] font-semibold text-zinc-900 tabular-nums">{fmt(total, currency)} <span className="text-[0.75rem] font-normal text-zinc-500">inc GST</span></p>
-              <p className="truncate">{chosen.length ? `${chosen.reduce((t, i) => t + qty[i.id], 0)} items${fr ? ` · freight ${fmt(fr, currency)}` : ""}` : "Nothing added yet"}{minOrder > 0 && goods > 0 && goods < minOrder ? ` · minimum ${fmt(minOrder, currency)}` : ""}</p>
+              <p className="truncate">{chosen.length ? `${chosen.reduce((t, i) => t + qty[i.id], 0)} items${fr ? ` · delivery ${fmt(fr * 1.1, currency)} inc GST` : pickup ? " · pickup, no delivery fee" : ""}` : "Nothing added yet"}{minimum > 0 && goods > 0 && goods < minimum ? ` · minimum ${fmt(minimum, currency)}` : ""}</p>
             </div>
-            <button type="button" disabled={!chosen.length || pending || (minOrder > 0 && goods < minOrder)} onClick={submit}
+            <button type="button" disabled={!chosen.length || pending || (minimum > 0 && goods < minimum)} onClick={submit}
               className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-white disabled:opacity-40" style={{ background: brand }}>
               {pending && <Loader2 className="h-4 w-4 animate-spin" />}Place order
             </button>

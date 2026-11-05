@@ -32,6 +32,9 @@ export default async function WholesaleOrderPage({ params }: { params: Promise<{
         <h1 className="flex flex-wrap items-center gap-2 text-[1.375rem] font-semibold tracking-tight text-ink">{o.number}<span className="font-normal text-ink-muted">· {c?.name ?? "Unknown customer"}</span></h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink-muted">
           <Badge tone={direct ? "brand" : "slate"}>{direct ? "Ordered here" : "Ordermentum"}</Badge>
+          {o.fulfilment === "pickup" && <Badge tone="amber">Pickup</Badge>}
+          {o.collected_at && <span>Collected {fmtDateTime(o.collected_at as string, org.timezone)}{o.collected_by ? ` · handed over by ${o.collected_by}` : ""}</span>}
+          {o.fulfilment === "pickup" && <a href={`/order/pickup/${o.view_token}`} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline print:hidden">Pickup pass</a>}
           <span>Ordered {fmtDate(o.order_date, "long")}</span>
           {o.delivery_date && <Link href={`/wholesale?run=${o.delivery_date}`} className="hover:underline">Delivery {fmtDate(o.delivery_date, "long")}</Link>}
           {direct && <span>{o.payment_status === "paid" ? `Paid${o.paid_at ? ` ${fmtDateTime(o.paid_at, org.timezone)}` : ""}` : o.payment_mode === "invoice" ? `On account${o.due_date ? `, due ${fmtDate(o.due_date)}` : ""}` : "Not paid"}</span>}

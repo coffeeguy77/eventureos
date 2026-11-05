@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 type Line = { name: string; quantity: number; unit_price: number; line_total: number; weight_kg: number | null; comment: string | null; position: number };
 type Row = {
   id: string; number: string; source: string; status: string; total: number; payment_status: string; payment_mode: string | null; customer_note: string | null; needs_check: string | null;
-  ship_to: { text?: string } | null; order_date: string;
+  ship_to: { text?: string } | null; order_date: string; fulfilment?: string; collected_at?: string | null; collected_by?: string | null;
   customer: { id: string; name: string; phone: string | null; address1: string | null; address2: string | null; suburb: string | null; state: string | null; postcode: string | null; delivery_instructions: string | null } | null;
   lines: Line[];
 };
@@ -29,8 +29,10 @@ export default async function RunSheetPage({ searchParams }: { searchParams: Pro
   const ws = readWholesale(org.settings);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone || "Australia/Sydney" }).format(new Date());
   const run = sp.run && /^\d{4}-\d{2}-\d{2}$/.test(sp.run) ? sp.run : currentRun(today, ws.deliveryWeekday);
+  const { pickupReady } = await import("@/lib/wholesale/orders");
+  const pickupCols = (await pickupReady(supabase)) ? ", fulfilment, collected_at, collected_by" : "";
   const { data } = await supabase.from("wholesale_orders")
-    .select("id, number, source, status, total, payment_status, payment_mode, customer_note, needs_check, ship_to, order_date, customer:wholesale_customers(id, name, phone, address1, address2, suburb, state, postcode, delivery_instructions), lines:wholesale_order_lines(name, quantity, unit_price, line_total, weight_kg, comment, position)")
+    .select("id, number, source, status, total, payment_status, payment_mode, customer_note, needs_check, ship_to, order_date" + pickupCols + ", customer:wholesale_customers(id, name, phone, address1, address2, suburb, state, postcode, delivery_instructions), lines:wholesale_order_lines(name, quantity, unit_price, line_total, weight_kg, comment, position)")
     .eq("organisation_id", org.id).eq("delivery_date", run).in("status", ["placed", "packed", "delivered"]);
   const orders = ((data ?? []) as unknown as Row[]).sort((a, b) => (a.customer?.suburb ?? "").localeCompare(b.customer?.suburb ?? "") || (a.customer?.name ?? "").localeCompare(b.customer?.name ?? ""));
   const totals = runTotals(orders.flatMap((o) => o.lines.map((l) => ({ name: l.name, quantity: Number(l.quantity), weight_kg: l.weight_kg == null ? null : Number(l.weight_kg) }))));
@@ -75,7 +77,9 @@ export default async function RunSheetPage({ searchParams }: { searchParams: Pro
                       <p className="flex flex-wrap items-center gap-2">
                         {o.customer ? <Link href={`/wholesale/customers/${o.customer.id}`} className="text-[0.9375rem] font-semibold text-ink hover:text-brand-700">{o.customer.name}</Link> : <span className="text-[0.9375rem] font-semibold text-ink">Unknown customer</span>}
                         <Link href={`/wholesale/orders/${o.id}`} className="text-[0.75rem] text-ink-faint hover:underline">{o.number}</Link>
-                        <Badge tone={st.tone}>{st.label}</Badge>
+                        <Badge tone={st.tone}>{o.fulfilment === "pickup" && o.status === "delivered" ? "Collected" : st.label}</Badge>
+                        {o.fulfilment === "pickup" && <Badge tone="amber">Pickup</Badge>}
+                        {o.collected_at && <span className="text-[0.75rem] text-ink-muted">{fmtDateTime(o.collected_at, org.timezone)}{o.collected_by ? ` · ${o.collected_by}` : ""}</span>}
                         {o.status === "delivered" && proof.get(o.id) && <Link href={`/wholesale/orders/${o.id}`} className="text-[0.75rem] text-ink-muted hover:underline">{fmtDateTime(proof.get(o.id)!.at, org.timezone)} · {proof.get(o.id)!.by_name}{proof.get(o.id)!.lat == null ? " · no location" : ""}</Link>}
                         {o.source === "eventureos" && <Badge tone="brand">Direct</Badge>}
                         {o.payment_status === "unpaid" && o.payment_mode === "invoice" && <Badge tone="slate">On account</Badge>}

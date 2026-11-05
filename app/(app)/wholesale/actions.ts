@@ -65,6 +65,8 @@ export interface CustomerInput {
   address1?: string | null; address2?: string | null; suburb?: string | null; state?: string | null; postcode?: string | null;
   delivery_instructions?: string | null; notes?: string | null; abn?: string | null; price_group?: string | null;
   payment_mode: "card" | "invoice"; payment_terms_days: number; delivery_weekday: number | null; min_order: number; active: boolean;
+  /** delivery (default) / pickup / either — they choose on each order */
+  fulfilment?: "delivery" | "pickup" | "either";
 }
 const EMAIL = /^[^\s@<>"',;:()]+@[^\s@<>"',;:()]+\.[^\s@<>"',;:()]{2,}$/;
 function cleanCustomer(i: CustomerInput) {
@@ -80,13 +82,20 @@ function cleanCustomer(i: CustomerInput) {
     payment_mode: i.payment_mode === "invoice" ? "invoice" : "card", payment_terms_days: Number.isFinite(terms) ? Math.min(120, Math.max(0, terms)) : 7,
     delivery_weekday: i.delivery_weekday == null || !Number.isInteger(Number(i.delivery_weekday)) ? null : Math.min(6, Math.max(0, Number(i.delivery_weekday))),
     min_order: Math.max(0, Math.round(Number(i.min_order || 0) * 100) / 100), active: !!i.active, updated_at: new Date().toISOString(),
-  };
+    fulfilment: i.fulfilment === "pickup" || i.fulfilment === "either" ? i.fulfilment : "delivery",
+  } as Record<string, unknown> & { name: string; payment_mode: string; payment_terms_days: number; fulfilment?: string };
 }
 
 export async function saveCustomer(id: string | null, input: CustomerInput): Promise<Result<{ id: string }>> {
   try {
     const { supabase, org, user, profile } = await manager();
     const row = cleanCustomer(input);
+    // Pickup needs migration 0097 — until then, save everything else
+    const { pickupReady } = await import("@/lib/wholesale/orders");
+    if (!(await pickupReady(supabase))) {
+      if (row.fulfilment !== "delivery") throw new Error("Pickup isn't switched on yet — run database update 0097 first.");
+      delete row.fulfilment;
+    }
     const res = id
       ? await supabase.from("wholesale_customers").update(row).eq("id", id).eq("organisation_id", org.id).select("id").single()
       : await supabase.from("wholesale_customers").insert({ ...row, organisation_id: org.id }).select("id").single();

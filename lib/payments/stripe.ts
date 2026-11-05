@@ -71,7 +71,10 @@ export function createCheckout(key: string, o: {
   saveCard?: { customerId?: string | null } | null;
   /** More lines on the same payment (e.g. an add-on). amountCents is the first line only. */
   extraLines?: { name: string; amountCents: number; description?: string }[];
+  /** Itemised cart (name × quantity at a unit price). When given it replaces the single line — must add up to amountCents. */
+  lines?: { name: string; unitCents: number; quantity: number; description?: string }[] | null;
 }) {
+  const cur = o.currency.toLowerCase();
   const save = o.saveCard ?? null;
   return call<CheckoutSession>(key, "POST", "/checkout/sessions", {
     mode: "payment",
@@ -80,8 +83,8 @@ export function createCheckout(key: string, o: {
     customer: save?.customerId || undefined,
     customer_email: save?.customerId ? undefined : o.email || undefined,
     customer_creation: save && !save.customerId ? "always" : undefined,
-    line_items: [
-      { quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } },
+    line_items: o.lines?.length ? o.lines.map((l) => ({ quantity: l.quantity, price_data: { currency: cur, unit_amount: l.unitCents, product_data: { name: l.name, description: l.description || undefined } } })) : [
+      { quantity: 1, price_data: { currency: cur, unit_amount: o.amountCents, product_data: { name: o.name, description: o.description || undefined } } },
       ...(o.extraLines ?? []).filter((l) => l.amountCents > 0).map((l) => ({ quantity: 1, price_data: { currency: o.currency.toLowerCase(), unit_amount: l.amountCents, product_data: { name: l.name, description: l.description || undefined } } })),
     ],
     metadata: o.metadata,

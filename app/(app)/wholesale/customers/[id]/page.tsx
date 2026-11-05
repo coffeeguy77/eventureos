@@ -45,6 +45,7 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
     name: c.name, business_name: c.business_name, email: c.email, billing_email: c.billing_email, phone: c.phone, contact_name: c.contact_name, address1: c.address1, address2: c.address2,
     suburb: c.suburb, state: c.state, postcode: c.postcode, delivery_instructions: c.delivery_instructions, notes: c.notes, abn: c.abn, price_group: c.price_group,
     payment_mode: c.payment_mode, payment_terms_days: c.payment_terms_days, delivery_weekday: c.delivery_weekday, min_order: Number(c.min_order), active: c.active,
+    fulfilment: c.fulfilment === "pickup" || c.fulfilment === "either" ? c.fulfilment : "delivery",
   };
   return (
     <div>

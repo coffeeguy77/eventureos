@@ -102,3 +102,30 @@ export function packBoxes(lines: BoxLine[], boxKg = 10): Box[] {
   if (other.items.length) boxes.push(other);
   return boxes;
 }
+
+/* ---------------- pickup ---------------- */
+export type CustomerFulfilment = "delivery" | "pickup" | "either";
+export type OrderFulfilment = "delivery" | "pickup";
+export const cleanFulfilment = (v: unknown): CustomerFulfilment => (v === "pickup" || v === "either" ? v : "delivery");
+/** How this order goes out: a pickup customer always collects, a delivery customer always gets it delivered, "either" picks. */
+export function orderFulfilment(customer: unknown, chosen: unknown): OrderFulfilment {
+  const c = cleanFulfilment(customer);
+  if (c === "either") return chosen === "pickup" ? "pickup" : "delivery";
+  return c;
+}
+
+/* ---------------- Stripe checkout lines ---------------- */
+export interface CheckoutLine { name: string; unitCents: number; quantity: number; description?: string }
+/**
+ * Each item at its GST-inclusive price, plus delivery, for the card payment page — so the customer sees what they're
+ * paying for. Returns null if the lines wouldn't add up to the order total to the cent (then one summary line is used).
+ */
+export function checkoutLines(lines: { name: string; quantity: number; unit_price: number; tax_rate: number }[], freight: number, totalCents: number, freightTaxRate = 10): CheckoutLine[] | null {
+  const out: CheckoutLine[] = lines.filter((l) => l.quantity > 0).map((l) => {
+    const unitCents = Math.round(l.unit_price * (1 + l.tax_rate / 100) * 100);
+    return { name: l.name.slice(0, 250), unitCents, quantity: Math.round(l.quantity), description: l.tax_rate > 0 ? "Includes GST" : "GST-free" };
+  });
+  if (freight > 0) out.push({ name: "Delivery", unitCents: Math.round(freight * (1 + freightTaxRate / 100) * 100), quantity: 1, description: freightTaxRate > 0 ? "Includes GST" : undefined });
+  const sum = out.reduce((t, l) => t + l.unitCents * l.quantity, 0);
+  return out.length && out.length <= 100 && sum === totalCents && out.every((l) => l.unitCents > 0) ? out : null;
+}

@@ -28,9 +28,13 @@ export default async function CrewDeliveries({ params, searchParams }: { params:
   const thisWeek = weekOf(today).from === from;
   const base = `/crew/${slug}/deliveries`;
 
-  const { data } = await s.db.from("wholesale_orders")
+  const { pickupReady } = await import("@/lib/wholesale/orders");
+  const pickupOn = await pickupReady(s.db);
+  let q = s.db.from("wholesale_orders")
     .select("id, number, status, delivery_date, customer_note, ship_to, customer:wholesale_customers(name, phone, contact_name, address1, address2, suburb, state, postcode, delivery_instructions), lines:wholesale_order_lines(name, quantity, position)")
     .eq("organisation_id", s.org.id).gte("delivery_date", from).lte("delivery_date", to).in("status", ["placed", "packed", "delivered"]);
+  if (pickupOn) q = q.neq("fulfilment", "pickup"); // customers collect these themselves
+  const { data } = await q;
   const rows = (data ?? []) as unknown as Row[];
   const ids = rows.map((r) => r.id);
   const { data: logs, error: logErr } = ids.length
