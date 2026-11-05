@@ -12,7 +12,15 @@ export const DEFAULT_GREEN_SENDERS = [
   "volcafe.com",
   "coficom.com.au",
   "origincoffeetraders.com",
-  "lindasmith@coffeeandnuttrading.com.au",
+  "coffeeandnuttrading.com.au",
+];
+
+/**
+ * Extra Gmail searches for invoices that didn't come straight from an importer's address (forwarded, sent from another
+ * system, or attached to a reply) — e.g. Coffee & Nut Trading's "Bean Culture Pre-Paid Inv 1759.xls".
+ */
+export const DEFAULT_GREEN_EXTRA = [
+  'has:attachment ("Pre-Paid Inv" OR "Terms Inv" OR "Coffee & Nut" OR "Coffee and Nut" OR "C&NT")',
 ];
 
 const SUPPLIER_BY_DOMAIN: [RegExp, string][] = [
@@ -22,10 +30,17 @@ const SUPPLIER_BY_DOMAIN: [RegExp, string][] = [
   [/origincoffeetraders\.com$/i, "Origin Coffee Traders"],
   [/coffeeandnuttrading\.com\.au$/i, "Coffee & Nut Trading"],
 ];
+const SUPPLIER_BY_NAME: [RegExp, string][] = [
+  [/project\s*origin/i, "Project Origin"], [/cofinet/i, "Cofinet"], [/cofi-?\s*com|volcafe/i, "Cofi-Com (Volcafe)"],
+  [/origin\s+coffee\s+traders/i, "Origin Coffee Traders"], [/coffee\s*(&|and)\s*nut/i, "Coffee & Nut Trading"],
+];
 export function supplierFor(fromEmail: string | null | undefined, printed?: string | null): string {
   const domain = (fromEmail ?? "").split("@")[1] ?? "";
   for (const [re, name] of SUPPLIER_BY_DOMAIN) if (re.test(domain)) return name;
-  return printed?.trim().slice(0, 120) || domain || "Unknown supplier";
+  // forwarded or sent from elsewhere: go by the name printed on the invoice
+  const p = printed?.trim() ?? "";
+  for (const [re, name] of SUPPLIER_BY_NAME) if (re.test(p)) return name;
+  return p.slice(0, 120) || domain || "Unknown supplier";
 }
 
 /** Gmail search for every email with an attachment from these senders, all time (PDFs are read; other files are listed). */

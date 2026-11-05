@@ -36,6 +36,8 @@ export default async function GreenPurchasesPage({ searchParams }: { searchParam
 
   const origins = byOrigin(lines);
   const totalKg = origins.reduce((t, o) => t + o.kg, 0);
+  const totalSpend = purchases.reduce((t, p) => t + Number(p.coffee_ex_gst ?? 0), 0);
+  const totalFreight = purchases.reduce((t, p) => t + Number(p.freight_ex_gst ?? 0), 0);
   const dates = purchases.map((p) => p.invoice_date).filter((d): d is string => !!d).sort();
   const first = dates[0] ?? null, last = dates[dates.length - 1] ?? null;
   const perYear = pricePerYear(lines);
@@ -81,8 +83,9 @@ export default async function GreenPurchasesPage({ searchParams }: { searchParam
     <div>
       <PageHeader title="Green coffee purchases" subtitle="Every invoice from your green coffee importers, read from Gmail — what you've bought since you opened, and what it has cost over the years." />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi label="Green coffee bought" value={kg(totalKg)} sub={first ? `since ${fmtDate(first, "medium")}` : "no invoices read yet"} />
+        <Kpi label="Spent on green coffee" value={money(totalSpend, cur, { cents: false })} sub={`ex GST${totalFreight ? ` · plus ${money(totalFreight, cur, { cents: false })} delivery` : ""}${totalKg ? ` · avg $${(totalSpend / totalKg).toFixed(2)}/kg` : ""}`} />
         <Kpi label="Invoices" value={purchases.length.toLocaleString("en-AU")} sub={`${suppliers.size} importer${suppliers.size === 1 ? "" : "s"}${last ? ` · latest ${fmtDate(last, "short")}` : ""}`} />
         <Kpi label="Origins" value={String(origins.filter((o) => !["Unknown", "Blends", "Decaf"].includes(o.origin)).length)} sub={`${coffees.size} different coffees`} />
         <Kpi label="Price change" value={change == null ? "–" : `${change > 0 ? "+" : ""}${change}%`} sub={index.length >= 2 ? `average $/kg, ${index[0].year} → ${index[index.length - 1].year}` : "needs two years of invoices"} />

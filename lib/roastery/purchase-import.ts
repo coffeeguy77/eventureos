@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAttachment, getMessage, header, listMessages, parseAddressList, type GmailMessage, type GmailPart } from "@/lib/integrations/gmail";
 import { ReconnectRequired, type SyncContext } from "@/lib/integrations/runtime";
-import { DEFAULT_GREEN_SENDERS, NOT_READ_YET, fileKind, greenQuery, supplierFor } from "./purchases";
+import { DEFAULT_GREEN_EXTRA, DEFAULT_GREEN_SENDERS, NOT_READ_YET, fileKind, greenQuery, supplierFor } from "./purchases";
 import { readGreenInvoice, readGreenSpreadsheet } from "./purchase-read";
 
 /**
@@ -18,6 +18,10 @@ export function greenSenders(settings: unknown): string[] {
   const r = ((((settings ?? {}) as Record<string, unknown>).roastery ?? {}) as Record<string, unknown>).green_import as Record<string, unknown> | undefined;
   const s = Array.isArray(r?.senders) ? (r!.senders as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
   return s.length ? s : DEFAULT_GREEN_SENDERS;
+}
+export function greenExtra(settings: unknown): string[] {
+  const r = ((((settings ?? {}) as Record<string, unknown>).roastery ?? {}) as Record<string, unknown>).green_import as Record<string, unknown> | undefined;
+  return Array.isArray(r?.extra) ? (r!.extra as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : DEFAULT_GREEN_EXTRA;
 }
 export function greenImportState(settings: unknown): { done: boolean; lastRun: string | null } {
   const r = ((((settings ?? {}) as Record<string, unknown>).roastery ?? {}) as Record<string, unknown>).green_import as Record<string, unknown> | undefined;
@@ -44,12 +48,17 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
   if (!query) return out;
 
   const ids: string[] = [];
-  let page: string | undefined;
-  do {
-    const r = await listMessages(ctx, query, page, 100);
-    ids.push(...(r.messages ?? []).map((m) => m.id));
-    page = r.nextPageToken;
-  } while (page && ids.length < 5000);
+  const have = new Set<string>();
+  for (const q of [query, ...greenExtra(org?.settings)]) {
+    let page: string | undefined;
+    do {
+      const r = await listMessages(ctx, q, page, 100);
+      for (const m of r.messages ?? []) if (!have.has(m.id)) { have.add(m.id); ids.push(m.id); }
+      page = r.nextPageToken;
+    } while (page && ids.length < 5000);
+  }
+  // Gmail lists newest first per search; sort the combined list newest first too (ids grow over time)
+  ids.sort((a, b) => (a.length - b.length) || (a < b ? 1 : a > b ? -1 : 0));
   out.found = ids.length;
 
   // what's already been looked at (failed reads are tried again)
