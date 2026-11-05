@@ -63,6 +63,13 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
       seenMsg.add(r.gmail_message_id);
     }
   }
+  // an email with any attachment still to read (failed, or a kind of file not read before) is looked at again
+  for (let c = 0; c < ids.length; c += 200) {
+    const { data: again } = await db.from("roastery_purchase_emails").select("gmail_message_id, status, message").eq("organisation_id", orgId).in("gmail_message_id", ids.slice(c, c + 200));
+    for (const r of (again ?? []) as { gmail_message_id: string; status: string; message: string | null }[]) {
+      if (r.status === "failed" || (r.status === "skipped" && r.message?.startsWith(NOT_READ_YET))) seenMsg.delete(r.gmail_message_id);
+    }
+  }
   const todo = ids.filter((id) => !seenMsg.has(id)).reverse(); // oldest first
   const parallel = Math.max(1, Math.min(8, opts.parallel ?? 5));
   let i = 0;
