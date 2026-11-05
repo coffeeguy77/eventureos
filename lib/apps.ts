@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "hosting", "nerdherd"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame";
 
 export interface AppInfo {
   key: AppKey;
@@ -157,6 +157,20 @@ export const APPS: AppInfo[] = [
       "Invoices go to Xero line by line",
     ],
     for: "Coffee machine dealers, agents and technicians",
+  },
+  {
+    key: "roastery", name: "Roastery", paths: ["/roastery"], icon: "flame",
+    tagline: "Green coffee stock, roast log and yield.",
+    description: "Green coffee in and out with what it's worth, every roast logged (or imported from the roast recorder), the weight each coffee loses, and the green you need for the roasted coffee you have to make.",
+    features: [
+      "Green stock on hand and its value at average cost",
+      "Roasts take their green off stock",
+      "Weight loss and yield per coffee from weighed batches",
+      "Green planner: roasted kilos needed → green to load, in batches",
+      "Roast log with first crack, drop, DTR and cup scores",
+      "Import from the W45A roast recorder",
+    ],
+    for: "Coffee roasters",
   },
   {
     key: "franchise", name: "Franchise", paths: ["/franchise"], icon: "handshake",
