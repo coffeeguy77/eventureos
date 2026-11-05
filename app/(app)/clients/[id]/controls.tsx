@@ -83,7 +83,7 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
             <div className="min-w-0 flex-1 text-[0.8125rem]">
               <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-medium text-ink">
                 {ct.first_name} {ct.last_name}
-                {ct.is_primary && <Badge tone="brand">Primary</Badge>}
+                {ct.is_primary && <Badge tone="brand">Main contact</Badge>}
                 {ct.portal_user_id && <Badge tone="green">Portal access</Badge>}
               </p>
               {ct.position && <p className="text-[0.75rem] text-ink-muted">{ct.position}</p>}
@@ -91,13 +91,15 @@ export function ContactsManager({ customerId, contacts, canRemove }: { customerI
                 {ct.email && <a href={`mailto:${ct.email}`} className="inline-flex min-w-0 items-center gap-1 py-0.5 hover:text-brand-700"><Mail className="h-3 w-3 shrink-0" /><span className="min-w-0 break-all">{ct.email}</span></a>}
                 {ct.phone && <a href={`tel:${ct.phone.replace(/\s/g, "")}`} className="inline-flex items-center gap-1 py-0.5 hover:text-brand-700"><Phone className="h-3 w-3" />{ct.phone}</a>}
               </div>
+              {!ct.is_primary && (
+                <button type="button" disabled={pending} onClick={() => run(() => setPrimaryContact(customerId, ct.id))}
+                  title="Make them the main contact — the client's email (and phone) change to theirs, so invoices and emails go to them"
+                  className="mt-1 inline-flex min-h-9 items-center gap-1 rounded-full px-2.5 text-[0.75rem] font-medium text-brand-700 ring-1 ring-inset ring-brand-200 hover:bg-brand-50 disabled:opacity-50 sm:min-h-7">
+                  <Star className="h-3.5 w-3.5" />Make main contact
+                </button>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-              {!ct.is_primary && (
-                <button type="button" disabled={pending} title="Make primary contact" aria-label={`Make ${ct.first_name} the primary contact`}
-                  onClick={() => run(() => setPrimaryContact(customerId, ct.id))}
-                  className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-surface hover:text-brand-700"><Star className="h-3.5 w-3.5" /></button>
-              )}
               <button type="button" title="Edit contact" aria-label={`Edit ${ct.first_name}`} onClick={() => { setError(undefined); setEditing(ct.id); }}
                 className="rounded-md p-2.5 text-ink-faint sm:p-1.5 hover:bg-surface hover:text-ink"><Pencil className="h-3.5 w-3.5" /></button>
               {canRemove && (
@@ -137,7 +139,7 @@ function ContactForm({ customerId, contact, onDone, firstContact }: { customerId
       <div className="sm:col-span-2"><Label htmlFor={`po-${k}`}>Position</Label><Input id={`po-${k}`} name="position" defaultValue={contact?.position ?? ""} placeholder="e.g. Events Manager, Bride" /></div>
       {!contact && !firstContact && (
         <label className="flex items-center gap-2 text-[0.7812rem] text-ink sm:col-span-2">
-          <input type="checkbox" name="is_primary" className="h-4 w-4 rounded border-line-strong text-brand-600" /> Make this the primary contact
+          <input type="checkbox" name="is_primary" className="h-4 w-4 rounded border-line-strong text-brand-600" /> Make this the main contact (the client&apos;s email and phone change to theirs)
         </label>
       )}
       {state?.error && <div className="sm:col-span-2"><FormError message={state.error} /></div>}

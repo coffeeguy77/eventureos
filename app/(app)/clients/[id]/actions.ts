@@ -136,6 +136,30 @@ const CONTACT_FIELDS: [col: string, label: string][] = [
 ];
 const contactName = (c: { first_name: string; last_name: string | null }) => `${c.first_name} ${c.last_name ?? ""}`.trim();
 
+/**
+ * The client's own details follow their main contact (invoices and emails go to the client's email):
+ *  - email, and phone when the contact has them
+ *  - the name too when the client is a person: an individual, or a client whose name was the previous main contact's
+ * Returns what changed (for the activity log).
+ */
+async function clientFollowsContact(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], orgId: string, customerId: string,
+  contact: { first_name: string; last_name: string | null; email?: string | null; phone?: string | null }, previousName: string | null): Promise<Record<string, [unknown, unknown]> | { error: string }> {
+  const { data: cust } = await supabase.from("customers").select("name, kind, email, phone").eq("id", customerId).eq("organisation_id", orgId).maybeSingle();
+  if (!cust) return {};
+  const full = contactName(contact);
+  const patch: Record<string, string> = {};
+  const email = contact.email?.trim().toLowerCase();
+  const phone = contact.phone?.trim();
+  if (email && email !== (cust.email ?? "").toLowerCase()) patch.email = email;
+  if (phone && phone !== cust.phone) patch.phone = phone;
+  const wasPerson = cust.kind === "individual" || (!!previousName && cust.name.trim().toLowerCase() === previousName.trim().toLowerCase());
+  if (wasPerson && full && full !== cust.name) patch.name = full;
+  if (!Object.keys(patch).length) return {};
+  const { error } = await supabase.from("customers").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", customerId).eq("organisation_id", orgId);
+  if (error) return { error: `the client's details couldn't be updated: ${error.message}` };
+  return Object.fromEntries(Object.entries(patch).map(([k, v]) => [`client ${k}`, [(cust as Record<string, unknown>)[k] ?? null, v] as [unknown, unknown]]));
+}
+
 /** Add a contact (contactId = null) or edit an existing one. */
 export async function saveContact(customerId: string, contactId: string | null, _prev: FormState, form: FormData): Promise<FormState> {
   const { supabase, org, user, profile } = await requireOrg();
@@ -159,6 +183,10 @@ export async function saveContact(customerId: string, contactId: string | null, 
       organisation_id: org.id, customer_id: customerId, ...values, is_primary: makePrimary, created_by: user.id,
     }).select("id").single();
     if (error) return { error: `Couldn't add the contact: ${error.message}` };
+    if (makePrimary) {
+      const r = await clientFollowsContact(supabase, org.id, customerId, values as { first_name: string; last_name: string | null; email: string | null; phone: string | null }, null);
+      if ("error" in r) return { error: `Contact added, but ${r.error}` };
+    }
     await logActivity(supabase, {
       orgId: org.id, actorId: user.id, action: "contact.created", entityType: "contact", entityId: data.id, customerId,
       summary: `${actorName(profile)} added contact ${contactName(values as { first_name: string; last_name: string | null })} to ${cust.name}${makePrimary ? " as primary" : ""}`,
@@ -179,17 +207,23 @@ export async function saveContact(customerId: string, contactId: string | null, 
   if (Object.keys(patch).length === 0) return undefined;
   const { error } = await supabase.from("contacts").update(patch).eq("id", contactId).eq("organisation_id", org.id);
   if (error) return { error: `Couldn't save the contact: ${error.message}` };
+  if (before.is_primary) {
+    const r = await clientFollowsContact(supabase, org.id, customerId, { ...before, ...patch } as { first_name: string; last_name: string | null; email: string | null; phone: string | null }, contactName(before as { first_name: string; last_name: string | null }));
+    if ("error" in r) return { error: `Contact saved, but ${r.error}` };
+    Object.assign(changes, r);
+  }
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "contact.updated", entityType: "contact", entityId: contactId, customerId,
     summary: `${actorName(profile)} updated contact ${contactName({ ...before, ...patch } as { first_name: string; last_name: string | null })}`, changes,
   });
   refresh(customerId);
+  revalidatePath(`/accounts/${customerId}`);
   return undefined;
 }
 
 export async function setPrimaryContact(customerId: string, contactId: string): Promise<FormState> {
   const { supabase, org, user, profile } = await requireOrg();
-  const { data: rows, error } = await supabase.from("contacts").select("id, first_name, last_name, is_primary")
+  const { data: rows, error } = await supabase.from("contacts").select("id, first_name, last_name, email, phone, is_primary")
     .eq("organisation_id", org.id).eq("customer_id", customerId);
   if (error) return { error: `Couldn't load contacts: ${error.message}` };
   const target = rows?.find((r) => r.id === contactId);
@@ -200,12 +234,15 @@ export async function setPrimaryContact(customerId: string, contactId: string): 
   if (e1) return { error: `Couldn't change the primary contact: ${e1.message}` };
   const { error: e2 } = await supabase.from("contacts").update({ is_primary: true }).eq("organisation_id", org.id).eq("id", contactId);
   if (e2) return { error: `Couldn't change the primary contact: ${e2.message}` };
+  const detailChanges = await clientFollowsContact(supabase, org.id, customerId, target, prev ? contactName(prev) : null);
+  if ("error" in detailChanges) return { error: `${contactName(target)} is the main contact now, but ${detailChanges.error}` };
   await logActivity(supabase, {
     orgId: org.id, actorId: user.id, action: "contact.primary_changed", entityType: "contact", entityId: contactId, customerId,
     summary: `${actorName(profile)} made ${contactName(target)} the primary contact`,
-    changes: { "primary contact": [prev ? contactName(prev) : null, contactName(target)] },
+    changes: { "primary contact": [prev ? contactName(prev) : null, contactName(target)], ...detailChanges },
   });
   refresh(customerId);
+  revalidatePath(`/accounts/${customerId}`);
   return undefined;
 }
 

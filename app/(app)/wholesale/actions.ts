@@ -115,14 +115,14 @@ export async function newOrderingLink(id: string): Promise<Result> {
   } catch (e) { return { ok: false, error: err(e) }; }
 }
 
-export async function emailOrderingLinkAction(id: string): Promise<Result<string>> {
+export async function emailOrderingLinkAction(id: string, welcome = true): Promise<Result<string>> {
   try {
     const { supabase, org, user, profile } = await manager();
     const { data: c } = await supabase.from("wholesale_customers").select("id, name").eq("id", id).eq("organisation_id", org.id).maybeSingle();
     if (!c) throw new Error("Customer not found.");
     const { emailOrderingLink } = await import("@/lib/wholesale/orders");
-    const to = await emailOrderingLink(supabase, id);
-    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "wholesale.link_emailed", entityType: "wholesale_customer", entityId: id, summary: `${actorName(profile)} emailed ${c.name} their wholesale ordering link (${to})` });
+    const to = await emailOrderingLink(supabase, id, { welcome });
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "wholesale.link_emailed", entityType: "wholesale_customer", entityId: id, summary: `${actorName(profile)} emailed ${c.name} ${welcome ? "a welcome email with " : ""}their wholesale ordering link (${to})` });
     return { ok: true, data: to };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

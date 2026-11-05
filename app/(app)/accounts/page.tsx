@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ChevronRight, Phone } from "lucide-react";
+import { ChevronRight, Globe, Phone, Search, User } from "lucide-react";
+import { searchAccountCustomers } from "@/lib/accounts/search";
 import { requireOrg } from "@/lib/context";
 import { fmtDate, fmtDateTime, money, relative, todayISO } from "@/lib/format";
 import { SyncNowButton } from "@/app/(app)/settings/integrations/controls";
@@ -72,8 +73,10 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
 
   const hostingPills = await hostingByClient(supabase, org.id, [...byCust.keys()]);
   let rows = [...byCust.values()];
-  const q = (sp.q ?? "").trim().toLowerCase();
-  if (q) rows = rows.filter((r) => r.name.toLowerCase().includes(q) || (r.phone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, "") || "~"));
+  const q = (sp.q ?? "").trim().slice(0, 100);
+  // Search every client (name, company, contact, email, phone, website) — not only the ones owing money
+  const hits = q ? await searchAccountCustomers(supabase, org.id, q) : [];
+  if (q) { const ids = new Set(hits.map((h) => h.id)); rows = rows.filter((r) => ids.has(r.id)); }
   // Hosting clients only (Web Culture): those with a hosting account
   const hostingOnly = sp.h === "1";
   if (hostingOnly) rows = rows.filter((r) => hostingPills.has(r.id));
@@ -131,8 +134,44 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
       <div className="no-scrollbar mb-3 mt-5 flex items-center gap-1.5 overflow-x-auto">
         {VIEWS.map((x) => <Link key={x.key} href={`/accounts?v=${x.key}${hostingOnly ? "&h=1" : ""}`} className={cn("shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium", view === x.key ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}>{x.label}{x.key in counts ? <span className={cn("ml-1.5 tabular-nums", view === x.key ? "opacity-70" : x.key === "broken" && counts[x.key] ? "font-semibold text-rose-700" : "text-ink-faint")}>{counts[x.key]}</span> : null}</Link>)}
         {hostingPills.size > 0 && <Link href={`/accounts?v=${view}${hostingOnly ? "" : "&h=1"}`} className={cn("ml-2 shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[0.7812rem] font-medium ring-1", hostingOnly ? "bg-emerald-600 text-white ring-emerald-600" : "bg-surface text-ink-muted ring-line hover:text-ink")}>{hostingOnly ? "✓ " : ""}Hosting clients</Link>}
-        <form action="/accounts" className="ml-auto"><input type="hidden" name="v" value={view} />{hostingOnly && <input type="hidden" name="h" value="1" />}<input name="q" defaultValue={sp.q ?? ""} placeholder="Find a customer or number" aria-label="Find a customer or phone number" className="h-8 w-44 rounded-full border border-line-strong bg-surface px-3 text-[0.7812rem] outline-none focus:border-brand-500" /></form>
       </div>
+      <form action="/accounts" role="search" className="mb-3 flex w-full gap-2">
+        <input type="hidden" name="v" value={view} />{hostingOnly && <input type="hidden" name="h" value="1" />}
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+          <input name="q" defaultValue={q} type="search" placeholder="Find a customer — name, contact, email, phone or website" aria-label="Find a customer"
+            className="h-11 w-full min-w-0 rounded-xl border border-line-strong bg-surface pl-9 pr-3 text-[0.9375rem] text-ink outline-none placeholder:text-ink-faint focus:border-brand-500 sm:h-10 sm:text-[0.875rem]" />
+        </div>
+        <button type="submit" className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl bg-ink px-4 text-[0.875rem] font-semibold text-surface hover:opacity-90 sm:h-10">Search</button>
+        {q && <Link href={`/accounts?v=${view}${hostingOnly ? "&h=1" : ""}`} className="inline-flex h-11 shrink-0 items-center rounded-xl px-3 text-[0.875rem] font-medium text-ink-muted ring-1 ring-line hover:text-ink sm:h-10">Clear</Link>}
+      </form>
+      {q && (
+        <Card className="mb-4">
+          <p className="border-b border-line px-4 py-2.5 text-[0.75rem] font-medium text-ink-muted sm:px-5">{hits.length ? `${hits.length}${hits.length === 30 ? "+" : ""} customer${hits.length === 1 ? "" : "s"} matching “${q}”` : `No customers match “${q}” — try part of the name, a contact's first name, or the website`}</p>
+          {hits.length > 0 && (
+            <ul className="divide-y divide-line">
+              {hits.map((h) => {
+                const o = byCust.get(h.id);
+                return (
+                  <li key={h.id}>
+                    <Link href={`/accounts/${h.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 sm:px-5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.875rem] font-semibold text-ink">{h.name}{h.company && h.company !== h.name ? <span className="font-normal text-ink-muted"> · {h.company}</span> : null}</p>
+                        {h.why && <p className="flex items-center gap-1 truncate text-[0.75rem] text-ink-muted">{h.why.startsWith("contact") ? <User className="h-3 w-3 shrink-0" /> : <Globe className="h-3 w-3 shrink-0" />}Matched {h.why}</p>}
+                        {h.domains.length > 0 && <p className="mt-0.5 flex flex-wrap gap-1">{h.domains.map((d) => <span key={d} className="max-w-full truncate rounded-full bg-zinc-100 px-2 py-0.5 text-[0.6875rem] text-ink-muted">{d}</span>)}</p>}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {o ? <><p className="text-[0.875rem] font-semibold tabular-nums text-ink">{money(o.owing, cur)}</p>{o.overdue > 0 && <p className="text-[0.6875rem] font-medium tabular-nums text-rose-700">{money(o.overdue, cur)} overdue</p>}</> : <p className="text-[0.75rem] text-emerald-700">Nothing owing</p>}
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-faint" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+      )}
       <Card>
         {view === "next" && rows.length > 0 && <p className="border-b border-line px-5 py-2.5 text-[0.75rem] text-ink-muted">Overdue customers you haven&apos;t contacted today, in order: broken promises, next steps due, never contacted, then the longest since you last spoke. Log a call or send an email and they drop off until tomorrow. Flagged accounts wait in the resolution centre.</p>}
         {!rows.length ? <EmptyState title={view === "next" ? "Everyone's been contacted today" : view === "overdue" ? "Nothing overdue" : "Nothing here"}>{view === "next" ? "Nice work — every overdue customer has been called, emailed or noted today (or is flagged)." : view === "overdue" ? "Every invoice is paid or not due yet." : "Try another view."}</EmptyState> : (

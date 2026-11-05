@@ -115,20 +115,27 @@ export function staffSignInEmail(o: { businessName: string; firstName: string; u
 }
 
 /** A wholesale customer's private ordering link (sent when the business clicks "Email the ordering link"). */
-export function wholesaleLinkEmail(o: { businessName: string; customerName: string; deliveryDay: string; url: string; brand?: string | null; logoUrl?: string | null }) {
-  const subject = `Order from ${o.businessName} online`;
+export function wholesaleLinkEmail(o: { businessName: string; customerName: string; deliveryDay: string; url: string; brand?: string | null; logoUrl?: string | null;
+  pickup?: "delivery" | "pickup" | "either"; pays?: string | null; welcome?: boolean }) {
+  const welcome = o.welcome !== false;
+  const subject = welcome ? `Welcome to ${o.businessName} wholesale — your ordering link` : `Your ${o.businessName} ordering link`;
+  const how = o.pickup === "pickup" ? `Orders are ready to pick up from ${o.deliveryDay} — no delivery fee and no minimum.`
+    : o.pickup === "either" ? `Choose delivery (next ${o.deliveryDay}) or pick it up yourself — pickup has no delivery fee.`
+    : `Orders go on the next ${o.deliveryDay} delivery.`;
   const paragraphs = [
     `Hi ${o.customerName},`,
-    `You can now place your ${o.businessName} orders online, with your own prices. Orders go on the next ${o.deliveryDay} delivery.`,
-    "Keep this link — it's just for your business, so there's nothing to sign up for. Bookmark it or add it to your phone's home screen.",
+    welcome ? `Welcome aboard — your ${o.businessName} wholesale account is ready. You can place orders online any time, with your own prices.` : `Here's your link to place ${o.businessName} orders online, with your own prices.`,
+    how,
+    ...(o.pays ? [o.pays] : []),
+    "Keep this link — it's just for your business, so there's nothing to sign up for. Bookmark it or add it to your phone's home screen, and use “Same as last order” to reorder in seconds.",
+    "Any questions, just reply to this email.",
   ];
-  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: "Your ordering link", paragraphs,
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: welcome ? "Welcome — your ordering link" : "Your ordering link", paragraphs,
     button: { label: "Place an order", url: o.url }, footer: `Sent by ${o.businessName}. Please don't share this link outside your business.` });
   const text = `${paragraphs.join("\n\n")}\n\nPlace an order: ${o.url}`;
   return { subject, html, text };
 }
 
-/** Confirmation to the customer when a wholesale order is placed (and paid, when paying by card). */
 export function wholesaleOrderEmail(o: { businessName: string; customerName: string; number: string; delivery: string; lines: string[]; total: string; paidNote: string; url: string; brand?: string | null; logoUrl?: string | null; pickupUrl?: string | null }) {
   const subject = `Order ${o.number} confirmed — ${o.businessName}`;
   const paragraphs = [`Hi ${o.customerName},`, o.pickupUrl ? `Thanks — we've got your order ${o.number} for ${o.delivery}.` : `Thanks — we've got your order ${o.number} for delivery ${o.delivery}.`, ...o.lines, `Total ${o.total}. ${o.paidNote}`,

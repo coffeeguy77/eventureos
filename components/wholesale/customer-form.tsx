@@ -4,23 +4,32 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form";
-import { saveCustomer, type CustomerInput } from "@/app/(app)/wholesale/actions";
+import { emailOrderingLinkAction, saveCustomer, type CustomerInput } from "@/app/(app)/wholesale/actions";
 import { WEEKDAYS } from "@/lib/wholesale/rules";
 
 /** Add / edit a wholesale customer: details, how they pay, their price group and delivery day. */
-export function CustomerForm({ id, initial, groups, defaultDay, canEdit }: { id: string | null; initial: CustomerInput; groups: string[]; defaultDay: number; canEdit: boolean }) {
+export function CustomerForm({ id, initial, groups, defaultDay, canEdit, ordering = true }: { id: string | null; initial: CustomerInput; groups: string[]; defaultDay: number; canEdit: boolean; ordering?: boolean }) {
   const router = useRouter();
   const [v, setV] = useState<CustomerInput>(initial);
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [welcome, setWelcome] = useState(ordering);
   const set = <K extends keyof CustomerInput>(k: K, val: CustomerInput[K]) => { setV((x) => ({ ...x, [k]: val })); setSaved(false); };
   const save = () => start(async () => {
     setErr(null);
     const r = await saveCustomer(id, v).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
     if (!r.ok) { setErr(r.error); return; }
     setSaved(true);
-    if (!id) router.push(`/wholesale/customers/${r.data.id}`); else router.refresh();
+    if (!id) {
+      // New customer: welcome email with their ordering link (when ticked and they have an email)
+      if (welcome && (v.email || v.billing_email)) {
+        const w = await emailOrderingLinkAction(r.data.id).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
+        if (!w.ok) { router.push(`/wholesale/customers/${r.data.id}?welcome=failed`); return; }
+        router.push(`/wholesale/customers/${r.data.id}?welcome=sent`); return;
+      }
+      router.push(`/wholesale/customers/${r.data.id}`);
+    } else router.refresh();
   });
   const text = (k: keyof CustomerInput, label: string, o: { type?: string; hint?: string; span?: boolean } = {}) => (
     <div className={o.span ? "sm:col-span-2" : undefined}><Label htmlFor={`wc-${k}`} hint={o.hint}>{label}</Label>
@@ -76,7 +85,14 @@ export function CustomerForm({ id, initial, groups, defaultDay, canEdit }: { id:
       </div>
       <label className="flex items-center gap-2 text-[0.8125rem] text-ink"><input type="checkbox" className="h-4 w-4 accent-brand-500" checked={v.active} onChange={(e) => set("active", e.target.checked)} disabled={!canEdit} />Active <span className="text-ink-faint">(untick when they stop ordering — their ordering link stops working)</span></label>
       <FormError message={err} />
-      {canEdit && <div className="flex items-center justify-end gap-3">{saved && <span className="text-[0.75rem] text-emerald-700">Saved.</span>}<Button variant="primary" onClick={save} disabled={pending || !v.name.trim()}>{pending ? "Saving…" : id ? "Save changes" : "Add customer"}</Button></div>}
+      {canEdit && !id && (
+        <label className="flex items-start gap-2 rounded-lg bg-zinc-50 px-3 py-2.5 text-[0.8125rem] text-ink ring-1 ring-inset ring-line">
+          <input type="checkbox" checked={welcome} onChange={(e) => setWelcome(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-line-strong text-brand-600" />
+          <span>Send them a welcome email with their ordering link
+            <span className="block text-[0.75rem] text-ink-muted">{!(v.email || v.billing_email) ? "Add their email above to send it." : ordering ? `Goes to ${v.email || v.billing_email}.` : "Online ordering is switched off in Wholesale → Settings — the link will show a “contact us” message until it's on."}</span></span>
+        </label>
+      )}
+      {canEdit && <div className="flex items-center justify-end gap-3">{saved && <span className="text-[0.75rem] text-emerald-700">Saved.</span>}<Button variant="primary" onClick={save} disabled={pending || !v.name.trim()}>{pending ? "Saving…" : id ? "Save changes" : welcome && (v.email || v.billing_email) ? "Add customer & send welcome" : "Add customer"}</Button></div>}
     </div>
   );
 }

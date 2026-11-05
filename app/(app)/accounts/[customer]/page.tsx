@@ -13,6 +13,8 @@ import { ContactsManager, type ContactRow } from "@/app/(app)/clients/[id]/contr
 import { PlanPanel, StatementPanel } from "@/components/accounts/statement-plan";
 import { lastAttempts } from "@/lib/accounts/phones";
 import { loadPhones } from "@/lib/accounts/phones-server";
+import { PaymentHistory, type HistInvoice } from "@/components/accounts/payment-history";
+import { TodoPanel } from "@/components/accounts/todo-panel";
 import { CancelReminder, ChaseComposer, FeePanel, FlagForm, LogForm, PayPanel, StepDone } from "@/components/accounts/customer-tools";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +22,12 @@ export const dynamic = "force-dynamic";
 const KIND: Record<string, string> = { note: "Note", call: "Phone call", email: "Email", sms: "Text", promise: "Promise to pay", dispute: "Dispute", plan: "Payment plan" };
 
 /** One customer who owes money: their unpaid invoices, every conversation and email, and what happens next. */
-export default async function AccountsCustomerPage({ params, searchParams }: { params: Promise<{ customer: string }>; searchParams: Promise<{ paid?: string; plan?: string }> }) {
+export default async function AccountsCustomerPage({ params, searchParams }: { params: Promise<{ customer: string }>; searchParams: Promise<{ paid?: string; plan?: string; history?: string }> }) {
   const { customer: id } = await params;
   const spx = await searchParams;
   const justPaid = spx.paid === "1" || spx.plan === "1";
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const { supabase, org, user } = await requireOrg();
+  const { supabase, org, user, access } = await requireOrg();
   const { data: cust } = await supabase.from("customers").select("id, name, email, phone, company").eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (!cust) notFound();
   const today = todayISO(org.timezone);
@@ -95,13 +97,26 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
     plan = { frequency: pl.frequency as string, instalments: (ins ?? []) as { n: number; due_date: string; amount: number; status: string; last_error: string | null }[] };
   }
   const people = (contacts ?? []) as ContactRow[];
+  // My to-dos for this customer, and jobs sent to Nerd Herd (open, or finished in the last 30 days)
+  const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const [{ data: todoRows }, { data: jobRows }] = await Promise.all([
+    supabase.from("tasks").select("id, title, due_at").eq("organisation_id", org.id).eq("customer_id", id).eq("status", "open").eq("assigned_to", user.id).order("due_at", { ascending: true, nullsFirst: false }).limit(30),
+    supabase.from("support_tickets").select("id, number, subject, status, resolved_at").eq("organisation_id", org.id).eq("customer_id", id).or(`status.not.in.(resolved,closed),resolved_at.gte.${monthAgo}`).order("created_at", { ascending: false }).limit(10),
+  ]);
+  const nowIso = new Date().toISOString();
+  const todos = ((todoRows ?? []) as { id: string; title: string; due_at: string | null }[]).map((t) => ({ id: t.id, title: t.title, due: t.due_at ? fmtDateTime(t.due_at, org.timezone, "date") : null, overdue: !!t.due_at && t.due_at < nowIso }));
+  const canNerdHerd = !access || access.includes("/nerd-herd");
+  // Full invoice + payment history (Xero and EventureOS) — "I've paid that"
+  const { data: histRows } = await supabase.from("invoices").select("id, number, issue_date, due_date, total, amount_paid, balance, status, origin, reference, payments(amount, paid_at, method, reference)")
+    .eq("organisation_id", org.id).eq("customer_id", id).order("issue_date", { ascending: false, nullsFirst: false }).limit(500);
+  const history = ((histRows ?? []) as unknown as HistInvoice[]).map((i) => ({ ...i, total: Number(i.total), amount_paid: Number(i.amount_paid), balance: Number(i.balance), payments: [...(i.payments ?? [])].sort((a, b) => b.paid_at.localeCompare(a.paid_at)) }));
 
   return (
     <>
       <Link href="/accounts" className="mb-3 inline-flex items-center gap-1 text-[0.7812rem] text-ink-muted hover:text-ink"><ArrowLeft className="h-3.5 w-3.5" />Money owing</Link>
       <PageHeader title={cust.name} subtitle={`${money(total, cur)} owing${overdue ? ` · ${money(overdue, cur)} overdue` : ""}`}
         actions={<div className="flex flex-wrap items-center gap-2">
-          {nerdHerd && <Link href={`/nerd-herd/tickets/new?client=${cust.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-[0.8125rem] font-semibold text-white hover:bg-brand-700">+ New job (Nerd Herd)</Link>}
+          {nerdHerd && <a href="#todo" className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-[0.8125rem] font-semibold text-white hover:bg-brand-700">+ Nerd Herd job / to-do</a>}
           <Link href={`/clients/${cust.id}`} className="text-[0.8125rem] font-medium text-brand-700 hover:underline">Client record</Link>
         </div>} />
 
@@ -136,6 +151,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
               </table>
             </div>
           </Card>
+          <div id="history" className="scroll-mt-20"><PaymentHistory invoices={history} currency={cur} tz={org.timezone} today={today} all={spx.history === "all"} href={`/accounts/${cust.id}?history=all#history`} /></div>
           {domains.length > 0 && (
             <Card>
               <CardHeader title="Their websites" subtitle="Check a site is still with us and that their email works — often why they've gone quiet" />
@@ -179,6 +195,7 @@ export default async function AccountsCustomerPage({ params, searchParams }: { p
         <aside className="space-y-5">
           <CallPanel customerId={cust.id} phones={phoneData.phones} attempts={lastAttempts(N)} xero={phoneData.xero}
             sms={smsOn ? { business: org.name, firstName: (people.find((p) => p.is_primary)?.first_name ?? cust.name).split(/\s+/)[0], owing: money(total, cur) } : null} />
+          <div id="todo" className="scroll-mt-20"><TodoPanel customerId={cust.id} todos={todos} jobs={(jobRows ?? []) as { id: string; number: number; subject: string; status: string }[]} sites={domains} nerdHerd={nerdHerd} ticketLinks={canNerdHerd} /></div>
           <Card className="p-4 text-[0.8125rem]">
             <p className="font-semibold text-ink">Contacts</p>
             <p className="mb-2 text-[0.75rem] text-ink-muted">Someone left? Edit or remove them here, and make the right person the main contact.</p>

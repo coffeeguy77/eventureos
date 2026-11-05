@@ -8,7 +8,7 @@ import { emailOrderingLinkAction, newOrderingLink } from "@/app/(app)/wholesale/
 import { cn } from "@/lib/cn";
 
 /** The customer's private ordering link: copy, open, email it to them, or replace it. */
-export function OrderLinkBox({ id, url, email, ordering, active, canEdit }: { id: string; url: string; email: string | null; ordering: boolean; active: boolean; canEdit: boolean }) {
+export function OrderLinkBox({ id, url, email, ordering, active, canEdit, lastSent }: { id: string; url: string; email: string | null; ordering: boolean; active: boolean; canEdit: boolean; lastSent?: string | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -23,12 +23,14 @@ export function OrderLinkBox({ id, url, email, ordering, active, canEdit }: { id
         <Button size="sm" onClick={() => { void navigator.clipboard?.writeText(url); setMsg({ ok: true, text: "Link copied." }); }}><Copy className="h-4 w-4" />Copy</Button>
         <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-zinc-50"><ExternalLink className="h-4 w-4" />See what they see</a>
         {canEdit && email && (askEmail
-          ? <><span className="self-center text-[0.8125rem]">Email it to {email}?</span><Button size="sm" variant="primary" disabled={pending} onClick={() => start(async () => { const r = await emailOrderingLinkAction(id); setMsg(r.ok ? { ok: true, text: `Emailed to ${r.data}.` } : { ok: false, text: r.error }); setAskEmail(false); })}>Send</Button><Button size="sm" variant="ghost" onClick={() => setAskEmail(false)}>Cancel</Button></>
-          : <Button size="sm" onClick={() => setAskEmail(true)}><Mail className="h-4 w-4" />Email it to them</Button>)}
+          ? <><span className="self-center text-[0.8125rem]">Send the welcome email to {email}?</span><Button size="sm" variant="primary" disabled={pending} onClick={() => start(async () => { const r = await emailOrderingLinkAction(id); setMsg(r.ok ? { ok: true, text: `Emailed to ${r.data}.` } : { ok: false, text: r.error }); setAskEmail(false); })}>Send</Button><Button size="sm" variant="ghost" onClick={() => setAskEmail(false)}>Cancel</Button></>
+          : <Button size="sm" onClick={() => setAskEmail(true)}><Mail className="h-4 w-4" />{lastSent ? "Send welcome email again" : "Send welcome email"}</Button>)}
         {canEdit && (askNew
           ? <><span className="self-center text-[0.8125rem]">The old link will stop working.</span><Button size="sm" disabled={pending} onClick={() => start(async () => { const r = await newOrderingLink(id); setMsg(r.ok ? { ok: true, text: "New link made." } : { ok: false, text: r.error }); setAskNew(false); router.refresh(); })}>Make a new link</Button><Button size="sm" variant="ghost" onClick={() => setAskNew(false)}>Cancel</Button></>
           : <button type="button" onClick={() => setAskNew(true)} className="inline-flex items-center gap-1 text-[0.75rem] text-ink-muted hover:text-ink"><RefreshCw className="h-3.5 w-3.5" />New link</button>)}
       </div>
+      {lastSent && <p className="text-[0.75rem] text-ink-muted">Welcome / link email last sent {lastSent}.</p>}
+      {!email && canEdit && <p className="text-[0.75rem] text-ink-muted">Add their email to send them a welcome email with this link.</p>}
       {msg && <p className={cn("text-[0.75rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
     </div>
   );

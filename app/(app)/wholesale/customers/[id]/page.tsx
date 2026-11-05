@@ -7,15 +7,16 @@ import { CustomerForm } from "@/components/wholesale/customer-form";
 import { OrderLinkBox } from "@/components/wholesale/order-link";
 import type { CustomerInput } from "@/app/(app)/wholesale/actions";
 import { appBaseUrl } from "@/lib/integrations/registry";
-import { fmtDate, money } from "@/lib/format";
+import { fmtDate, fmtDateTime, money } from "@/lib/format";
 import { mergeNames, readWholesale } from "@/lib/wholesale/settings";
 
 export const dynamic = "force-dynamic";
 
 const BLANK: CustomerInput = { name: "", payment_mode: "card", payment_terms_days: 7, delivery_weekday: null, min_order: 0, active: true };
 
-export default async function WholesaleCustomerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function WholesaleCustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ welcome?: string }> }) {
   const { id } = await params;
+  const sp = await searchParams;
   const isNew = id === "new";
   if (!isNew && !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const { supabase, org, role } = await requireOrg();
@@ -26,7 +27,7 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
     return (
       <div className="max-w-3xl">
         <h1 className="mb-4 text-[1.375rem] font-semibold tracking-tight text-ink">Add a wholesale customer</h1>
-        <Card className="p-5"><CustomerForm id={null} initial={BLANK} groups={groups} defaultDay={ws.deliveryWeekday} canEdit={canManage(role)} /></Card>
+        <Card className="p-5"><CustomerForm id={null} initial={BLANK} groups={groups} defaultDay={ws.deliveryWeekday} canEdit={canManage(role)} ordering={ws.ordering} /></Card>
       </div>
     );
   }
@@ -35,6 +36,8 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
   const { data: orders } = await supabase.from("wholesale_orders").select("id, number, source, status, order_date, delivery_date, total, lines:wholesale_order_lines(name, quantity)").eq("customer_id", id).order("order_date", { ascending: false }).limit(100);
   type O = { id: string; number: string; source: string; status: string; order_date: string; delivery_date: string | null; total: number; lines: { name: string; quantity: number }[] };
   const list = (orders ?? []) as unknown as O[];
+  const { data: sentLog } = await supabase.from("activity_logs").select("created_at").eq("organisation_id", org.id).eq("entity_type", "wholesale_customer").eq("entity_id", id).eq("action", "wholesale.link_emailed").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const lastSent = sentLog?.created_at ? fmtDateTime(sentLog.created_at as string, org.timezone) : null;
   const live = list.filter((o) => o.status !== "cancelled");
   const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
   const year = live.filter((o) => o.order_date >= yearAgo);
@@ -49,6 +52,8 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
   };
   return (
     <div>
+      {sp.welcome === "sent" && <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-[0.8125rem] text-emerald-800 ring-1 ring-inset ring-emerald-200">Customer added — welcome email with their ordering link sent to {c.email || c.billing_email}.</p>}
+      {sp.welcome === "failed" && <p role="status" className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200">Customer added, but the welcome email couldn&apos;t be sent — try “Send welcome email” under their ordering link.</p>}
       <div className="mb-5">
         <p className="mb-1 text-[0.75rem] text-ink-faint"><Link href="/wholesale/customers" className="hover:text-ink">Customers</Link> / {c.name}</p>
         <h1 className="flex flex-wrap items-center gap-2 text-[1.375rem] font-semibold tracking-tight text-ink">{c.name}{!c.active && <Badge tone="slate">Inactive</Badge>}{c.source === "ordermentum" && <Badge tone="slate">From Ordermentum</Badge>}</h1>
@@ -59,7 +64,7 @@ export default async function WholesaleCustomerPage({ params }: { params: Promis
         <div className="space-y-6">
           <Card>
             <CardHeader title="Ordering link" subtitle="Their own page to order with their prices — no login" />
-            <div className="px-5 pb-5"><OrderLinkBox id={c.id} url={`${appBaseUrl()}/order/${c.order_token}`} email={c.email || c.billing_email} ordering={ws.ordering} active={c.active} canEdit={canManage(role)} /></div>
+            <div className="px-5 pb-5"><OrderLinkBox id={c.id} url={`${appBaseUrl()}/order/${c.order_token}`} email={c.email || c.billing_email} ordering={ws.ordering} active={c.active} canEdit={canManage(role)} lastSent={lastSent} /></div>
           </Card>
           {usual.size > 0 && (
             <Card>

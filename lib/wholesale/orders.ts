@@ -181,15 +181,18 @@ async function orderPlaced(db: SupabaseClient, org: WsOrg, orderId: string, how:
 }
 
 /** Email a customer their ordering link (only when the business clicks the button). */
-export async function emailOrderingLink(db: SupabaseClient, customerId: string) {
-  const { data: c } = await db.from("wholesale_customers").select("name, email, billing_email, order_token, delivery_weekday, organisation_id").eq("id", customerId).single();
+export async function emailOrderingLink(db: SupabaseClient, customerId: string, opts: { welcome?: boolean } = {}) {
+  const pickupCol = (await pickupReady(db)) ? ", fulfilment" : "";
+  const { data: c } = await db.from("wholesale_customers").select(`name, email, billing_email, order_token, delivery_weekday, organisation_id, payment_mode, payment_terms_days${pickupCol}`).eq("id", customerId).single<Record<string, unknown> & { name: string; email: string | null; billing_email: string | null; order_token: string; delivery_weekday: number | null; organisation_id: string; payment_mode: string; payment_terms_days: number; fulfilment?: string }>();
   if (!c) throw new Error("Customer not found.");
   const to = c.email || c.billing_email;
   if (!to) throw new Error(`${c.name} has no email address.`);
   if (!emailConfigured()) throw new Error("Email isn't set up.");
   const { data: org } = await db.from("organisations").select("name, brand_colour, logo_url, contact_email, settings").eq("id", c.organisation_id).single();
   const ws = readWholesale(org?.settings);
-  const m = wholesaleLinkEmail({ businessName: org!.name as string, customerName: c.name as string, deliveryDay: WEEKDAYS[(c.delivery_weekday as number | null) ?? ws.deliveryWeekday], url: orderLink(c.order_token as string), brand: org?.brand_colour as string | null, logoUrl: org?.logo_url as string | null });
+  const m = wholesaleLinkEmail({ businessName: org!.name as string, customerName: c.name as string, deliveryDay: WEEKDAYS[(c.delivery_weekday as number | null) ?? ws.deliveryWeekday], url: orderLink(c.order_token as string), brand: org?.brand_colour as string | null, logoUrl: org?.logo_url as string | null,
+    pickup: cleanFulfilment(c.fulfilment), welcome: opts.welcome !== false,
+    pays: c.payment_mode === "invoice" ? `Orders go on your account — pay within ${c.payment_terms_days} day${c.payment_terms_days === 1 ? "" : "s"}.` : "You pay by card when you order (secure, through Stripe)." });
   await sendEmail({ to: to as string, ...m, replyTo: org?.contact_email as string | null, fromName: org!.name as string });
   return to as string;
 }
