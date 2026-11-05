@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/roastery", label: "Green stock" },
   { href: "/roastery/roasts", label: "Roast log" },
   { href: "/roastery/planner", label: "Green planner" },
+  { href: "/roastery/purchases", label: "Purchases" },
 ];
 
 export function RoasteryNav() {

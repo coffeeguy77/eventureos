@@ -26,6 +26,7 @@ function authorised(req: NextRequest) {
 const PROVIDERS: LiveProviderId[] = ["gmail", "gmail2", "google_calendar", "xero"];
 
 export async function GET(req: NextRequest) {
+  const t0 = Date.now();
   if (!process.env.CRON_SECRET?.trim() && !process.env.SYNC_TRIGGER_SECRET?.trim()) {
     return NextResponse.json({ ok: false, error: "CRON_SECRET is not set — background sync is disabled." }, { status: 503 });
   }
@@ -230,5 +231,13 @@ export async function GET(req: NextRequest) {
       hosting = out;
     }
   } catch (e) { hosting = { error: e instanceof Error ? e.message : String(e) }; }
-  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, roster: rosterJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, classbento, learn });
+  // Roastery: green coffee invoices from the importers' emails — works through the history, then picks up new ones hourly
+  let greenCoffee: unknown = null;
+  if (providers.includes("gmail" as LiveProviderId)) try {
+    const { runGreenImports } = await import("@/lib/roastery/purchase-import");
+    const left = 280_000 - (Date.now() - t0);
+    greenCoffee = left > 100_000 ? await runGreenImports(db, Math.min(200_000, left)) : { waiting: "not enough time left in this run" };
+  } catch (e) { greenCoffee = { error: e instanceof Error ? e.message : String(e) }; }
+
+  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, roster: rosterJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, greenCoffee, classbento, learn });
 }
