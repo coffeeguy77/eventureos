@@ -23,6 +23,7 @@ Return ONLY a JSON object:
    "price_per_kg": number|null (ex GST, as printed), "amount_ex_gst": number|null (line total ex GST)}],
  "freight_ex_gst": number|null, "total_inc_gst": number|null}
 Rules: green coffee is GST-free in Australia; quantities are kilos unless the line says bags (then give bags and bag_kg as printed, e.g. "6 bags of 60 kgs" → bags 6, bag_kg 60, kg 360);
+if the document is NOT an invoice (statement, remittance, price list / offer sheet, order confirmation, quote), set "document" accordingly and return "lines": [] — don't copy its lines;
 short country codes like "Bra", "Col", "PNG", "Eth" mean Brazil, Colombia, Papua New Guinea, Ethiopia; copy numbers exactly; use null when a value isn't printed; never invent a line, origin or price.`;
 
 export interface ReadInvoice {
@@ -31,13 +32,22 @@ export interface ReadInvoice {
 }
 
 export async function readGreenInvoice(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
+  // a reply that comes back cut short or garbled is asked for once more
+  try { return await readOnce(bytes, key); }
+  catch (e) {
+    if (e instanceof Error && /JSON|Expected|Unexpected/i.test(e.message)) return readOnce(bytes, key);
+    throw e;
+  }
+}
+
+async function readOnce(bytes: Uint8Array, key: string): Promise<ReadInvoice> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 60_000);
   try {
     const res = await fetch(ANTHROPIC_URL, {
       method: "POST", signal: ctrl.signal, headers: anthropicHeaders(key),
       body: JSON.stringify({
-        model: replyModel(), max_tokens: 6000, system: SYSTEM,
+        model: replyModel(), max_tokens: 12000, system: SYSTEM,
         messages: [{ role: "user", content: [
           { type: "document", source: { type: "base64", media_type: "application/pdf", data: Buffer.from(bytes).toString("base64") } },
           { type: "text", text: "Copy out this document as JSON." },

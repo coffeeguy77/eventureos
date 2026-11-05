@@ -76,6 +76,8 @@ export async function importGreenInvoices(ctx: SyncContext, opts: { aiKey: strin
       const name = (part.filename || "attachment").slice(0, 200);
       const kind = fileKind(name, part.mimeType);
       // only PDFs are read for now; other files are listed so we can see what each importer sends
+      // email signature logos (image001.png …) — nothing to read
+      if (kind === "image" && ((part.body?.size ?? 0) < 60_000 || /^image\d{3}\./i.test(name))) { await record(db, orgId, msg, from, name, "skipped", null, "Email signature image"); out.skipped++; continue; }
       if (kind !== "pdf") { await record(db, orgId, msg, from, name, "skipped", null, `${NOT_READ_YET} (${kind}${part.mimeType ? `, ${part.mimeType}` : ""}, ${Math.round((part.body?.size ?? 0) / 1024)} KB)`); out.skipped++; continue; }
       try {
         const bytes = part.body?.attachmentId ? await getAttachment(ctx, id, part.body.attachmentId) : new Uint8Array(Buffer.from(part.body?.data ?? "", "base64url"));
