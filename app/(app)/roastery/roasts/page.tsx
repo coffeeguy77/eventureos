@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LineChart } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { fmtDateTime } from "@/lib/format";
 import { loadRoastery } from "@/lib/roastery/load";
@@ -42,9 +43,10 @@ export default async function RoastLogPage({ searchParams }: { searchParams: Pro
                   return (
                     <li key={r.id} className="px-4 py-3">
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="font-medium text-ink">{c?.name ?? "Unknown coffee"}</span>
+                        <Link href={`/roastery/roasts/${r.id}`} className="font-medium text-ink hover:underline">{c?.name ?? "Unknown coffee"}</Link>
                         <span className="text-[0.8125rem] text-ink-muted">{fmtDateTime(r.roasted_at, org.timezone)}</span>
                         <Badge>{SOURCE[r.source]}</Badge>
+                        {r.has_curve && <Link href={`/roastery/roasts/${r.id}`} className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline"><LineChart className="h-3.5 w-3.5" />Roast graph</Link>}
                         <span className="ml-auto text-[0.875rem] font-semibold text-ink tabular">{r.score != null ? r.score : <span className="font-normal text-ink-faint">not scored</span>}</span>
                       </div>
                       <div className="mt-1 text-[0.8125rem] text-ink-muted tabular">

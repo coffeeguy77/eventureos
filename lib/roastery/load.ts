@@ -10,7 +10,7 @@ export interface Roast {
   id: string; coffee_id: string | null; roasted_at: string; green_kg: number; roasted_kg: number | null; loss_pct: number | null;
   profile: string | null; charge_c: number | null; turning_point_s: number | null; first_crack_s: number | null; first_crack_c: number | null;
   end_s: number | null; drop_c: number | null; dtr_pct: number | null; score: number | null; notes: string | null;
-  source: "manual" | "recorder" | "weighed_list"; recorder_name: string | null;
+  source: "manual" | "recorder" | "weighed_list"; recorder_name: string | null; has_curve: boolean;
 }
 export interface CoffeeSummary extends Coffee {
   onHand: number; value: number | null; avgCost: number | null;
@@ -28,7 +28,7 @@ export async function loadRoastery(supabase: SupabaseClient, orgId: string) {
   const [c, m, r] = await Promise.all([
     supabase.from("roastery_coffees").select("id, name, origin, supplier, process, batch_kg, reorder_kg, notes, archived").eq("organisation_id", orgId).order("name"),
     supabase.from("roastery_stock_moves").select("coffee_id, kind, kg, cost_per_kg").eq("organisation_id", orgId).limit(20000),
-    supabase.from("roastery_roasts").select("id, coffee_id, roasted_at, green_kg, roasted_kg, loss_pct, profile, charge_c, turning_point_s, first_crack_s, first_crack_c, end_s, drop_c, dtr_pct, score, notes, source, recorder_name").eq("organisation_id", orgId).order("roasted_at", { ascending: false }).limit(5000),
+    supabase.from("roastery_roasts").select("id, coffee_id, roasted_at, green_kg, roasted_kg, loss_pct, profile, charge_c, turning_point_s, first_crack_s, first_crack_c, end_s, drop_c, dtr_pct, score, notes, source, recorder_name, has_curve").eq("organisation_id", orgId).order("roasted_at", { ascending: false }).limit(5000),
   ]);
   for (const x of [c, m, r]) if (x.error) throw new Error(x.error.message);
   const coffees = (c.data ?? []).map((x) => ({ ...x, batch_kg: Number(x.batch_kg), reorder_kg: num(x.reorder_kg) })) as Coffee[];

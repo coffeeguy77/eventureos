@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
-import { parseRecorderIndex } from "@/lib/roastery/core";
+import { cleanCurve, type ImportRoast } from "@/lib/roastery/core";
 
 /** Roastery (back end): green coffees, stock in and out, roast log and the roast recorder import. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => {
   const m = e instanceof Error ? e.message : String(e);
-  return { ok: false, error: /roastery_/.test(m) && /does not exist|could not find|schema cache/i.test(m) ? "Roastery needs its database update first: run supabase/migrations/0098_roastery.sql in Supabase." : m };
+  return { ok: false, error: /roastery_|has_curve|"curve"/.test(m) && /does not exist|could not find|schema cache/i.test(m) ? "Roastery needs its database updates first: run supabase/migrations/0098_roastery.sql and 0099_roastery_curves.sql in Supabase." : m };
 };
 const UUID = /^[0-9a-f-]{36}$/i;
 const t = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) || null : null);
@@ -205,15 +205,29 @@ export async function deleteRoast(id: string): Promise<R> {
 }
 
 /**
- * Import the W45A roast recorder's roasts/index.csv. Each roast is added once (by its file name); coffees that don't
- * exist yet are added. With `deduct`, the green weight of each newly added roast comes off stock.
+ * Import roasts parsed in the browser from the W45A roast recorder (index.csv + each roast's CSV) or an import bundle.
+ * Each roast is added once, by its recorder file name; importing again only adds a curve a roast didn't have yet.
+ * Coffees that don't exist are added. With `deduct` (and unless the roast says otherwise) the green comes off stock.
  */
-export async function importRecorder(text: string, deduct: boolean): Promise<R<{ added: number; skipped: number; already: number; newCoffees: string[] }>> {
+export async function importRoasts(list: ImportRoast[], deduct: boolean): Promise<R<{ added: number; curves: number; already: number; newCoffees: string[] }>> {
   try {
     const { supabase, org, user, profile } = await roastery();
-    if (typeof text !== "string" || text.length > 2_000_000) throw new Error("That file is too big.");
-    const { rows, skipped } = parseRecorderIndex(text);
-    if (!rows.length) throw new Error(skipped ? `None of the ${skipped} roasts in that file have a coffee and batch weight (set them in the advisor before the roast).` : "That file has no roasts.");
+    if (!Array.isArray(list) || !list.length) throw new Error("Nothing to import.");
+    if (list.length > 50) throw new Error("Import at most 50 roasts at a time.");
+    const rows = list.map((r) => {
+      const name = t(r?.name, 200), coffee = t(r?.coffee, 80), batch = Number(r?.batch_kg);
+      if (!name || !coffee) throw new Error("Each roast needs a name and a coffee.");
+      if (!Number.isFinite(batch) || batch <= 0 || batch > 500) throw new Error(`${name}: the batch weight doesn't look right.`);
+      const charge = new Date(String(r.charge));
+      const num = (v: unknown, lo: number, hi: number) => { const x = Number(v); return v == null || v === "" || !Number.isFinite(x) || x < lo || x > hi ? null : x; };
+      const roasted = num(r.roasted_kg, 0.01, batch);
+      return {
+        name, coffee, batch, at: Number.isNaN(charge.getTime()) ? new Date().toISOString() : charge.toISOString(), roasted,
+        profile: t(r.profile, 120), charge_c: num(r.charge_bean_c, 0, 400), tp: num(r.turning_point_s, 0, 3600), fc: num(r.first_crack_s, 0, 3600),
+        fc_c: num(r.first_crack_bean_c, 0, 400), end: num(r.end_s, 0, 3600), drop: num(r.drop_bean_c, 0, 400), dtr: num(r.dtr_pct, 0, 60),
+        score: num(r.score, 0, 100), notes: t(r.notes, 2000), curve: cleanCurve(r.curve), deduct: deduct && r.deduct !== false,
+      };
+    });
     const { data: existing, error: e0 } = await supabase.from("roastery_coffees").select("id, name").eq("organisation_id", org.id);
     if (e0) throw new Error(e0.message);
     const byName = new Map((existing ?? []).map((c) => [String(c.name).toLowerCase(), c.id as string]));
@@ -221,33 +235,40 @@ export async function importRecorder(text: string, deduct: boolean): Promise<R<{
     for (const r of rows) {
       const k = r.coffee.toLowerCase();
       if (byName.has(k)) continue;
-      const { data, error } = await supabase.from("roastery_coffees").insert({ organisation_id: org.id, name: r.coffee.slice(0, 80), batch_kg: r.batch_kg ?? 30 }).select("id").single();
+      const { data, error } = await supabase.from("roastery_coffees").insert({ organisation_id: org.id, name: r.coffee, batch_kg: r.batch }).select("id").single();
       if (error) throw new Error(error.message);
       byName.set(k, data.id as string); newCoffees.push(r.coffee);
     }
-    const { data: have } = await supabase.from("roastery_roasts").select("recorder_name").eq("organisation_id", org.id).in("recorder_name", rows.map((r) => r.name));
-    const seen = new Set((have ?? []).map((x) => x.recorder_name as string));
-    const fresh = rows.filter((r) => !seen.has(r.name));
-    let added = 0;
-    for (const r of fresh) {
+    const { data: have, error: e1 } = await supabase.from("roastery_roasts").select("id, recorder_name, has_curve").eq("organisation_id", org.id).in("recorder_name", rows.map((r) => r.name));
+    if (e1) throw new Error(e1.message);
+    const seen = new Map((have ?? []).map((x) => [x.recorder_name as string, x as { id: string; has_curve: boolean }]));
+    let added = 0, curves = 0, already = 0;
+    for (const r of rows) {
+      const old = seen.get(r.name);
+      if (old) {
+        already++;
+        if (!old.has_curve && r.curve) {
+          const { error } = await supabase.from("roastery_roasts").update({ curve: r.curve }).eq("organisation_id", org.id).eq("id", old.id);
+          if (error) throw new Error(error.message);
+          curves++;
+        }
+        continue;
+      }
       const coffeeId = byName.get(r.coffee.toLowerCase())!;
-      const at = Number.isNaN(new Date(r.charge).getTime()) ? new Date().toISOString() : new Date(r.charge).toISOString();
-      const roasted = r.roasted_kg && r.batch_kg && r.roasted_kg <= r.batch_kg ? r.roasted_kg : null;
       const { data, error } = await supabase.from("roastery_roasts").insert({
-        organisation_id: org.id, coffee_id: coffeeId, roasted_at: at, green_kg: r.batch_kg, roasted_kg: roasted, profile: r.followed?.slice(0, 120) ?? null,
-        charge_c: r.charge_bean_c, turning_point_s: r.turning_point_s, first_crack_s: r.first_crack_s, first_crack_c: r.first_crack_bean_c,
-        end_s: r.end_s, drop_c: r.drop_bean_c, dtr_pct: r.dtr_pct, score: r.score != null && r.score <= 100 ? r.score : null, notes: r.notes?.slice(0, 2000) ?? null,
-        source: "recorder", recorder_name: r.name.slice(0, 200),
+        organisation_id: org.id, coffee_id: coffeeId, roasted_at: r.at, green_kg: r.batch, roasted_kg: r.roasted, profile: r.profile,
+        charge_c: r.charge_c, turning_point_s: r.tp, first_crack_s: r.fc, first_crack_c: r.fc_c, end_s: r.end, drop_c: r.drop, dtr_pct: r.dtr,
+        score: r.score, notes: r.notes, source: "recorder", recorder_name: r.name, curve: r.curve,
       }).select("id").single();
-      if (error) { if (/duplicate/.test(error.message)) continue; throw new Error(error.message); }
-      if (deduct) {
-        const { error: e2 } = await supabase.from("roastery_stock_moves").insert({ organisation_id: org.id, coffee_id: coffeeId, kind: "roasted", kg: -Number(r.batch_kg), roast_id: data.id, happened_at: at });
+      if (error) { if (/duplicate/.test(error.message)) { already++; continue; } throw new Error(error.message); }
+      if (r.deduct) {
+        const { error: e2 } = await supabase.from("roastery_stock_moves").insert({ organisation_id: org.id, coffee_id: coffeeId, kind: "roasted", kg: -r.batch, roast_id: data.id, happened_at: r.at });
         if (e2) throw new Error(e2.message);
       }
-      added++;
+      added++; if (r.curve) curves++;
     }
-    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "roastery.imported", entityType: "roastery_roast", summary: `${actorName(profile)} imported ${added} roast${added === 1 ? "" : "s"} from the roast recorder${deduct && added ? " (taken off green stock)" : ""}`, metadata: { added, skipped, already: rows.length - fresh.length, newCoffees } });
+    if (added || curves) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "roastery.imported", entityType: "roastery_roast", summary: `${actorName(profile)} imported ${added} roast${added === 1 ? "" : "s"}${curves ? ` (${curves} with roast graph${curves === 1 ? "" : "s"})` : ""}`, metadata: { added, curves, already, newCoffees } });
     done();
-    return { ok: true, data: { added, skipped, already: rows.length - fresh.length, newCoffees } };
+    return { ok: true, data: { added, curves, already, newCoffees } };
   } catch (e) { return fail(e); }
 }

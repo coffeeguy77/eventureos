@@ -110,3 +110,70 @@ function splitCsv(text: string): string[][] {
 }
 
 export const mmss = (s: number | null | undefined) => (s == null ? "–" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
+
+/* ------------------------------------------------------------------ roast curves */
+
+/**
+ * A roast's curve, stored compactly: one sample every `step` seconds from charge (t = 0). Temperatures in °C to 0.1,
+ * burner in %. `burner` is what the burner actually did; `burner_sp` what it was set to; `air_sp` the air setpoint.
+ */
+export interface Curve { step: number; bt: (number | null)[]; et: (number | null)[]; burner?: (number | null)[]; burner_sp?: (number | null)[]; air_sp?: (number | null)[] }
+
+export const CURVE_MAX_S = 3600;
+
+/** Check and tidy a curve from an import (it comes from the browser, so nothing is trusted). */
+export function cleanCurve(raw: unknown): Curve | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const step = Number(o.step);
+  if (!Number.isFinite(step) || step < 1 || step > 10) return null;
+  const max = Math.floor(CURVE_MAX_S / step) + 1;
+  const arr = (v: unknown, lo: number, hi: number, dp: number) => {
+    if (!Array.isArray(v) || !v.length) return undefined;
+    return v.slice(0, max).map((x) => { const n = typeof x === "number" ? x : Number(x); return x === null || x === "" || !Number.isFinite(n) || n < lo || n > hi ? null : Math.round(n * 10 ** dp) / 10 ** dp; });
+  };
+  const bt = arr(o.bt, -20, 400, 1);
+  if (!bt || bt.filter((x) => x != null).length < 10) return null;
+  const c: Curve = { step, bt, et: arr(o.et, -20, 600, 1) ?? [] };
+  const b = arr(o.burner, 0, 101, 0), bs = arr(o.burner_sp, 0, 101, 0), a = arr(o.air_sp, 0, 600, 0);
+  if (b) c.burner = b; if (bs) c.burner_sp = bs; if (a) c.air_sp = a;
+  return c;
+}
+
+/**
+ * Build a curve from a roast CSV: the W45A roast recorder's roast files (t_roast_s, bean_temp_c, air_temp_c, burner_pct,
+ * burner_sp_pct, air_temp_sp_c) or the Profiler beta export (t_s, …). Samples every `step` seconds from charge.
+ */
+export function curveFromCsv(text: string, step = 2): Curve | null {
+  const lines = splitCsv(text.replace(/^﻿/, ""));
+  if (lines.length < 3) return null;
+  const head = lines[0].map((h) => h.trim());
+  const ix = (...names: string[]) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+  const iT = ix("t_roast_s", "t_s"), iB = ix("bean_temp_c"), iE = ix("air_temp_c"), iP = ix("burner_pct"), iS = ix("burner_sp_pct"), iA = ix("air_temp_sp_c");
+  if (iT < 0 || iB < 0) return null;
+  const at = new Map<number, string[]>(), gap = new Map<number, number>();
+  for (const r of lines.slice(1)) {
+    const t = Number(r[iT]);
+    if (r[iT] === "" || !Number.isFinite(t) || t < 0 || t > CURVE_MAX_S) continue;
+    const k = Math.round(t / step), d = Math.abs(t - k * step);
+    if (!at.has(k) || d < gap.get(k)!) { at.set(k, r); gap.set(k, d); }
+  }
+  if (!at.size) return null;
+  const last = Math.max(...at.keys());
+  const pick = (i: number) => (i < 0 ? undefined : Array.from({ length: last + 1 }, (_, k) => { const r = at.get(k); const v = r ? Number(r[i]) : NaN; return r && r[i] !== "" && Number.isFinite(v) ? v : null; }));
+  return cleanCurve({ step, bt: pick(iB), et: pick(iE), burner: pick(iP), burner_sp: pick(iS), air_sp: pick(iA) });
+}
+
+/** Rate of rise (°C/min) over `windowS` seconds at each sample. */
+export function rorOf(c: Curve, windowS = 30): (number | null)[] {
+  const k = Math.max(1, Math.round(windowS / c.step));
+  return c.bt.map((v, i) => { const p = c.bt[i - k]; return i >= k && v != null && p != null ? Math.round((v - p) * (60 / (k * c.step)) * 10) / 10 : null; });
+}
+
+/** A roast for import: from the recorder (index.csv row + its roast CSV) or an import bundle (.json). */
+export interface ImportRoast {
+  name: string; charge: string; coffee: string; batch_kg: number; roasted_kg?: number | null; profile?: string | null;
+  charge_bean_c?: number | null; turning_point_s?: number | null; first_crack_s?: number | null; first_crack_bean_c?: number | null;
+  end_s?: number | null; drop_bean_c?: number | null; dtr_pct?: number | null; score?: number | null; notes?: string | null;
+  curve?: Curve | null; deduct?: boolean;
+}
