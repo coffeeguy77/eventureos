@@ -1,4 +1,5 @@
 import { HostingPills, hostingByClient } from "@/components/hosting/pills";
+import { ClubOnClient } from "@/components/club/client-strip";
 import { AccountPanel } from "@/components/accounts/account-panel";
 import Link from "next/link";
 import { NotConnected } from "@/components/ui/connect-link";
@@ -277,6 +278,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               )}
               {lastContact && <span className="text-ink-faint">· Last email {relative(lastContact)}</span>}
             </div>
+            {canManage(role) && ((org.settings ?? {}) as { uses_events?: unknown }).uses_events !== false && <ClubOnClient orgId={org.id} orgSettings={org.settings} customerId={c.id} />}
           </div>
           <div className="flex w-full gap-2 sm:w-auto">
             <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">New event for this client</ButtonLink>

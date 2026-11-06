@@ -44,7 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     franchise: appAllowed(access, "franchise") && readSite((org as unknown as { settings: unknown }).settings).pages.some((p) => p.layout === "franchise" || p.form === "franchise"),
     hire: hireOn(access, org.settings),
     // apps this business doesn't have — and Events when it doesn't run events (Settings → Enquiries)
-    locked: [...APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths), ...(((org.settings ?? {}) as { uses_events?: unknown }).uses_events === false ? ["/events"] : [])],
+    locked: [...APPS.filter((a) => !appAllowed(access, a.key)).flatMap((a) => a.paths), ...(((org.settings ?? {}) as { uses_events?: unknown }).uses_events === false ? ["/events", "/cart-club"] : [])],
     sections,
     labels: { "/hosting": readHosting(org.settings).menuLabel },
   };

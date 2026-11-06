@@ -110,3 +110,10 @@ test("page sections, menu flag and logo size", async () => {
   assert.equal(readSite({}).logoSize, "md");
   assert.deepEqual(readSections("x"), []);
 });
+
+test("Cart Club addresses on the business's own domain", () => {
+  const site = readSite({ site: { domain: "www.example.com.au" } });
+  assert.deepEqual(routeFor(site, "biz", "/hotelrealm", [], null, true, ["hotelrealm"]), { kind: "rewrite", to: "/club/biz/hotelrealm" });
+  assert.deepEqual(routeFor(site, "biz", "/hotelrealm/welcome", [], null, true, ["hotelrealm"]), { kind: "rewrite", to: "/club/biz/hotelrealm/welcome" });
+  assert.deepEqual(routeFor(site, "biz", "/club/biz/hotelrealm", [], null, true, ["hotelrealm"]), { kind: "pass" });
+});

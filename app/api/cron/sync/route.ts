@@ -84,6 +84,13 @@ export async function GET(req: NextRequest) {
     rosterJobs = await runRosterJobs(db);
   } catch (e) { rosterJobs = { error: e instanceof Error ? e.message : String(e) }; }
 
+  // Cart Club: follow-ups for quotes not booked a week out, and month-end invoices (quietly nothing before the 0101 update)
+  let clubJobs: unknown = null;
+  try {
+    const { runClubJobs } = await import("@/lib/club/server");
+    clubJobs = await runClubJobs(db);
+  } catch (e) { clubJobs = { error: e instanceof Error ? e.message : String(e) }; }
+
   // Course bookings: reminders, thank-yous, scheduled gift certificates, unpaid seat holds (quietly nothing before the 0049 update)
   let bookingJobs: unknown = null;
   try {
@@ -239,5 +246,5 @@ export async function GET(req: NextRequest) {
     greenCoffee = left > 100_000 ? await runGreenImports(db, Math.min(200_000, left)) : { waiting: "not enough time left in this run" };
   } catch (e) { greenCoffee = { error: e instanceof Error ? e.message : String(e) }; }
 
-  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, roster: rosterJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, greenCoffee, classbento, learn });
+  return NextResponse.json({ ok: true, ran: results.length, results, emailSetup, recurring, hosting, bookings: bookingJobs, roster: rosterJobs, cartClub: clubJobs, jobBoard, shop: shopJobs, pricing: pricingJobs, reminders, paymentReminders, promiseReminders, planCharges, paidFollowUps, wholesale, kitchen, shopEmails, greenCoffee, classbento, learn });
 }

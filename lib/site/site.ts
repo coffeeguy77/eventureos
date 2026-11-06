@@ -49,7 +49,7 @@ export const SITE_IMAGES = ["hero", "about", "classes", "hire", "hireshop", "aca
 /** The public sections that live under /<section>/<business>/… */
 export const SECTIONS = ["hire", "shop", "cafe", "jobs", "academy", "book", "site"] as const;
 /** Page addresses a business can't use (they're EventureOS's own). */
-const TAKEN = new Set<string>([...SECTIONS, "classes", "api", "auth", "media", "fonts", "brand", "p", "q", "pay", "order", "print", "login", "signup", "admin", "dashboard", "sitemap.xml", "robots.txt", "_next"]);
+const TAKEN = new Set<string>([...SECTIONS, "classes", "api", "auth", "media", "fonts", "brand", "p", "q", "pay", "order", "print", "login", "signup", "club", "admin", "dashboard", "sitemap.xml", "robots.txt", "_next"]);
 
 const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, n: number, d = "") => (typeof v === "string" ? v.trim().slice(0, n) : d);
@@ -179,7 +179,9 @@ export function routeFor(site: SiteSettings, slug: string, rawPath: string, extr
   /** agency sites (Nerd Herd businesses): their built-in service pages, and the home page is always the agency home */
   agency: { pages: readonly string[] } | null = null,
   /** the business takes class bookings (otherwise "/" is always the website home) */
-  classes = true): Route {
+  classes = true,
+  /** Cart Club addresses (e.g. /hotelrealm) for this business's special clients */
+  clubs: readonly string[] = []): Route {
   const path = rawPath || "/";
   if (/^\/(_next|api|auth|media|fonts|brand|downloads)(\/|$)/.test(path) || path === "/favicon.ico" || path === "/manifest.webmanifest" || path === "/embed.js") return { kind: "pass" };
   if (path === "/sitemap.xml") return { kind: "rewrite", to: `/api/site/sitemap?org=${slug}` };
@@ -193,6 +195,8 @@ export function routeFor(site: SiteSettings, slug: string, rawPath: string, extr
     return { kind: "rewrite", to: `/${first}/${slug}${segs.length > 1 ? "/" + segs.slice(1).join("/") : ""}` };
   }
   if (first === slug) return { kind: "pass" };
+  if (first === "club" && segs[1] === slug) return { kind: "pass" };
+  if (clubs.includes(first)) return { kind: "rewrite", to: `/club/${slug}/${first}${segs.length > 1 ? "/" + segs.slice(1).join("/") : ""}` };
   if (first === "classes" && segs.length === 1) return { kind: "rewrite", to: `/${slug}` };
   if (segs.length === 1 && site.pages.some((p) => p.slug === first)) return { kind: "rewrite", to: `/site/${slug}/${first}` };
   if (agency && segs.length === 1 && agency.pages.includes(first)) return { kind: "rewrite", to: `/site/${slug}/${first}` };
