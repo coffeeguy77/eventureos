@@ -11,7 +11,7 @@ import { addDaysISO } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AccountForm, CancelBooking, ClubToggle, PeoplePanel, ResyncRuns, type PersonView } from "@/components/club/office";
+import { AccountForm, CancelBooking, ClubToggle, OpenAsStaff, PeoplePanel, ResyncRuns, type PersonView } from "@/components/club/office";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cart Club client" };
@@ -86,10 +86,13 @@ export default async function CartClubAccount({ params }: { params: Promise<{ id
             <AccountForm a={a} wholesale={(wholesale ?? []) as { id: string; name: string }[]} urlPrefix={prefix} />
           </Card>
         </div>
-        <Card className="self-start">
+        <div className="space-y-5 self-start">
+        {a.enabled && <Card><OpenAsStaff accountId={a.id} people={((people ?? []) as PersonView[]).filter((p) => p.active).map((p) => ({ id: p.id, name: p.name }))} /></Card>}
+        <Card>
           <CardHeader title="People" subtitle="Anyone here can sign in, make quotes and book. Their name goes on what they do." />
           <PeoplePanel accountId={a.id} people={(people ?? []) as PersonView[]} smsReady={twilio?.status === "connected"} />
         </Card>
+        </div>
       </div>
     </>
   );

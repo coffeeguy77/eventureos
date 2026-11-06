@@ -319,3 +319,24 @@ export async function searchClubCustomers(q: string): Promise<R<{ id: string; na
     return { ok: true, data: (data ?? []) as { id: string; name: string; email: string | null }[] };
   } catch (e) { return fail(e); }
 }
+
+/** Open the client's page from the office — as yourself, or on behalf of one of their people. Returns the page address. */
+export async function openClubAsStaff(accountId: string, personId: string | null): Promise<R<string>> {
+  try {
+    const { db, org, user, profile } = await manager();
+    const a = await account(db, org.id, accountId);
+    if (!a.enabled) throw new Error("Switch the club on first.");
+    let pid: string | null = null;
+    if (personId) {
+      if (!UUID.test(personId)) throw new Error("Refresh and try again.");
+      const { data: p } = await db.from("cart_club_people").select("id").eq("id", personId).eq("account_id", a.id).maybeSingle();
+      if (!p) throw new Error("That person isn't on this club any more.");
+      pid = p.id as string;
+    }
+    const { startStaffView } = await import("@/lib/club/auth");
+    await startStaffView(a.id, { userId: user.id, name: actorName(profile) }, pid);
+    // Always the EventureOS address: the staff pass is a cookie for this site
+    const { appBaseUrl } = await import("@/lib/integrations/registry");
+    return { ok: true, data: `${appBaseUrl()}/club/${org.slug}/${a.slug}` };
+  } catch (e) { return fail(e); }
+}

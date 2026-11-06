@@ -1,7 +1,7 @@
 "use server";
 
-import { clubCtx, saveQuote, bookQuote, removeQuote, type QuoteInput } from "@/lib/club/server";
-import { currentPerson, requestCode, signOut, redeemWelcomeLink, verifyCode } from "@/lib/club/auth";
+import { clubCtx, saveQuote, bookQuote, removeQuote, updateBooked, type QuoteInput } from "@/lib/club/server";
+import { currentViewer, requestCode, signOut, redeemWelcomeLink, verifyCode } from "@/lib/club/auth";
 
 type R<T = null> = { ok: true; data: T } | { ok: false; error: string };
 const gone = { ok: false as const, error: "This booking page isn't available. Please contact us." };
@@ -13,7 +13,7 @@ async function ctx(org: string, club: string) {
 }
 async function signedIn(org: string, club: string) {
   const c = await ctx(org, club);
-  const p = await currentPerson(c);
+  const p = await currentViewer(c);
   if (!p) throw new Error("You've been signed out — sign in again.");
   return { c, p };
 }
@@ -44,10 +44,18 @@ export async function signOutAction(org: string, club: string): Promise<R> {
   try { await signOut(await ctx(org, club)); return { ok: true, data: null }; } catch (e) { return fail(e); }
 }
 
-export async function saveQuoteAction(org: string, club: string, id: string | null, input: QuoteInput, book: boolean): Promise<R<{ id: string; invoice: string | null; booked: boolean }>> {
+export async function saveQuoteAction(org: string, club: string, id: string | null, input: QuoteInput, book: boolean): Promise<R<{ id: string; invoice: string | null; booked: boolean; changed?: boolean; invoiceToFix?: string | null }>> {
   try {
     const { c, p } = await signedIn(org, club);
     const qid = id && /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+    if (qid && p.staff) {
+      const { data: cur } = await c.db.from("cart_club_bookings").select("status").eq("id", qid).eq("account_id", c.account.id).maybeSingle();
+      if (cur?.status === "booked") {
+        const u = await updateBooked(c, { name: p.name }, qid, input);
+        if (!u.ok) return u;
+        return { ok: true, data: { id: qid, invoice: null, booked: true, changed: true, invoiceToFix: u.data.invoice } };
+      }
+    }
     const s = await saveQuote(c, { id: p.id, name: p.name }, qid, input);
     if (!s.ok) return s;
     if (!book) return { ok: true, data: { id: s.data.id, invoice: null, booked: false } };

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
 import { OFFERS, OFFER_LABEL, type ClubRates, type Offer, type StandardOrder } from "@/lib/club/core";
 import {
-  addClubPerson, addFoundPeople, addToClub, cancelClubBooking, findClubPeople, removeClubPerson, resyncClubRuns, saveClubAccount, saveClubSettings,
+  addClubPerson, addFoundPeople, addToClub, cancelClubBooking, findClubPeople, openClubAsStaff, removeClubPerson, resyncClubRuns, saveClubAccount, saveClubSettings,
   searchClubCustomers, sendClubWelcomes, setClubEnabled, updateClubPerson, type FoundPerson,
 } from "@/app/(app)/cart-club/actions";
 
@@ -307,4 +307,35 @@ export function ResyncRuns({ id }: { id: string }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   return <Button size="sm" disabled={busy} onClick={() => start(async () => { await resyncClubRuns(id); router.refresh(); })}>{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Redo deliveries on calendar</Button>;
+}
+
+/* ------------------------------------------------------------------ open their page as staff */
+
+export function OpenAsStaff({ accountId, people }: { accountId: string; people: { id: string; name: string }[] }) {
+  const [who, setWho] = useState("");
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const go = () => start(async () => {
+    setErr(null);
+    const r = await openClubAsStaff(accountId, who || null);
+    if (r.ok) { setUrl(r.data); window.open(r.data, "_blank", "noopener"); } else setErr(r.error);
+  });
+  return (
+    <div className="space-y-2 p-4 sm:p-5">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[200px] flex-1">
+          <Label>Open their page</Label>
+          <Select value={who} onChange={(e) => setWho(e.target.value)}>
+            <option value="">As me (staff)</option>
+            {people.map((p) => <option key={p.id} value={p.id}>On behalf of {p.name}</option>)}
+          </Select>
+        </div>
+        <Button variant="primary" disabled={busy} onClick={go}>{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Open</Button>
+      </div>
+      <p className="text-[0.75rem] text-ink-muted">No code needed. You can make quotes, book, and change bookings that are already booked (they can&apos;t). “On behalf of” puts their name on it and sends the confirmation to them. Lasts 8 hours on this browser.</p>
+      {url && <a href={url} target="_blank" rel="noopener" className="inline-block text-[0.8125rem] font-medium text-brand-700 underline">Didn&apos;t open? Tap here for their page</a>}
+      <FormError message={err} />
+    </div>
+  );
 }

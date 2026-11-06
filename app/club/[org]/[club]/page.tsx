@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { clubCtx, accountBookings } from "@/lib/club/server";
-import { currentPerson } from "@/lib/club/auth";
+import { currentViewer } from "@/lib/club/auth";
 import { orderLink } from "@/lib/wholesale/orders";
 import { todayISO } from "@/lib/format";
 import { addDays } from "@/lib/events/days";
@@ -28,7 +28,7 @@ export default async function ClubPage({ params, searchParams }: P) {
   // On the business's own domain the page lives at /<club>; on EventureOS at /club/<business>/<club>
   const base = (await headers()).get("x-site-host") ? `/${club}` : `/club/${org}/${club}`;
   const brand = { name: c.org.name, logo: c.org.logo_url && /^https:\/\//.test(c.org.logo_url) ? c.org.logo_url : null, colour: safeColour(c.org.brand_colour), phone: c.org.contact_phone, email: c.org.settings.reply_to ?? c.org.contact_email };
-  const person = await currentPerson(c);
+  const person = await currentViewer(c);
   if (!person) return <ClubLogin org={org} club={club} clubName={c.s.name} account={c.account.name} brand={brand} />;
 
   const today = todayISO(c.org.timezone);
@@ -41,7 +41,7 @@ export default async function ClubPage({ params, searchParams }: P) {
   return (
     <ClubApp
       org={org} club={club} base={base} clubName={c.s.name} account={c.account.name} brand={brand} today={today}
-      me={{ id: person.id, name: person.name }} offers={c.account.offers} rates={c.account.rates} standards={c.account.standard_orders}
+      me={{ id: person.id, name: person.name, staff: person.staff, actingFor: person.actingFor }} offers={c.account.offers} rates={c.account.rates} standards={c.account.standard_orders}
       billing={c.account.billing} bookings={bookings} wholesale={wholesale} open={sp.open && /^[0-9a-f-]{36}$/i.test(sp.open) ? sp.open : null}
     />
   );

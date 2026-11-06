@@ -136,6 +136,37 @@ export async function saveQuote(c: ClubCtx, by: { id: string | null; name: strin
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
+/**
+ * Office staff change a booking that's already booked: the booking, its job (dates, carts, venue) and the delivery runs
+ * follow. An invoice already raised isn't changed — the office is told so it can be updated.
+ */
+export async function updateBooked(c: ClubCtx, by: { name: string }, id: string, i: QuoteInput): Promise<R<{ id: string; invoice: string | null }>> {
+  try {
+    const { data: cur } = await c.db.from("cart_club_bookings").select("status, event_id, invoice_id, number, invoice:invoices(number, status)").eq("id", id).eq("account_id", c.account.id).maybeSingle();
+    if (!cur || cur.status !== "booked") throw new Error("That booking isn't there any more.");
+    const { order, p, title } = await priced(c, i, id);
+    const now = new Date().toISOString();
+    const first = order.days[0];
+    const { error } = await c.db.from("cart_club_bookings").update({
+      title, venue: t(i.venue, 300), address: t(i.address, 400), notes: t(i.notes, 4000), days: order.days, carts: order.carts, van: order.van, baristas: order.baristas, coffees: order.coffees,
+      lines: p.lines, subtotal: p.subtotal, total: p.total, first_day: first.date, last_day: order.days[order.days.length - 1].date, updated_by_name: by.name, updated_at: now,
+    }).eq("id", id);
+    if (error) throw new Error(error.message);
+    if (cur.event_id) {
+      await c.db.from("events").update({
+        name: `${title} — ${c.account.name}`.slice(0, 200), event_date: first.date, start_time: first.start, finish_time: first.finish, venue: t(i.venue, 300), address: t(i.address, 400),
+        fleet: { ...(order.carts ? { cart: order.carts } : {}), ...(order.van ? { van: order.van } : {}) }, fleet_dates: order.days.map((d) => d.date), crew_needed: order.baristas || null, serves: order.coffees || null,
+        days: order.days.length > 1 ? order.days.map((d) => ({ date: d.date, setup: null, start: d.start, finish: d.finish })) : [], customer_notes: t(i.notes, 4000),
+      }).eq("id", cur.event_id);
+      try { const { syncJobCalendar } = await import("@/lib/calendar/job-sync"); await syncJobCalendar(c.db, c.org.id, cur.event_id as string, { create: true, mode: "service" }); } catch (e) { console.error("[club] job calendar", e); }
+    }
+    try { await syncRuns(c.db, c.org, c.account); } catch (e) { console.error("[club] runs", e); }
+    const inv = cur.invoice as unknown as { number: string; status: string } | null;
+    if (inv) await c.db.from("notifications").insert({ organisation_id: c.org.id, type: "club.changed", title: `Invoice ${inv.number} may need updating`.slice(0, 200), body: `${by.name} changed Cart Club booking #${cur.number} ${title} — now ${money(p.total)} inc GST`.slice(0, 140), link: `/cart-club/${c.account.id}`, entity_type: "cart_club_booking", entity_id: id }).then(() => null, () => null);
+    return { ok: true, data: { id, invoice: inv?.number ?? null } };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
 export async function removeQuote(c: ClubCtx, id: string): Promise<R<null>> {
   const { data, error } = await c.db.from("cart_club_bookings").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", id).eq("account_id", c.account.id).eq("status", "quote").select("id");
   if (error) return { ok: false, error: error.message };

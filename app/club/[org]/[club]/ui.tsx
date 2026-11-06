@@ -78,10 +78,10 @@ export function ClubLogin({ org, club, clubName, account, brand }: { org: string
 /* ------------------------------------------------------------------ the club */
 
 interface Props {
-  org: string; club: string; base: string; clubName: string; account: string; brand: Brand; today: string; me: { id: string; name: string };
+  org: string; club: string; base: string; clubName: string; account: string; brand: Brand; today: string; me: { id: string | null; name: string; staff: string | null; actingFor: string | null };
   offers: Offer[]; rates: ClubRates; standards: StandardOrder[]; billing: "on_booking" | "monthly"; bookings: ClubBooking[]; wholesale: string | null; open: string | null;
 }
-type Draft = { id: string | null; title: string; venue: string; address: string; notes: string; days: ClubDay[]; carts: number; van: number; baristas: number; coffees: number; hours: number };
+type Draft = { booked?: boolean; id: string | null; title: string; venue: string; address: string; notes: string; days: ClubDay[]; carts: number; van: number; baristas: number; coffees: number; hours: number };
 
 const blank = (offers: Offer[]): Draft => ({ id: null, title: "", venue: "", address: "", notes: "", days: [{ date: "", start: null, finish: null }], carts: offers.includes("cart") ? 1 : 0, van: 0, baristas: 0, coffees: 0, hours: 0 });
 const fromBooking = (b: ClubBooking): Draft => ({ id: b.id, title: b.title, venue: b.venue ?? "", address: b.address ?? "", notes: b.notes ?? "", days: b.days.length ? b.days : [{ date: "", start: null, finish: null }], carts: b.carts, van: b.van, baristas: b.baristas, coffees: b.coffees, hours: 0 });
@@ -96,6 +96,7 @@ export function ClubApp(p: Props) {
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, start] = useTransition();
   const openBooking = (b: ClubBooking) => (b.status === "quote" ? setDraft(fromBooking(b)) : setViewing(b));
+  const editBooked = (b: ClubBooking) => { setViewing(null); setDraft({ ...fromBooking(b), booked: true }); };
   const upcoming = p.bookings.filter((b) => (b.last_day ?? "") >= p.today);
   const past = p.bookings.filter((b) => (b.last_day ?? "") < p.today).reverse();
   const quotes = upcoming.filter((b) => b.status === "quote").length;
@@ -108,9 +109,15 @@ export function ClubApp(p: Props) {
   return (
     <main className="min-h-screen bg-zinc-50 px-4 pb-16 pt-6">
       <div className="mx-auto max-w-4xl">
+        {p.me.staff && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-2.5 text-[0.8125rem] text-amber-900 ring-1 ring-amber-200">
+            <span><b>Staff view</b> — {p.me.actingFor ? `booking on behalf of ${p.me.actingFor} (their emails go to them)` : `you're in as ${p.me.staff}`}. The client sees this page without this bar.</span>
+            <button onClick={() => start(async () => { await signOutAction(p.org, p.club); router.refresh(); })} className="font-semibold underline">Leave staff view</button>
+          </div>
+        )}
         <Header brand={p.brand} clubName={p.clubName} account={p.account} right={
           <div className="flex items-center gap-3 text-[0.8125rem] text-zinc-600">
-            <span className="hidden sm:inline">Hi {p.me.name.split(/\s+/)[0]}</span>
+            <span className="hidden sm:inline">Hi {(p.me.actingFor ?? p.me.staff ?? p.me.name).split(/\s+/)[0]}</span>
             <button onClick={() => start(async () => { await signOutAction(p.org, p.club); router.refresh(); })} className="rounded-lg px-2.5 py-1.5 font-medium text-zinc-700 ring-1 ring-zinc-300 hover:bg-white">Sign out</button>
           </div>
         } />
@@ -160,7 +167,7 @@ export function ClubApp(p: Props) {
       </div>
 
       {draft && <Editor p={p} draft={draft} onClose={() => setDraft(null)} onDone={(m) => { setDraft(null); setFlash(m); router.refresh(); }} />}
-      {viewing && <Viewer b={viewing} brand={p.brand} onClose={() => setViewing(null)} />}
+      {viewing && <Viewer b={viewing} brand={p.brand} onClose={() => setViewing(null)} onEdit={p.me.staff ? () => editBooked(viewing) : undefined} />}
     </main>
   );
 }
@@ -280,6 +287,7 @@ function Editor({ p, draft, onClose, onDone }: { p: Props; draft: Draft; onClose
     setErr(null);
     const r = await saveQuoteAction(p.org, p.club, d.id, { title: d.title, venue: d.venue, address: d.address, notes: d.notes, order: { days, carts: d.carts, van: d.van, baristas: d.baristas, coffees: d.coffees } }, book);
     if (!r.ok) { setErr(r.error); return; }
+    if (r.data.changed) { onDone(`Booking changed — the job and deliveries are updated.${r.data.invoiceToFix ? ` Invoice ${r.data.invoiceToFix} wasn't changed: update it in Invoices.` : ""}`); return; }
     onDone(r.data.booked ? `${d.title} is booked${r.data.invoice ? ` — invoice ${r.data.invoice} is on its way` : ""}. You'll get a confirmation email.` : `Quote saved. It stays editable until someone books it.`);
   });
   const remove = () => start(async () => {
@@ -292,7 +300,7 @@ function Editor({ p, draft, onClose, onDone }: { p: Props; draft: Draft; onClose
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 sm:rounded-3xl sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
-          <div><p className="text-[0.75rem] font-semibold uppercase tracking-wide text-red-600">{d.id ? "Quote · not booked" : "New quote"}</p><h2 className="text-[1.25rem] font-semibold text-zinc-900">{d.title || "Your booking"}</h2></div>
+          <div><p className={`text-[0.75rem] font-semibold uppercase tracking-wide ${d.booked ? "text-amber-700" : "text-red-600"}`}>{d.booked ? "Booked · staff change" : d.id ? "Quote · not booked" : "New quote"}</p><h2 className="text-[1.25rem] font-semibold text-zinc-900">{d.title || "Your booking"}</h2></div>
           <button onClick={onClose} className="rounded-lg p-2 hover:bg-zinc-100" aria-label="Close"><X className="h-5 w-5 text-zinc-500" /></button>
         </div>
 
@@ -339,10 +347,10 @@ function Editor({ p, draft, onClose, onDone }: { p: Props; draft: Draft; onClose
         {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[0.8125rem] text-red-700 ring-1 ring-red-100">{err}</p>}
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-          {d.id && <button disabled={busy} onClick={remove} className="h-11 rounded-xl px-4 text-[0.875rem] font-medium text-red-700 hover:bg-red-50">Remove quote</button>}
+          {d.id && !d.booked && <button disabled={busy} onClick={remove} className="h-11 rounded-xl px-4 text-[0.875rem] font-medium text-red-700 hover:bg-red-50">Remove quote</button>}
           <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
-            <button disabled={busy} onClick={() => save(false)} className="h-11 rounded-xl bg-white px-4 text-[0.9375rem] font-medium text-zinc-800 ring-1 ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50">Save quote</button>
-            <button disabled={busy} onClick={() => save(true)} className="flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-white disabled:opacity-50" style={{ background: p.brand.colour }}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}<Lock className="h-4 w-4" />Book it</button>
+            {!d.booked && <button disabled={busy} onClick={() => save(false)} className="h-11 rounded-xl bg-white px-4 text-[0.9375rem] font-medium text-zinc-800 ring-1 ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50">Save quote</button>}
+            <button disabled={busy} onClick={() => save(!d.booked)} className="flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-[0.9375rem] font-semibold text-white disabled:opacity-50" style={{ background: p.brand.colour }}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}<Lock className="h-4 w-4" />{d.booked ? "Save changes" : "Book it"}</button>
           </div>
         </div>
         <p className="mt-2 text-right text-[0.75rem] text-zinc-500">Booking locks it in{p.billing === "monthly" ? " (invoiced at month end)" : " and sends your invoice"}.</p>
@@ -351,7 +359,7 @@ function Editor({ p, draft, onClose, onDone }: { p: Props; draft: Draft; onClose
   );
 }
 
-function Viewer({ b, brand, onClose }: { b: ClubBooking; brand: Brand; onClose: () => void }) {
+function Viewer({ b, brand, onClose, onEdit }: { b: ClubBooking; brand: Brand; onClose: () => void; onEdit?: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div className="max-h-[94dvh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white p-5 sm:rounded-3xl sm:p-6" onClick={(e) => e.stopPropagation()}>
@@ -367,6 +375,7 @@ function Viewer({ b, brand, onClose }: { b: ClubBooking; brand: Brand; onClose: 
           {b.notes && <div className="flex gap-3"><dt className="w-24 shrink-0 text-zinc-500">Notes</dt><dd className="whitespace-pre-line text-zinc-900">{b.notes}</dd></div>}
         </dl>
         <div className="mt-4"><Lines lines={b.lines} subtotal={b.subtotal} total={b.total} /></div>
+        {onEdit && <button onClick={onEdit} className="mt-4 h-10 w-full rounded-xl bg-amber-50 text-[0.875rem] font-semibold text-amber-900 ring-1 ring-amber-200">Staff: change this booking</button>}
         <p className="mt-4 flex items-center gap-2 text-[0.8125rem] text-zinc-500"><Lock className="h-4 w-4" />Booked and locked. Need a change? Contact {brand.name}{brand.phone ? ` on ${brand.phone}` : ""}.</p>
       </div>
     </div>

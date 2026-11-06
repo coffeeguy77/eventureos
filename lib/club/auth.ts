@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { brandOf } from "@/lib/bookings/server";
@@ -107,6 +107,53 @@ async function startSession(c: ClubCtx, personId: string) {
   (await cookies()).set(cookieName(c.account.id), token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_DAYS * 86400 });
 }
 
+/* ------------------------------------------------------------------ staff view (from the office) */
+
+const staffCookie = (accountId: string) => `eos_club_staff_${accountId.slice(0, 8)}`;
+const staffSecret = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.CRON_SECRET ?? "eventureos-club";
+const b64 = (s: string) => Buffer.from(s).toString("base64url");
+const sign = (accountId: string, body: string) => createHmac("sha256", staffSecret()).update(`${accountId}.${body}`).digest("base64url");
+
+/**
+ * A manager opens a client's page from the office — as themselves, or on behalf of one of the client's people
+ * (e.g. booking what someone asked for on the phone). A signed, short-lived cookie; no code needed.
+ */
+export async function startStaffView(accountId: string, staff: { userId: string; name: string }, personId: string | null, hours = 8) {
+  const body = b64(JSON.stringify({ u: staff.userId, n: staff.name.slice(0, 80), p: personId, e: Date.now() + hours * 3600e3 }));
+  (await cookies()).set(staffCookie(accountId), `${body}.${sign(accountId, body)}`, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: hours * 3600 });
+}
+
+async function staffView(c: ClubCtx): Promise<{ name: string; personId: string | null } | null> {
+  const raw = (await cookies()).get(staffCookie(c.account.id))?.value;
+  if (!raw) return null;
+  const [body, sig] = raw.split(".");
+  if (!body || !sig) return null;
+  const want = Buffer.from(sign(c.account.id, body)), got = Buffer.from(sig);
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
+  try {
+    const o = JSON.parse(Buffer.from(body, "base64url").toString()) as { n?: string; p?: string | null; e?: number };
+    if (!o.e || o.e < Date.now() || typeof o.n !== "string") return null;
+    return { name: o.n, personId: typeof o.p === "string" ? o.p : null };
+  } catch { return null; }
+}
+
+/** Who's using the club page: one of the client's people, or office staff (as themselves or for a person). */
+export interface ClubViewer { id: string | null; name: string; staff: string | null; actingFor: string | null }
+
+export async function currentViewer(c: ClubCtx): Promise<ClubViewer | null> {
+  const sv = await staffView(c);
+  if (sv) {
+    const first = sv.name.split(/\s+/)[0] || sv.name;
+    if (sv.personId) {
+      const { data: p } = await c.db.from("cart_club_people").select(PERSON_COLS).eq("id", sv.personId).eq("account_id", c.account.id).maybeSingle();
+      if (p) return { id: p.id as string, name: `${p.name as string} (entered by ${first})`, staff: sv.name, actingFor: p.name as string };
+    }
+    return { id: null, name: `${sv.name} (${c.org.name})`, staff: sv.name, actingFor: null };
+  }
+  const p = await currentPerson(c);
+  return p ? { id: p.id, name: p.name, staff: null, actingFor: null } : null;
+}
+
 /** The signed-in person at this club, or null. */
 export async function currentPerson(c: ClubCtx): Promise<ClubPerson | null> {
   const token = (await cookies()).get(cookieName(c.account.id))?.value;
@@ -127,6 +174,7 @@ export async function signOut(c: ClubCtx) {
   const token = jar.get(cookieName(c.account.id))?.value;
   if (token && /^[0-9a-f]{64}$/.test(token)) await c.db.from("cart_club_sessions").delete().eq("token_hash", sha(token));
   jar.set(cookieName(c.account.id), "", { path: "/", maxAge: 0 });
+  jar.set(staffCookie(c.account.id), "", { path: "/", maxAge: 0 });
 }
 
 /* ------------------------------------------------------------------ welcome (sent from the office) */
