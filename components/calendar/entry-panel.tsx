@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AlertTriangle, ArrowUpRight, CalendarClock, MapPin, RefreshCw } from "lucide-react";
 import { deleteCalendarEntry, moveCalendarEntry } from "@/app/(app)/calendar/actions";
+import { invoicesForJob } from "@/app/(app)/invoices/quick/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { FormError, Select } from "@/components/ui/form";
@@ -128,6 +129,8 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
           </div>
         )}
 
+        {canManage && !entry.appointmentId && <JobInvoices entry={entry} />}
+
         {canManage && <StaffSection refKey={entry.id} />}
 
         {entry.ghost ? null : canManage ? (
@@ -164,5 +167,32 @@ export function EntryPanel({ entry, entries, resources, google, canManage, onClo
         </div>
       </div>
     </Drawer>
+  );
+}
+
+/** The job's invoices — or "Create invoice" for a job booked over the phone (choose the customer, build it, send). */
+function JobInvoices({ entry }: { entry: Entry }) {
+  const [list, setList] = useState<{ id: string; number: string; total: number; status: string }[] | null>(entry.eventId ? null : []);
+  useEffect(() => {
+    if (!entry.eventId) return;
+    let live = true;
+    void invoicesForJob(entry.eventId).then((r) => { if (live) setList(r.ok ? r.data : []); });
+    return () => { live = false; };
+  }, [entry.eventId]);
+  const href = entry.ghost || entry.id.startsWith("job:") ? `/invoices/quick?event=${entry.eventId}` : `/invoices/quick?entry=${entry.id}`;
+  const aud = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n);
+  return (
+    <div className="rounded-lg border border-line p-3">
+      <p className="text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Invoice</p>
+      {list === null ? <p className="mt-1 text-[0.8125rem] text-ink-muted">Checking…</p>
+        : list.length ? (
+          <ul className="mt-1 space-y-1 text-[0.8125rem]">
+            {list.map((i) => (
+              <li key={i.id}><Link href={`/invoices/${i.id}`} className="flex items-center justify-between gap-2 font-medium text-ink hover:text-brand-700"><span>{i.number} · {aud(i.total)}</span><span className="text-[0.75rem] font-normal text-ink-muted">{i.status.replace(/_/g, " ")}</span></Link></li>
+            ))}
+          </ul>
+        ) : <p className="mt-1 text-[0.8125rem] text-rose-700">Not invoiced yet.</p>}
+      <ButtonLink href={href} size="sm" variant={list && !list.length ? "primary" : "secondary"} className="mt-2 h-10 w-full sm:h-8 sm:w-auto">{list && list.length ? "Another invoice" : "Create invoice"}</ButtonLink>
+    </div>
   );
 }
