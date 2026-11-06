@@ -31,7 +31,7 @@ export async function choosePrinter(all = false): Promise<string> {
   if (!b) throw new Error("This browser can't use Bluetooth printers.");
   const d = await b.requestDevice(all
     ? { acceptAllDevices: true, optionalServices: [SERVICE] }
-    : { filters: [{ services: [SERVICE] }, { namePrefix: "XX" }, { namePrefix: "ZQ" }, { namePrefix: "Zebra" }], optionalServices: [SERVICE] });
+    : { filters: [{ services: [SERVICE] }, { namePrefix: "XX" }, { namePrefix: "ZQ" }, { namePrefix: "Zebra" }, { namePrefix: "Emona" }], optionalServices: [SERVICE] });
   device = d; char = null;
   d.addEventListener("gattserverdisconnected", () => { char = null; });
   await ensure();
