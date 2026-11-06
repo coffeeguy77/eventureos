@@ -7,6 +7,7 @@ import { emailConfigured, sendEmail } from "@/lib/email/send";
 import { officeAlertEmail } from "@/lib/bookings/emails";
 import { fmtDateTime, money, todayISO, zonedTimeUTC } from "@/lib/format";
 import { readEvents } from "@/lib/events/core";
+import { incLineFromEx, lineTotals } from "@/lib/invoices/lines";
 import {
   cleanOffers, cleanOrder, cleanStandardOrders, daysText, deliveryDay, dueDate, followUpDue, lastMonth, orderProblem, pickupDay, priceOrder,
   readCodes, readRates, runsFor, OFFER_LABEL, type ClubCodes, type ClubDay, type ClubRates, type Offer, type Priced, type PricedLine, type StandardOrder,
@@ -257,9 +258,8 @@ export async function invoiceBookings(db: SupabaseClient, org: PublicOrg, a: Clu
   const today = todayISO(org.timezone);
   const lines = bookings.flatMap((b) => [
     ...(bookings.length > 1 || b.title ? [{ description: `${b.title} — ${daysText(b.days)}${b.venue ? ` · ${b.venue}` : ""} (booked by ${b.booked_by_name ?? "your team"})`, quantity: 1, unit_amount: 0, tax_rate: 10 as const, inc: true as const }] : []),
-    ...b.lines.map((l) => ({ description: `${l.label}\n${l.note}`, quantity: l.qty, unit_amount: Math.round(l.unit * 1.1 * 100) / 100, tax_rate: 10 as const, item_code: codes[KEY_CODE[l.key]] || null, inc: true as const })),
+    ...b.lines.map((l) => incLineFromEx(`${l.label}\n${l.note}`, l.qty, l.unit, { item_code: codes[KEY_CODE[l.key]] || null })),
   ]);
-  const { lineTotals } = await import("@/lib/invoices/lines");
   const tot = lineTotals(lines);
   const firstDay = bookings.map((b) => b.first_day).filter(Boolean).sort()[0] ?? null;
   const due = dueDate(a.due_rule, a.due_days, today, firstDay);

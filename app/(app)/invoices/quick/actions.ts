@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { money, todayISO } from "@/lib/format";
-import { cleanLines, lineTotals, type InvLine } from "@/lib/invoices/lines";
+import { cleanLines, incLineFromEx, lineTotals, type InvLine } from "@/lib/invoices/lines";
 
 type R<T = null> = { ok: true; data: T } | { ok: false; error: string };
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -32,7 +32,9 @@ function asIncLines(raw: RawLine[], subtotal: number, total: number): InvLine[] 
     const qty = Number(l.quantity);
     const each = l.line_amount != null && Math.abs(Number(l.line_amount) - qty * Number(l.unit_amount ?? 0)) > 0.005 ? Number(l.line_amount) / qty : Number(l.unit_amount ?? 0);
     const gst = l.tax_rate === 0 ? 0 : 10;
-    return { description: String(l.description).trim(), quantity: qty, unit_amount: r2(exGst && gst ? each * 1.1 : each), tax_rate: gst as 0 | 10, item_code: l.item_code ?? null, account_code: l.account_code ?? null, service_id: null, inc: true as const };
+    const extra = { item_code: l.item_code ?? null, account_code: l.account_code ?? null };
+    if (exGst && gst) return incLineFromEx(String(l.description).trim(), qty, Math.round(each * 10000) / 10000, extra);
+    return { description: String(l.description).trim(), quantity: qty, unit_amount: r2(each), tax_rate: gst as 0 | 10, ...extra, service_id: null, inc: true as const };
   });
 }
 
@@ -164,5 +166,32 @@ export async function invoicesForJob(eventId: string): Promise<R<{ id: string; n
     const { data, error } = await supabase.from("invoices").select("id, number, total, status").eq("organisation_id", org.id).eq("event_id", eventId).neq("status", "void").order("issue_date");
     if (error) throw new Error(error.message);
     return { ok: true, data: ((data ?? []) as { id: string; number: string; total: number; status: string }[]).map((x) => ({ ...x, total: Number(x.total) })) };
+  } catch (e) { return fail(e); }
+}
+
+/** A new customer from someone invited to the calendar entry (name, email, phone from the notes). */
+export async function customerFromInvite(i: { name: string; company: string; email: string; phone: string }): Promise<R<{ id: string; name: string; existed: boolean }>> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const t = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+    const person = t(i.name, 160);
+    const company = t(i.company, 160);
+    const email = t(i.email, 254)?.toLowerCase() ?? null;
+    if (!person && !company) throw new Error("Add their name or company.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("That email doesn't look right.");
+    if (email) {
+      const { data: same } = await supabase.from("customers").select("id, name").eq("organisation_id", org.id).ilike("email", email.replace(/[%_\\]/g, "\\$&")).limit(1).maybeSingle();
+      if (same) return { ok: true, data: { id: same.id as string, name: same.name as string, existed: true } };
+    }
+    const name = company ?? person!;
+    const { data, error } = await supabase.from("customers").insert({ organisation_id: org.id, kind: company ? "company" : "individual", name, company, email, phone: t(i.phone, 40), created_by: user.id }).select("id").single();
+    if (error) throw new Error(error.message);
+    if (person) {
+      const parts = person.split(/\s+/);
+      await supabase.from("contacts").insert({ organisation_id: org.id, customer_id: data.id, first_name: parts[0], last_name: parts.slice(1).join(" ") || null, email, phone: t(i.phone, 40), is_primary: true, created_by: user.id });
+    }
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.created", entityType: "customer", entityId: data.id as string, customerId: data.id as string, summary: `${actorName(profile)} added client ${name} (from a calendar invite)` });
+    revalidatePath("/clients");
+    return { ok: true, data: { id: data.id as string, name, existed: false } };
   } catch (e) { return fail(e); }
 }

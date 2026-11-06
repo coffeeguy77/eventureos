@@ -3,25 +3,33 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Copy, Loader2, Plus, Send, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Copy, ExternalLink, Loader2, Plus, Send, Trash2, UserPlus } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form";
 import { addDaysISO, fmtDate, money } from "@/lib/format";
-import { lineTotals, type InvLine } from "@/lib/invoices/lines";
+import { incLineFromEx, lineTotals, type InvLine } from "@/lib/invoices/lines";
 import { priceOrder, readRates } from "@/lib/club/core";
-import { clubRatesFor, createJobInvoice, pastInvoices, type PastInvoice } from "@/app/(app)/invoices/quick/actions";
+import { clubRatesFor, createJobInvoice, customerFromInvite, pastInvoices, type PastInvoice } from "@/app/(app)/invoices/quick/actions";
 
-interface Svc { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; code: string | null; xero_account_code: string | null; category: string | null }
+interface Svc { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit?: string | null; code: string | null; xero_account_code: string | null; category: string | null }
+export interface Invitee { email: string; name: string | null; match: { id: string; name: string } | null }
+export interface CalDetails {
+  title: string; when: string; start: string | null; finish: string | null; location: string | null; notes: string; link: string | null;
+  phones: string[]; coffees: number | null; setup: string | null; serviceStart: string | null; serviceFinish: string | null;
+}
+const hoursBetween = (a: string | null, b: string | null) => { if (!a || !b) return 0; const m = (Number(b.slice(0, 2)) * 60 + Number(b.slice(3, 5))) - (Number(a.slice(0, 2)) * 60 + Number(a.slice(3, 5))); return m > 0 ? Math.round((m / 60) * 100) / 100 : 0; };
 type Row = { key: string; description: string; quantity: string; unit: string; gst: boolean; item_code: string | null; account_code: string | null; service_id: string | null };
 const num = (v: string) => { const n = Number(String(v).replace(/[$,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
 const key = () => `r${Math.random().toString(36).slice(2, 9)}`;
 const fromLine = (l: InvLine): Row => ({ key: key(), description: l.description, quantity: String(l.quantity), unit: l.unit_amount.toFixed(2), gst: l.tax_rate === 10, item_code: l.item_code ?? null, account_code: l.account_code ?? null, service_id: l.service_id ?? null });
 
-export function QuickInvoice({ entryId, eventId, customers, priceList, initial, existing, today, terms, currency }: {
+export function QuickInvoice({ entryId, eventId, customers: allCustomers, priceList, initial, existing, today, terms, currency, cal, invitees }: {
   entryId: string | null; eventId: string | null; customers: { id: string; name: string; terms: number | null }[]; priceList: Svc[];
   initial: { customer: string; name: string; date: string; venue: string }; existing: { id: string; number: string; total: number }[]; today: string; terms: number; currency: string;
+  cal: CalDetails | null; invitees: Invitee[];
 }) {
+  const [customers, setCustomers] = useState(allCustomers);
   const router = useRouter();
   const [customerId, setCustomerId] = useState(initial.customer);
   const [filter, setFilter] = useState("");
@@ -35,7 +43,10 @@ export function QuickInvoice({ entryId, eventId, customers, priceList, initial, 
   const [reference, setReference] = useState("");
   const [past, setPast] = useState<PastInvoice[] | null>(null);
   const [club, setClub] = useState<{ rates: Record<string, number>; offers: string[]; codes: Record<string, string> } | null>(null);
-  const [cb, setCb] = useState({ carts: 1, baristas: 0, start: "", finish: "", coffees: 0 });
+  const svcStart = cal?.serviceStart ?? cal?.start ?? "";
+  const svcFinish = cal?.serviceFinish ?? cal?.finish ?? "";
+  const [cb, setCb] = useState({ carts: 1, baristas: svcStart && svcFinish ? 1 : 0, start: svcStart, finish: svcFinish, coffees: cal?.coffees ?? 0 });
+  const serviceHrs = hoursBetween(svcStart || null, svcFinish || null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, start] = useTransition();
 
@@ -65,13 +76,14 @@ export function QuickInvoice({ entryId, eventId, customers, priceList, initial, 
     const p = priceList.find((x) => x.id === id);
     if (!p) return;
     const inc = Math.round(Number(p.unit_price) * (1 + Number(p.tax_rate) / 100) * 100) / 100;
-    setRows((all) => [...all, { key: key(), description: [p.name, p.description?.trim()].filter(Boolean).join("\n"), quantity: "1", unit: inc.toFixed(2), gst: Number(p.tax_rate) > 0, item_code: p.code, account_code: p.xero_account_code, service_id: p.id }]);
+    const hourly = /hour|hr/i.test(`${p.unit ?? ""} ${p.name}`) && serviceHrs > 0;
+    setRows((all) => [...all, { key: key(), description: [p.name, p.description?.trim(), hourly ? `${svcStart}–${svcFinish}` : ""].filter(Boolean).join("\n"), quantity: hourly ? String(serviceHrs) : "1", unit: inc.toFixed(2), gst: Number(p.tax_rate) > 0, item_code: p.code, account_code: p.xero_account_code, service_id: p.id }]);
   };
   const fromClub = () => {
     if (!club) return;
     const r = readRates(club.rates);
     const p = priceOrder({ days: [{ date, start: cb.start || null, finish: cb.finish || null }], carts: club.offers.includes("cart") ? cb.carts : 0, van: 0, baristas: club.offers.includes("baristas") ? cb.baristas : 0, coffees: club.offers.includes("coffees") ? cb.coffees : 0 }, r);
-    setRows(p.lines.map((l) => ({ key: key(), description: `${l.label}\n${l.note}`, quantity: String(l.qty), unit: (Math.round(l.unit * 1.1 * 100) / 100).toFixed(2), gst: true, item_code: club.codes[l.key] || null, account_code: null, service_id: null })));
+    setRows(p.lines.map((l) => fromLine(incLineFromEx(`${l.label}\n${l.note}`, l.qty, l.unit, { item_code: club.codes[l.key] || null }))));
   };
 
   const submit = (send: boolean) => start(async () => {
@@ -92,6 +104,9 @@ export function QuickInvoice({ entryId, eventId, customers, priceList, initial, 
           This job already has {existing.length === 1 ? "an invoice" : "invoices"}: {existing.map((x, i) => <span key={x.id}>{i ? ", " : ""}<Link href={`/invoices/${x.id}`} className="font-medium text-brand-700 hover:underline">{x.number}</Link> ({money(x.total, currency)})</span>)}. You can still raise another (e.g. extras).
         </Card>
       )}
+
+      {cal && <FromCalendar cal={cal} invitees={invitees} date={initial.date} customerId={customerId} onPick={(id) => chooseCustomer(id)}
+        onCreated={(c) => { setCustomers((all) => all.some((x) => x.id === c.id) ? all : [{ id: c.id, name: c.name, terms: null }, ...all]); chooseCustomer(c.id); }} />}
 
       <Card>
         <CardHeader title="The job" />
@@ -132,6 +147,7 @@ export function QuickInvoice({ entryId, eventId, customers, priceList, initial, 
                     ))}
                   </ul>
                 )}
+              {rows.length > 0 && serviceHrs > 0 && <p className="mt-1.5 text-[0.75rem] text-ink-muted">The calendar says service {svcStart}–{svcFinish} ({serviceHrs} hrs){cal?.setup ? `, setup ${cal.setup}` : ""}{cal?.coffees ? `, ${cal.coffees} coffees` : ""}.</p>}
               {rows.length > 0 && <p className="mt-1.5 text-[0.75rem] text-amber-700">Check dates and times in the descriptions — they're copied as they were.</p>}
             </div>
 
@@ -201,5 +217,73 @@ export function QuickInvoice({ entryId, eventId, customers, priceList, initial, 
         <div className="px-4 pb-4 sm:px-5"><FormError message={err} /></div>
       </Card>
     </div>
+  );
+}
+
+/** What the calendar says about the job — notes, times, phone — and who was invited (use a client, or add one). */
+function FromCalendar({ cal, invitees, date, customerId, onPick, onCreated }: {
+  cal: CalDetails; invitees: Invitee[]; date: string; customerId: string; onPick: (id: string) => void; onCreated: (c: { id: string; name: string }) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [nc, setNc] = useState({ name: "", company: "", email: "", phone: "" });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const startAdd = (i: Invitee | null) => { setAdding(i?.email ?? "new"); setNc({ name: i?.name ?? "", company: "", email: i?.email ?? "", phone: cal.phones[0] ?? "" }); setErr(null); };
+  const create = () => start(async () => {
+    const r = await customerFromInvite(nc);
+    if (r.ok) { setAdding(null); onCreated({ id: r.data.id, name: r.data.name }); } else setErr(r.error);
+  });
+  const facts = [cal.setup && `Setup ${cal.setup}`, cal.serviceStart && cal.serviceFinish && `Service ${cal.serviceStart}–${cal.serviceFinish}`, cal.coffees && `${cal.coffees} coffees`, ...cal.phones].filter(Boolean) as string[];
+  return (
+    <Card>
+      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5">
+        <span className="flex min-w-0 items-center gap-2"><CalendarDays className="h-4 w-4 shrink-0 text-ink-faint" /><span className="truncate text-[0.875rem] font-semibold text-ink">From the calendar: {cal.title}</span></span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-ink-faint transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="space-y-4 border-t border-line p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink">
+            <span>{fmtDate(date, "weekday")} · {cal.when}</span>
+            {cal.location && <span className="text-ink-muted">{cal.location}</span>}
+            {cal.link && <a href={cal.link} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline">Google Calendar<ExternalLink className="h-3 w-3" /></a>}
+          </div>
+          {facts.length > 0 && <div className="flex flex-wrap gap-1.5">{facts.map((f) => <span key={f} className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[0.75rem] font-medium text-brand-800 ring-1 ring-inset ring-brand-200">{f}</span>)}</div>}
+          {cal.notes ? <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-zinc-50 p-3 font-sans text-[0.8125rem] leading-relaxed text-ink ring-1 ring-line">{cal.notes}</pre>
+            : <p className="text-[0.8125rem] text-ink-muted">No notes on this calendar entry.</p>}
+
+          <div>
+            <p className="mb-1.5 text-[0.75rem] font-medium uppercase tracking-wide text-ink-faint">Invited</p>
+            {!invitees.length && <p className="text-[0.8125rem] text-ink-muted">Nobody outside your team was invited.</p>}
+            <ul className="divide-y divide-line rounded-lg ring-1 ring-line empty:hidden">
+              {invitees.map((i) => (
+                <li key={i.email} className="flex flex-wrap items-center gap-2 px-3 py-2 text-[0.8125rem]">
+                  <div className="min-w-0 flex-1"><p className="font-medium text-ink">{i.name ?? i.email.split("@")[0]}</p><p className="truncate text-[0.75rem] text-ink-muted">{i.email}</p></div>
+                  {i.match ? (
+                    i.match.id === customerId ? <span className="text-[0.75rem] font-medium text-emerald-700">Billing {i.match.name}</span>
+                      : <Button size="sm" onClick={() => onPick(i.match!.id)}>Bill {i.match.name}</Button>
+                  ) : <Button size="sm" onClick={() => startAdd(i)}><UserPlus className="h-3.5 w-3.5" />New customer</Button>}
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => startAdd(null)} className="mt-2 text-[0.75rem] font-medium text-brand-700 hover:underline">+ Add a new customer by hand</button>
+          </div>
+
+          {adding && (
+            <div className="space-y-2 rounded-lg bg-zinc-50 p-3 ring-1 ring-line">
+              <p className="text-[0.8125rem] font-medium text-ink">New customer</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div><Label>Contact name</Label><Input value={nc.name} onChange={(e) => setNc({ ...nc, name: e.target.value })} /></div>
+                <div><Label hint="leave blank for a person">Company</Label><Input value={nc.company} onChange={(e) => setNc({ ...nc, company: e.target.value })} /></div>
+                <div><Label>Email</Label><Input type="email" value={nc.email} onChange={(e) => setNc({ ...nc, email: e.target.value })} /></div>
+                <div><Label>Phone</Label><Input value={nc.phone} onChange={(e) => setNc({ ...nc, phone: e.target.value })} inputMode="tel" /></div>
+              </div>
+              <div className="flex gap-2"><Button variant="primary" disabled={busy} onClick={create}>{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Add and bill them</Button><Button variant="ghost" onClick={() => setAdding(null)}>Cancel</Button></div>
+              <FormError message={err} />
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

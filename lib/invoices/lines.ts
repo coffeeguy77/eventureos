@@ -93,3 +93,14 @@ export function linesChangeSummary(before: InvLine[], after: InvLine[]) {
   const changed = after.filter((l) => { const b = was.get(key(l)); return b && (b.quantity !== l.quantity || b.unit_amount !== l.unit_amount || b.description !== l.description || b.tax_rate !== l.tax_rate); }).length;
   return [added.length ? `added ${added.join(", ")}` : "", removed.length ? `removed ${removed.join(", ")}` : "", changed ? `changed ${changed} line${changed === 1 ? "" : "s"}` : ""].filter(Boolean).join(", ") || "updated the lines";
 }
+
+/**
+ * A GST-inclusive line from an ex-GST price. When the GST-inclusive unit price would need more than 2 decimals
+ * (e.g. $2.25 + GST = $2.475), the line becomes one lot so the total is exact: "200 × $2.25 + GST".
+ */
+export function incLineFromEx(description: string, qty: number, unitEx: number, extra: Partial<InvLine> = {}): InvLine {
+  const each = unitEx * 1.1;
+  const exact = Math.abs(each * 100 - Math.round(each * 100)) < 1e-6;
+  if (exact || qty === 1) return { description, quantity: qty, unit_amount: r2(each), tax_rate: 10, item_code: null, account_code: null, service_id: null, ...extra, inc: true };
+  return { description: `${description}\n${qty} × $${unitEx.toFixed(2)} + GST`, quantity: 1, unit_amount: r2(qty * each), tax_rate: 10, item_code: null, account_code: null, service_id: null, ...extra, inc: true };
+}
