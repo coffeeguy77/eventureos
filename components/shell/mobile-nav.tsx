@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Award, Wrench, CalendarClock, Flame, CalendarHeart } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Award, Wrench, CalendarClock, Flame, CalendarHeart, PlugZap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -26,6 +26,7 @@ const MORE = [
   { href: "/quotes", label: "Quotes", icon: FileText },
   { href: "/bookings", label: "Bookings", icon: Ticket },
   { href: "/cart-club", label: "Cart Club", icon: CalendarHeart },
+  { href: "/test-tag", label: "Test & Tag", icon: PlugZap },
   { href: "/learn", label: "Learn", icon: GraduationCap },
   { href: "/store", label: "Shop", icon: Coffee },
   { href: "/wholesale", label: "Wholesale", icon: Truck },

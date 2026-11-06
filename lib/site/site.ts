@@ -49,7 +49,7 @@ export const SITE_IMAGES = ["hero", "about", "classes", "hire", "hireshop", "aca
 /** The public sections that live under /<section>/<business>/… */
 export const SECTIONS = ["hire", "shop", "cafe", "jobs", "academy", "book", "site"] as const;
 /** Page addresses a business can't use (they're EventureOS's own). */
-const TAKEN = new Set<string>([...SECTIONS, "classes", "api", "auth", "media", "fonts", "brand", "p", "q", "pay", "order", "print", "login", "signup", "club", "admin", "dashboard", "sitemap.xml", "robots.txt", "_next"]);
+const TAKEN = new Set<string>([...SECTIONS, "classes", "api", "auth", "media", "fonts", "brand", "p", "q", "pay", "order", "print", "login", "signup", "club", "tag", "admin", "dashboard", "sitemap.xml", "robots.txt", "_next"]);
 
 const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 const str = (v: unknown, n: number, d = "") => (typeof v === "string" ? v.trim().slice(0, n) : d);

@@ -5,7 +5,7 @@ import { NavLink as Link } from "./nav-link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Inbox, Workflow, FileText, CalendarCheck2, CalendarDays, Users, Receipt,
-  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Wrench, CalendarClock, Flame, CalendarHeart } from "lucide-react";
+  CreditCard, Ticket, Wallet, Globe, BarChart3, Settings, ShieldCheck, Briefcase, ListTodo, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Wrench, CalendarClock, Flame, CalendarHeart, PlugZap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { canOpen } from "@/lib/access";
 import { BusinessRail, type OrgChip } from "./business-rail";
@@ -20,6 +20,7 @@ const NAV = [
   { href: "/events", label: "Events", icon: CalendarCheck2 },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/cart-club", label: "Cart Club", icon: CalendarHeart },
+  { href: "/test-tag", label: "Test & Tag", icon: PlugZap },
   { href: "/kitchen", label: "Kitchen", icon: ChefHat },
   { href: "/bookings", label: "Bookings", icon: Ticket },
   { href: "/learn", label: "Learn", icon: GraduationCap },
