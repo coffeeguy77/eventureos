@@ -22,11 +22,16 @@ export const bleSupported = () => !!bt();
 export const printerName = () => device?.name ?? null;
 export const isIOS = () => typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
 
-/** Choose the printer (the browser shows its list). */
-export async function choosePrinter(): Promise<string> {
+/**
+ * Choose the printer (the browser shows its list). By default only devices offering Zebra's print service are listed,
+ * so phones, TVs and other gear don't clutter it; `all` lists every Bluetooth device nearby.
+ */
+export async function choosePrinter(all = false): Promise<string> {
   const b = bt();
   if (!b) throw new Error("This browser can't use Bluetooth printers.");
-  const d = await b.requestDevice({ acceptAllDevices: true, optionalServices: [SERVICE] });
+  const d = await b.requestDevice(all
+    ? { acceptAllDevices: true, optionalServices: [SERVICE] }
+    : { filters: [{ services: [SERVICE] }, { namePrefix: "XX" }, { namePrefix: "ZQ" }, { namePrefix: "Zebra" }], optionalServices: [SERVICE] });
   device = d; char = null;
   d.addEventListener("gattserverdisconnected", () => { char = null; });
   await ensure();

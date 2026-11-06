@@ -30,6 +30,10 @@ export function PrinterBar() {
         setErr(null);
         try { setName(await choosePrinter()); } catch (e) { const m = e instanceof Error ? e.message : String(e); if (!/cancel/i.test(m)) setErr(m); }
       })}>{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{name ? "Change" : "Choose printer"}</Button>
+      {!name && <button type="button" className="w-full text-left text-[0.75rem] text-ink-muted underline" onClick={() => start(async () => {
+        setErr(null);
+        try { setName(await choosePrinter(true)); } catch (e) { const m = e instanceof Error ? e.message : String(e); if (!/cancel/i.test(m)) setErr(m); }
+      })}>Printer not in the list? Show every Bluetooth device</button>}
       {err && <p className="w-full text-[0.75rem] text-rose-600">{err}</p>}
     </div>
   );
