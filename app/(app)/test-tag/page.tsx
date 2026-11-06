@@ -8,6 +8,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { TagNav } from "@/components/testtag/nav";
 import { TagBadge } from "@/components/testtag/status";
+import { BatchLabels } from "@/components/testtag/batch";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Test & Tag" };
@@ -25,6 +26,7 @@ export default async function TestTagHome() {
   const todo = assets.filter((a) => a.st === "overdue" || a.st === "due_soon" || a.st === "failed" || a.st === "untested");
   const byOwner = new Map<string, typeof todo>();
   for (const a of todo) { const k = a.customer?.name ?? `${org.name} (our own)`; byOwner.set(k, [...(byOwner.get(k) ?? []), a]); }
+  const { count: unprinted } = await supabase.from("tag_tests").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).is("printed_at", null);
   const { data: recent } = await supabase.from("tag_tests").select("id, tested_on, result, tester_name, asset:tag_assets(id, code, name)").eq("organisation_id", org.id).order("created_at", { ascending: false }).limit(10);
   const stat = (label: string, n: number, tone: string, href: string) => (
     <Link href={href} className="rounded-xl bg-surface p-4 ring-1 ring-inset ring-line hover:ring-line-strong"><p className="text-[0.75rem] text-ink-muted">{label}</p><p className={`text-[1.5rem] font-semibold ${tone}`}>{n}</p></Link>
@@ -60,7 +62,12 @@ export default async function TestTagHome() {
             </div>
           ))}
         </Card>
-        <Card className="self-start">
+        <div className="space-y-5 self-start">
+        <Card>
+          <CardHeader title="Labels to print" subtitle="On iPhone: download one file, then send it from the Zebra app → Available Files" />
+          <div className="border-t border-line p-4 sm:p-5"><BatchLabels count={unprinted ?? 0} /></div>
+        </Card>
+        <Card>
           <CardHeader title="Recent tests" />
           <ul className="divide-y divide-line border-t border-line">
             {!(recent ?? []).length && <li className="px-5 py-6 text-center text-[0.8125rem] text-ink-muted">No tests yet.</li>}
@@ -73,6 +80,7 @@ export default async function TestTagHome() {
             ))}
           </ul>
         </Card>
+        </div>
       </div>
     </>
   );

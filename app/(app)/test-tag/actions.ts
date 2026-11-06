@@ -253,3 +253,30 @@ export async function searchTagCustomers(q: string): Promise<R<{ id: string; nam
     return { ok: true, data: (data ?? []) as { id: string; name: string }[] };
   } catch (e) { return fail(e); }
 }
+
+/** Every label not printed yet (optionally for one owner), as one file — print a whole job in one go. */
+export async function unprintedLabels(ownerId: string | null): Promise<R<{ zpl: string; count: number; ids: string[] }>> {
+  try {
+    const { supabase, org } = await staff();
+    const s = readTagSettings(org.settings);
+    let q = supabase.from("tag_tests").select("id, result, tested_on, next_due, tester_name, asset:tag_assets!inner(code, name, customer_id, customer:customers(id, name))")
+      .eq("organisation_id", org.id).is("printed_at", null).order("created_at").limit(300);
+    if (ownerId === "own") q = q.is("asset.customer_id", null);
+    else if (ownerId && UUID.test(ownerId)) q = q.eq("asset.customer_id", ownerId);
+    const { data, error } = await q;
+    if (error) throw new Error(missing(error.message));
+    const rows = (data ?? []) as unknown as { id: string; result: "pass" | "fail"; tested_on: string; next_due: string | null; tester_name: string | null; asset: Pick<TagAsset, "code" | "name" | "customer"> }[];
+    return { ok: true, data: { zpl: rows.map((x) => labelZpl(labelFor(org, s, x.asset, x), s.profile)).join("\n"), count: rows.length, ids: rows.map((x) => x.id) } };
+  } catch (e) { return fail(e); }
+}
+
+/** Mark a batch of labels as printed (after the file is downloaded / sent). */
+export async function markManyPrinted(ids: string[]): Promise<R> {
+  try {
+    const { supabase, org } = await staff();
+    const list = (Array.isArray(ids) ? ids : []).filter((x) => UUID.test(x)).slice(0, 300);
+    if (list.length) await supabase.from("tag_tests").update({ printed_at: new Date().toISOString(), print_count: 1 }).eq("organisation_id", org.id).in("id", list).is("printed_at", null);
+    refresh();
+    return { ok: true, data: null };
+  } catch (e) { return fail(e); }
+}
