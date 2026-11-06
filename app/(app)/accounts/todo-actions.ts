@@ -75,8 +75,10 @@ export async function raiseNerdJob(customerId: string, i: NerdJobInput): Promise
       const { data: w } = await supabase.from("websites").select("id, domain").eq("organisation_id", org.id).eq("customer_id", customerId).limit(50);
       websiteId = ((w ?? []) as { id: string; domain: string }[]).find((x) => x.domain.replace(/^www\./, "").toLowerCase() === t.site)?.id ?? null;
     }
+    const { readNerd } = await import("@/lib/nerdherd/core");
     const { data: tk, error } = await supabase.from("support_tickets").insert({
       organisation_id: org.id, subject: t.subject, kind: j.kind, priority: "normal", status: "new", source: "manual",
+      assigned_to: readNerd(org.settings).defaultAssignee, // jobs from Accounts go to the default tech (Nerd Herd settings)
       customer_id: customerId, website_id: websiteId, due_date: i.due && DATE.test(i.due) ? i.due : null, created_by: user.id,
     }).select("id, number").single();
     if (error) throw new Error(`Couldn't create the job: ${error.message}`);
@@ -89,7 +91,7 @@ export async function raiseNerdJob(customerId: string, i: NerdJobInput): Promise
     try {
       const { createServiceClient } = await import("@/lib/integrations/runtime");
       const { alertStaff } = await import("@/lib/nerdherd/mail");
-      await alertStaff(createServiceClient(), org.id, tk.id as string, `New job from ${by} (Accounts)`, t.note.split("\n"), { except: user.id });
+      await alertStaff(createServiceClient(), org.id, tk.id as string, `New job from ${by} (Accounts) — assigned to you`, t.note.split("\n"), { except: user.id });
     } catch (e) { console.error("[accounts] nerd herd alert:", e); }
     refresh(customerId);
     revalidatePath("/nerd-herd", "layout");

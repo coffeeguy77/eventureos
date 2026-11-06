@@ -51,6 +51,10 @@ export async function createTicket(i: TicketInput): Promise<R<string>> {
     const subject = t(i.subject, 300);
     if (!subject) throw new Error("Give the ticket a subject, e.g. “Contact form not sending”.");
     const kind = isKind(i.kind) ? i.kind : "support";
+    // nobody assigned: it's the maker's — unless they never get ticket emails (e.g. accounts), then the default tech's
+    const nerd = readNerd(org.settings);
+    let assignee = i.assigned_to && UUID.test(i.assigned_to) ? i.assigned_to : null;
+    if (!assignee && nerd.quietUsers.includes(user.id)) assignee = nerd.defaultAssignee;
     const { data, error } = await supabase.from("support_tickets").insert({
       // details typed by the team are an internal note (below), never on the ticket the client can see
       organisation_id: org.id, subject, kind,
@@ -58,7 +62,7 @@ export async function createTicket(i: TicketInput): Promise<R<string>> {
       status: isTicketStatus(i.status) ? i.status : "new", source: "manual",
       customer_id: i.customer_id && UUID.test(i.customer_id) ? i.customer_id : null,
       website_id: i.website_id && UUID.test(i.website_id) ? i.website_id : null,
-      assigned_to: i.assigned_to && UUID.test(i.assigned_to) ? i.assigned_to : null,
+      assigned_to: assignee,
       due_date: i.due_date && DATE.test(i.due_date) ? i.due_date : null,
       checklist: kind === "maintenance" ? await defaultChecklist(supabase) : [],
       created_by: user.id,
@@ -68,6 +72,7 @@ export async function createTicket(i: TicketInput): Promise<R<string>> {
       await supabase.from("support_ticket_updates").insert({ organisation_id: org.id, ticket_id: data.id, kind: "note", body: t(i.description, 20000), author_id: user.id, author_name: actorName(profile) });
     }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "ticket.created", entityType: "support_ticket", entityId: data.id, customerId: data.customer_id, summary: `${actorName(profile)} opened ticket #${data.number}: ${subject}` });
+    if (assignee && assignee !== user.id) await tellAssignee(org.id, data.id as string, assignee, user.id, `${actorName(profile)} gave you a new ticket`, [t(i.description, 600) ?? ""]);
     refresh();
     return { ok: true, data: data.id as string };
   } catch (e) { return fail(e); }
@@ -100,6 +105,7 @@ export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
     if (p.priority !== undefined) { if (!isPriority(p.priority)) throw new Error("Choose a priority."); patch.priority = p.priority; }
     if (p.kind !== undefined) { if (!isKind(p.kind)) throw new Error("Choose a type."); patch.kind = p.kind; }
     if (p.assigned_to !== undefined) patch.assigned_to = p.assigned_to && UUID.test(p.assigned_to) ? p.assigned_to : null;
+    const newAssignee = p.assigned_to !== undefined && patch.assigned_to && patch.assigned_to !== ticket.assigned_to ? patch.assigned_to as string : null;
     if (p.customer_id !== undefined) patch.customer_id = p.customer_id && UUID.test(p.customer_id) ? p.customer_id : null;
     if (p.website_id !== undefined) patch.website_id = p.website_id && UUID.test(p.website_id) ? p.website_id : null;
     if (p.due_date !== undefined) patch.due_date = p.due_date && DATE.test(p.due_date) ? p.due_date : null;
@@ -110,9 +116,19 @@ export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
       await supabase.from("support_ticket_updates").insert({ organisation_id: org.id, ticket_id: id, kind: "status", body: `${actorName(profile)} changed ${said.join(", ")}`, author_id: user.id, author_name: actorName(profile) });
     }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "ticket.updated", entityType: "support_ticket", entityId: id, customerId: (patch.customer_id as string | undefined) ?? ticket.customer_id, summary: `${actorName(profile)} updated ticket #${ticket.number}${said.length ? ` (${said.join(", ")})` : ""}` });
+    if (newAssignee && newAssignee !== user.id) await tellAssignee(org.id, id, newAssignee, user.id, `${actorName(profile)} assigned this ticket to you`, []);
     refresh(id);
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
+}
+
+/** Email just the person a ticket (or part of one) has been given to — not the person who gave it, not anyone on the quiet list. */
+async function tellAssignee(orgId: string, ticketId: string, to: string, actor: string, heading: string, lines: string[]) {
+  try {
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const { alertStaff } = await import("@/lib/nerdherd/mail");
+    await alertStaff(createServiceClient(), orgId, ticketId, heading, lines.filter(Boolean), { only: to, except: actor });
+  } catch { /* an email never stops the ticket saving */ }
 }
 
 export interface UpdateInput { kind: "comment" | "note" | "time"; body?: string | null; minutes?: number | null; billable?: boolean; public?: boolean; status?: TicketStatus | null; tabId?: string | null }
@@ -269,7 +285,7 @@ export async function setPlanOptions(id: string, o: { creates_ticket?: boolean; 
   } catch (e) { return fail(e); }
 }
 
-export async function saveNerdSettings(i: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts?: boolean }): Promise<R> {
+export async function saveNerdSettings(i: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts?: boolean; default_assignee?: string | null; quiet_users?: string[] }): Promise<R> {
   try {
     const { supabase, org, role, user, profile } = await desk();
     if (!canManage(role)) throw new Error("Only owners, admins and managers can change settings.");
@@ -277,7 +293,9 @@ export async function saveNerdSettings(i: { hourly_rate: number; account_code: s
     if (!(rate > 0 && rate < 10000)) throw new Error("Enter the hourly rate (ex GST).");
     const email = (i.support_email ?? "").trim().toLowerCase();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("That support email address doesn't look right.");
-    const nerdherd = { hourly_rate: rate, account_code: t(i.account_code, 10) ?? "6664", email_tickets: !!i.email_tickets, support_email: email || null, staff_alerts: i.staff_alerts !== false };
+    const nerdherd = { hourly_rate: rate, account_code: t(i.account_code, 10) ?? "6664", email_tickets: !!i.email_tickets, support_email: email || null, staff_alerts: i.staff_alerts !== false,
+      default_assignee: i.default_assignee && UUID.test(i.default_assignee) ? i.default_assignee : null,
+      quiet_users: (Array.isArray(i.quiet_users) ? i.quiet_users : []).filter((x) => UUID.test(x)).slice(0, 50) };
     // managers may change these (checked above); the organisations table only lets owners/admins write, so save with the service role
     const { createServiceClient } = await import("@/lib/integrations/runtime");
     const db = createServiceClient();
@@ -331,13 +349,15 @@ export async function updateTicketTab(tabId: string, p: { assigned_to?: string |
     if (!tab) throw new Error("That tab no longer exists.");
     const patch: Record<string, unknown> = {};
     const said: string[] = [];
-    if (p.assigned_to !== undefined) { const a = p.assigned_to && UUID.test(p.assigned_to) ? p.assigned_to : null; if (a !== tab.assigned_to) { patch.assigned_to = a; said.push(`gave ${tab.name} to ${await memberName(ctx, a)}`); } }
+    let tabGivenTo: string | null = null;
+    if (p.assigned_to !== undefined) { const a = p.assigned_to && UUID.test(p.assigned_to) ? p.assigned_to : null; if (a !== tab.assigned_to) { patch.assigned_to = a; said.push(`gave ${tab.name} to ${await memberName(ctx, a)}`); if (a && a !== ctx.user.id) tabGivenTo = a; } }
     if (p.done !== undefined && p.done !== tab.done) { patch.done = p.done; patch.done_at = p.done ? new Date().toISOString() : null; said.push(p.done ? `marked ${tab.name} done` : `reopened ${tab.name}`); }
     if (p.name !== undefined) { const n = t(p.name, 60); if (!n) throw new Error("The tab needs a name."); if (n !== tab.name) { patch.name = n; said.push(`renamed ${tab.name} to ${n}`); } }
     if (!Object.keys(patch).length) return { ok: true, data: undefined };
     const { error } = await ctx.supabase.from("support_ticket_tabs").update(patch).eq("id", tabId);
     if (error) throw new Error(error.message);
     await logLine(ctx, tab.ticket_id as string, `${actorName(ctx.profile)} ${said.join(", ")}`, tabId);
+    if (tabGivenTo) await tellAssignee(ctx.org.id, tab.ticket_id as string, tabGivenTo, ctx.user.id, `${actorName(ctx.profile)} gave you the ${tab.name} part of this ticket`, []);
     refresh(tab.ticket_id as string);
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }

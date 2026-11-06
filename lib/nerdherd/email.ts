@@ -81,9 +81,13 @@ export async function ticketFromEmail(ctx: SyncContext, m: EmailForTicket): Prom
     const text = `${m.subject ?? ""} ${m.body}`.toLowerCase();
     websiteId = (list.length === 1 ? list[0] : list.find((s) => text.includes(s.domain)))?.id ?? null;
   }
+  // new tickets from email go to the default person (Nerd Herd settings) — they're the one emailed
+  const { data: o } = await db.from("organisations").select("settings").eq("id", org).maybeSingle();
+  const { readNerd } = await import("./core");
+  const defaultAssignee = readNerd(o?.settings).defaultAssignee;
   const { data: t, error } = await db.from("support_tickets").insert({
     organisation_id: org, customer_id: m.customerId, website_id: websiteId, subject, description: body, status: "new", source: "email",
-    email_thread_id: m.threadId, last_activity_at: m.sentAt, created_by: null,
+    email_thread_id: m.threadId, last_activity_at: m.sentAt, created_by: null, assigned_to: defaultAssignee,
   }).select("id, number").single();
   if (error) throw new Error(`Couldn't open a ticket from the email: ${error.message}`);
   await db.from("support_ticket_updates").insert({

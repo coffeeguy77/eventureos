@@ -103,27 +103,26 @@ export async function ticketLink(db: SupabaseClient, orgId: string, ticketId: st
  * Email the team about something on a ticket: the person it's assigned to and anyone with a tab on it;
  * if nobody has it, the owners, admins and managers. Never the person who did it. Never throws.
  */
-export async function alertStaff(db: SupabaseClient, orgId: string, ticketId: string, heading: string, lines: string[], o: { except?: string | null } = {}) {
+export async function alertStaff(db: SupabaseClient, orgId: string, ticketId: string, heading: string, lines: string[], o: { except?: string | null; only?: string | null } = {}) {
   try {
     const { emailConfigured, sendEmail } = await import("@/lib/email/send");
     if (!emailConfigured()) return;
     const { data: org } = await db.from("organisations").select("id, name, brand_colour, logo_url, settings").eq("id", orgId).maybeSingle();
     if (!org) return;
     const { readNerd } = await import("./core");
-    if (!readNerd(org.settings).staffAlerts) return;
-    const { data: t } = await db.from("support_tickets").select("id, number, subject, assigned_to").eq("id", ticketId).maybeSingle();
+    const nerd = readNerd(org.settings);
+    if (!nerd.staffAlerts) return;
+    const { data: t } = await db.from("support_tickets").select("id, number, subject, assigned_to, created_by, source").eq("id", ticketId).maybeSingle();
     if (!t) return;
-    const ids = new Set<string>();
-    if (t.assigned_to) ids.add(t.assigned_to as string);
     const { data: tabs } = await db.from("support_ticket_tabs").select("assigned_to, done").eq("ticket_id", ticketId);
-    for (const x of (tabs ?? []) as { assigned_to: string | null; done: boolean }[]) if (x.assigned_to && !x.done) ids.add(x.assigned_to);
-    if (!ids.size) {
-      const { data: m } = await db.from("organisation_users").select("user_id").eq("organisation_id", orgId).eq("status", "active").in("role", ["owner", "admin", "manager"]);
-      for (const x of (m ?? []) as { user_id: string }[]) ids.add(x.user_id);
-    }
-    if (o.except) ids.delete(o.except);
-    if (!ids.size) return;
-    const { data: users } = await db.from("users").select("id, email").in("id", [...ids]);
+    // only the person on the ticket (or its default / its maker) — see alert-rules.ts
+    const { ticketAlertRecipients } = await import("./alert-rules");
+    const ids = o.only ? [o.only].filter((x) => !nerd.quietUsers.includes(x) && x !== o.except) : ticketAlertRecipients({
+      assignees: [t.assigned_to as string | null, ...((tabs ?? []) as { assigned_to: string | null; done: boolean }[]).filter((x) => !x.done).map((x) => x.assigned_to)],
+      createdBy: t.created_by as string | null, source: t.source as string | null, defaultAssignee: nerd.defaultAssignee, quiet: nerd.quietUsers, actor: o.except ?? null,
+    });
+    if (!ids.length) return;
+    const { data: users } = await db.from("users").select("id, email").in("id", ids);
     const { staffTicketAlert } = await import("@/lib/email/templates");
     const url = `${appBaseUrl()}/nerd-herd/tickets/${ticketId}`;
     const m = staffTicketAlert({ businessName: org.name as string, heading, lines: [`#${t.number} ${t.subject}`, ...lines], url, brand: org.brand_colour as string | null, logoUrl: org.logo_url as string | null });

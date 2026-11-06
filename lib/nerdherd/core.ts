@@ -154,7 +154,13 @@ export function timeLine(minutes: number, hourlyExGst: number, description: stri
 }
 
 /** Nerd Herd settings (organisations.settings.nerdherd). */
-export interface NerdSettings { hourlyRate: number; accountCode: string; emailTickets: boolean; supportEmail: string | null; staffAlerts: boolean }
+export interface NerdSettings {
+  hourlyRate: number; accountCode: string; emailTickets: boolean; supportEmail: string | null; staffAlerts: boolean;
+  /** who new tickets go to when nobody is assigned (emails, the client page, Accounts) */
+  defaultAssignee: string | null;
+  /** team members who never get ticket emails */
+  quietUsers: string[];
+}
 export function readNerd(settings: unknown): NerdSettings {
   const n = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).nerdherd : null) ?? {}) as Record<string, unknown>;
   const rate = Number(n.hourly_rate);
@@ -164,5 +170,7 @@ export function readNerd(settings: unknown): NerdSettings {
     emailTickets: n.email_tickets !== false,
     supportEmail: typeof n.support_email === "string" && n.support_email.includes("@") ? n.support_email.trim().toLowerCase() : null,
     staffAlerts: n.staff_alerts !== false,
+    defaultAssignee: typeof n.default_assignee === "string" && /^[0-9a-f-]{36}$/i.test(n.default_assignee) ? n.default_assignee : null,
+    quietUsers: (Array.isArray(n.quiet_users) ? n.quiet_users : []).filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50),
   };
 }
