@@ -62,7 +62,11 @@ export function eventNextAction(ev: {
   daysUntil?: number | null;
 }): NextAction {
   if (ev.status === "cancelled") return { label: "Event cancelled", urgency: "done" };
-  if (ev.next_action) return { label: ev.next_action, due: ev.next_action_due, urgency: urgencyFor(ev.next_action_due), kind: "custom" };
+  if (ev.next_action) {
+    const kind = stepFromText(ev.next_action);
+    // A saved "create a quote" that's out of date (a quote exists now) gives way to the worked-out step
+    if (!(kind === "create_quote" && ev.quote)) return { label: ev.next_action, due: ev.next_action_due, urgency: urgencyFor(ev.next_action_due), kind };
+  }
 
   const overdue = ev.invoices?.find((i) => i.status === "overdue");
   if (overdue) return { label: "Chase overdue invoice", urgency: "overdue", kind: "chase_invoice" };
@@ -80,6 +84,19 @@ export function eventNextAction(ev: {
   if (ev.daysUntil != null && ev.daysUntil >= 0 && ev.daysUntil <= 2) return { label: "Prepare for event day", urgency: "soon", kind: "prepare" };
   if (outstanding > 0) return { label: "Awaiting payment", urgency: "normal", kind: "awaiting_payment" };
   return { label: "Confirm final details", urgency: "normal", kind: "confirm" };
+}
+
+/** What a typed or saved next action is about, so it can still get its button ("Create a quote" → New quote). */
+export function stepFromText(text: string): EventStep {
+  const t = text.toLowerCase();
+  if (/(create|make|prepare|build|draft|new)\b.*\bquote/.test(t)) return "create_quote";
+  if (/(finish|send|check)\b.*\bquote/.test(t)) return "finish_quote";
+  if (/revise.*quote|quote.*declined/.test(t)) return "revise_quote";
+  if (/follow[\s-]?up/.test(t)) return "follow_up";
+  if (/(chase|overdue).*(invoice|deposit|payment)|(invoice|deposit|payment).*(overdue|chase)/.test(t)) return "chase_invoice";
+  if (/(collect|await).*(payment|balance)/.test(t)) return "collect_payment";
+  if (/reply|confirm|send .*form|email|call/.test(t)) return "confirm";
+  return "custom";
 }
 
 /** The button for an event's next step. */
