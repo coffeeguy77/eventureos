@@ -82,7 +82,10 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
 
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
   const memberOpts = members.map((m) => ({ id: m.id, name: m.full_name ?? m.email }));
-  const na = enquiryNextAction(e);
+  const naBase = enquiryNextAction(e);
+  // The button for the step, where it's a link (converting to a job is the Convert button above)
+  const na = { ...naBase, cta: e.event_id && ["qualified", "quote_required"].includes(e.status) ? { label: "New quote", href: `/quotes/new?event=${e.event_id}` }
+    : e.event_id && e.status === "won" ? { label: "Open the job", href: `/events/${e.event_id}` } : undefined };
   const s = ENQUIRY_STATUS[e.status];
   const today = todayISO(tz);
   const sameDay = ((sameDayRes.data ?? []) as { id: string; name: string; status: EventStatus; start_time: string | null; finish_time: string | null }[]).filter((x) => x.id !== e.event_id);

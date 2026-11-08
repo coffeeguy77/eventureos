@@ -2,6 +2,7 @@ import { ArrowRight } from "lucide-react";
 import type { NextAction } from "@/lib/next-action";
 import { relative } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { ButtonLink } from "@/components/ui/button";
 
 export function NextActionBanner({ action, children }: { action: NextAction; children?: React.ReactNode }) {
   const styles = {
@@ -26,7 +27,12 @@ export function NextActionBanner({ action, children }: { action: NextAction; chi
           </div>
         )}
       </div>
-      {children && <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 [&>*]:flex-1 sm:[&>*]:flex-none">{children}</div>}
+      {(children || action.cta) && (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 [&>*]:flex-1 sm:[&>*]:flex-none">
+          {action.cta && <ButtonLink href={action.cta.href} variant={action.urgency === "done" ? "secondary" : "primary"} className="h-10 sm:h-9">{action.cta.label}<ArrowRight className="h-3.5 w-3.5" /></ButtonLink>}
+          {children}
+        </div>
+      )}
     </div>
   );
 }

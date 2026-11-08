@@ -23,7 +23,7 @@ import { EventTimeline } from "@/components/records/event-timeline";
 import { EventDetailsEditor, EventStatusSelect } from "./controls";
 import { StaffPortalMessages } from "@/components/portal/staff-messages";
 import { addNote, createTask } from "@/app/(app)/record-actions";
-import { eventNextAction } from "@/lib/next-action";
+import { eventNextAction, eventStepButton } from "@/lib/next-action";
 import { EVENT_STATUS, INVOICE_STATUS, QUOTE_STATUS } from "@/lib/status";
 import { addDaysISO, daysBetween, fmtDate, fmtDateTime, fmtTime, money, relative, relativeDay, timeRange, todayISO, zonedMidnightUTC } from "@/lib/format";
 import type { ActivityLog, EmailMessage, EmailThread, EventRecord, InvoiceStatus, QuoteStatus, Task } from "@/lib/types";
@@ -207,7 +207,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
   const today = todayISO(tz);
   const quote = quotes.find((q) => q.status !== "superseded") ?? quotes[0] ?? null;
   const currentVersion = versions.find((v) => v.id === quote?.current_version_id) ?? null;
-  const na = eventNextAction({ ...e, quote, invoices, daysUntil: e.event_date ? daysBetween(today, e.event_date) : null });
+  const naBase = eventNextAction({ ...e, quote, invoices, daysUntil: e.event_date ? daysBetween(today, e.event_date) : null });
+  const na = { ...naBase, cta: eventStepButton(naBase.kind, { eventId: e.id, quoteId: quote?.id ?? null, overdueInvoiceId: invoices.find((i) => i.status === "overdue")?.id ?? null }) };
   const invoiced = invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.total), 0);
   const paid = invoices.filter((i) => i.status !== "void").reduce((s, i) => s + Number(i.amount_paid), 0);
   const conflicts = sameDay.filter((o) => cal.some((c) => c.calendar_connection_id === o.calendar_connection_id && c.starts_at < o.ends_at && o.starts_at < c.ends_at));

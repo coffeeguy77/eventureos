@@ -5,7 +5,13 @@ export interface NextAction {
   detail?: string;
   due?: string | null;
   urgency: "overdue" | "soon" | "normal" | "done";
+  /** What kind of step it is, so a page can offer the button that does it. */
+  kind?: EventStep;
+  /** The button for it (filled in by the page, which knows the links). */
+  cta?: { label: string; href: string };
 }
+
+export type EventStep = "custom" | "chase_invoice" | "create_quote" | "finish_quote" | "follow_up" | "revise_quote" | "collect_payment" | "prepare" | "awaiting_payment" | "confirm";
 
 function urgencyFor(due: string | null | undefined, now = Date.now()): NextAction["urgency"] {
   if (!due) return "normal";
@@ -56,22 +62,38 @@ export function eventNextAction(ev: {
   daysUntil?: number | null;
 }): NextAction {
   if (ev.status === "cancelled") return { label: "Event cancelled", urgency: "done" };
-  if (ev.next_action) return { label: ev.next_action, due: ev.next_action_due, urgency: urgencyFor(ev.next_action_due) };
+  if (ev.next_action) return { label: ev.next_action, due: ev.next_action_due, urgency: urgencyFor(ev.next_action_due), kind: "custom" };
 
   const overdue = ev.invoices?.find((i) => i.status === "overdue");
-  if (overdue) return { label: "Chase overdue invoice", urgency: "overdue" };
+  if (overdue) return { label: "Chase overdue invoice", urgency: "overdue", kind: "chase_invoice" };
 
-  if (!ev.quote) return { label: "Create a quote", urgency: "normal" };
-  if (ev.quote.status === "draft") return { label: "Finish and send the quote", urgency: "normal" };
-  if (ev.quote.status === "sent") return { label: "Follow up — quote not yet viewed", urgency: "normal" };
-  if (ev.quote.status === "viewed") return { label: "Follow up — customer has viewed the quote", urgency: "soon" };
-  if (ev.quote.status === "declined") return { label: "Quote declined — revise or close", urgency: "normal" };
+  if (!ev.quote) return { label: "Create a quote", urgency: "normal", kind: "create_quote" };
+  if (ev.quote.status === "draft") return { label: "Finish and send the quote", urgency: "normal", kind: "finish_quote" };
+  if (ev.quote.status === "sent") return { label: "Follow up — quote not yet viewed", urgency: "normal", kind: "follow_up" };
+  if (ev.quote.status === "viewed") return { label: "Follow up — customer has viewed the quote", urgency: "soon", kind: "follow_up" };
+  if (ev.quote.status === "declined") return { label: "Quote declined — revise or close", urgency: "normal", kind: "revise_quote" };
 
   const outstanding = ev.invoices?.reduce((s, i) => s + (i.status === "void" ? 0 : Number(i.balance)), 0) ?? 0;
   if (ev.status === "completed") {
-    return outstanding > 0 ? { label: "Collect final payment", urgency: "soon" } : { label: "All done — paid in full", urgency: "done" };
+    return outstanding > 0 ? { label: "Collect final payment", urgency: "soon", kind: "collect_payment" } : { label: "All done — paid in full", urgency: "done" };
   }
-  if (ev.daysUntil != null && ev.daysUntil >= 0 && ev.daysUntil <= 2) return { label: "Prepare for event day", urgency: "soon" };
-  if (outstanding > 0) return { label: "Awaiting payment", urgency: "normal" };
-  return { label: "Confirm final details", urgency: "normal" };
+  if (ev.daysUntil != null && ev.daysUntil >= 0 && ev.daysUntil <= 2) return { label: "Prepare for event day", urgency: "soon", kind: "prepare" };
+  if (outstanding > 0) return { label: "Awaiting payment", urgency: "normal", kind: "awaiting_payment" };
+  return { label: "Confirm final details", urgency: "normal", kind: "confirm" };
+}
+
+/** The button for an event's next step. */
+export function eventStepButton(kind: EventStep | undefined, ids: { eventId: string; quoteId: string | null; overdueInvoiceId: string | null }): NextAction["cta"] {
+  const ev = `/events/${ids.eventId}`;
+  switch (kind) {
+    case "create_quote": return { label: "New quote", href: `/quotes/new?event=${ids.eventId}` };
+    case "finish_quote": return ids.quoteId ? { label: "Open quote", href: `/quotes/${ids.quoteId}` } : undefined;
+    case "revise_quote": return ids.quoteId ? { label: "Revise quote", href: `/quotes/${ids.quoteId}` } : undefined;
+    case "follow_up": return { label: "Email the client", href: `${ev}?tab=communication` };
+    case "chase_invoice": return ids.overdueInvoiceId ? { label: "Open invoice", href: `/invoices/${ids.overdueInvoiceId}` } : { label: "Invoices", href: `${ev}?tab=invoice` };
+    case "collect_payment": case "awaiting_payment": return { label: "View invoices", href: `${ev}?tab=invoice` };
+    case "prepare": return { label: "Run sheet", href: `${ev}?tab=schedule` };
+    case "confirm": return { label: "Message the client", href: `${ev}?tab=communication` };
+    default: return undefined;
+  }
 }
