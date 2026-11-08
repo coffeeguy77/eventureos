@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import { createQuoteForEvent } from "@/app/(app)/quotes/actions";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,8 @@ export interface PickerEvent {
 }
 
 const run = async (eventId: string) =>
-  createQuoteForEvent(eventId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }));
+  // the action finishes by sending you to the new quote — that's a redirect, not an error, so let it through
+  createQuoteForEvent(eventId).catch((e: unknown) => { unstable_rethrow(e); return { ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }; });
 
 /** Pick the event a new quote belongs to. */
 export function EventPicker({ events, today }: { events: PickerEvent[]; today: string }) {

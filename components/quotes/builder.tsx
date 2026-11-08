@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ExternalLink, AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
 import {
@@ -943,7 +943,7 @@ export function DuplicateButton({ quoteId, onError, variant = "chip" }: { quoteI
   const [err, setErr] = useState<string | null>(null);
   const click = () => start(async () => {
     setErr(null);
-    const r = await duplicateQuote(quoteId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }));
+    const r = await duplicateQuote(quoteId).catch((e: unknown) => { unstable_rethrow(e); return { ok: false as const, error: "Couldn't reach the server. Check your connection and try again." }; });
     if (r && !r.ok) { if (onError) onError(r.error); else setErr(r.error); }
   });
   const icon = pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />;
