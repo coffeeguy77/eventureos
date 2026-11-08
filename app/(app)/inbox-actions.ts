@@ -113,7 +113,9 @@ export async function sendReply(threadId: string, _prev: ReplyState, form: FormD
   return { ok: true, sentTo: to };
 }
 
-export type DraftState = { ok: true; body: string; notes: string[] } | { ok: false; error: string };
+/** A draft quote sitting alongside a reply: what it is now, plus a fingerprint so edits made since can be spotted. */
+export interface QuoteCard { id: string; number: number; status: string; total: number; currency: string; label: string; sig: string; locked: boolean }
+export type DraftState = { ok: true; body: string; notes: string[]; quote: QuoteCard | null } | { ok: false; error: string };
 
 /** Throw away a saved reply draft (e.g. one prepared overnight) without sending it. */
 export async function discardSavedDraft(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -133,17 +135,77 @@ export async function discardSavedDraft(threadId: string): Promise<{ ok: true } 
   return { ok: true };
 }
 
-/** AI draft for the reply box — never sent automatically. */
+/**
+ * AI draft for the reply box — never sent automatically. When the customer wants pricing and the AI has the job details,
+ * a draft quote is built too (from the price list, on the job's quote — the enquiry becomes a job if it isn't one yet),
+ * so the reply can go out with a proper quote attached. A quote that already has lines is left exactly as it is.
+ */
 export async function draftReplyAction(threadId: string): Promise<DraftState> {
   try {
-    const { supabase, org, profile } = await requireOrg();
+    if (!/^[0-9a-f-]{36}$/i.test(threadId)) return { ok: false, error: "That conversation link isn't valid." };
+    const { supabase, org, profile, role } = await requireOrg();
+    const { data: t } = await supabase.from("email_threads").select("id, event_id, enquiry_id, classification").eq("id", threadId).eq("organisation_id", org.id).maybeSingle();
+    const canQuote = !!t && t.classification !== "spam" && role !== "staff" && role !== "customer" && !!(t.event_id || t.enquiry_id);
     const { draftReply } = await import("@/lib/ai/reply");
     const r = await draftReply(supabase, { id: org.id, name: org.name, timezone: org.timezone, currency: org.currency }, threadId,
-      profile.full_name?.split(" ")[0] ?? org.name);
-    return { ok: true, body: r.body, notes: r.notes };
+      profile.full_name?.split(" ")[0] ?? org.name, { forQuote: canQuote });
+    let body = r.body;
+    const notes = [...r.notes];
+    let quote: QuoteCard | null = null;
+    if (r.quote) {
+      const built = await (async () => {
+        const open = await startQuoteFromThread(threadId);
+        if (!open.ok) throw new Error(open.error);
+        const quoteId = open.url.split("/quotes/")[1].split("?")[0];
+        const { count } = await supabase.from("quote_items").select("id", { count: "exact", head: true }).eq("quote_id", quoteId);
+        if ((count ?? 0) > 0) { notes.unshift("This job already has a quote with prices on it, so it was left as it is — check it still matches what they asked for."); return quoteId; }
+        const { addPricedSection } = await import("@/app/(app)/quotes/actions");
+        const added = await addPricedSection(quoteId, { packageId: r.quote!.packageId, start: r.quote!.start, end: r.quote!.end, serves: r.quote!.serves, staff: r.quote!.staff, includeDelivery: true });
+        if (!added.ok) throw new Error(added.error);
+        notes.unshift(`Draft quote built from your price list: ${r.quote!.packageName}, ${r.quote!.start}–${r.quote!.end}, ${r.quote!.serves} serves, ${r.quote!.staff} staff. Check it before sending.`);
+        return quoteId;
+      })().catch((e) => { notes.unshift(`Couldn't build the draft quote (${errMessage(e)}), so the prices are in the message instead.`); return null; });
+      if (built) quote = await loadQuoteCard(supabase, org, built);
+      else body = `${body}\n\n${r.quote.table}`;
+    }
+    return { ok: true, body, notes, quote };
   } catch (e) {
     return { ok: false, error: errMessage(e) };
   }
+}
+
+async function loadQuoteCard(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], org: { id: string; currency: string }, quoteId: string): Promise<QuoteCard | null> {
+  const { data: q } = await supabase.from("quotes").select("id, number, status, title").eq("id", quoteId).eq("organisation_id", org.id).maybeSingle();
+  if (!q) return null;
+  const { data: snap } = await supabase.rpc("build_quote_snapshot", { qid: q.id });
+  const sn = (snap ?? {}) as { total?: number; sections?: { title: string; items: { name: string; quantity: number; unit_price: number; line_total: number }[] }[]; discount?: unknown };
+  const sig = JSON.stringify([sn.sections ?? [], sn.discount ?? null, sn.total ?? 0]);
+  let h = 0; for (let i = 0; i < sig.length; i++) h = (h * 31 + sig.charCodeAt(i)) | 0;
+  return {
+    id: q.id, number: q.number, status: q.status, total: Number(sn.total ?? 0), currency: org.currency,
+    label: (sn.sections ?? []).map((x) => x.title).filter(Boolean).slice(0, 2).join(" + ") || q.title || "Quote",
+    sig: `${sig.length}:${h}`, locked: q.status === "accepted",
+  };
+}
+
+/** The quote shown beside a reply, as it is right now (to spot edits made in the quote builder). */
+export async function quoteCardAction(quoteId: string): Promise<{ ok: true; quote: QuoteCard } | { ok: false; error: string }> {
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(quoteId)) return { ok: false, error: "That quote link isn't valid." };
+    const { supabase, org } = await requireOrg();
+    const card = await loadQuoteCard(supabase, org, quoteId);
+    return card ? { ok: true, quote: card } : { ok: false, error: "That quote no longer exists." };
+  } catch (e) { return { ok: false, error: errMessage(e) }; }
+}
+
+/** "Polish" the text in a reply box with AI. Returns the rewrite; nothing changes until the person presses Replace. */
+export async function polishReplyAction(text: string, mode: string, threadId?: string | null): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, org } = await requireOrg();
+    const { polishText, POLISH_MODES } = await import("@/lib/ai/polish");
+    const m = (Object.keys(POLISH_MODES).includes(mode) ? mode : "polish") as keyof typeof POLISH_MODES;
+    return { ok: true, text: await polishText(supabase, org, String(text ?? ""), m, threadId ?? null) };
+  } catch (e) { return { ok: false, error: errMessage(e) }; }
 }
 
 export type SignaturePreviewState =
@@ -194,18 +256,19 @@ export async function startQuoteFromThread(threadId: string): Promise<QuoteFromT
     if (!eventId) return { ok: false, error: "Link this email to an enquiry or event first, then you can reply with a quote." };
 
     // 2. The quote: the newest one still being worked on, or a fresh draft
-    const { data: ev } = await supabase.from("events").select("id, number, name, customer_id, status, enquiry_id").eq("id", eventId).maybeSingle();
+    const { data: ev } = await supabase.from("events").select("id, number, name, customer_id, status, enquiry_id, event_date").eq("id", eventId).maybeSingle();
     if (!ev) return { ok: false, error: "The event couldn't be found." };
     if (ev.status === "cancelled") return { ok: false, error: "This event is cancelled. Reopen it before quoting." };
     const { data: open } = await supabase.from("quotes").select("id").eq("event_id", ev.id).in("status", ["draft", "sent", "viewed"])
       .order("created_at", { ascending: false }).limit(1);
     let quoteId = open?.[0]?.id as string | undefined;
     if (!quoteId) {
-      const { todayISO, addDaysISO } = await import("@/lib/format");
+      const { todayISO } = await import("@/lib/format");
+      const { quoteExpiryFor } = await import("@/lib/quotes/late");
       const today = todayISO(org.timezone);
       const { data: q, error } = await supabase.from("quotes").insert({
         organisation_id: org.id, event_id: ev.id, customer_id: ev.customer_id, title: ev.name,
-        status: "draft", issue_date: today, expiry_date: addDaysISO(today, 14), created_by: user.id,
+        status: "draft", issue_date: today, expiry_date: quoteExpiryFor(today, (ev.event_date as string | null) ?? null), created_by: user.id,
       }).select("id, number").single();
       if (error) return { ok: false, error: `Couldn't create the quote: ${error.message}` };
       quoteId = q.id;

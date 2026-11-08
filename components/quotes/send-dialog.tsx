@@ -12,6 +12,7 @@ import { publishQuote } from "@/app/(app)/quotes/actions";
 import { followUpToTask } from "@/app/(app)/tasks/actions";
 import { addDaysISO, todayISO, zonedTimeUTC } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { PolishBar } from "@/components/records/polish";
 
 const EMAIL = /^[^\s@<>"',;:()]+@[^\s@<>"',;:()]+\.[^\s@<>"',;:()]{2,}$/;
 interface Recipient { email: string; name: string | null }
@@ -24,8 +25,10 @@ export interface AfterSend {
 }
 
 /** "Send quote" pop-up: who it goes to, the message, a live preview of the email, then send (publishing first if needed). */
-export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup, replyThreadId, after }: {
+export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSetup, replyThreadId, after, initialMessage }: {
   quoteId: string;
+  /** Start with this message (e.g. an AI-drafted reply) instead of the usual quote message */
+  initialMessage?: string | null;
   after?: AfterSend;
   /** Start in "reply in this email conversation" mode (e.g. from "Reply with quote" on a thread) */
   replyThreadId?: string | null;
@@ -74,7 +77,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
     return () => { live = false; };
     function apply(d: QuoteSendSetup) {
       setSetup(d);
-      setSubject(d.subject); setMessage(d.message); setWithSig(Boolean(d.signature)); setVia(d.gmail ? "gmail" : "resend");
+      setSubject(d.subject); setMessage(initialMessage?.trim() ? initialMessage : d.message); setWithSig(Boolean(d.signature)); setVia(d.gmail ? "gmail" : "resend");
       // Reply in the customer's conversation when there is one (the one asked for, else the latest)
       const t = d.gmail ? d.threads.find((x) => x.id === replyThreadId) ?? d.threads[0] ?? null : null;
       setThreadId(t?.id ?? null);
@@ -241,6 +244,7 @@ export function SendQuoteDialog({ quoteId, flushAll, onClose, onDone, initialSet
                 <div>
                   <Label htmlFor="send-message" hint="The quote, total and button are added below it">Message</Label>
                   <Textarea id="send-message" value={message} maxLength={5000} rows={11} onChange={(e) => setMessage(e.target.value)} className="text-base leading-relaxed sm:text-[0.8438rem]" />
+                  <PolishBar text={message} threadId={threadId} onReplace={setMessage} />
                 </div>
                 <div className="space-y-2 text-[0.8125rem]">
                   {setup.signature ? (

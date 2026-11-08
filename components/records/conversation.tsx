@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
-import { ArrowDown, BellPlus, FileText, Sparkles, X } from "lucide-react";
+import { ArrowDown, BellPlus, ExternalLink, Eye, FileText, Loader2, Send, Sparkles, X } from "lucide-react";
 import { DateTimeField } from "@/components/ui/datetime-field";
 import { addTask } from "@/app/(app)/tasks/actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,12 @@ import { CLASSIFICATION } from "@/lib/status";
 import { fmtDateTime, relative } from "@/lib/format";
 import type { EmailMessage, EmailThread } from "@/lib/types";
 import { cn } from "@/lib/cn";
-import { discardSavedDraft, draftReplyAction, replyRecipients, replySignaturePreview, sendReply, startQuoteFromThread, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { discardSavedDraft, draftReplyAction, quoteCardAction, replyRecipients, replySignaturePreview, sendReply, startQuoteFromThread, type QuoteCard, type ReplyState, type SignaturePreviewState } from "@/app/(app)/inbox-actions";
+import { previewQuote } from "@/app/(app)/quotes/actions";
+import { PolishBar } from "@/components/records/polish";
+import { SendQuoteDialog } from "@/components/quotes/send-dialog";
+import { QuoteDocument } from "@/components/quotes/quote-document";
+import type { QuoteSnapshotData } from "@/components/quotes/types";
 import { useRouter } from "next/navigation";
 
 export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
@@ -152,12 +157,31 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
     replyRecipients(threadId).then((r) => { if (live) { setRcpt(r); setCc(r.cc); } }).catch(() => {});
     return () => { live = false; };
   }, [open, rcpt, threadId]);
+  // A draft quote going out with this reply: as drafted (`quoteBase`) and as it is now (`quote`), to spot edits
+  const [quote, setQuote] = useState<QuoteCard | null>(null);
+  const [quoteBase, setQuoteBase] = useState<QuoteCard | null>(null);
+  const [sendingQuote, setSendingQuote] = useState(false);
+  const attach = (q: QuoteCard | null) => { setQuote(q); setQuoteBase(q); };
+  // Coming back from the quote builder (another tab): re-check the quote so any edits show
+  useEffect(() => {
+    if (!quote) return;
+    const id = quote.id;
+    const check = () => { if (document.visibilityState === "visible") quoteCardAction(id).then((r) => { if (r.ok) setQuote(r.quote); }).catch(() => {}); };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => { window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); };
+  }, [quote]);
   async function draft() {
     setDrafting(true); setDraftError(null);
     const r = await draftReplyAction(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server. Try again." }));
     setDrafting(false);
     if (!r.ok) { setDraftError(r.error); return; }
-    setBody(r.body); setDraftNotes(r.notes); setOpen(true);
+    setBody(r.body); setDraftNotes(r.notes); attach(r.quote); setOpen(true);
+  }
+  async function openSaved(d: SavedDraft) {
+    setBody(d.body); setDraftNotes(d.notes); setOpen(true);
+    const id = d.quote_url?.split("/quotes/")[1]?.split(/[?#]/)[0];
+    if (id) { const r = await quoteCardAction(id).catch(() => null); if (r?.ok && !r.quote.locked) attach(r.quote); }
   }
 
   if (!open) {
@@ -182,7 +206,7 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
               )}
               {saved.quote_url && <p className="mt-2 text-[0.75rem] text-ink-muted">A <Link href={saved.quote_url} className="font-medium text-brand-700 underline underline-offset-2">draft quote</Link> with these prices is ready too.</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="primary" className="h-10 sm:h-8" onClick={() => { setBody(saved.body); setDraftNotes(saved.notes); setOpen(true); }}>Edit &amp; send</Button>
+                <Button size="sm" variant="primary" className="h-10 sm:h-8" onClick={() => openSaved(saved)}>Edit &amp; send</Button>
                 <Button size="sm" variant="ghost" className="h-10 sm:h-8" disabled={discarding} onClick={async () => {
                   setDiscarding(true);
                   const r = await discardSavedDraft(threadId).catch(() => ({ ok: false as const, error: "Couldn't reach the server." }));
@@ -241,17 +265,35 @@ function ReplyBox({ threadId, saved, orgName, thread }: { threadId: string; save
           </>}
         </div>
       )}
+      {quote && <QuoteStrip quote={quote} base={quoteBase} threadId={threadId} onRemove={() => attach(null)} />}
       <textarea name="body" rows={body ? 14 : 4} autoFocus required placeholder="Write a reply…" value={body} onChange={(e) => setBody(e.target.value)}
         className="w-full resize-y rounded-lg border border-line-strong bg-surface px-3 py-2 text-[0.8125rem] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100" />
-      <SignatureStrip sig={sig} on={withSig} onChange={setWithSig} />
+      <PolishBar text={body} threadId={threadId} onReplace={setBody} />
+      {!quote && <SignatureStrip sig={sig} on={withSig} onChange={setWithSig} />}
       {state?.error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[0.7812rem] text-rose-700 ring-1 ring-inset ring-rose-100">{state.error}</p>}
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <span className="text-[0.75rem] text-ink-faint">Sent through your Gmail account, in the same Gmail thread.</span>
+        <span className="text-[0.75rem] text-ink-faint">{quote ? "Next you'll see the email exactly as they'll get it — change anything, then send." : "Sent through your Gmail account, in the same Gmail thread."}</span>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Sending…" : "Send reply"}</Button>
+          <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={() => { setOpen(false); attach(null); }}>Cancel</Button>
+          {quote ? (
+            <Button type="button" size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={!body.trim()} onClick={() => setSendingQuote(true)}>
+              <Send className="h-3.5 w-3.5" />Review &amp; send with quote
+            </Button>
+          ) : (
+            <Button size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" disabled={pending}>{pending ? "Sending…" : "Send reply"}</Button>
+          )}
         </div>
       </div>
+      {quote && sendingQuote && (
+        <SendQuoteDialog quoteId={quote.id} replyThreadId={threadId} initialMessage={body} flushAll={async () => true}
+          onClose={() => setSendingQuote(false)}
+          onDone={async () => {
+            setSendingQuote(false);
+            await discardSavedDraft(threadId).catch(() => null);
+            setBody(""); setDraftNotes([]); attach(null); setOpen(false);
+            router.refresh();
+          }} />
+      )}
     </form>
   );
 }
@@ -338,5 +380,62 @@ function FollowUpLater({ thread, onDone }: { thread: EmailThread; onDone: () => 
       </div>
       {msg && <p className={cn("text-[0.75rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
     </form>
+  );
+}
+
+/** The draft quote going out with this reply: total, View (quick look), Edit quote (in a new tab), and a flag when it's been edited since. */
+function QuoteStrip({ quote, base, threadId, onRemove }: { quote: QuoteCard; base: QuoteCard | null; threadId: string; onRemove: () => void }) {
+  const [view, setView] = useState(false);
+  const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: quote.currency || "AUD" }).format(n);
+  const edited = !!base && base.sig !== quote.sig;
+  return (
+    <div className="mb-2 rounded-xl border border-line bg-zinc-50/60 px-3 py-2.5 dark:bg-white/5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <FileText className="h-4 w-4 shrink-0 text-brand-600" />
+        <div className="min-w-0 flex-1 basis-48">
+          <p className="text-[0.8125rem] font-semibold text-ink">Quote Q-{quote.number} goes with this reply <span className="font-normal text-ink-muted">· {fmt(quote.total)} inc GST</span></p>
+          <p className="truncate text-[0.75rem] text-ink-muted">{quote.label}{quote.status === "draft" ? " · draft — published when you send" : ""}</p>
+        </div>
+        {edited && <Badge tone="blue">Edited — was {fmt(base!.total)}</Badge>}
+        <div className="flex flex-wrap gap-1.5">
+          <Button type="button" size="sm" variant="secondary" className="h-10 sm:h-8" onClick={() => setView(true)}><Eye className="h-3.5 w-3.5" />View{edited ? " latest" : ""}</Button>
+          <Link href={`/quotes/${quote.id}?reply=${threadId}`} target="_blank" rel="noopener"
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-surface sm:h-8">
+            <ExternalLink className="h-3.5 w-3.5" />Edit quote
+          </Link>
+          <Button type="button" size="sm" variant="ghost" className="h-10 sm:h-8" onClick={onRemove}>Don&apos;t attach</Button>
+        </div>
+      </div>
+      {edited && <p className="mt-1.5 text-[0.75rem] text-ink-muted">Your changes are saved in the quote. It now totals {fmt(quote.total)} — that&apos;s what will be sent.</p>}
+      {view && <QuoteQuickView quoteId={quote.id} number={quote.number} currency={quote.currency} onClose={() => setView(false)} />}
+    </div>
+  );
+}
+
+function QuoteQuickView({ quoteId, number, currency, onClose }: { quoteId: string; number: number; currency: string; onClose: () => void }) {
+  const [snap, setSnap] = useState<QuoteSnapshotData | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    previewQuote(quoteId).then((r) => { if (!live) return; if (r.ok) setSnap(r.data); else setErr(r.error); }).catch(() => live && setErr("Couldn't load the quote."));
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => { live = false; window.removeEventListener("keydown", onKey); };
+  }, [quoteId, onClose]);
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`Quote Q-${number}`}>
+      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/45" onClick={onClose} />
+      <div className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-surface shadow-pop sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <p className="text-[0.9375rem] font-semibold text-ink">Quote Q-{number} — as it is now</p>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-2 text-ink-faint hover:bg-zinc-100 hover:text-ink dark:hover:bg-white/10"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+          {err ? <p className="text-[0.8125rem] text-rose-600">{err}</p>
+            : !snap ? <p className="inline-flex items-center gap-2 text-[0.8125rem] text-ink-muted"><Loader2 className="h-4 w-4 animate-spin" />Loading…</p>
+            : <QuoteDocument snap={snap} currency={currency} quoteNumber={number} compact />}
+        </div>
+      </div>
+    </div>
   );
 }

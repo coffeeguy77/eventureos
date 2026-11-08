@@ -23,7 +23,7 @@ const clip = (s: string | null | undefined, n: number) => {
   return t.length > n ? t.slice(0, n) + "…" : t;
 };
 
-export async function callClaudeRaw(key: string | null, system: string, user: string, maxTokens: number, timeoutMs: number) {
+export async function callClaudeRaw(key: string | null, system: string, user: string, maxTokens: number, timeoutMs: number, model = replyModel()) {
   if (!key) throw new Error("AI drafting needs a Claude API key — add one in Settings → Integrations.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -31,7 +31,7 @@ export async function callClaudeRaw(key: string | null, system: string, user: st
     const res = await fetch(ANTHROPIC_URL, {
       method: "POST", signal: ctrl.signal,
       headers: anthropicHeaders(key),
-      body: JSON.stringify({ model: replyModel(), max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] }),
     });
     if (!res.ok) throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const json = (await res.json()) as { content?: { type: string; text?: string }[] };
@@ -67,9 +67,15 @@ async function examples(db: SupabaseClient, orgId: string, threadId: string, tex
   return pairs.sort((x, y) => y.score - x.score).slice(0, limit);
 }
 
-export interface DraftResult { body: string; notes: string[]; priced: boolean }
+/** The job the AI priced, so a real draft quote can be built from it (prices still come from the price list). */
+export interface DraftQuote { packageId: string; packageName: string; start: string; end: string; serves: number; staff: number; table: string }
+export interface DraftResult { body: string; notes: string[]; priced: boolean; quote: DraftQuote | null }
 
-export async function draftReply(db: SupabaseClient, org: { id: string; name: string; timezone: string; currency: string }, threadId: string, senderName: string): Promise<DraftResult> {
+/**
+ * `forQuote`: the reply will go out with a proper quote attached, so the price table is left out of the message and
+ * the job details are handed back to build the quote from.
+ */
+export async function draftReply(db: SupabaseClient, org: { id: string; name: string; timezone: string; currency: string }, threadId: string, senderName: string, { forQuote = false }: { forQuote?: boolean } = {}): Promise<DraftResult> {
   const { data: thread } = await db.from("email_threads").select("id, subject, customer_id, enquiry_id, extracted")
     .eq("organisation_id", org.id).eq("id", threadId).maybeSingle();
   if (!thread) throw new Error("That conversation couldn't be found.");
@@ -93,7 +99,9 @@ export async function draftReply(db: SupabaseClient, org: { id: string; name: st
   const system = `You write email replies for ${org.name}, an Australian event-services business, as ${senderName}.
 Match the voice, length, greeting and sign-off of the business's past replies shown as EXAMPLES. Australian English. Warm, direct, no fluff.
 Never invent prices, availability, or facts not given. If something needed for a quote is missing (date, service times, number of guests/coffees, indoor/outdoor, venue), ask for it briefly.
-When the customer wants pricing and you know enough, choose ONE package and give the job details; the system will calculate the price and insert it where you put the token [[QUOTE]] on its own line. Do not write any dollar amounts yourself.
+When the customer wants pricing and you know enough, choose ONE package and give the job details; ${forQuote
+    ? "the system will build a formal quote from them and send it with your email (the quote, its total and a button to view and accept it appear under your message). Refer to it naturally, e.g. \"I've put together a quote for you below\", and put the token [[QUOTE]] on its own line where a price would otherwise go."
+    : "the system will calculate the price and insert it where you put the token [[QUOTE]] on its own line."} Do not write any dollar amounts yourself.
 Packages available: ${packages.map((p) => `"${p.name}"${p.summary ? ` (${p.summary})` : ""}`).join(", ") || "none"}.
 Reply with ONLY a JSON object:
 {"reply":"the email body, plain text, with [[QUOTE]] where the price table goes (omit the token if not quoting)","quote":{"package":"exact package name","start":"HH:MM","end":"HH:MM","serves":number,"staff":number|null}|null,"notes":["short notes for the person sending, e.g. assumptions to check"]}`;
@@ -114,6 +122,7 @@ ${convoText}`;
   if (!body) throw new Error("The AI didn't return a draft — try again.");
   const notes = Array.isArray(obj.notes) ? obj.notes.filter((n): n is string => typeof n === "string").slice(0, 5) : [];
   let priced = false;
+  let quote: DraftQuote | null = null;
 
   const q = obj.quote as { package?: string; start?: string; end?: string; serves?: number; staff?: number | null } | null;
   const hhmm = (v?: string) => { const m = /^(\d{1,2}):(\d{2})$/.exec(v ?? ""); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
@@ -130,12 +139,17 @@ ${convoText}`;
       `Subtotal ${fmt(r.subtotal)} + GST ${fmt(r.tax_total)} = ${fmt(r.total)} inc GST`,
       ...r.notes.map((n) => `Tip: ${n}`),
     ].join("\n");
-    body = body.includes("[[QUOTE]]") ? body.replace("[[QUOTE]]", table) : `${body}\n\n${table}`;
     priced = true;
-    notes.unshift(`Priced from your price list: ${pkg.name}, ${q!.start}–${q!.end}, ${serves} serves, ${staff} staff. Check before sending.`);
+    if (forQuote) {
+      body = body.replace(/\n?\[\[QUOTE\]\]\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+      quote = { packageId: pkg.id, packageName: pkg.name, start: q!.start!, end: q!.end!, serves, staff, table };
+    } else {
+      body = body.includes("[[QUOTE]]") ? body.replace("[[QUOTE]]", table) : `${body}\n\n${table}`;
+      notes.unshift(`Priced from your price list: ${pkg.name}, ${q!.start}–${q!.end}, ${serves} serves, ${staff} staff. Check before sending.`);
+    }
   } else {
     body = body.replace(/\n?\[\[QUOTE\]\]\n?/g, "\n");
     if (q) notes.unshift("The AI suggested a quote but details were incomplete, so no prices were added.");
   }
-  return { body, notes, priced };
+  return { body, notes, priced, quote };
 }
