@@ -26,3 +26,19 @@ export async function approveBooking(eventId: string): Promise<ApprovalResult> {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/** A late acceptance: the office has checked staff and equipment — the job is confirmed, the calendar drops "TBC". */
+export async function confirmAvailability(eventId: string): Promise<ApprovalResult> {
+  try {
+    const { supabase, org } = await requireOrg();
+    if (!UUID.test(eventId)) return { ok: false, error: "Refresh the page and try again." };
+    const { error } = await supabase.from("events").update({ availability_tbc: false, next_action: null, next_action_due: null }).eq("id", eventId).eq("organisation_id", org.id);
+    if (error) return { ok: false, error: error.message };
+    try { const { syncJobCalendar } = await import("@/lib/calendar/job-sync"); await syncJobCalendar(supabase, org.id, eventId, { create: false }); } catch { /* the next sync renames it */ }
+    revalidatePath(`/events/${eventId}`);
+    revalidatePath("/calendar");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}

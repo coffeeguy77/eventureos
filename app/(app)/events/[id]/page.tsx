@@ -9,6 +9,7 @@ import { CrewCard, type CrewOption, type CrewRow } from "./crew-card";
 import { PeopleCard, type PersonRow } from "./people-card";
 import { KitchenOrderCard } from "./kitchen-order-card";
 import { ApprovalBanner } from "./approval-banner";
+import { AvailabilityBanner } from "./availability-banner";
 import { Card, CardHeader, EmptyState, Field } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -263,6 +264,7 @@ export default async function EventPage({ params, searchParams }: { params: Prom
         <ApprovalBanner eventId={e.id} when={e.event_date ? `${relativeDay(e.event_date, today).toLowerCase()} (${fmtDate(e.event_date, "weekday")})` : "undated"}
           requestedAt={approval.requestedAt ? relative(approval.requestedAt) : null} canApprove={role === "owner" || role === "admin"} invoiceNote={approval.invoiceNote} />
       )}
+      {(e as { availability_tbc?: boolean }).availability_tbc && <AvailabilityBanner eventId={e.id} phone={e.contact?.phone ?? e.customer.phone ?? null} />}
       <NextActionBanner action={na} />
 
       <div className="mt-6"><Tabs tabs={tabs} active={tab} baseHref={`/events/${e.id}`} /></div>

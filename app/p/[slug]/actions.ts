@@ -154,7 +154,7 @@ export async function respondToQuote(_prev: ActionResult | undefined, form: Form
       await alertBookingApproval(supabase, ev.id);
       const { createServiceClient } = await import("@/lib/integrations/runtime");
       const { afterQuoteAccepted } = await import("@/lib/quotes/after-accept");
-      await afterQuoteAccepted(createServiceClient(), ev.id);
+      await afterQuoteAccepted(createServiceClient(), ev.id, { byCustomer: true });
     }
     revalidatePath(`/p/${slug}`, "layout");
     return { ok: true };

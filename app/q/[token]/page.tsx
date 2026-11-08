@@ -9,6 +9,7 @@ import { LinkResponse, PrintButton, ViewBeacon } from "./client";
 import { readShop } from "@/lib/shop/core";
 import { CATERING_LOCKED_MESSAGE, loadCustomerEdit } from "@/lib/quotes/customer-edit-server";
 import { CustomerChange } from "@/components/quotes/customer-change";
+import { canStillAccept, isLateAcceptance } from "@/lib/quotes/late";
 
 import { loadBillTo } from "@/lib/customers/bill-to";
 import { createClient } from "@/lib/supabase/server";
@@ -59,7 +60,11 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
   const v = d.version;
   const snap: QuoteSnapshotData = { ...v.snapshot, subtotal: Number(v.subtotal), tax_total: Number(v.tax_total), total: Number(v.total) };
   const total = money(v.total, cur, { cents: true });
-  const open = (v.status === "sent" || v.status === "viewed") && !d.quote.expired;
+  // Past its expiry the quote can still be accepted while the event is to come — late: availability to be confirmed
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const respondable = v.status === "sent" || v.status === "viewed";
+  const open = respondable && canStillAccept(today, d.quote.expiry_date, d.event?.event_date ?? null);
+  const late = open && isLateAcceptance(today, d.quote.expiry_date, d.event?.event_date ?? null);
   // ?preview=1 opened by the business (signed in): exactly what the customer sees, but nothing is recorded or saved
   const preview = wantPreview && await (async () => {
     const supabase = await createClient();
@@ -127,7 +132,7 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
         {open && !isCopy && (
           <div className="mt-6">
             <LinkResponse token={token} versionNumber={v.number} total={total} defaultName={d.recipient.name ?? ""} businessName={d.org.name}
-              needsApproval={d.org.approval_on_accept} />
+              needsApproval={d.org.approval_on_accept} late={late} phone={d.org.contact_phone} />
           </div>
         )}
 

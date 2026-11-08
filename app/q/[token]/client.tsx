@@ -34,8 +34,8 @@ const btn = (primary: boolean) => cn(
   primary ? "bg-[var(--portal-brand)] text-[color:var(--portal-brand-fg)] shadow-sm hover:brightness-95" : "bg-surface text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50",
 );
 
-export function LinkResponse({ token, versionNumber, total, defaultName, businessName, needsApproval }: {
-  token: string; versionNumber: number; total: string; defaultName: string; businessName: string; needsApproval: boolean;
+export function LinkResponse({ token, versionNumber, total, defaultName, businessName, needsApproval, late = false, phone = null }: {
+  token: string; versionNumber: number; total: string; defaultName: string; businessName: string; needsApproval: boolean; late?: boolean; phone?: string | null;
 }) {
   const [mode, setMode] = useState<"accept" | "decline">("accept");
   const [state, setState] = useState<LinkRespondState>(undefined);
@@ -63,6 +63,15 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
             ? needsApproval ? `${businessName} will confirm your booking shortly.` : `${businessName} has been notified and will be in touch with the next steps.`
             : `${businessName} has been notified.`}
         </p>
+        {state.decision === "accepted" && state.late && (
+          <p className="mx-auto mt-4 max-w-md rounded-xl bg-amber-50 px-4 py-3 text-left text-[0.875rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+            <strong>Please call {businessName}{state.phone ? <> on <a href={`tel:${state.phone.replace(/[^\d+]/g, "")}`} className="underline">{state.phone}</a></> : ""} to confirm availability.</strong>{" "}
+            This was accepted close to the event (or after the quote expired), so accepting doesn&apos;t guarantee we&apos;re available. We&apos;ve also emailed you.
+          </p>
+        )}
+        {state.decision === "accepted" && state.payUrl && (
+          <a href={state.payUrl} className={cn(btn(true), "mt-5")}>Pay now</a>
+        )}
       </div>
     );
   }
@@ -89,6 +98,11 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
               You&apos;re accepting version {versionNumber} for <strong className="text-ink">{total}</strong>. We record your name, the date and time,
               and your connection details as a record of your acceptance.
             </p>
+            {late && (
+              <p className="rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+                <strong>Please call {businessName}{phone ? ` on ${phone}` : ""} to confirm availability.</strong> This quote is past its expiry or close to the event date, so accepting it doesn&apos;t guarantee we&apos;re available.
+              </p>
+            )}
             {needsApproval && (
               <p className="rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200">
                 <strong>Your booking isn&apos;t confirmed until {businessName} confirms it</strong> — they may need to check staff and equipment first.

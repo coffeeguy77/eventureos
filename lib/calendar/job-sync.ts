@@ -27,15 +27,19 @@ export async function quoteStaffDays(db: SupabaseClient, orgId: string, eventId:
 /** Load a job (tolerating a database without the 0058 update) and work out its days. */
 export async function loadJobDays(db: SupabaseClient, orgId: string, eventId: string) {
   const cols = "id, number, name, venue, customer_id, event_date, setup_time, start_time, finish_time";
-  let { data: ev, error } = await db.from("events").select(`${cols}, days`).eq("organisation_id", orgId).eq("id", eventId).maybeSingle();
+  let { data: ev, error } = await db.from("events").select(`${cols}, days, availability_tbc`).eq("organisation_id", orgId).eq("id", eventId).maybeSingle();
+  if (error && /availability_tbc/.test(error.message)) ({ data: ev, error } = await db.from("events").select(`${cols}, days`).eq("organisation_id", orgId).eq("id", eventId).maybeSingle());
   if (error && /days/.test(error.message)) ({ data: ev, error } = await db.from("events").select(cols).eq("organisation_id", orgId).eq("id", eventId).maybeSingle());
   if (error) throw new Error(error.message);
   if (!ev) return null;
-  const e = ev as { id: string; number: number; name: string; venue: string | null; customer_id: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; days?: unknown };
+  const e = ev as { id: string; number: number; name: string; venue: string | null; customer_id: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; days?: unknown; availability_tbc?: boolean };
   const { jobPlans } = await import("@/lib/crew/job-plan");
   const plan = (await jobPlans(db, orgId, [e])).get(e.id);
   return { ev: e, days: plan?.days ?? jobDays(e, await quoteStaffDays(db, orgId, eventId)), travel: plan?.travel ?? 0, address: plan?.address ?? null };
 }
+
+/** The calendar entry's title: "TBC - …" while availability is still to be confirmed (a late acceptance). */
+export const calTitle = (ev: { name: string; availability_tbc?: boolean }) => (ev.availability_tbc ? `TBC - ${ev.name}` : ev.name);
 
 /** Where the calendar entry says it is: the venue, plus the travel address from the quote when there is one. */
 export const jobLocation = (venue: string | null, travelAddress: string | null) =>
@@ -93,15 +97,15 @@ export async function syncJobCalendar(db: SupabaseClient, orgId: string, eventId
     const { startsAt, endsAt } = dayWindow(day, tz, job.travel);
     const have = byDate.get(day.date) ?? spare.shift();
     if (have) {
-      const same = Date.parse(have.starts_at) === Date.parse(startsAt) && Date.parse(have.ends_at) === Date.parse(endsAt) && have.title === job.ev.name && (have.location ?? null) === location;
+      const same = Date.parse(have.starts_at) === Date.parse(startsAt) && Date.parse(have.ends_at) === Date.parse(endsAt) && have.title === calTitle(job.ev) && (have.location ?? null) === location;
       if (!same || have.sync_status !== "synced") {
-        const { error } = await db.from("calendar_events").update({ starts_at: startsAt, ends_at: endsAt, title: job.ev.name, location, ...(have.sync_status === "local" ? {} : { sync_status: status }) }).eq("id", have.id);
+        const { error } = await db.from("calendar_events").update({ starts_at: startsAt, ends_at: endsAt, title: calTitle(job.ev), location, ...(have.sync_status === "local" ? {} : { sync_status: status }) }).eq("id", have.id);
         if (error) throw new Error(`Couldn't update the calendar: ${error.message}`);
       }
       ids.push(have.id);
     } else {
       const { data: row, error } = await db.from("calendar_events").insert({
-        organisation_id: orgId, calendar_connection_id: connId, event_id: eventId, title: job.ev.name, starts_at: startsAt, ends_at: endsAt,
+        organisation_id: orgId, calendar_connection_id: connId, event_id: eventId, title: calTitle(job.ev), starts_at: startsAt, ends_at: endsAt,
         all_day: false, location, kind: "event", sync_status: status, created_by: opts.actorId ?? null,
       }).select("id").single();
       if (error) throw new Error(`Couldn't add it to the calendar: ${error.message}`);

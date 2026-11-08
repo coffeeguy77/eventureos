@@ -5,12 +5,13 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
-import { addDaysISO, fmtDate, money, todayISO } from "@/lib/format";
+import { fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
 import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
 import { cleanDetails, servesLine, staffLine } from "@/lib/quotes/line-helpers";
 import { xeroLinesToQuoteLines, type XeroLine } from "@/lib/quotes/xero-import";
 import { loadMatchContext } from "@/lib/quotes/history";
+import { quoteExpiryFor } from "@/lib/quotes/late";
 import type {
   ActionResult, HeaderPatch, ItemPatch, QItem, QSection, QuoteDoc, QuoteSnapshotData, SectionPatch,
 } from "@/components/quotes/types";
@@ -111,7 +112,7 @@ export async function createQuoteForEvent(eventId: string): Promise<ActionResult
   const res = await run(async () => {
     assertId(eventId, "event");
     const { supabase, org, user, profile } = await requireOrg();
-    const { data: ev, error } = await supabase.from("events").select("id, number, name, customer_id, status, enquiry_id")
+    const { data: ev, error } = await supabase.from("events").select("id, number, name, customer_id, status, enquiry_id, event_date")
       .eq("id", eventId).eq("organisation_id", org.id).maybeSingle();
     if (error) fail(`Couldn't load the event: ${error.message}`);
     if (!ev) fail("That event no longer exists, or you don't have access to it.");
@@ -120,7 +121,7 @@ export async function createQuoteForEvent(eventId: string): Promise<ActionResult
     const today = todayISO(org.timezone);
     const { data: q, error: qErr } = await supabase.from("quotes").insert({
       organisation_id: org.id, event_id: ev!.id, customer_id: ev!.customer_id, title: ev!.name,
-      status: "draft", issue_date: today, expiry_date: addDaysISO(today, 14), created_by: user.id,
+      status: "draft", issue_date: today, expiry_date: quoteExpiryFor(today, (ev!.event_date as string | null) ?? null), created_by: user.id,
     }).select("id, number, event_id").single();
     if (qErr) fail(`Couldn't create the quote: ${qErr.message}`);
 
@@ -147,7 +148,8 @@ export async function duplicateQuote(quoteId: string): Promise<ActionResult<neve
     const { supabase, org, user, profile } = await requireOrg();
     const q = await loadQuote(supabase, org.id, quoteId);
     const today = todayISO(org.timezone);
-    const { data, error } = await supabase.rpc("duplicate_quote", { p_quote_id: q.id, p_expiry: addDaysISO(today, 14) });
+    const { data: qev } = q.event_id ? await supabase.from("events").select("event_date").eq("id", q.event_id).maybeSingle() : { data: null };
+    const { data, error } = await supabase.rpc("duplicate_quote", { p_quote_id: q.id, p_expiry: quoteExpiryFor(today, (qev?.event_date as string | null) ?? null) });
     if (error) fail(`Couldn't duplicate the quote: ${error.message}`);
     const { data: nq, error: nErr } = await supabase.from("quotes").select("id, number, event_id").eq("id", data as string).single();
     if (nErr) fail(`The copy was made but couldn't be opened: ${nErr.message}`);

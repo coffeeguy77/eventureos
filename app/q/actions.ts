@@ -43,7 +43,7 @@ export async function recordQuoteLinkView(token: string): Promise<void> {
   if (error) console.error("quote_link_viewed failed", error.message);
 }
 
-export type LinkRespondState = { ok?: boolean; decision?: "accepted" | "declined"; error?: string } | undefined;
+export type LinkRespondState = { ok?: boolean; decision?: "accepted" | "declined"; error?: string; late?: boolean; payUrl?: string | null; phone?: string | null } | undefined;
 
 export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormData): Promise<LinkRespondState> {
   try {
@@ -70,7 +70,9 @@ export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormDat
       await alertBookingApproval(db, eventId as string);
       // The calendar entry goes to Google now, not on the next sync
       const { afterQuoteAccepted } = await import("@/lib/quotes/after-accept");
-      await afterQuoteAccepted(db, eventId as string);
+      const a = await afterQuoteAccepted(db, eventId as string, { byCustomer: true });
+      revalidatePath(`/q/${token}`);
+      return { ok: true, decision, late: a.late, payUrl: a.payUrl, phone: a.phone };
     }
     revalidatePath(`/q/${token}`);
     return { ok: true, decision };
