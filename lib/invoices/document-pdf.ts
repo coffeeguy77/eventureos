@@ -18,6 +18,8 @@ export interface InvoiceDocInput {
   payments: DocPayment[];
   credits: DocPayment[];
   payUrl?: string | null;
+  /** Direct deposit details, printed under "How to pay" with the invoice number as the reference */
+  bank?: { name: string; bsb: string; account: string } | null;
 }
 
 const A4: [number, number] = [595.28, 841.89];
@@ -195,7 +197,18 @@ export async function buildInvoicePdf(d: InvoiceDocInput): Promise<Uint8Array> {
     const link = doc.context.obj({ Type: "Annot", Subtype: "Link", Rect: [M, boxTop - 44, right, boxTop], Border: [0, 0, 0], A: { Type: "Action", S: "URI", URI: PDFString.of(d.payUrl) } });
     page.node.addAnnot(doc.context.register(link));
     y -= 22;
-    text(`Or pay by bank transfer using ${d.invoice.number} as the reference.`, M, 8.5, { color: MUTED }); y -= 12;
+    if (!d.bank) { text(`Or pay by bank transfer using ${d.invoice.number} as the reference.`, M, 8.5, { color: MUTED }); y -= 12; }
+  }
+  // Direct deposit details (unpaid)
+  if (!paid && d.bank && d.invoice.status !== "void") {
+    y -= d.payUrl ? 4 : 16; need(82);
+    page.drawRectangle({ x: M, y: y - 68, width: right - M, height: 82, color: rgb(0.97, 0.97, 0.98), borderColor: LINE, borderWidth: 0.75 });
+    y -= 2; text(d.payUrl ? "Or pay by direct deposit" : "Pay by direct deposit", M + 14, 10.5, { font: bold, color: brand }); y -= 15;
+    const col2 = M + 14 + 100;
+    for (const [k, v] of [["Account name", d.bank.name], ["BSB", d.bank.bsb], ["Account number", d.bank.account], ["Reference", d.invoice.number]] as [string, string][]) {
+      text(k, M + 14, 9, { color: MUTED }); text(v, col2, 9, { font: bold }); y -= 12;
+    }
+    y -= 12;
   }
 
   pages.forEach((p, i) => {

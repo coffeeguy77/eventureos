@@ -117,3 +117,33 @@ export function PayIn4Form({ initial }: { initial: { enabled: boolean; days: num
     </Card>
   );
 }
+
+/** Bank details shown on invoices so customers can pay by direct deposit, with the invoice number as the reference. */
+export function DirectDepositForm({ initial }: { initial: { on: boolean; name: string; bsb: string; account: string } }) {
+  const router = useRouter();
+  const [f, setF] = useState({ ...initial, bsb: initial.bsb ? `${initial.bsb.slice(0, 3)}-${initial.bsb.slice(3)}` : "" });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const save = () => start(async () => {
+    const { saveDirectDeposit } = await import("@/app/(app)/accounts/actions");
+    const r = await saveDirectDeposit(f);
+    setMsg(r.ok ? { ok: true, text: f.on ? "Saved — your bank details now show on invoices." : "Saved. Direct deposit details are hidden from invoices." } : { ok: false, text: r.error }); if (r.ok) router.refresh();
+  });
+  return (
+    <Card>
+      <CardHeader title="Direct deposit" subtitle="Your bank details on every unpaid invoice — the pay page, invoice emails and the PDF — with the invoice number as the payment reference, so the bank feed can match the deposit to the invoice." />
+      <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+        <label className="flex items-center gap-2 font-medium text-ink"><input type="checkbox" className="h-4 w-4" checked={f.on} onChange={(e) => setF({ ...f, on: e.target.checked })} />Show direct deposit details on invoices</label>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,1fr)]">
+          <div><Label htmlFor="dd-name">Account name</Label><Input id="dd-name" value={f.name} maxLength={60} autoComplete="off" onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
+          <div><Label htmlFor="dd-bsb">BSB</Label><Input id="dd-bsb" inputMode="numeric" value={f.bsb} maxLength={7} placeholder="000-000" autoComplete="off" onChange={(e) => setF({ ...f, bsb: e.target.value })} /></div>
+          <div><Label htmlFor="dd-acc">Account number</Label><Input id="dd-acc" inputMode="numeric" value={f.account} maxLength={14} autoComplete="off" onChange={(e) => setF({ ...f, account: e.target.value })} /></div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="primary" disabled={pending} onClick={save}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}Save</Button>
+          {msg && <p role="status" className={msg.ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}>{msg.text}</p>}
+        </div>
+      </div>
+    </Card>
+  );
+}

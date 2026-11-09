@@ -39,6 +39,8 @@ export interface InvoiceSendSetup {
   dueDate: string | null;
   payUrl: string;
   cardPayments: boolean;
+  /** Direct deposit details (Accounts → Fees & terms), shown in the email */
+  bank: { name: string; bsb: string; account: string } | null;
   /** A draft gets marked as sent (awaiting payment) when it's emailed */
   isDraft: boolean;
   xeroManaged: boolean;
@@ -97,7 +99,7 @@ export async function invoiceSendSetup(invoiceId: string): Promise<Result<Invoic
     const [{ data: contacts }, { data: jobPeople }, { data: o }, card] = await Promise.all([
       supabase.from("contacts").select("id, first_name, last_name, email, is_primary").eq("organisation_id", org.id).eq("customer_id", inv.customer_id).not("email", "is", null),
       inv.event ? supabase.from("event_contacts").select("contact_id").eq("organisation_id", org.id).eq("event_id", inv.event.id) : Promise.resolve({ data: [] }),
-      supabase.from("organisations").select("brand_colour, logo_url").eq("id", org.id).single(),
+      supabase.from("organisations").select("brand_colour, logo_url, settings").eq("id", org.id).single(),
       stripeOn(supabase, org.id),
     ]);
     const gm = await gmailSender(supabase, org.id, user.id);
@@ -146,14 +148,16 @@ export async function invoiceSendSetup(invoiceId: string): Promise<Result<Invoic
     const eventDate = inv.event?.event_date ? fmtDate(inv.event.event_date, "long") : null;
     const dueDate = inv.due_date ? fmtDate(inv.due_date, "long") : null;
     const amountDue = money(inv.balance, org.currency, { cents: true });
-    const orgRow = o as { brand_colour: string | null; logo_url: string | null } | null;
+    const orgRow = o as { brand_colour: string | null; logo_url: string | null; settings?: unknown } | null;
+    const { directDepositFor } = await import("@/lib/accounts/core");
+    const bank = directDepositFor(orgRow?.settings);
     return {
       ok: true,
       data: {
         suggestions,
         defaultTo: jobEmails.length ? jobEmails : first ? [first] : [],
         subject: defaultInvoiceSubject({ businessName: org.name, invoiceNumber: inv.number, eventName: inv.event?.name }),
-        message: defaultInvoiceMessage({ firstName, eventName: inv.event?.name ?? null, eventDate, dueDate, amountDue, cardPayments: card, senderFirstName: profile.full_name?.split(" ")[0] ?? null }),
+        message: defaultInvoiceMessage({ firstName, eventName: inv.event?.name ?? null, eventDate, dueDate, amountDue, cardPayments: card, bankTransfer: !!bank, senderFirstName: profile.full_name?.split(" ")[0] ?? null }),
         senderEmail: profile.email,
         businessName: org.name,
         brand: orgRow?.brand_colour ?? null,
@@ -167,6 +171,7 @@ export async function invoiceSendSetup(invoiceId: string): Promise<Result<Invoic
         dueDate,
         payUrl: `${appBaseUrl()}/pay/${inv.pay_token}`,
         cardPayments: card,
+        bank,
         isDraft: inv.status === "draft",
         xeroManaged: !!inv.xero_invoice_id,
         emailReady: Boolean(gm) || emailConfigured(),
@@ -243,15 +248,16 @@ export async function sendInvoiceEmail(invoiceId: string, input: SendInvoiceInpu
       const s = await signatureForSend(supabase, org.id, user.id, null).catch(() => null);
       if (s) sig = { html: s.html, text: s.text, version: s.version };
     }
-    const { data: o } = await supabase.from("organisations").select("brand_colour, logo_url, contact_email").eq("id", org.id).single();
-    const orgRow = o as { brand_colour: string | null; logo_url: string | null; contact_email: string | null } | null;
+    const { data: o } = await supabase.from("organisations").select("brand_colour, logo_url, contact_email, settings").eq("id", org.id).single();
+    const orgRow = o as { brand_colour: string | null; logo_url: string | null; contact_email: string | null; settings: unknown } | null;
+    const { directDepositFor } = await import("@/lib/accounts/core");
     const card = await stripeOn(supabase, org.id);
     const m = invoiceEmail({
       businessName: org.name, logoUrl: orgRow?.logo_url, brand: orgRow?.brand_colour, invoiceNumber: inv.number,
       eventLine: inv.event ? [inv.event.name, inv.event.event_date ? fmtDate(inv.event.event_date, "long") : null].filter(Boolean).join(" · ") : null,
       total: money(inv.total, org.currency, { cents: true }), amountDue: money(inv.balance, org.currency, { cents: true }),
       paidNote: Number(inv.amount_paid) > 0 ? `${money(inv.amount_paid, org.currency, { cents: true })} of ${money(inv.total, org.currency, { cents: true })} already paid` : null,
-      dueDate: inv.due_date ? fmtDate(inv.due_date, "long") : null, message, url: `${appBaseUrl()}/pay/${inv.pay_token}`, cardPayments: card,
+      dueDate: inv.due_date ? fmtDate(inv.due_date, "long") : null, message, url: `${appBaseUrl()}/pay/${inv.pay_token}`, cardPayments: card, bank: directDepositFor(orgRow?.settings),
       signatureHtml: sig?.html ?? null, signatureText: sig?.text ?? null,
     });
     const fromName = profile.full_name ? `${profile.full_name} · ${org.name}` : org.name;

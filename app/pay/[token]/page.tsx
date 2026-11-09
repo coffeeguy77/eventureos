@@ -1,5 +1,5 @@
 import { billToLines, loadBillTo } from "@/lib/customers/bill-to";
-import { readTerms } from "@/lib/accounts/core";
+import { directDepositFor, readTerms } from "@/lib/accounts/core";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Download } from "lucide-react";
@@ -8,6 +8,7 @@ import { fmtDate, money } from "@/lib/format";
 import { PayButton } from "./pay-button";
 import { InvoiceViewBeacon } from "./view-beacon";
 import { ReceiptWait } from "./receipt-wait";
+import { BankDetails } from "./bank-details";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pay invoice", robots: { index: false, follow: false } };
@@ -40,6 +41,8 @@ export default async function PayPage({ params, searchParams }: { params: Promis
   // The business's terms and conditions (Accounts → Fees & terms), linked when they've published them
   const { data: termsOrg } = await svc.from("organisations").select("slug, settings").eq("id", inv.organisation_id).maybeSingle();
   const termsHref = termsOrg && readTerms(termsOrg.settings) ? `/p/${termsOrg.slug as string}/terms` : null;
+  // Direct deposit details (Accounts → Fees & terms), for an invoice that's still owing
+  const bank = !justPaid && inv.status !== "paid" && inv.status !== "void" && Number(inv.balance) > 0 ? directDepositFor(termsOrg?.settings) : null;
   // What they're paying for: the invoice's lines (from EventureOS or Xero)
   const { data: lineInv } = await svc.from("invoices").select("organisation_id, kind, total, subtotal, tax_total, line_items, xero_invoice_id, quote_id, created_by, origin, reference, issue_date").eq("id", inv.id).maybeSingle();
   const { invoiceLines } = await import("@/lib/invoices/document");
@@ -96,7 +99,7 @@ export default async function PayPage({ params, searchParams }: { params: Promis
               <div className="flex justify-between border-t border-line pt-3 text-[1.0625rem] font-semibold"><dt className="text-ink">Amount due</dt><dd className="text-ink">{money(justPaid ? 0 : inv.balance, cur, { cents: true })}</dd></div>
             </dl>
           </div>
-          <div className="border-t border-line bg-zinc-50 p-6">
+          <div className="border-t border-line bg-canvas p-6">
             {justPaid || inv.status === "paid" ? (
               <div className="text-center">
                 <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" />
@@ -104,8 +107,11 @@ export default async function PayPage({ params, searchParams }: { params: Promis
                 <p className="mt-1 text-[0.8125rem] text-ink-muted">{inv.org.name} has been notified.{justPaid && !recent ? " Your receipt will appear below in a few seconds." : ""}</p>
                 {justPaid && !recent && <ReceiptWait />}
               </div>
-            ) : canPay ? (
-              <PayButton token={token} label={`Pay ${money(inv.balance, cur, { cents: true })} by card`} colour={colour} />
+            ) : canPay || bank ? (
+              <>
+                {canPay && <PayButton token={token} label={`Pay ${money(inv.balance, cur, { cents: true })} by card`} colour={colour} />}
+                {bank && <BankDetails bank={bank} reference={inv.number ?? "Invoice"} amount={money(inv.balance, cur, { cents: true })} alsoCard={canPay} />}
+              </>
             ) : (
               <p className="text-center text-[0.875rem] text-ink-muted">
                 {!stripeReady ? `Online card payment isn't available for this invoice. Please contact ${inv.org.name} to pay.` : "This invoice can't be paid online."}

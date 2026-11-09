@@ -28,6 +28,8 @@ export interface InvoiceEmailInput {
   url: string;                // the invoice / pay page
   /** Card payments switched on: the button says "View and pay" */
   cardPayments: boolean;
+  /** Direct deposit details (shown under the button, with the invoice number as the reference) */
+  bank?: { name: string; bsb: string; account: string } | null;
   signatureHtml?: string | null;
   signatureText?: string | null;
 }
@@ -36,13 +38,13 @@ export function defaultInvoiceSubject(o: { businessName: string; invoiceNumber: 
   return `Invoice ${o.invoiceNumber} from ${o.businessName}${o.eventName ? ` — ${o.eventName}` : ""}`;
 }
 
-export function defaultInvoiceMessage(o: { firstName: string | null; eventName: string | null; eventDate: string | null; dueDate: string | null; amountDue: string; cardPayments: boolean; senderFirstName: string | null }) {
+export function defaultInvoiceMessage(o: { firstName: string | null; eventName: string | null; eventDate: string | null; dueDate: string | null; amountDue: string; cardPayments: boolean; bankTransfer?: boolean; senderFirstName: string | null }) {
   return [
     `Hi ${o.firstName?.trim() || "there"},`,
     "",
     `Thanks for confirming${o.eventName ? ` ${o.eventName}` : ""}${o.eventDate ? ` on ${o.eventDate}` : ""}. Please find your invoice below.`,
     "",
-    `The amount due is ${o.amountDue}${o.dueDate ? `, due by ${o.dueDate}` : ""}.${o.cardPayments ? " You can view the invoice and pay by card using the button below." : " You can view the invoice using the button below."}`,
+    `The amount due is ${o.amountDue}${o.dueDate ? `, due by ${o.dueDate}` : ""}.${o.cardPayments ? ` You can view the invoice and pay by card using the button below${o.bankTransfer ? ", or by direct deposit (details below)" : ""}.` : o.bankTransfer ? " You can pay by direct deposit (details below) and view the invoice using the button." : " You can view the invoice using the button below."}`,
     "",
     "If you have any questions, just reply to this email.",
     "",
@@ -72,6 +74,13 @@ ${o.eventLine ? `<tr><td style="padding:0 20px;font:600 16px/1.4 ${FONT};color:#
   </tr></table>
 </td></tr>
 <tr><td style="padding:0 20px 20px"><a href="${esc(o.url)}" style="display:block;text-align:center;background:${colour};color:${onColour(colour)};text-decoration:none;font:600 15px/1 ${FONT};padding:15px 22px;border-radius:10px">${button}</a></td></tr>
+${o.bank ? `<tr><td style="padding:0 20px 20px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:10px;border-collapse:separate">
+  <tr><td colspan="2" style="padding:12px 14px 4px;font:600 13px/1.4 ${FONT};color:#18181b">${o.cardPayments ? "Or pay by direct deposit" : "Pay by direct deposit"}</td></tr>
+  ${[["Account name", o.bank.name], ["BSB", o.bank.bsb], ["Account number", o.bank.account], ["Reference", o.invoiceNumber]].map(([k, v], i, a) =>
+    `<tr><td style="padding:${i === a.length - 1 ? "2px 14px 12px" : "2px 14px"};font:400 13px/1.5 ${FONT};color:#71717a">${k}</td><td align="right" style="padding:${i === a.length - 1 ? "2px 14px 12px" : "2px 14px"};font:600 13px/1.5 ${FONT};color:#18181b">${esc(v)}</td></tr>`).join("")}
+  </table>
+</td></tr>` : ""}
 </table>`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(`Invoice ${o.invoiceNumber}`)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f5">
@@ -93,6 +102,7 @@ ${o.signatureHtml ? `<tr><td style="padding:0 28px 24px">${o.signatureHtml}</td>
     o.dueDate ? `Due by: ${o.dueDate}` : null,
     "",
     `${button}: ${o.url}`,
+    ...(o.bank ? ["", `${o.cardPayments ? "Or pay by direct deposit" : "Pay by direct deposit"}:`, `Account name: ${o.bank.name}`, `BSB: ${o.bank.bsb}`, `Account number: ${o.bank.account}`, `Reference: ${o.invoiceNumber}`] : []),
     ...(o.signatureText ? ["", "-- ", o.signatureText] : []),
   ].filter((x) => x !== null).join("\n");
   return { html, text };

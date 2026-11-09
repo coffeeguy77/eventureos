@@ -594,3 +594,20 @@ export async function savePayIn4(enabled: boolean, days: number): Promise<R> {
     return { ok: true, data: undefined };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** Direct deposit details for invoices (pay page, invoice emails, PDF). */
+export async function saveDirectDeposit(v: { on: boolean; name: string; bsb: string; account: string }): Promise<R> {
+  try {
+    const name = String(v.name ?? "").trim().replace(/\s+/g, " ").slice(0, 60);
+    const bsb = String(v.bsb ?? "").replace(/\D/g, "");
+    const account = String(v.account ?? "").replace(/\D/g, "");
+    if (v.on || name || bsb || account) {
+      if (!name) throw new Error("Add the account name.");
+      if (bsb.length !== 6) throw new Error("The BSB is 6 digits.");
+      if (account.length < 4 || account.length > 12) throw new Error("Check the account number.");
+    }
+    await saveCollections((col) => ({ ...col, direct_deposit: { on: !!v.on, name, bsb, account } }));
+    revalidatePath("/invoices", "layout");
+    return { ok: true, data: undefined };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

@@ -1,8 +1,8 @@
 import { requireOrg } from "@/lib/context";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { PageHeader } from "@/components/ui/page-header";
-import { DEFAULT_TERMS, fillTerms, readFees, readPayIn4, readTerms } from "@/lib/accounts/core";
-import { FeesForm, PayIn4Form, TermsForm, TidyPhones } from "@/components/accounts/terms-form";
+import { DEFAULT_TERMS, fillTerms, readDirectDeposit, readFees, readPayIn4, readTerms } from "@/lib/accounts/core";
+import { DirectDepositForm, FeesForm, PayIn4Form, TermsForm, TidyPhones } from "@/components/accounts/terms-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Fees & terms" };
@@ -17,8 +17,9 @@ export default async function TermsPage() {
   const preview = fillTerms(terms || DEFAULT_TERMS, { business: o?.name ?? org.name, payment_terms: Number(o?.default_payment_terms_days ?? 14) || 14, fees, email: o?.contact_email ?? null, phone: o?.contact_phone ?? null });
   return (
     <>
-      <PageHeader eyebrow="Accounts" title="Fees & terms" subtitle="The account-keeping fee for overdue invoices, and the terms and conditions customers agree to." />
+      <PageHeader eyebrow="Accounts" title="Fees & terms" subtitle="How customers can pay, the account-keeping fee for overdue invoices, and the terms and conditions customers agree to." />
       <div className="space-y-5">
+        <DirectDepositForm initial={readDirectDeposit(o?.settings)} />
         <FeesForm initial={feeInit} customRates={Object.keys(overrides).length} />
         <PayIn4Form initial={readPayIn4(o?.settings)} />
         {(role === "owner" || role === "admin") && <TidyPhones />}

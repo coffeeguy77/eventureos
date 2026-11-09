@@ -92,10 +92,11 @@ export async function deliverInvoice(db: SupabaseClient, invoiceId: string, inpu
   if (!to.length) return { ok: false, error: "The client has no email address." };
 
   const [{ data: org }, { data: stripe }] = await Promise.all([
-    db.from("organisations").select("name, currency, brand_colour, logo_url, contact_email").eq("id", inv.organisation_id).single(),
+    db.from("organisations").select("name, currency, brand_colour, logo_url, contact_email, settings").eq("id", inv.organisation_id).single(),
     db.from("integrations").select("status").eq("organisation_id", inv.organisation_id).eq("provider", "stripe").maybeSingle(),
   ]);
-  const o = org as { name: string; currency: string | null; brand_colour: string | null; logo_url: string | null; contact_email: string | null };
+  const o = org as { name: string; currency: string | null; brand_colour: string | null; logo_url: string | null; contact_email: string | null; settings: unknown };
+  const { directDepositFor } = await import("@/lib/accounts/core");
   const cur = o.currency || "AUD";
   // The job lead's signature (else none)
   let sig: { html: string; text: string } | null = null;
@@ -108,7 +109,7 @@ export async function deliverInvoice(db: SupabaseClient, invoiceId: string, inpu
     total: money(inv.total, cur, { cents: true }), amountDue: money(inv.balance, cur, { cents: true }),
     paidNote: Number(inv.amount_paid) > 0 ? `${money(inv.amount_paid, cur, { cents: true })} of ${money(inv.total, cur, { cents: true })} already paid` : null,
     dueDate: inv.due_date ? fmtDate(inv.due_date, "long") : null, message: input.message, url: `${appBaseUrl()}/pay/${inv.pay_token}${input.track ? `?ce=${input.track}` : ""}`,
-    cardPayments: (stripe as { status?: string } | null)?.status === "connected", signatureHtml: sig?.html ?? null, signatureText: sig?.text ?? null,
+    cardPayments: (stripe as { status?: string } | null)?.status === "connected", bank: directDepositFor(o.settings), signatureHtml: sig?.html ?? null, signatureText: sig?.text ?? null,
   });
 
   // a tiny image that tells us the email was opened (most email apps load it; some block images, so opens are a lower bound)

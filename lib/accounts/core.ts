@@ -215,3 +215,21 @@ export function readPayIn4(settings: unknown): { enabled: boolean; days: number 
   const d = Number(p.days);
   return { enabled: p.enabled !== false, days: Number.isInteger(d) && d >= 0 && d <= 365 ? d : 60 };
 }
+
+/**
+ * Direct deposit (bank transfer) details printed on invoices — the pay page, invoice emails and the PDF — with the
+ * invoice number as the reference (so the bank feed can match the deposit to the invoice). Saved by the business at
+ * organisations.settings.collections.direct_deposit.
+ */
+export interface DirectDeposit { on: boolean; name: string; bsb: string; account: string }
+export function readDirectDeposit(settings: unknown): DirectDeposit {
+  const c = (settings && typeof settings === "object" ? (settings as Record<string, unknown>).collections : null) as Record<string, unknown> | null;
+  const d = (c?.direct_deposit && typeof c.direct_deposit === "object" ? c.direct_deposit : {}) as Record<string, unknown>;
+  const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  return { on: d.on === true, name: s(d.name, 60), bsb: s(d.bsb, 6).replace(/\D/g, ""), account: s(d.account, 12).replace(/\D/g, "") };
+}
+/** The details to show customers — only when switched on and complete. */
+export function directDepositFor(settings: unknown): { name: string; bsb: string; account: string } | null {
+  const d = readDirectDeposit(settings);
+  return d.on && d.name && d.bsb.length === 6 && d.account.length >= 4 ? { name: d.name, bsb: `${d.bsb.slice(0, 3)}-${d.bsb.slice(3)}`, account: d.account } : null;
+}

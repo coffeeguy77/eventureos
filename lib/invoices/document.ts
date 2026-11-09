@@ -23,6 +23,8 @@ async function logoBytes(url: string | null | undefined): Promise<Uint8Array | n
 
 const KIND: Record<string, string> = { deposit: "Deposit", final: "Final invoice", full: "Invoice", other: "Invoice" };
 
+import { directDepositFor } from "@/lib/accounts/core";
+
 export async function invoicePdf(invoiceId: string): Promise<{ bytes: Uint8Array; file: string; paid: boolean } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(invoiceId)) return null;
   const db = createServiceClient();
@@ -56,6 +58,7 @@ export async function invoicePdf(invoiceId: string): Promise<{ bytes: Uint8Array
       eventLabel: ev ? `${ev.name}${ev.event_date ? ` · ${new Date(`${ev.event_date}T00:00:00Z`).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}` : ""}` : null,
       currency: (inv.currency as string) || "AUD", subtotal: Number(inv.subtotal), taxTotal: Number(inv.tax_total), total: Number(inv.total), balance, status: inv.status as string },
     lines, lineTax, payments, credits, payUrl: paid ? null : `${appBaseUrl()}/pay/${inv.pay_token}`,
+    bank: paid ? null : directDepositFor(org.settings),
   });
   return { bytes, paid, file: `${paid ? "Paid tax invoice" : "Tax invoice"} ${inv.number ?? ""}.pdf`.replace(/\s+\.pdf$/, ".pdf") };
 }

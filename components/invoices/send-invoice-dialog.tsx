@@ -78,7 +78,7 @@ export function SendInvoiceDialog({ invoiceId, onClose, onDone, after }: {
     return invoiceEmail({
       businessName: setup.businessName, logoUrl: setup.logoUrl, brand: setup.brand, invoiceNumber: setup.number, eventLine: setup.eventLine,
       total: setup.total, amountDue: setup.amountDue, paidNote: setup.paidNote, dueDate: setup.dueDate, message: message || " ", url: setup.payUrl,
-      cardPayments: setup.cardPayments, signatureHtml: withSig ? setup.signature?.html : null,
+      cardPayments: setup.cardPayments, bank: setup.bank, signatureHtml: withSig ? setup.signature?.html : null,
     }).html.replace("<head>", "<head><style>a{pointer-events:none}</style>");
   }, [setup, message, withSig]);
 
@@ -190,7 +190,7 @@ export function SendInvoiceDialog({ invoiceId, onClose, onDone, after }: {
                   {via === "resend" && <Check2 on={copyMe} onChange={setCopyMe}>Send me a copy ({setup.senderEmail})</Check2>}
                   {newAddresses.length > 0 && <Check2 on={saveContacts} onChange={setSaveContacts}>Save {newAddresses.map((a) => a.email).join(", ")} as {newAddresses.length === 1 ? "a contact" : "contacts"} on this client</Check2>}
                 </div>
-                {!setup.cardPayments && <p className="rounded-lg bg-canvas px-3 py-2 text-[0.75rem] text-ink-muted ring-1 ring-inset ring-line">Card payments aren&apos;t switched on, so the button opens the invoice to view. Add how to pay (e.g. bank details) to your message, or <Link href="/settings/integrations" className="font-medium text-brand-700 hover:underline">connect Stripe</Link>.</p>}
+                {!setup.cardPayments && !setup.bank && <p className="rounded-lg bg-canvas px-3 py-2 text-[0.75rem] text-ink-muted ring-1 ring-inset ring-line">Card payments aren&apos;t switched on, so the button opens the invoice to view. Add your bank details in <Link href="/accounts/terms" className="font-medium text-brand-700 hover:underline">Accounts → Fees &amp; terms</Link> so they show in the email, or <Link href="/settings/integrations" className="font-medium text-brand-700 hover:underline">connect Stripe</Link>.</p>}
                 <button type="button" onClick={() => setShowPreview((s) => !s)} className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium text-brand-700 lg:hidden">
                   <Eye className="h-4 w-4" />{showPreview ? "Hide preview" : "Preview the email"}
                 </button>
