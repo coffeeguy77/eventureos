@@ -128,6 +128,10 @@ export interface QuoteInput {
   /** a fixed price inc GST instead of hours × rate (optional) */
   priceOverride?: number | null;
   ai?: { description: string; hours: number; notes: string } | null;
+  /** run the work with Nerd Herd AI maintenance as soon as the quote's invoice is paid */
+  aiJob?: boolean;
+  /** what Claude should do (defaults to the title + description) */
+  aiRequest?: string | null;
 }
 
 /** Save a draft quote (new, or changes to one that hasn't been accepted). A ticket's first quote is the quote; later ones are variations. */
@@ -150,6 +154,15 @@ export async function saveTicketQuote(ticketId: string, quoteId: string | null, 
     const now = new Date().toISOString();
     const base: Record<string, unknown> = { title, description, hours, rate, amount: price, updated_at: now };
     if (i.ai) { base.ai_description = i.ai.description.slice(0, 8000); base.ai_hours = Math.round(Number(i.ai.hours) * 100) / 100 || null; base.ai_notes = i.ai.notes.slice(0, 3000); }
+    if (i.aiJob !== undefined) {
+      if (i.aiJob) {
+        const { data: tw } = await supabase.from("support_tickets").select("website_id").eq("id", ticketId).single();
+        const { data: wc } = tw?.website_id ? await supabase.from("website_connectors").select("website_id").eq("website_id", tw.website_id).maybeSingle() : { data: null };
+        if (!wc) throw new Error("AI maintenance needs the ticket's website to be connected to the Web Culture Connector (Details → Website, then connect it under Websites).");
+      }
+      base.ai_job = !!i.aiJob;
+      base.ai_request = i.aiJob ? ((i.aiRequest ?? "").trim().slice(0, 12000) || null) : null;
+    }
     let id = quoteId;
     if (id) {
       const { quote } = await quoteFor(id);

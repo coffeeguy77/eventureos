@@ -88,7 +88,10 @@ export async function callConnector<T>(siteUrl: string, key: string, method: "GE
   if (!r.res.ok) {
     const j = r.json as { code?: string; message?: string } | null;
     if (r.res.status === 404 && (!j || j.code === "rest_no_route")) throw new Error("The Web Culture Connector plugin isn't installed or active on this site.");
-    if (r.res.status === 401 || r.res.status === 403) throw new Error(j?.code === "wcc_stale" ? "The site's clock is out by more than 5 minutes." : "The site rejected the key. Copy it again from Tools → Web Culture on the site.");
+    // only the authentication codes mean a key problem; other refusals (e.g. a content tool saying no) carry their own message
+    if ((r.res.status === 401 || r.res.status === 403) && (!j?.code || ["wcc_signature", "wcc_forbidden", "wcc_stale", "wcc_replay", "wcc_nonce", "rest_forbidden"].includes(j.code))) {
+      throw new Error(j?.code === "wcc_stale" ? "The site's clock is out by more than 5 minutes." : "The site rejected the key. Copy it again from Tools → Web Culture on the site.");
+    }
     throw new Error(j?.message ? `The site said: ${j.message}` : `The site answered with HTTP ${r.res.status}.`);
   }
   if (r.json === null) throw new Error("The site didn't send back a proper answer (a security plugin or firewall may be blocking it).");
@@ -132,7 +135,7 @@ export function describeUpdate(d: UpdData | null | undefined, fallback: string) 
 export async function syncLog(db: SupabaseClient, orgId: string, websiteId: string, url: string, key: string) {
   const log = await callConnector<LogEntry[]>(url, key, "GET", "/log?limit=200");
   if (!Array.isArray(log) || !log.length) return 0;
-  const map: Record<string, string> = { update: "update", cache: "purge", lock: "lock", unlock: "unlock" };
+  const map: Record<string, string> = { update: "update", cache: "purge", lock: "lock", unlock: "unlock", backup: "backup", content: "content" };
   const rows = log.map((e) => {
     const action = map[e.action] ?? "other";
     const data = (e.data && typeof e.data === "object" ? e.data : null) as UpdData | null;
@@ -142,7 +145,8 @@ export async function syncLog(db: SupabaseClient, orgId: string, websiteId: stri
       ...(data.themes ?? []).filter((t) => t.ok).map((t) => ({ name: `${t.slug} theme`, from: t.from, to: t.to })),
     ] : null;
     return {
-      organisation_id: orgId, website_id: websiteId, action, source: "site", public: action !== "other",
+      // content changes are reported (in plain English) by the AI job that made them, so the raw entries stay internal
+      organisation_id: orgId, website_id: websiteId, action, source: "site", public: action !== "other" && action !== "content",
       ok: action === "update" ? (data?.health_after?.ok ?? true) : true,
       summary: (action === "update" ? describeUpdate(data, e.message) : e.message).slice(0, 2000),
       detail: items ? { items, message: e.message } : { message: e.message },

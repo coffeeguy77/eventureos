@@ -300,7 +300,9 @@ export async function saveNerdSettings(i: { hourly_rate: number; account_code: s
     const { createServiceClient } = await import("@/lib/integrations/runtime");
     const db = createServiceClient();
     const { data: cur } = await db.from("organisations").select("settings").eq("id", org.id).single();
-    const settings = { ...((cur?.settings as Record<string, unknown>) ?? {}), nerdherd };
+    // keep the other Nerd Herd settings (AI maintenance limits etc.) that this form doesn't show
+    const prev = (((cur?.settings as Record<string, unknown>) ?? {}).nerdherd ?? {}) as Record<string, unknown>;
+    const settings = { ...((cur?.settings as Record<string, unknown>) ?? {}), nerdherd: { ...prev, ...nerdherd } };
     const { data: done, error } = await db.from("organisations").update({ settings }).eq("id", org.id).select("id");
     if (error) throw new Error(error.message);
     if (!done?.length) throw new Error("Couldn't save — please try again.");
@@ -372,6 +374,33 @@ export async function deleteTicketTab(tabId: string): Promise<R> {
     await ctx.supabase.from("support_ticket_tabs").delete().eq("id", tabId);
     await logLine(ctx, tab.ticket_id as string, `${actorName(ctx.profile)} removed the ${tab.name} tab`);
     refresh(tab.ticket_id as string);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** AI maintenance settings: model, spending limits, the backup line on invoices. */
+export async function saveAiSettings(i: { ai_model: string; ai_job_cap_usd: number; ai_monthly_cap_usd: number; ai_backup_hours: number }): Promise<R> {
+  try {
+    const { supabase, org, role, user, profile } = await desk();
+    if (!canManage(role)) throw new Error("Only owners, admins and managers can change settings.");
+    const model = (i.ai_model ?? "").trim();
+    if (model && !/^claude-[a-z0-9.-]{3,60}$/.test(model)) throw new Error("The model should be a Claude model id, e.g. claude-sonnet-5-5.");
+    const job = Math.round(Number(i.ai_job_cap_usd) * 100) / 100, month = Math.round(Number(i.ai_monthly_cap_usd) * 100) / 100, backup = Math.round(Number(i.ai_backup_hours) * 100) / 100;
+    if (!(job >= 0.5 && job <= 100)) throw new Error("Per-job limit: between US$0.50 and US$100.");
+    if (!(month >= 1 && month <= 5000)) throw new Error("Monthly limit: between US$1 and US$5,000.");
+    if (!(backup >= 0 && backup <= 8)) throw new Error("Backup line: between 0 and 8 hours.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { data: cur } = await db.from("organisations").select("settings").eq("id", org.id).single();
+    const base = (cur?.settings as Record<string, unknown>) ?? {};
+    const prev = (base.nerdherd ?? {}) as Record<string, unknown>;
+    const settings = { ...base, nerdherd: { ...prev, ai_model: model || null, ai_job_cap_usd: job, ai_monthly_cap_usd: month, ai_backup_hours: backup } };
+    const { data: done, error } = await db.from("organisations").update({ settings }).eq("id", org.id).select("id");
+    if (error) throw new Error(error.message);
+    if (!done?.length) throw new Error("Couldn't save — please try again.");
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "settings.updated", entityType: "organisation", entityId: org.id, summary: `${actorName(profile)} updated AI maintenance settings` });
+    refresh();
+    revalidatePath("/nerd-herd/ai");
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
 }

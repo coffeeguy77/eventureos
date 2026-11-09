@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Eye, EyeOff, Loader2, Mail, Pencil, Plus, Send, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Bot, Check, Eye, EyeOff, Loader2, Mail, Pencil, Plus, Send, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
@@ -17,6 +18,7 @@ export interface QuoteTaskView { id: string; label: string; hours: number; done_
 export interface QuoteView {
   id: string; seq: number; kind: "quote" | "variation"; title: string; description: string | null; hours: number; rate: number; amount: number; status: QuoteStatus;
   ai_hours: number | null; ai_notes: string | null; ai_description: string | null; invoice: { id: string; number: string | null; status: string } | null;
+  ai_job?: boolean; ai_request?: string | null; ai_job_id?: string | null; ai_job_number?: number | null; ai_job_status?: string | null;
   sent_at: string | null; send_count: number; first_viewed_at: string | null; last_viewed_at: string | null; view_count: number; accepted_at: string | null; accepted_by: string | null; paid_at: string | null; completed_at: string | null; client_notified_at: string | null;
   tasks: QuoteTaskView[];
 }
@@ -28,8 +30,10 @@ const label = (q: { kind: string; seq: number }) => (q.kind === "variation" ? `V
 const StaffOnly = () => <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.6562rem] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"><EyeOff className="h-3 w-3" />Staff only</span>;
 
 /** Quotes & variations on a ticket: write (Claude drafts), send / nudge, see who opened it, red until paid, then tick off the work. */
-export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, currency, tz, quotes, views, needsMigration }: {
+export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, currency, tz, quotes, views, needsMigration, aiSite = null }: {
   ticketId: string; ticketNumber: number; hasClient: boolean; defaultRate: number; currency: string; tz: string; quotes: QuoteView[]; views: ViewRow[]; needsMigration: boolean;
+  /** the ticket's website, when it's connected to the Web Culture Connector (AI maintenance can do the work) */
+  aiSite?: { domain: string } | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<QuoteView | "new" | null>(null);
@@ -67,6 +71,9 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
                     <p className="text-[0.7188rem] font-semibold uppercase tracking-wide text-ink-faint">{label(q)}</p>
                     <p className="break-words text-[0.9375rem] font-semibold text-ink">{q.title}</p>
                     <p className={cn("text-[0.75rem] font-medium", L.light === "green" ? "text-emerald-600" : L.light === "red" ? "text-rose-600" : "text-ink-muted")}>{L.label}{q.invoice ? ` · invoice ${q.invoice.number ?? ""}` : ""}</p>
+                    {q.ai_job && (q.ai_job_id
+                      ? <Link href={`/nerd-herd/ai/${q.ai_job_id}`} className="mt-0.5 inline-flex items-center gap-1 text-[0.7188rem] font-medium text-brand-600 hover:underline"><Bot className="h-3.5 w-3.5" />AI-{q.ai_job_number}: {q.ai_job_status === "done" ? "done" : q.ai_job_status === "needs_attention" ? "needs checking" : q.ai_job_status === "failed" ? "failed" : "working"}</Link>
+                      : <span className="mt-0.5 inline-flex items-center gap-1 text-[0.7188rem] text-ink-muted"><Bot className="h-3.5 w-3.5" />AI maintenance runs it once paid</span>)}
                   </div>
                   <div className="text-right">
                     <p className="text-[1.0625rem] font-bold tabular text-ink">{money(q.amount, currency, { cents: true })}</p>
@@ -120,7 +127,7 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
         </ul>
       )}
 
-      {editing && <QuoteEditor ticketId={ticketId} quote={editing === "new" ? null : editing} variation={editing === "new" ? live.length > 0 : editing.kind === "variation"} defaultRate={defaultRate} currency={currency}
+      {editing && <QuoteEditor ticketId={ticketId} quote={editing === "new" ? null : editing} variation={editing === "new" ? live.length > 0 : editing.kind === "variation"} defaultRate={defaultRate} currency={currency} aiSite={aiSite}
         onClose={() => setEditing(null)} onSaved={(id, send) => { setEditing(null); router.refresh(); if (send) setSending({ mode: "quote", quote: { id } as QuoteView }); }} />}
       {sending && <SendDialog ticketId={ticketId} ticketNumber={ticketNumber} mode={sending.mode} quote={sending.quote ?? null} onClose={() => setSending(null)} onDone={(text) => { setSending(null); setMsg({ ok: true, text }); router.refresh(); }} />}
     </div>
@@ -143,9 +150,11 @@ function Modal({ title, onClose, children, footer, wide }: { title: React.ReactN
   );
 }
 
-function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClose, onSaved }: {
-  ticketId: string; quote: QuoteView | null; variation: boolean; defaultRate: number; currency: string; onClose: () => void; onSaved: (id: string, send: boolean) => void;
+function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClose, onSaved, aiSite }: {
+  ticketId: string; quote: QuoteView | null; variation: boolean; defaultRate: number; currency: string; onClose: () => void; onSaved: (id: string, send: boolean) => void; aiSite: { domain: string } | null;
 }) {
+  const [aiJob, setAiJob] = useState(!!quote?.ai_job);
+  const [aiRequest, setAiRequest] = useState(quote?.ai_request ?? "");
   const [title, setTitle] = useState(quote?.title ?? "");
   const [description, setDescription] = useState(quote?.description ?? "");
   const [tasks, setTasks] = useState<{ label: string; hours: number }[]>(quote?.tasks.map((t) => ({ label: t.label, hours: Number(t.hours) })) ?? []);
@@ -169,7 +178,7 @@ function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClos
   });
   const save = (send: boolean) => start(async () => {
     setError(null);
-    const r = await saveTicketQuote(ticketId, quote?.id ?? null, { title, description, tasks, rate, priceOverride: Number(fixed) > 0 ? Number(fixed) : null, ai });
+    const r = await saveTicketQuote(ticketId, quote?.id ?? null, { title, description, tasks, rate, priceOverride: Number(fixed) > 0 ? Number(fixed) : null, ai, aiJob: aiSite || quote?.ai_job ? aiJob : undefined, aiRequest });
     if (!r.ok) { setError(r.error); return; }
     onSaved(r.data.id, send);
   });
@@ -211,6 +220,16 @@ function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClos
           <div><Label hint="ex GST">Hourly rate</Label><Input inputMode="decimal" value={String(rate)} onChange={(e) => setRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} /></div>
           <div><Label hint="optional, inc GST">Fixed price</Label><Input inputMode="decimal" value={fixed} onChange={(e) => setFixed(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={p.incGst.toFixed(2)} /></div>
         </div>
+        {(aiSite || quote?.ai_job) && (
+          <div className="rounded-xl bg-canvas p-3 ring-1 ring-line">
+            <label className="flex items-start gap-2 text-[0.8125rem]">
+              <input type="checkbox" className="mt-0.5 h-4 w-4" checked={aiJob} onChange={(e) => setAiJob(e.target.checked)} />
+              <span><span className="flex flex-wrap items-center gap-2 font-medium text-ink"><Bot className="h-4 w-4 text-brand-600" />Do the work with AI maintenance once it&apos;s paid <StaffOnly /></span>
+                <span className="block text-[0.7188rem] text-ink-muted">When the client pays, a job starts straight away on {aiSite?.domain ?? "the ticket's website"}: backup first, then Claude makes the changes and the report goes on the ticket and the website file. No second invoice — this quote pays for it.</span></span>
+            </label>
+            {aiJob && <div className="mt-2"><Label hint="leave blank to use the title and description">Instructions for Claude</Label><Textarea rows={4} value={aiRequest} onChange={(e) => setAiRequest(e.target.value)} placeholder="Exactly what to change, page by page — technical detail is fine, the client never sees this." /></div>}
+          </div>
+        )}
         <p className="text-[0.75rem] text-ink-muted">The client pays the full amount before we start. Their invoice shows one line — the title — with no hours.</p>
       </div>
     </Modal>

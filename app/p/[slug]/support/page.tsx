@@ -25,9 +25,9 @@ export default async function PortalSupport({ params }: { params: Promise<{ slug
   type T = { id: string; number: number; subject: string; status: TicketStatus; kind: string; created_at: string; last_activity_at: string; resolved_at: string | null };
   const tickets = (tk ?? []) as T[];
   const sites = (ws ?? []) as { id: string; domain: string; status: string; customer_id: string | null }[];
-  type M = { id: string; action: string; ok: boolean; summary: string | null; created_at: string; websites: { domain: string } | null; detail: { items?: { name: string; from: string | null; to: string | null }[] } | null };
+  type M = { id: string; action: string; ok: boolean; summary: string | null; created_at: string; websites: { domain: string } | null; detail: { items?: { name: string; from: string | null; to: string | null }[]; changes?: { at: string; summary: string }[]; backup?: string | null } | null };
   const work = ((mr ?? []) as unknown as M[]);
-  const label: Record<string, string> = { update: "Updates", purge: "Cache cleared", lock: "Site paused", unlock: "Site back online" };
+  const label: Record<string, string> = { update: "Updates", purge: "Cache cleared", lock: "Site paused", unlock: "Site back online", ai: "Website changes", backup: "Backup made", restore: "Restored from a backup" };
   const open = tickets.filter((t) => !["resolved", "closed"].includes(t.status));
   const done = tickets.filter((t) => ["resolved", "closed"].includes(t.status));
   const row = (t: T) => (
@@ -62,6 +62,15 @@ export default async function PortalSupport({ params }: { params: Promise<{ slug
                       <span className="text-[0.8125rem] text-ink-faint">{fmtDateTime(m.created_at, org.timezone)}</span>
                     </div>
                     <p className={`text-[0.875rem] ${m.ok ? "text-ink-muted" : "text-rose-700"}`}>{m.summary}</p>
+                    {m.detail?.changes && m.detail.changes.length > 0 && (
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-[0.8125rem] font-medium text-[var(--portal-brand)]">What was changed ({m.detail.changes.length})</summary>
+                        <ul className="mt-1.5 space-y-0.5 text-[0.8125rem] text-ink-muted">
+                          {m.detail.changes.map((c, i) => <li key={i} className="min-w-0 break-words"><span className="text-ink-faint">{fmtDateTime(c.at, org.timezone, "time")}</span> {c.summary}</li>)}
+                        </ul>
+                        {m.detail.backup && <p className="mt-1 text-[0.75rem] text-ink-faint">{m.detail.backup}</p>}
+                      </details>
+                    )}
                     {m.detail?.items && m.detail.items.length > 0 && (
                       <details className="mt-1">
                         <summary className="cursor-pointer text-[0.8125rem] font-medium text-[var(--portal-brand)]">What was updated ({m.detail.items.length})</summary>

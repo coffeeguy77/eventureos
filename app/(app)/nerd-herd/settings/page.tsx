@@ -5,6 +5,9 @@ import { readNerd } from "@/lib/nerdherd/core";
 import { describeScope, readScope } from "@/lib/integrations/xero-scope";
 import { Card, CardHeader } from "@/components/ui/card";
 import { NerdSettingsForm } from "@/components/nerdherd/settings-form";
+import { AiSettingsForm } from "@/components/nerdherd/ai-settings-form";
+import { readAiSettings } from "@/lib/nerdherd/ai-runner";
+import { AI_DEFAULT_MODEL } from "@/lib/nerdherd/ai-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +32,13 @@ export default async function NerdSettingsPage() {
         </div>
       </Card>
       <div className="space-y-5">
+        <Card>
+          <CardHeader title="AI maintenance" subtitle="Claude making changes on connected WordPress sites" />
+          <div className="border-t border-line px-5 py-4">
+            {(() => { const a = readAiSettings(org.settings); const raw = ((org.settings ?? {}) as { nerdherd?: { ai_model?: string | null } }).nerdherd?.ai_model ?? "";
+              return <AiSettingsForm defaultModel={AI_DEFAULT_MODEL} initial={{ ai_model: raw ?? "", ai_job_cap_usd: a.jobCapUsd, ai_monthly_cap_usd: a.monthlyCapUsd, ai_backup_hours: a.backupHours }} />; })()}
+          </div>
+        </Card>
         <Card>
           <CardHeader title="Support inbox" />
           <div className="space-y-2 border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted">
