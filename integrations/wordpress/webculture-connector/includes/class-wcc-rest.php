@@ -156,5 +156,41 @@ class WCC_Rest {
 				'callback'            => fn( WP_REST_Request $r ) => WCC_Maintenance::get_log( (int) $r['limit'] ),
 			)
 		);
+
+		register_rest_route(
+			self::NS,
+			'/deploy',
+			array(
+				'methods'             => 'POST',
+				'permission_callback' => $auth,
+				'args'                => array(
+					'type'     => array(
+						'required' => true,
+						'type'     => 'string',
+						'enum'     => array( 'theme', 'plugin' ),
+					),
+					'zip'      => array(
+						'required' => true,
+						'type'     => 'string',
+					),
+					'activate' => array(
+						'type'    => 'boolean',
+						'default' => false,
+					),
+					'slug'     => array(
+						'type'    => 'string',
+						'default' => '',
+					),
+				),
+				'callback'            => function ( WP_REST_Request $r ) {
+					return WCC_Deploy::install(
+						(string) $r['type'],
+						(string) $r['zip'],
+						(bool) $r['activate'],
+						sanitize_key( (string) $r['slug'] )
+					);
+				},
+			)
+		);
 	}
 }

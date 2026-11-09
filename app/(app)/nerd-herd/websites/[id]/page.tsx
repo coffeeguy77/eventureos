@@ -14,6 +14,8 @@ import { WpConnector, type ConnectorRow } from "@/components/nerdherd/wp-connect
 import { SiteSignIn } from "@/components/nerdherd/site-sign-in";
 import { LinkHosting } from "@/components/nerdherd/link-hosting";
 import { detectHost, HOST_LABEL } from "@/lib/nerdherd/host-detect";
+import { AiJobList, type AiJobRow } from "@/components/nerdherd/ai-maintenance";
+import { Bot } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 // Updates run through server actions on this page and can take a few minutes on a big site.
@@ -43,6 +45,10 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
     supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).neq("action", "check").order("created_at", { ascending: false }).limit(25).then((r) => r, () => ({ data: [] })),
   ]);
+  // AI maintenance jobs on this site (the client's job file); nothing before update 0104
+  const { data: aiJobs } = await supabase.from("nh_ai_jobs").select("id, number, kind, request, billable, source, status, stage_note, report_summary, changes, created_at, invoice_id").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(30).then((r) => r, () => ({ data: [] }));
+  const aiRows: AiJobRow[] = ((aiJobs ?? []) as { id: string; number: number; kind: string; request: string | null; billable: boolean; source: string; status: string; stage_note: string | null; report_summary: string | null; changes: unknown; created_at: string; invoice_id: string | null }[])
+    .map((j) => ({ ...j, domain: w.domain, client: null, changes: Array.isArray(j.changes) ? j.changes.length : 0, when: fmtDateTime(j.created_at, org.timezone) }));
   // saved logins for this site (only counted — the vault shows them once unlocked); nothing before update 0095
   // linked to this site, or saved for this client with an address on this domain
   const { count: savedLogins } = await supabase.from("nerd_vault_items").select("id", { count: "exact", head: true }).eq("organisation_id", org.id)
@@ -87,6 +93,13 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
                   checkedLabel={connector && (connector as ConnectorRow).last_checked_at ? relative((connector as ConnectorRow).last_checked_at) : null}
                   runs={((runs ?? []) as { id: string; action: string; scope: string | null; ok: boolean; summary: string | null; created_at: string }[]).map((r) => ({ ...r, when: fmtDateTime(r.created_at, org.timezone) }))} />
               </div>
+            </Card>
+          )}
+          {connector && (
+            <Card className="overflow-hidden">
+              <CardHeader title="AI maintenance" subtitle="Changes and updates done by Claude on this site — backup first, report and changes for each job"
+                action={canManage(role) ? <ButtonLink href={`/nerd-herd/ai?site=${w.id}`} size="sm" variant="primary"><Bot className="h-3.5 w-3.5" />New AI job</ButtonLink> : undefined} />
+              <div className="border-t border-line"><AiJobList rows={aiRows} showSite={false} /></div>
             </Card>
           )}
           <Card>

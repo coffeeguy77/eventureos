@@ -1,5 +1,5 @@
 === Web Culture Connector ===
-Stable tag: 1.2.1
+Stable tag: 1.4.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GPLv2 or later
@@ -20,6 +20,8 @@ POST /update        body {"type":"core|plugins|themes|translations|all","items":
 POST /cache/purge   SiteGround, WP Rocket, W3TC, LiteSpeed, Elementor CSS, object cache
 GET  /health        loads the homepage and reports HTTP code / fatal errors
 GET  /log?limit=50  maintenance history
+POST /deploy        body {"type":"theme|plugin","zip":"<base64 of .zip>","activate":true|false,"slug":"folder-slug"}
+                    installs/overwrites a theme or plugin from the sent package, optionally activates it, purges caches
 
 == Authentication ==
 Either an administrator (logged in, or an Application Password), or a signed request:
@@ -40,3 +42,22 @@ Site administrators can't unlock it from the site; the Deactivate link is hidden
 
 == Updates ==
 The plugin updates itself from https://www.eventureos.com.au/downloads/webculture-connector.json
+
+== Backups (1.4.0) ==
+POST /backup/start {"label":"…","scope":"full|code|database","budget":20}  begins a backup and works for up to budget seconds
+POST /backup/step  {"id":"…","budget":20}                             carry on until status is "done"
+GET  /backups                                                          finished backups (manifest of each)
+POST /backup/download-link {"id":"…","part":"database.sql.gz|files-001.zip"}  10-minute single-use link (signed only)
+POST /backup/restore {"id":"…"}                                       restore the database, in slices (signed only)
+POST /backup/delete {"id":"…"}                                        (signed only)
+Backups live in wp-content/wcc-backups/<random id>/ (web access denied); the newest 5 are kept (option wcc_backup_keep).
+
+== Content tools (1.4.0) ==
+GET  /site/info · POST /site/settings {"settings":{…},"summary":"…"}
+GET  /content/list?type=any&search= · GET /content/item?id= · POST /content/item {"item":{…},"summary":"…"}
+POST /content/replace {"id","find","replace","summary"}
+GET  /elementor/outline?id= · GET /elementor/element?id=&path= · POST /elementor/patch {"id","ops":[…],"summary"}
+GET  /media/list?search= · POST /media/item {"media":{"id","alt","title","caption"}} · POST /media/upload
+GET  /menus/items?menu= · POST /menus/item {"item":{…}}
+POST /rest {"method","path","body","query","summary"}   anything else through WordPress's REST API (not users/plugins/themes/settings)
+GET  /changes · POST /undo {"change_id"}                each change keeps an undo copy (last 8 per page)

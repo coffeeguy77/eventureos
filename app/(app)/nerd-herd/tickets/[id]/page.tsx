@@ -64,6 +64,18 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
     tasks: [...q.support_ticket_quote_tasks].sort((a, b) => a.position - b.position).map((t) => ({ id: t.id, label: t.label, hours: Number(t.hours), done_at: t.done_at, done_by: t.done_by })),
   }));
   const views = (vRes.data ?? []) as ViewRow[];
+  // AI maintenance (update 0104): which quotes run with AI, their jobs, and whether the ticket's site is connected
+  const [{ data: aiQ }, { data: aiJobs }, { data: aiConn }] = await Promise.all([
+    supabase.from("support_ticket_quotes").select("id, ai_job, ai_request").eq("ticket_id", id).then((r) => r, () => ({ data: [] })),
+    supabase.from("nh_ai_jobs").select("id, number, status, quote_id").eq("ticket_id", id).then((r) => r, () => ({ data: [] })),
+    tk.website_id ? supabase.from("website_connectors").select("website_id, websites(domain)").eq("website_id", tk.website_id).maybeSingle().then((r) => r, () => ({ data: null })) : Promise.resolve({ data: null }),
+  ]);
+  for (const q of quotes) {
+    const a = ((aiQ ?? []) as { id: string; ai_job: boolean; ai_request: string | null }[]).find((x) => x.id === q.id);
+    const j = ((aiJobs ?? []) as { id: string; number: number; status: string; quote_id: string | null }[]).find((x) => x.quote_id === q.id);
+    Object.assign(q, { ai_job: !!a?.ai_job, ai_request: a?.ai_request ?? null, ai_job_id: j?.id ?? null, ai_job_number: j?.number ?? null, ai_job_status: j?.status ?? null });
+  }
+  const aiSite = aiConn ? { domain: ((aiConn as unknown as { websites: { domain: string } | null }).websites?.domain) ?? "the website" } : null;
   const activeTab = tabs.some((t) => t.id === tabParam) ? tabParam : null;
   const updates = activeTab ? allUpdates.filter((u) => u.tab_id === activeTab) : allUpdates;
   const minutes = allUpdates.reduce((a, u) => a + Number(u.minutes ?? 0), 0);
@@ -92,7 +104,8 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
             {tk.websites && <> · <Link href={`/nerd-herd/websites/${tk.websites.id}`} className="hover:underline">{tk.websites.domain}</Link></>}
           </p>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {aiSite && manage && tk.website_id && <Link href={`/nerd-herd/ai?site=${tk.website_id}&ticket=${tk.id}`} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[0.75rem] font-medium text-brand-600 ring-1 ring-inset ring-line-strong hover:bg-canvas">AI job on {aiSite.domain}</Link>}
           {tk.priority !== "normal" && <Badge tone={PRIORITY[tk.priority].tone}>{PRIORITY[tk.priority].label}</Badge>}
           <Badge tone={TICKET_STATUS[tk.status].tone}>{TICKET_STATUS[tk.status].label}</Badge>
         </div>
@@ -103,7 +116,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
         <div className="space-y-5">
           <Card>
             <CardHeader title="Quote & payment" subtitle="Quote the fix, send it, and start once it's paid — red until paid, green when it's ready to do." />
-            <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} /></div>
+            <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} aiSite={aiSite} /></div>
           </Card>
           {tk.kind === "maintenance" && (
             <Card>
