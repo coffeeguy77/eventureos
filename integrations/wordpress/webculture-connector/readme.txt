@@ -1,5 +1,5 @@
 === Web Culture Connector ===
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GPLv2 or later
@@ -61,3 +61,6 @@ GET  /media/list?search= · POST /media/item {"media":{"id","alt","title","capti
 GET  /menus/items?menu= · POST /menus/item {"item":{…}}
 POST /rest {"method","path","body","query","summary"}   anything else through WordPress's REST API (not users/plugins/themes/settings)
 GET  /changes · POST /undo {"change_id"}                each change keeps an undo copy (last 8 per page)
+
+== Automatic updates (1.4.1) ==
+The connector keeps itself up to date: WordPress's background updater installs new versions of this plugin (about twice a day) even when automatic updates are off for other plugins, and the command centre pushes the newest version to any site still behind.

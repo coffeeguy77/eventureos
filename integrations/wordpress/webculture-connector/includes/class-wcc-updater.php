@@ -1,7 +1,7 @@
 <?php
 /**
- * Self-update from EventureOS: new versions of this plugin appear in Dashboard → Updates like any other plugin
- * (and are picked up by the command centre's "Update everything").
+ * Self-update from EventureOS: new versions of this plugin appear in Dashboard → Updates like any other plugin,
+ * install themselves through WordPress's automatic background updates (1.4.1+), and are pushed by the command centre.
  * Manifest: https://www.eventureos.com.au/downloads/webculture-connector.json
  *
  * @package WebCultureConnector
@@ -20,6 +20,14 @@ class WCC_Updater {
 		// after an update (or a manual upload) WordPress can keep showing "new version available" for the version
 		// already installed — drop that stale notice whenever the update list is read
 		add_filter( 'site_transient_update_plugins', array( __CLASS__, 'clean' ) );
+		// keep the connector current by itself: WordPress's background updater (about twice a day) installs new
+		// versions of this plugin even when automatic plugin updates are off for everything else
+		add_filter( 'auto_update_plugin', array( __CLASS__, 'auto' ), 20, 2 );
+	}
+
+	public static function auto( $update, $item ) {
+		$plugin = is_object( $item ) ? ( $item->plugin ?? '' ) : '';
+		return plugin_basename( WCC_FILE ) === $plugin ? true : $update;
 	}
 
 	private static function manifest() {

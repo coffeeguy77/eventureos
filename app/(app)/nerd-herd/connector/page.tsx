@@ -10,10 +10,15 @@ export const dynamic = "force-dynamic";
 /** Nerd Herd → Connector: download the WordPress plugin, how to install it, and which sites are on which version. */
 export default async function ConnectorPage() {
   const { supabase, org } = await requireOrg();
-  const { data } = await supabase.from("website_connectors").select("website_id, connector_version, websites(domain)").eq("organisation_id", org.id).limit(2000).then((r) => r, () => ({ data: [] }));
-  const rows = (data ?? []) as unknown as { website_id: string; connector_version: string | null; websites: { domain: string } | null }[];
+  const first = await supabase.from("website_connectors").select("website_id, connector_version, auto_update_at, auto_update_error, websites(domain)").eq("organisation_id", org.id).limit(2000);
+  // before the 0105 database update the auto-update columns aren't there yet
+  const data: unknown[] | null = first.error
+    ? (await supabase.from("website_connectors").select("website_id, connector_version, websites(domain)").eq("organisation_id", org.id).limit(2000).then((r) => r.data, () => [])) as unknown[] | null
+    : first.data;
+  const rows = (data ?? []) as unknown as { website_id: string; connector_version: string | null; auto_update_at?: string | null; auto_update_error?: string | null; websites: { domain: string } | null }[];
   const latest = manifest.version;
-  const behind = rows.filter((r) => r.connector_version !== latest).sort((a, b) => (a.websites?.domain ?? "").localeCompare(b.websites?.domain ?? ""));
+  const { versionBehind } = await import("@/lib/nerdherd/autoupdate");
+  const behind = rows.filter((r) => versionBehind(r.connector_version, latest)).sort((a, b) => (a.websites?.domain ?? "").localeCompare(b.websites?.domain ?? ""));
   const changes = manifest.changelog.split(/\s(?=\d+\.\d+\.\d+ –)/).map((s) => s.trim()).filter(Boolean);
   return (
     <div className="grid max-w-6xl gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -52,12 +57,12 @@ export default async function ConnectorPage() {
           {behind.length > 0 && (
             <ul className="divide-y divide-line border-t border-line">
               {behind.map((r) => (
-                <li key={r.website_id}><Link href={`/nerd-herd/websites/${r.website_id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-canvas"><span className="min-w-0 truncate text-[0.8125rem] text-ink">{r.websites?.domain ?? "—"}</span><span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:text-amber-300">{r.connector_version ?? "?"} → {latest}</span></Link></li>
+                <li key={r.website_id}><Link href={`/nerd-herd/websites/${r.website_id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-canvas"><span className="min-w-0"><span className="block truncate text-[0.8125rem] text-ink">{r.websites?.domain ?? "—"}</span>{r.auto_update_error ? <span className="block truncate text-[0.6875rem] text-rose-600 dark:text-rose-300" title={r.auto_update_error}>Last try: {r.auto_update_error}</span> : r.auto_update_at ? <span className="block text-[0.6875rem] text-ink-faint">Updating automatically</span> : <span className="block text-[0.6875rem] text-ink-faint">Queued to update</span>}</span><span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/30 dark:text-amber-300">{r.connector_version ?? "?"} → {latest}</span></Link></li>
               ))}
             </ul>
           )}
           {rows.length > 0 && behind.length === 0 && <p className="border-t border-line px-5 py-4 text-[0.8125rem] text-emerald-600">Every connected site is up to date.</p>}
-          {behind.length > 0 && <p className="border-t border-line px-5 py-3 text-[0.75rem] text-ink-muted">Sites update themselves through WordPress updates, or open one and press <strong>Update Connector now</strong>.</p>}
+          {behind.length > 0 && <p className="border-t border-line px-5 py-3 text-[0.75rem] text-ink-muted">These update by themselves: every 15 minutes EventureOS pushes {latest} to sites that are behind (a site that fails is retried after 12 hours), and from 1.4.1 WordPress also installs new versions on its own. To do one straight away, open it and press <strong>Update Connector now</strong>.</p>}
         </Card>
         <Card>
           <CardHeader title="Safe by design" />
