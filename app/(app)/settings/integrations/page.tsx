@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Landmark, Sparkles } from "lucide-react";
 import { canManage, requireOrg } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { fmtDateTime, relative } from "@/lib/format";
 import type { Tone } from "@/lib/status";
 import { DisconnectButton, SyncNowButton } from "./controls";
 import { AiKeyForm } from "./ai-key";
+import { RedbarkKeyForm } from "./redbark-key";
 import { OAUTH } from "@/lib/integrations/oauth";
 
 /** The connection was made before EventureOS asked for permissions it now uses. */
@@ -56,6 +57,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const stripeDef = PROVIDERS.find((p) => p.id === "stripe")!;
   const stripe = rows.get("stripe") ?? null;
   const aiRow = rows.get("anthropic") ?? null;
+  const rbRow = rows.get("redbark") ?? null;
+  const rbOn = rbRow?.status === "connected";
   const aiOwn = aiRow?.status === "connected";
 
   return (
@@ -136,6 +139,22 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           <p className="mt-3 text-[0.8125rem] text-ink-muted">Powers the academy&apos;s AI coach and latte art / espresso photo scoring, and AI reply drafts in Enquiries.{!aiOwn && env.ai ? " You're using the platform's key — add your own to use your Anthropic account." : ""}</p>
           {aiOwn && aiRow?.account_label && <p className="mt-2 text-[0.75rem] text-ink">{aiRow.account_label}{aiRow.connected_at ? ` · added ${fmtDateTime(aiRow.connected_at, org.timezone, "date")}` : ""}</p>}
           <div className="mt-auto pt-4">{manager ? <AiKeyForm hasOwn={aiOwn} /> : <p className="text-[0.75rem] text-ink-faint">Ask an owner or manager to add a key.</p>}</div>
+        </Card>
+        <Card className="flex flex-col p-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" aria-hidden><Landmark className="h-5 w-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-2 text-[0.9375rem] font-semibold text-ink">Bank feeds
+                <Badge tone={rbOn ? "green" : "neutral"} dot>{rbOn ? "Connected" : "Not connected"}</Badge></p>
+              <p className="text-[0.75rem] text-ink-faint">Redbark · Australian banks</p>
+            </div>
+          </div>
+          <p className="mt-3 text-[0.8125rem] text-ink-muted">Your bank transactions every morning, matched and sent to Xero by themselves — transfers, invoice payments, Stripe and Ordermentum payouts. Connect your bank in the Redbark app, then paste its API key here.</p>
+          {rbOn && rbRow?.account_label && <p className="mt-2 text-[0.75rem] text-ink">{rbRow.account_label}{rbRow.connected_at ? ` · added ${fmtDateTime(rbRow.connected_at, org.timezone, "date")}` : ""}</p>}
+          <div className="mt-auto space-y-2 pt-4">
+            {manager ? <RedbarkKeyForm hasKey={rbOn} /> : <p className="text-[0.75rem] text-ink-faint">Ask an owner or manager to add the key.</p>}
+            {rbOn && <Link href="/accounts/reconcile" className="inline-flex text-[0.8125rem] font-medium text-brand-700 hover:underline dark:text-brand-300">Bank feed settings in Reconcile →</Link>}
+          </div>
         </Card>
         <Card className="flex flex-col p-5">
           <div className="flex items-start gap-3">

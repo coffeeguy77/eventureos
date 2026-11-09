@@ -4,6 +4,8 @@ import { readReconcile } from "@/lib/reconcile/core";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { ReconcileTool } from "@/components/accounts/reconcile";
+import { BankFeedPanel } from "@/components/accounts/bank-feed";
+import { readFeedSettings } from "@/lib/bankfeed/redbark";
 import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
 import type { OpenInvoice } from "@/lib/reconcile/match";
 import { sharedOrgIds } from "@/lib/reconcile/shared";
@@ -46,12 +48,20 @@ export default async function ReconcilePage() {
   const clearingId = (st?.settings as { xero_account?: string } | null)?.xero_account ?? null;
   const cl = clearingId ? accounts.find((a) => a.id === clearingId || a.code === clearingId) : undefined;
   const clearing = cl ? { name: cl.name, code: cl.code, bank: cl.type === "BANK" } : null;
+  // Bank feed (Redbark)
+  const { data: rb } = await db.from("integrations").select("status, settings").eq("organisation_id", org.id).eq("provider", "redbark").maybeSingle();
+  const feedOn = rb?.status === "connected";
+  const feed = readFeedSettings(rb?.settings);
+  const rec = readReconcile(org.settings);
   return (
     <div>
-      <PageHeader title="Reconcile" subtitle="Drop in your bank's export: transfers between your accounts, customer payments and Stripe payouts are matched and sent to Xero — so each bank line is just “OK” in Xero." />
+      <PageHeader title="Reconcile" subtitle="Your bank feed or your bank's export: transfers between your accounts, customer payments and Stripe payouts are matched and sent to Xero — so each bank line is just “OK” in Xero." />
       {!connected ? <Card className="p-6 text-[0.875rem] text-ink-muted">Connect Xero first (Settings → Integrations → Xero).</Card>
-        : <ReconcileTool banks={banks} bankError={bankError} canTransfer={canTransfer(scopes)} settings={readReconcile(org.settings)} canSend={role === "owner" || role === "admin"}
-          invoices={invoices} accounts={accounts} taxRates={taxRates} clearing={clearing} stripeOn={stripeOn} />}
+        : <div className="space-y-5">
+          <BankFeedPanel connected={feedOn} accounts={feed.accounts} banks={banks} map={rec.accounts} from={rec.from} auto={feed.auto} lastRun={feed.last_run} canSend={role === "owner" || role === "admin"} />
+          <ReconcileTool feedOn={feedOn} banks={banks} bankError={bankError} canTransfer={canTransfer(scopes)} settings={readReconcile(org.settings)} canSend={role === "owner" || role === "admin"}
+          invoices={invoices} accounts={accounts} taxRates={taxRates} clearing={clearing} stripeOn={stripeOn} />
+        </div>}
     </div>
   );
 }

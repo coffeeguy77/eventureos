@@ -8,7 +8,7 @@
  */
 
 export interface BankLine { key: string; account: string; date: string; narrative: string; amount: number; transfer: boolean }
-export interface ParsedStatement { lines: BankLine[]; accounts: { number: string; lines: number; from: string; to: string }[]; format: string }
+export interface ParsedStatement { lines: BankLine[]; accounts: { number: string; label?: string; lines: number; from: string; to: string }[]; format: string }
 
 /** A transfer line between your own accounts (Westpac writes "TFR <name>"; other banks "TRANSFER"). */
 export const TRANSFER_RE = /\bTFR\b|\bTRANSFER\b|\bXFER\b/i;
@@ -215,7 +215,7 @@ export function readReconcile(settings: unknown): ReconcileSettings {
   const r = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).reconcile : null) ?? {}) as Record<string, unknown>;
   const acc: Record<string, string> = {};
   if (r.accounts && typeof r.accounts === "object") {
-    for (const [k, v] of Object.entries(r.accounts as Record<string, unknown>)) if (/^[\w -]{1,40}$/.test(k) && typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)) acc[k] = v;
+    for (const [k, v] of Object.entries(r.accounts as Record<string, unknown>)) if (/^[\w -]{1,64}$/.test(k) && typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v)) acc[k] = v;
   }
   const from = typeof r.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.from) ? r.from : null;
   const st = (r.stripe && typeof r.stripe === "object" ? r.stripe : {}) as Record<string, unknown>;

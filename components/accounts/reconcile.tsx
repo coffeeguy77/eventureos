@@ -10,7 +10,7 @@ import { alreadyInXero, pairTransfers, parseStatement, sameAccountNumber, transf
 import type { XeroAccountLite, XeroBank, XeroTaxRate } from "@/lib/reconcile/xero";
 import type { OpenInvoice } from "@/lib/reconcile/match";
 import { InvoiceDeposits, OrdermentumPayouts, StripePayouts } from "./reconcile-more";
-import { saveReconcileSettings, sendTransfers, xeroTransfers } from "@/app/(app)/accounts/reconcile-actions";
+import { loadBankFeed, saveReconcileSettings, sendTransfers, xeroTransfers } from "@/app/(app)/accounts/reconcile-actions";
 
 type Tab = "ready" | "unsure" | "xero" | "sent" | "unpaired";
 const money = (n: number) => `$${n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,7 +21,8 @@ const tail = (n: string) => `…${n.replace(/\D/g, "").slice(-4) || n}`;
  * Reconcile: read the bank's export in the browser, pair the transfers between your accounts, check which Xero already
  * has, and send the rest to Xero. The statement itself never leaves this computer.
  */
-export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend, invoices, accounts, taxRates, clearing, stripeOn }: {
+export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend, invoices, accounts, taxRates, clearing, stripeOn, feedOn }: {
+  feedOn?: boolean;
   banks: XeroBank[]; bankError: string | null; canTransfer: boolean; settings: ReconcileSettings; canSend: boolean;
   invoices: OpenInvoice[]; accounts: XeroAccountLite[]; taxRates: XeroTaxRate[]; clearing: { name: string; code: string | null; bank: boolean } | null; stripeOn: boolean;
 }) {
@@ -55,6 +56,17 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
       if (!from) { const last = s.accounts.reduce((a, x) => (x.to > a ? x.to : a), s.accounts[0].to); setFrom(`${last.slice(0, 8)}01`); }
     } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't read that file." }); }
   };
+
+  const fromFeed = () => start(async () => {
+    setMsg(null);
+    const since = from || settings.from || new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10);
+    const r = await loadBankFeed(since);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    setFile({ name: "Bank feed", s: r.data });
+    setExisting(null); setSent({}); setPicked({}); setTab("ready");
+    if (!from) setFrom(since);
+  });
+  const label = (acc: string) => file?.s.accounts.find((a) => a.number === acc)?.label ?? tail(acc);
 
   const pairing = useMemo(() => (file ? pairTransfers(file.s.lines, { from: from || null }) : null), [file, from]);
   const rows = useMemo(() => {
@@ -114,10 +126,14 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
       {bankError && <Card className="p-4 text-[0.8125rem] text-rose-700">Couldn&apos;t read your Xero bank accounts: {bankError}</Card>}
 
       <Card>
-        <CardHeader title="1. Your bank's export" subtitle="Westpac Live: Accounts → Export → CSV, with all your accounts ticked. The file is read here in your browser — it isn't uploaded." />
+        <CardHeader title="1. Your bank's export" subtitle={feedOn ? "Load the last weeks from your bank feed to sort anything the morning run left for you — or use a CSV export (Westpac Live: Accounts → Export → CSV, all accounts ticked; read here in your browser, not uploaded)." : "Westpac Live: Accounts → Export → CSV, with all your accounts ticked. The file is read here in your browser — it isn't uploaded."} />
         <div className="space-y-3 border-t border-line px-5 py-4">
           <input ref={pick} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { void read(e.target.files?.[0]); e.target.value = ""; }} />
-          <Button variant={file ? "secondary" : "primary"} onClick={() => pick.current?.click()}><FileUp className="h-4 w-4" />{file ? "Choose a different file" : "Choose the CSV file"}</Button>
+          <div className="flex flex-wrap gap-2">
+            {feedOn && <Button variant={file ? "secondary" : "primary"} onClick={fromFeed} disabled={pending}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Load from bank feed</Button>}
+            <Button variant={file || feedOn ? "secondary" : "primary"} onClick={() => pick.current?.click()}><FileUp className="h-4 w-4" />{file ? "Choose a different file" : "Choose the CSV file"}</Button>
+          </div>
+          {!file && msg && <p className={cn("text-[0.8125rem]", msg.ok ? "text-emerald-700" : "text-rose-700 dark:text-rose-300")}>{msg.text}</p>}
           {file && <p className="text-[0.8125rem] text-ink-muted">{file.name} · {file.s.lines.length.toLocaleString()} transactions · {file.s.accounts.length} account{file.s.accounts.length === 1 ? "" : "s"}</p>}
         </div>
       </Card>
@@ -128,8 +144,8 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
           <div className="space-y-3 border-t border-line px-5 py-4">
             {file.s.accounts.map((a) => (
               <div key={a.number} className="grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-                <div className="text-[0.875rem]"><span className="font-semibold text-ink">{a.number}</span><span className="block text-[0.75rem] text-ink-muted">{a.lines.toLocaleString()} lines · {fmt(a.from)} – {fmt(a.to)}</span></div>
-                <Select aria-label={`Xero account for ${a.number}`} value={map[a.number] ?? ""} onChange={(e) => setMap({ ...map, [a.number]: e.target.value })}>
+                <div className="text-[0.875rem]"><span className="font-semibold text-ink">{a.label ?? a.number}</span><span className="block text-[0.75rem] text-ink-muted">{a.lines.toLocaleString()} lines · {fmt(a.from)} – {fmt(a.to)}</span></div>
+                <Select aria-label={`Xero account for ${a.label ?? a.number}`} value={map[a.number] ?? ""} onChange={(e) => setMap({ ...map, [a.number]: e.target.value })}>
                   <option value="">Choose the Xero bank account…</option>
                   {banks.map((b) => <option key={b.id} value={b.id}>{b.name}{b.number ? ` (${b.number})` : ""}</option>)}
                 </Select>
@@ -154,7 +170,7 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
             {progress && <span className="flex items-center gap-1.5 text-[0.8125rem] text-ink-muted"><Loader2 className="h-4 w-4 animate-spin" />{progress}</span>}
           </div>
           {(unmapped.length > 0 || (!checked && canTransfer)) && (
-            <p className="border-t border-line bg-canvas px-5 py-2 text-[0.75rem] text-ink-muted">{unmapped.length > 0 ? `Match ${unmapped.map((a) => tail(a.number)).join(", ")} to a Xero account first. ` : ""}{!checked ? "Check Xero first, so nothing already there is sent twice." : ""}</p>
+            <p className="border-t border-line bg-canvas px-5 py-2 text-[0.75rem] text-ink-muted">{unmapped.length > 0 ? `Match ${unmapped.map((a) => a.label ?? tail(a.number)).join(", ")} to a Xero account first. ` : ""}{!checked ? "Check Xero first, so nothing already there is sent twice." : ""}</p>
           )}
           {msg && <p className={cn("border-t border-line px-5 py-2.5 text-[0.8125rem]", msg.ok ? "text-emerald-700" : "text-rose-700")}>{msg.text}</p>}
           <div className="no-scrollbar flex gap-1.5 overflow-x-auto border-t border-line px-5 py-3">
@@ -169,7 +185,7 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
               ? pairing.unpaired.slice(0, limit).map((l) => (
                 <div key={l.key} className="flex items-center gap-3 px-5 py-2.5 text-[0.8125rem]">
                   <span className="w-24 shrink-0 text-ink-muted">{fmt(l.date)}</span>
-                  <span className="min-w-0 flex-1 truncate">{bankName(map[l.account]) ?? tail(l.account)} · {l.narrative}</span>
+                  <span className="min-w-0 flex-1 truncate">{bankName(map[l.account]) ?? label(l.account)} · {l.narrative}</span>
                   <span className={cn("tabular-nums", l.amount < 0 ? "text-rose-700" : "text-emerald-700")}>{money(l.amount)}</span>
                 </div>
               ))
@@ -181,7 +197,7 @@ export function ReconcileTool({ banks, bankError, canTransfer, settings, canSend
                     {canTick ? <input type="checkbox" className="h-4 w-4 shrink-0" checked={isPicked(r)} onChange={(e) => setPicked({ ...picked, [r.key]: e.target.checked })} /> : <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />}
                     <span className="w-24 shrink-0 text-ink-muted">{fmt(r.out.date)}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1 font-medium text-ink">{bankName(r.fromId) ?? tail(r.out.account)}<ArrowRight className="h-3.5 w-3.5 text-ink-faint" />{bankName(r.toId) ?? tail(r.in.account)}</span>
+                      <span className="flex flex-wrap items-center gap-1 font-medium text-ink">{bankName(r.fromId) ?? label(r.out.account)}<ArrowRight className="h-3.5 w-3.5 text-ink-faint" />{bankName(r.toId) ?? label(r.in.account)}</span>
                       <span className="block truncate text-[0.75rem] text-ink-muted">{note || "Transfer"}{r.gapDays ? ` · arrived ${r.gapDays > 0 ? `${r.gapDays} day${r.gapDays === 1 ? "" : "s"} later` : "a day earlier"}` : ""}{!r.mapped ? " · account not matched" : ""}</span>
                       {r.error && <span className="block text-[0.75rem] text-rose-700">{r.error}</span>}
                     </span>

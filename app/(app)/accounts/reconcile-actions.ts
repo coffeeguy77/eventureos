@@ -280,3 +280,64 @@ export async function ordermentumInXero(batches: string[]): Promise<R<{ batch: s
     return { ok: true, data: [...(await batchesInXero(ctx, list)).entries()].map(([batch, v]) => ({ batch, listed: v.reference.trim() !== batch, reconciled: v.reconciled })) };
   } catch (e) { return fail(e); }
 }
+
+// ── Bank feed (Redbark) ───────────────────────────────────────────────────────────────────────────
+
+/** Save which Xero bank account each Redbark account is, the start date, and whether matches go to Xero by themselves. */
+export async function saveBankFeed(input: { accounts: Record<string, string>; from: string | null; auto: boolean }): Promise<R> {
+  try {
+    const { supabase, org, role } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can change the bank feed.");
+    if (input.from && !DATE.test(input.from)) throw new Error("Choose a start date.");
+    const db = createServiceClient();
+    const { REDBARK_PROVIDER, readFeedSettings } = await import("@/lib/bankfeed/redbark");
+    const { data: row } = await db.from("integrations").select("id, settings").eq("organisation_id", org.id).eq("provider", REDBARK_PROVIDER).maybeSingle();
+    if (!row) throw new Error("Add your Redbark API key first (Settings → Integrations).");
+    const feed = readFeedSettings(row.settings);
+    const known = new Set(feed.accounts.map((a) => a.id));
+    const { data, error: e1 } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    if (e1) throw new Error(e1.message);
+    const settings = (data?.settings ?? {}) as Record<string, unknown>;
+    const cur = readReconcile(settings);
+    const accounts = { ...cur.accounts };
+    for (const [k, v] of Object.entries(input.accounts ?? {})) {
+      if (!known.has(k)) continue;
+      if (v && UUID.test(v)) accounts[k] = v; else delete accounts[k];
+    }
+    const clean = readReconcile({ reconcile: { accounts, from: input.from ?? cur.from, stripe: cur.stripe } });
+    const { error } = await supabase.from("organisations").update({ settings: { ...settings, reconcile: clean } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    await db.from("integrations").update({ settings: { ...(row.settings as object), auto: !!input.auto } }).eq("id", row.id);
+    revalidatePath("/accounts/reconcile");
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** Read the feed now and send what's certain to Xero (the same as the morning run). */
+export async function runBankFeedNow(): Promise<R<import("@/lib/bankfeed/redbark").FeedRun>> {
+  try {
+    const { org, user, role } = await owner();
+    if (role !== "owner" && role !== "admin") throw new Error("Only an owner or admin can send to Xero.");
+    const { runBankFeed } = await import("@/lib/bankfeed/auto");
+    const run = await runBankFeed(createServiceClient(), org.id, { actorId: user.id, send: true });
+    revalidatePath("/accounts/reconcile");
+    return { ok: true, data: run };
+  } catch (e) { return fail(e); }
+}
+
+/** The feed's transactions as a statement, to work through in the Reconcile tool like a CSV. */
+export async function loadBankFeed(from: string): Promise<R<import("@/lib/reconcile/core").ParsedStatement>> {
+  try {
+    if (!DATE.test(from)) throw new Error("Choose a start date.");
+    const { org } = await owner();
+    const db = createServiceClient();
+    const { redbarkKey, feedAccounts, feedStatement } = await import("@/lib/bankfeed/redbark");
+    const conn = await redbarkKey(db, org.id);
+    if (!conn) throw new Error("Add your Redbark API key first (Settings → Integrations).");
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone || "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const earliest = addDays(today, -400);
+    const s = await feedStatement(conn.key, await feedAccounts(conn.key), from < earliest ? earliest : from, today);
+    if (!s.lines.length) throw new Error("Redbark has no settled transactions since then.");
+    return { ok: true, data: s };
+  } catch (e) { return fail(e); }
+}

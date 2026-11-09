@@ -584,3 +584,39 @@ export async function removeAiKeyAction(): Promise<ActionState> {
   revalidatePath(BASE);
   return { ok: "Key removed." };
 }
+
+// ── Bank feeds (Redbark) ──────────────────────────────────────────────────────────────────────────
+
+/** Save the business's Redbark API key (checked with Redbark first; never shown again). */
+export async function saveRedbarkKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const { supabase, org, role } = await requireOrg();
+  if (!canManage(role)) return { error: "Only owners, admins and managers can change integrations." };
+  const key = String(form.get("key") ?? "").trim();
+  if (!/^rbk_[A-Za-z0-9_-]{12,}$/.test(key)) return { error: "That doesn't look like a Redbark API key — it starts with rbk_. Create one in Redbark → Settings → API & MCP." };
+  const { testRedbarkKey, feedAccounts, REDBARK_PROVIDER } = await import("@/lib/bankfeed/redbark");
+  const t = await testRedbarkKey(key);
+  if (!t.ok) return { error: t.error };
+  let accounts: Awaited<ReturnType<typeof feedAccounts>> = [];
+  try { accounts = await feedAccounts(key); } catch (e) { return { error: e instanceof Error ? e.message : "Couldn't read your accounts from Redbark." }; }
+  const { error } = await supabase.rpc("save_integration_connection", {
+    p_org: org.id, p_provider: REDBARK_PROVIDER, p_account_label: `Key ending ${key.slice(-4)}${t.plan ? ` · ${t.plan} plan` : ""}`, p_external_account_id: null, p_scopes: [],
+    p_access_token: key, p_refresh_token: null, p_expires_at: null, p_settings: { accounts },
+  });
+  if (error) return { error: error.message };
+  revalidatePath(BASE);
+  revalidatePath("/accounts/reconcile");
+  return { ok: accounts.length
+    ? `Saved and checked — Redbark has ${accounts.length} bank account${accounts.length === 1 ? "" : "s"}. Next: Accounts → Reconcile → Bank feed, match them to Xero and set the start date.`
+    : "Saved and checked, but Redbark has no bank accounts yet — connect your bank in the Redbark app first, then come back to Accounts → Reconcile." };
+}
+
+export async function removeRedbarkKeyAction(): Promise<ActionState> {
+  const { supabase, org, role } = await requireOrg();
+  if (!canManage(role)) return { error: "Only owners, admins and managers can change integrations." };
+  const { REDBARK_PROVIDER } = await import("@/lib/bankfeed/redbark");
+  const { data: row } = await supabase.from("integrations").select("id").eq("organisation_id", org.id).eq("provider", REDBARK_PROVIDER).maybeSingle();
+  if (row) { const { error } = await supabase.rpc("disconnect_integration", { p_integration_id: row.id }); if (error) return { error: error.message }; }
+  revalidatePath(BASE);
+  revalidatePath("/accounts/reconcile");
+  return { ok: "Key removed — the bank feed has stopped." };
+}
