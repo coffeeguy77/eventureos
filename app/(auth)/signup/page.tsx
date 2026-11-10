@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { SignupForm } from "./form";
+import { GoogleButton, OrDivider } from "../google-button";
+import { googleSignInOn } from "@/lib/auth/google";
 
 export const metadata = { title: "Create account" };
 
@@ -7,12 +9,14 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const email = typeof sp.email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sp.email) ? sp.email.slice(0, 254) : "";
   const org = typeof sp.org === "string" ? sp.org.slice(0, 80) : "";
+  const google = await googleSignInOn();
   return (
     <>
       <h1 className="text-[1.25rem] font-semibold tracking-tight lg:text-[1.375rem]">{org ? `Join ${org}` : "Create your account"}</h1>
       <p className="mt-1 text-[0.8438rem] text-ink-muted lg:mt-1.5">
         {org ? "Create your account with the email your invitation was sent to — you'll go straight in." : "You’ll set up your organisation next."}
       </p>
+      {google && <div className="mt-5 lg:mt-8"><GoogleButton next="/onboarding" label="Sign up with Google" /><OrDivider /></div>}
       <SignupForm defaultEmail={email} />
       <p className="mt-5 text-[0.8125rem] text-ink-muted lg:mt-6">
         Already have an account?{" "}

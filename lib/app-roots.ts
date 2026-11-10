@@ -4,5 +4,5 @@
  * fresh (e.g. a search form), so lib/app-roots.test.ts checks this list against app/(app).
  */
 export const APP_ROOTS = new Set(["dashboard", "tasks", "enquiries", "crm", "quotes", "events", "calendar", "kitchen", "bookings", "learn", "store", "wholesale", "offers", "website",
-  "clients", "invoices", "payments", "wages", "portal", "reports", "settings", "my-jobs", "my-signature", "history", "xero-quotes", "franchise", "rentals", "login", "signup", "auth",
+  "clients", "invoices", "payments", "wages", "portal", "reports", "settings", "my-jobs", "my-signature", "my-security", "history", "xero-quotes", "franchise", "rentals", "login", "signup", "auth",
   "admin", "onboarding", "crew", "suspended", "api", "accounts", "hosting", "nerd-herd", "pricing", "printing", "machines", "roastery", "my-bonuses", "roster", "cart-club", "test-tag"]);

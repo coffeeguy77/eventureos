@@ -13,7 +13,7 @@ import { RosterToggle } from "./roster-toggle";
 import { CrewList, type CrewMember } from "./crew-list";
 import { staffMinHours } from "@/lib/crew/shifts";
 import { AccessEditor } from "@/components/settings/access-editor";
-import { SetPassword } from "@/components/settings/set-password";
+import { ResetTwoStep, SetPassword } from "@/components/settings/set-password";
 import { ACCESS_PRESETS, SECTIONS, businessSections } from "@/lib/access";
 
 export const metadata = { title: "Team" };
@@ -156,7 +156,7 @@ export default async function TeamPage() {
                         </div>
                       </ActionForm>
                     )}
-                    {canAdmin && !isMe && m.role !== "owner" && <SetPassword memberId={m.id} name={name} />}
+                    {canAdmin && !isMe && m.role !== "owner" && <><SetPassword memberId={m.id} name={name} /><ResetTwoStep memberId={m.id} name={name} /></>}
                     {canAdmin && !isMe && m.role !== "owner" && (
                       <ActionButton
                         action={removeMember.bind(null, m.id)}
@@ -230,7 +230,7 @@ export default async function TeamPage() {
                     {usesEvents && <td className="px-3 py-3">{toggles("member", m.id, m.auto_add_to_events, m.sees_job_details)}</td>}
                     <td className="px-3 py-3 text-ink-muted" title={fmtDateTime(m.created_at, org.timezone)}>{fmtDateTime(m.created_at, org.timezone, "date")}</td>
                     <td className="px-5 py-3 text-right">
-                      {canAdmin && !isMe && m.role !== "owner" && <div className="mb-1 flex justify-end"><SetPassword memberId={m.id} name={name} /></div>}
+                      {canAdmin && !isMe && m.role !== "owner" && <div className="mb-1 flex flex-wrap justify-end gap-1"><SetPassword memberId={m.id} name={name} /><ResetTwoStep memberId={m.id} name={name} /></div>}
                       {canAdmin && !isMe && m.role !== "owner" && (
                         <ActionButton
                           action={removeMember.bind(null, m.id)}

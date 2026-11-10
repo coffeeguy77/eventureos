@@ -86,3 +86,33 @@ export async function setOwnPassword(_prev: AuthState, form: FormData): Promise<
   if (error) return { error: /same/i.test(error.message) ? "That's your current password — choose a different one." : /weak|pwned|leaked/i.test(error.message) ? "That password is too easy to guess — choose another." : error.message };
   redirect("/dashboard");
 }
+
+/** "Continue with Google": off to Google, back to /auth/callback (then on to two-step if the person has it on). */
+export async function signInWithGoogle(form: FormData): Promise<void> {
+  const next = safeNext(form.get("next"));
+  const h = await headers();
+  const origin = h.get("origin") ?? `https://${h.get("host")}`;
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`, queryParams: { prompt: "select_account" } },
+  });
+  if (error || !data?.url) redirect(`/login?error=${encodeURIComponent(error?.message && /not enabled|unsupported/i.test(error.message) ? "Google sign-in isn't switched on yet." : "Couldn't start Google sign-in — try again.")}`);
+  redirect(data.url);
+}
+
+export type MfaState = { error?: string } | undefined;
+
+/** Second step of signing in: the 6-digit code from the person's authenticator app. */
+export async function verifyMfaLogin(_prev: MfaState, form: FormData): Promise<MfaState> {
+  const code = String(form.get("code") ?? "").replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(code)) return { error: "Enter the 6-digit code from your authenticator app." };
+  const supabase = await createClient();
+  const { data: f, error: e1 } = await supabase.auth.mfa.listFactors();
+  if (e1) return { error: "Your sign-in has expired — sign in again." };
+  const factor = f?.totp?.[0];
+  if (!factor) redirect(safeNext(form.get("next")));
+  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
+  if (error) return { error: /invalid|expired/i.test(error.message) ? "That code didn't work — check the time on your phone is right and try the newest code." : error.message };
+  redirect(safeNext(form.get("next")));
+}

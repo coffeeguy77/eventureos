@@ -8,7 +8,7 @@ import type { OrgRole } from "@/lib/types";
  *  - staff (field staff): only My jobs
  */
 const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/roster", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing", "/hosting"];
-const STAFF_ALLOWED = ["/my-jobs", "/my-signature"];
+const STAFF_ALLOWED = ["/my-jobs", "/my-signature", "/my-security"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
 
@@ -37,7 +37,7 @@ export const ACCESS_PRESETS: { key: string; label: string; sections: string[] }[
   { key: "operations", label: "Operations", sections: ["/events", "/calendar", "/rentals", "/kitchen", "/wages", "/roster", "/tasks"] },
   { key: "web_designer", label: "Web designer", sections: ["/nerd-herd", "/quotes", "/invoices", "/clients", "/tasks", "/calendar"] },
 ];
-const ALWAYS = ["/dashboard", "/my-signature", "/my-bonuses", "/notifications", "/profile"];
+const ALWAYS = ["/dashboard", "/my-signature", "/my-security", "/my-bonuses", "/notifications", "/profile"];
 const SECTION_KEYS = new Set(SECTIONS.map((x) => x.key));
 export const cleanAccess = (raw: unknown): string[] | null => {
   if (!Array.isArray(raw)) return null;

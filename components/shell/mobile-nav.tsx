@@ -166,6 +166,9 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
               <Link href="/my-signature" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
                 <PenLine className="h-5 w-5 text-ink-muted" /> My email signature
               </Link>
+              <Link href="/my-security" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
+                <ShieldCheck className="h-5 w-5 text-ink-muted" /> Sign-in &amp; security
+              </Link>
               <Link href="/my-bonuses" onClick={() => setOpen(false)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-[0.875rem] font-medium text-ink hover:bg-zinc-50">
                 <Award className="h-5 w-5 text-ink-muted" /> My bonuses
               </Link>

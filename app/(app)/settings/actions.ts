@@ -709,3 +709,26 @@ export async function saveEnquiryCta(cta: "event" | "ticket" | null, usesEvents:
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/** Owners and admins: turn off a team member's two-step sign-in (they lost their phone). They can set it up again. */
+export async function resetMemberTwoStep(memberId: string): Promise<{ ok: true; had: boolean } | { ok: false; error: string }> {
+  try {
+    const { supabase, org, user, profile, role } = await ownerOrAdmin();
+    const m = await loadMember(supabase, org.id, memberId);
+    if (m.user_id === user.id) throw new Error("Turn your own off from Sign-in & security.");
+    if (m.role === "owner" && role !== "owner") throw new Error("Only an owner can change an owner's sign-in.");
+    const { createServiceClient } = await import("@/lib/integrations/runtime");
+    const db = createServiceClient();
+    const { count } = await db.from("organisation_users").select("id", { count: "exact", head: true }).eq("user_id", m.user_id).neq("organisation_id", org.id);
+    if (count) throw new Error(`${m.name} also signs in to another business, so only they (or EventureOS support) can change this.`);
+    const { data, error } = await db.auth.admin.mfa.listFactors({ userId: m.user_id });
+    if (error) throw new Error(error.message);
+    const factors = data?.factors ?? [];
+    for (const f of factors) {
+      const { error: e } = await db.auth.admin.mfa.deleteFactor({ userId: m.user_id, id: f.id });
+      if (e) throw new Error(e.message);
+    }
+    if (factors.length) await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "team.two_step_reset", entityType: "user", entityId: m.user_id, summary: `${actorName(profile)} turned off two-step sign-in for ${m.name}` });
+    return { ok: true, had: factors.length > 0 };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

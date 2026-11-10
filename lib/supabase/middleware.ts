@@ -54,6 +54,16 @@ export async function updateSession(request: NextRequest) {
     redirect.search = path && path !== "/" ? `?next=${encodeURIComponent(path + request.nextUrl.search)}` : "";
     return NextResponse.redirect(redirect);
   }
+  // Two-step sign-in: someone who has an authenticator app set up must enter its code before using the app
+  if (user && !isPublic && !path.startsWith("/api/")) {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      const redirect = request.nextUrl.clone();
+      redirect.pathname = "/login/mfa";
+      redirect.search = `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
+      return NextResponse.redirect(redirect);
+    }
+  }
   if (user && (path === "/login" || path === "/signup")) {
     const redirect = request.nextUrl.clone();
     redirect.pathname = "/dashboard";

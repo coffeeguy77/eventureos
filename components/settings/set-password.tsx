@@ -47,3 +47,28 @@ export function SetPassword({ memberId, name }: { memberId: string; name: string
     </div>
   );
 }
+
+/** Owners and admins: turn off someone's two-step sign-in (e.g. they lost their phone). */
+export function ResetTwoStep({ memberId, name }: { memberId: string; name: string }) {
+  const [sure, setSure] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, start] = useTransition();
+  const run = () => start(async () => {
+    const { resetMemberTwoStep } = await import("@/app/(app)/settings/actions");
+    const r = await resetMemberTwoStep(memberId);
+    setSure(false);
+    setMsg(r.ok ? { ok: true, text: r.had ? `Two-step sign-in is off for ${name}. They can sign in with their password and set it up again.` : `${name} doesn't have two-step sign-in on.` } : { ok: false, text: r.error });
+  });
+  return (
+    <div className="min-w-0">
+      {!sure ? <Button type="button" variant="ghost" size="sm" className="h-10 sm:h-8" onClick={() => { setSure(true); setMsg(null); }}>Reset two-step</Button> : (
+        <div className="flex flex-wrap items-center gap-1.5 text-[0.75rem] text-ink-muted">
+          <span>Turn off {name}&apos;s two-step sign-in?</span>
+          <Button type="button" size="sm" variant="primary" className="h-10 sm:h-8" disabled={pending} onClick={run}>{pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Turn off</Button>
+          <Button type="button" size="sm" variant="ghost" className="h-10 sm:h-8" onClick={() => setSure(false)}>Cancel</Button>
+        </div>
+      )}
+      {msg && <p className={`mt-1 text-[0.75rem] ${msg.ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600"}`}>{msg.text}</p>}
+    </div>
+  );
+}
