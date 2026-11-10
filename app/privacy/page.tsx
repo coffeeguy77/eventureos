@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LegalPage, OPERATOR } from "@/components/legal/legal-page";
 
-export const metadata = { title: "Privacy Policy · EventureOS", description: "How EventureOS collects, uses, stores and protects personal information, including data from Google accounts." };
+export const metadata = { title: "Privacy Policy", description: "How EventureOS collects, uses, stores and protects personal information, including data from Google accounts." };
 
 export default function PrivacyPage() {
   const mail = <a href={`mailto:${OPERATOR.email}`}>{OPERATOR.email}</a>;

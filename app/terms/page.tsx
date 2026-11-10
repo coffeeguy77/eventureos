@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LegalPage, OPERATOR } from "@/components/legal/legal-page";
 
-export const metadata = { title: "Terms of Service · EventureOS", description: "The terms for using EventureOS." };
+export const metadata = { title: "Terms of Service", description: "The terms for using EventureOS." };
 
 export default function TermsPage() {
   const mail = <a href={`mailto:${OPERATOR.email}`}>{OPERATOR.email}</a>;
