@@ -393,7 +393,7 @@ export function SalesPage() {
           </div>
           <nav aria-label="Product" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Product</p><ul className="mk-muted space-y-2"><li><a href="#how" className="hover:text-[rgb(var(--ink))]">How it works</a></li><li><a href="#product" className="hover:text-[rgb(var(--ink))]">Tour</a></li><li><Link href="/apps" className="hover:text-[rgb(var(--ink))]">Apps</Link></li><li><a href="#integrations" className="hover:text-[rgb(var(--ink))]">Integrations</a></li><li><a href="#pricing" className="hover:text-[rgb(var(--ink))]">Pricing</a></li></ul></nav>
           <nav aria-label="Company" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Get started</p><ul className="mk-muted space-y-2"><li><a href="#demo" className="hover:text-[rgb(var(--ink))]">Book a demo</a></li><li><a href="#faq" className="hover:text-[rgb(var(--ink))]">FAQ</a></li></ul></nav>
-          <nav aria-label="Account" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Customers</p><ul className="mk-muted space-y-2"><li><Link href="/login" className="hover:text-[rgb(var(--ink))]">Sign in</Link></li></ul></nav>
+          <nav aria-label="Account" className="text-[0.9375rem]"><p className="mb-3 font-semibold">Customers</p><ul className="mk-muted space-y-2"><li><Link href="/login" className="hover:text-[rgb(var(--ink))]">Sign in</Link></li><li><Link href="/privacy" className="hover:text-[rgb(var(--ink))]">Privacy</Link></li><li><Link href="/terms" className="hover:text-[rgb(var(--ink))]">Terms</Link></li></ul></nav>
         </div>
         <div className="mk-wrap mk-faint mt-12 flex flex-wrap items-center justify-between gap-3 text-[0.8125rem]">
           <p>© {new Date().getFullYear()} EventureOS</p>
