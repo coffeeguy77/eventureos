@@ -2,8 +2,9 @@
   "name": "eventureos",
   "version": "0.1.0",
   "private": true,
-  "description": "EventureOS — the operating system for event businesses",
+  "description": "EventureOS \u2014 the operating system for event businesses",
   "scripts": {
+    "prebuild": "node scripts/gen-public-pages.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

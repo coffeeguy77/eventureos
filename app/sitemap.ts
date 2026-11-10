@@ -6,15 +6,31 @@ import { readSite } from "@/lib/site/site";
 import { readHireSettings } from "@/lib/hire/core";
 import { isAgencyAccess } from "@/lib/site/agency/support";
 import { AGENCY_PAGES } from "@/lib/site/agency/content";
+import { readShop } from "@/lib/shop/core";
+import { readJobSettings } from "@/lib/jobs/core";
+import { readLearnSettings } from "@/lib/learn/core";
+import { readMachines } from "@/lib/machines/core";
+import { readPrinting } from "@/lib/printing/core";
+// The site's own public pages, listed by scripts/gen-public-pages.mjs before every build
+import PUBLIC_PAGES from "@/lib/public-pages.generated.json";
 
 export const revalidate = 3600;
 const BASE = "https://www.eventureos.com.au";
 
-/** The marketing pages, plus every business's public booking page and course pages (so they can be found in search). */
+/**
+ * sitemap.xml, rebuilt hourly: the site's own public pages (found automatically at build time — a new page is added
+ * without touching this file), plus every business's public pages straight from the database — cafés, hire, shops
+ * and their products, courses, jobs boards, academies and agency sites — so a business that switches a page on
+ * appears within the hour.
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const LEGAL = new Set(["/privacy", "/terms"]);
   const out: MetadataRoute.Sitemap = [
-    { url: `${BASE}/`, changeFrequency: "weekly", priority: 1 },
-    { url: `${BASE}/apps`, changeFrequency: "monthly", priority: 0.8 },
+    ...(PUBLIC_PAGES as string[]).map((p) => ({
+      url: p === "/" ? `${BASE}/` : `${BASE}${p}`,
+      changeFrequency: (p === "/" ? "weekly" : LEGAL.has(p) ? "yearly" : "monthly") as "weekly" | "yearly" | "monthly",
+      priority: p === "/" ? 1 : LEGAL.has(p) ? 0.3 : 0.8,
+    })),
     { url: `${BASE}/login`, changeFrequency: "yearly", priority: 0.3 },
   ];
   if (!serviceRoleConfigured()) return out;
@@ -45,6 +61,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       out.push({ url: h, changeFrequency: "weekly", priority: 0.9 });
       for (const k of offered(ev)) if (k !== "diy") out.push({ url: `${h}/${hirePageSlug(k, ev)}`, changeFrequency: "weekly", priority: 0.9 });
       for (const p of ["quote", "drinks", "branding", "catering"]) out.push({ url: `${h}/${p}`, changeFrequency: "weekly", priority: 0.7 });
+    }
+    // hire extras: coffee machine sales, repairs and printing
+    for (const o of orgs as { slug: string; settings: Record<string, unknown> | null }[]) {
+      if (!readEvents(o.settings).enabled) continue;
+      const m = readMachines(o.settings);
+      if (m.enabled) out.push({ url: `${BASE}/hire/${o.slug}/machines`, changeFrequency: "weekly", priority: 0.7 });
+      if (m.serviceEnabled) out.push({ url: `${BASE}/hire/${o.slug}/repairs`, changeFrequency: "monthly", priority: 0.6 });
+      if (readPrinting(o.settings).enabled) out.push({ url: `${BASE}/hire/${o.slug}/printing`, changeFrequency: "monthly", priority: 0.6 });
+    }
+    // online shops (coffee etc.) and their product pages
+    for (const o of orgs as { id: string; slug: string; settings: Record<string, unknown> | null }[]) {
+      if (!readShop(o.settings).enabled) continue;
+      out.push({ url: `${BASE}/shop/${o.slug}`, changeFrequency: "daily", priority: 0.9 });
+      const { data: ps, error } = await db.from("shop_products").select("slug").eq("organisation_id", o.id).eq("status", "active").not("slug", "is", null).limit(1000);
+      if (!error) for (const p of (ps ?? []) as { slug: string }[]) out.push({ url: `${BASE}/shop/${o.slug}/p/${p.slug}`, changeFrequency: "weekly", priority: 0.8 });
+    }
+    // barista jobs boards (only where the business has set one up) and online academies
+    for (const o of orgs as { slug: string; name?: string; settings: Record<string, unknown> | null }[]) {
+      if (o.settings?.jobs && readJobSettings(o.settings, "").enabled) out.push({ url: `${BASE}/jobs/${o.slug}`, changeFrequency: "daily", priority: 0.7 });
+      if (readLearnSettings(o.settings).enabled) out.push({ url: `${BASE}/academy/${o.slug}`, changeFrequency: "weekly", priority: 0.7 });
     }
     // online hire shops and their item pages
     const shops = ((orgs ?? []) as { id: string; slug: string; settings: Record<string, unknown> | null; app_access: string[] | null }[]).filter((o) => {
