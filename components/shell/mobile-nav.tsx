@@ -68,7 +68,7 @@ export function MobileTabBar({ role, enquiries, isSuperAdmin, orgs, currentOrgId
   flags?: { franchise?: boolean; hire?: boolean; locked?: string[]; sections?: string[] | null; labels?: Record<string, string> };
   enquiries: number;
   isSuperAdmin: boolean;
-  orgs: { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean }[];
+  orgs: { id: string; name: string; role: string; logo?: string | null; icon?: boolean; colour?: string | null; fresh?: boolean }[];
   currentOrgId: string;
   user: { name: string; email: string };
 }) {

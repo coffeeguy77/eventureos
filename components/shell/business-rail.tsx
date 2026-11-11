@@ -6,16 +6,16 @@ import { Loader2, Plus } from "lucide-react";
 import { switchOrganisation } from "@/app/(app)/shell-actions";
 import { cn } from "@/lib/cn";
 
-export type OrgChip = { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean };
+export type OrgChip = { id: string; name: string; role: string; logo?: string | null; icon?: boolean; colour?: string | null; fresh?: boolean };
 
 const initials = (name: string) => name.replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
 
-/** One business's mark: its logo, or its initials in its colour. */
+/** One business's mark: its square icon (fills the tile), its logo, or its initials in its colour. */
 export function OrgMark({ o, size = 32 }: { o: OrgChip; size?: number }) {
   const bg = o.colour && /^#[0-9a-f]{6}$/i.test(o.colour) ? o.colour : "#6d28d9";
   return o.logo && /^https:\/\//.test(o.logo)
     // eslint-disable-next-line @next/next/no-img-element
-    ? <img src={o.logo} alt="" style={{ width: size, height: size }} className="rounded-lg bg-white object-contain p-0.5 ring-1 ring-line" />
+    ? <img src={o.logo} alt="" style={{ width: size, height: size }} className={o.icon ? "rounded-lg object-cover ring-1 ring-line" : "rounded-lg bg-white object-contain p-0.5 ring-1 ring-line"} />
     : <span style={{ width: size, height: size, background: bg }} className="grid place-items-center rounded-lg text-[0.6875rem] font-bold text-white">{initials(o.name)}</span>;
 }
 

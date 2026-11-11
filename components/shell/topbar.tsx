@@ -14,7 +14,7 @@ import { globalSearch, markAllNotificationsRead, signOut, switchOrganisation, ty
 
 export interface TopbarProps {
   user: { name: string; email: string };
-  orgs: { id: string; name: string; role: string; logo?: string | null; colour?: string | null; fresh?: boolean }[];
+  orgs: { id: string; name: string; role: string; logo?: string | null; icon?: boolean; colour?: string | null; fresh?: boolean }[];
   currentOrgId: string;
   notifications: { id: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null; type: string }[];
   unread: number;

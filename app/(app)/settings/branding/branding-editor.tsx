@@ -17,6 +17,8 @@ export interface BrandingOrg {
   logoUrl: string | null;
   /** white/light version of the logo for dark website headers and footers */
   darkLogoUrl?: string | null;
+  /** square icon: business switcher, browser tab, staff app */
+  iconUrl?: string | null;
   brandColour: string;
   contactEmail: string | null;
   contactPhone: string | null;
@@ -60,6 +62,11 @@ export function BrandingEditor({ org, canEdit }: { org: BrandingOrg; canEdit: bo
           <p className="mt-0.5 text-[0.7812rem] text-ink-muted">A white or light version for dark website headers and footers. Without one, your main logo is used there.</p>
           <div className="mt-3">
             <LogoUploader org={org} canEdit={canEdit} dark />
+          </div>
+          <h4 className="mt-5 text-[0.8125rem] font-semibold text-ink">App icon &amp; favicon <span className="font-normal text-ink-faint">(optional)</span></h4>
+          <p className="mt-0.5 text-[0.7812rem] text-ink-muted">A square mark (at least 256 × 256) for the business switcher, the browser tab and your staff app&apos;s home-screen icon. Without one, your logo is used.</p>
+          <div className="mt-3">
+            <LogoUploader org={org} canEdit={canEdit} icon />
           </div>
         </section>
 
@@ -151,9 +158,9 @@ function LogoMark({ org, size = 36 }: { org: BrandingOrg; size?: number }) {
   );
 }
 
-function LogoUploader({ org, canEdit, dark = false }: { org: BrandingOrg; canEdit: boolean; dark?: boolean }) {
-  const which = dark ? "dark" : "main";
-  const current = dark ? org.darkLogoUrl ?? null : org.logoUrl;
+function LogoUploader({ org, canEdit, dark = false, icon = false }: { org: BrandingOrg; canEdit: boolean; dark?: boolean; icon?: boolean }) {
+  const which = icon ? "icon" : dark ? "dark" : "main";
+  const current = icon ? org.iconUrl ?? null : dark ? org.darkLogoUrl ?? null : org.logoUrl;
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +174,7 @@ function LogoUploader({ org, canEdit, dark = false }: { org: BrandingOrg; canEdi
     start(async () => {
       try {
         const supabase = createClient();
-        const path = `${org.id}/logo${dark ? "-dark" : ""}-${Date.now()}.${ext}`;
+        const path = `${org.id}/logo${icon ? "-icon" : dark ? "-dark" : ""}-${Date.now()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("branding").upload(path, file, {
           contentType: file.type, cacheControl: "31536000", upsert: false,
         });
@@ -185,20 +192,27 @@ function LogoUploader({ org, canEdit, dark = false }: { org: BrandingOrg; canEdi
   return (
     <div>
       <div className="flex flex-wrap items-center gap-4">
-        <div className={`flex h-16 min-w-[64px] items-center justify-center rounded-lg border border-dashed px-3 ${dark ? "border-zinc-600 bg-[#0F0B1E]" : "border-line-strong bg-canvas"}`}>
+        {icon ? (
+          <div className="flex items-end gap-3">
+            {current
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <><img src={current} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-line" /><img src={current} alt="" title="Browser tab size" className="h-8 w-8 rounded-lg object-cover ring-1 ring-line" /><img src={current} alt="" title="Browser tab size" className="h-4 w-4 rounded-sm object-cover" /></>
+              : <div className="grid h-16 w-16 place-items-center rounded-xl border border-dashed border-line-strong bg-canvas text-[0.6875rem] text-ink-faint">None yet</div>}
+          </div>
+        ) : <div className={`flex h-16 min-w-[64px] items-center justify-center rounded-lg border border-dashed px-3 ${dark ? "border-zinc-600 bg-[#0F0B1E]" : "border-line-strong bg-canvas"}`}>
           {dark ? (current ? <img src={current} alt="" style={{ height: 40, maxWidth: 160 }} className="w-auto object-contain" /> : <span className="text-[0.75rem] text-zinc-400">None yet</span>) : <LogoMark org={org} size={40} />}
-        </div>
+        </div>}
         {canEdit && (
           <div className="flex gap-2">
             <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" id={dark ? "logo-dark-file" : "logo-file"}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
             <Button type="button" size="sm" disabled={pending} onClick={() => input.current?.click()} className="h-10 sm:h-8">
-              <ImageUp className="h-3.5 w-3.5" /> {pending ? "Uploading…" : current ? "Replace logo" : "Upload logo"}
+              <ImageUp className="h-3.5 w-3.5" /> {pending ? "Uploading…" : icon ? (current ? "Replace icon" : "Upload icon") : current ? "Replace logo" : "Upload logo"}
             </Button>
             {current && (
               <Button type="button" size="sm" variant="ghost" disabled={pending} className="h-10 sm:h-8"
                 onClick={() => {
-                  if (!window.confirm(dark ? "Remove the logo for dark backgrounds? Your main logo will be used instead." : "Remove your logo? Your business name will show instead.")) return;
+                  if (!window.confirm(icon ? "Remove the icon? Your logo will be used instead." : dark ? "Remove the logo for dark backgrounds? Your main logo will be used instead." : "Remove your logo? Your business name will show instead.")) return;
                   setError(null);
                   start(async () => {
                     try { await removeLogo(which); router.refresh(); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't remove the logo"); }

@@ -1,7 +1,7 @@
 import { readHosting } from "@/lib/hosting/core";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { requireOrg, isSuperAdmin } from "@/lib/context";
+import { getContext, requireOrg, isSuperAdmin } from "@/lib/context";
 import { canOpen, homeFor } from "@/lib/access";
 import { SupportBanner } from "@/components/shell/support-banner";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -11,6 +11,21 @@ import { PrefsSync } from "@/components/shell/personalise";
 import { readSite } from "@/lib/site/site";
 import { APPS, appAllowed, appForPath } from "@/lib/apps";
 import { hireOn, orgAppAccess } from "@/lib/apps-server";
+
+/** The business's square icon (Settings → Branding → App icon & favicon), if it has one. */
+const appIcon = (settings: unknown): string | null => {
+  const v = (settings as { app_icon?: unknown } | null)?.app_icon;
+  return typeof v === "string" && /^https:\/\//.test(v) ? v : null;
+};
+
+/** The browser tab shows the current business's icon (the EventureOS bird when it has none). */
+export async function generateMetadata(): Promise<import("next").Metadata> {
+  try {
+    const { current } = await getContext();
+    const icon = appIcon(current?.organisation?.settings);
+    return icon ? { icons: { icon, apple: icon } } : {};
+  } catch { return {}; }
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { supabase, org, realProfile: profile, memberships, isSupportSession, current, role, access: sections } = await requireOrg();
@@ -60,7 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ]);
     for (const r of [...(n.data ?? []), ...(e.data ?? [])] as { organisation_id: string }[]) fresh.add(r.organisation_id);
   }
-  const orgList = memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role, logo: m.organisation.logo_url ?? null, colour: m.organisation.brand_colour ?? null, fresh: fresh.has(m.organisation.id) }));
+  const orgList = memberships.map((m) => ({ id: m.organisation.id, name: m.organisation.name, role: m.role, logo: appIcon(m.organisation.settings) ?? m.organisation.logo_url ?? null, icon: !!appIcon(m.organisation.settings), colour: m.organisation.brand_colour ?? null, fresh: fresh.has(m.organisation.id) }));
 
   return (
     <div className="min-h-screen">

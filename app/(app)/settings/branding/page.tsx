@@ -25,6 +25,7 @@ export default async function BrandingPage() {
           org={{
             id: o.id, name: o.name, logoUrl: o.logo_url, brandColour: o.brand_colour,
             darkLogoUrl: typeof (o.settings as Record<string, unknown> | null)?.logo_on_dark === "string" ? ((o.settings as Record<string, unknown>).logo_on_dark as string) : null,
+            iconUrl: typeof (o.settings as Record<string, unknown> | null)?.app_icon === "string" ? ((o.settings as Record<string, unknown>).app_icon as string) : null,
             contactEmail: o.contact_email, contactPhone: o.contact_phone, website: o.website, address: o.address,
           }}
         />
