@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { approveBooking } from "../approval-actions";
 import { Button } from "@/components/ui/button";
+import { MarkHeldDone } from "./mark-done";
 
 /** Shown on an event whose booking is waiting for an owner/admin to approve (short-notice or "every booking" rule). */
-export function ApprovalBanner({ eventId, when, requestedAt, canApprove, invoiceNote }: {
+export function ApprovalBanner({ eventId, when, requestedAt, canApprove, invoiceNote, done }: {
   eventId: string; when: string; requestedAt: string | null; canApprove: boolean; invoiceNote: string;
+  /** why it looks finished already ("the date has passed", "it's been paid"), if it does */
+  done?: string | null;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +27,10 @@ export function ApprovalBanner({ eventId, when, requestedAt, canApprove, invoice
             and their portal says we still need to confirm. Check you have the staff and equipment, then approve.
           </p>
           <p className="mt-1 text-[0.75rem] text-amber-800">Approving confirms the event, adds it to the calendar with the rostered staff and {invoiceNote}. Can’t do it? Call the customer, then set the status to Cancelled.</p>
+          {done && <p className="mt-2 text-[0.8125rem] font-semibold text-amber-900">Looks finished already — {done}. If the job&apos;s done, mark it completed: nothing is added to the calendar and no invoice is raised.</p>}
           {error && <p className="mt-2 text-[0.8125rem] font-medium text-danger">{error}</p>}
         </div>
+        {canApprove && done && <MarkHeldDone eventId={eventId} />}
         {canApprove ? (
           <Button variant="primary" disabled={pending} className="w-full sm:w-auto"
             onClick={() => start(async () => {

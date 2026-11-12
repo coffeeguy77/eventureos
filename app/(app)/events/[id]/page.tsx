@@ -262,7 +262,8 @@ export default async function EventPage({ params, searchParams }: { params: Prom
 
       {approval.pending && (
         <ApprovalBanner eventId={e.id} when={e.event_date ? `${relativeDay(e.event_date, today).toLowerCase()} (${fmtDate(e.event_date, "weekday")})` : "undated"}
-          requestedAt={approval.requestedAt ? relative(approval.requestedAt) : null} canApprove={role === "owner" || role === "admin"} invoiceNote={approval.invoiceNote} />
+          requestedAt={approval.requestedAt ? relative(approval.requestedAt) : null} canApprove={role === "owner" || role === "admin"} invoiceNote={approval.invoiceNote}
+          done={[e.event_date && e.event_date < today ? "the date has passed" : null, invoices.some((i) => i.status === "paid") && !invoices.some((i) => i.status !== "paid" && i.status !== "void") ? "it's been paid" : null].filter(Boolean).join(" and ") || null} />
       )}
       {(e as { availability_tbc?: boolean }).availability_tbc && <AvailabilityBanner eventId={e.id} phone={e.contact?.phone ?? e.customer.phone ?? null} />}
       <NextActionBanner action={na} />

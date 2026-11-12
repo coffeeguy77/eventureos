@@ -1,5 +1,6 @@
 import { JobsBoard } from "@/components/nerdherd/jobs-board";
 import Link from "next/link";
+import { MarkHeldDone } from "@/app/(app)/events/[id]/mark-done";
 import { NotConnected } from "@/components/ui/connect-link";
 import { ArrowUpRight } from "lucide-react";
 import { canManage, requireOrg, getMembers } from "@/lib/context";
@@ -110,9 +111,14 @@ export default async function DashboardPage() {
   const messages = must<Row[]>(messagesRes, "messages");
   const overdueEvents = must<Row[]>(overdueEventsRes, "events");
   const names = Object.fromEntries(members.map((m) => [m.id, m.full_name ?? m.email]));
-  const { data: held } = await supabase.from("events").select("id, name, event_date, approval_requested_at, customer:customers(name)")
+  const { data: held } = await supabase.from("events").select("id, name, event_date, approval_requested_at, customer:customers(name), invoices(status)")
     .eq("organisation_id", org.id).eq("approval_status", "pending").not("status", "in", "(confirmed,completed,cancelled)").order("event_date");
-  const heldBookings = (held ?? []) as unknown as { id: string; name: string; event_date: string | null; approval_requested_at: string | null; customer: { name: string } | null }[];
+  const heldBookings = ((held ?? []) as unknown as { id: string; name: string; event_date: string | null; approval_requested_at: string | null; customer: { name: string } | null; invoices: { status: string }[] | null }[])
+    .map((b) => {
+      const inv = (b.invoices ?? []).filter((i) => i.status !== "void");
+      const paid = inv.length > 0 && inv.every((i) => i.status === "paid");
+      return { ...b, done: b.event_date && b.event_date < today ? (paid ? "already happened and paid" : "date has passed") : paid ? "already paid" : null };
+    });
   // ---- Get paid before the event: confirmed jobs coming up with money still owing (or no invoice yet), and overdue invoices
   const in60 = addDaysISO(today, 59);
   const { data: soon } = await supabase.from("events").select("id, name, event_date, status, customer:customers(name)")
@@ -247,6 +253,7 @@ export default async function DashboardPage() {
                 {b.customer?.name ? ` · ${b.customer.name}` : ""}
                 {b.event_date ? ` · ${relativeDay(b.event_date, today)} (${fmtDate(b.event_date, "weekday")})` : ""}
                 {b.approval_requested_at ? <span className="text-amber-800"> · accepted {relative(b.approval_requested_at)}</span> : null}
+                {b.done && <span className="mt-1 flex flex-wrap items-center gap-2"><span className="text-amber-800">Looks finished — {b.done}.</span>{(role === "owner" || role === "admin") && <MarkHeldDone eventId={b.id} compact />}</span>}
               </li>
             ))}
           </ul>
