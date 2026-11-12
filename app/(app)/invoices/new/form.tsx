@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerPicker, type PickerCustomer } from "@/components/customers/customer-picker";
 import { useActionState, useState } from "react";
 import { createInvoice, type InvoiceFormState } from "../actions";
 import { Card } from "@/components/ui/card";
@@ -20,7 +21,7 @@ const KINDS: { key: Kind; label: string; hint: string }[] = [
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, today, defaultDue, payBeforeEvent, currency, initial }: {
-  customers: { id: string; name: string }[]; events: { id: string; label: string; customerId: string; date: string | null }[]; quotes: QuoteOption[];
+  customers: PickerCustomer[]; events: { id: string; label: string; customerId: string; date: string | null }[]; quotes: QuoteOption[];
   depositPct: number; terms: number; today: string; defaultDue: string; payBeforeEvent: boolean; currency: string;
   initial: { customer?: string; event?: string; quote?: string };
 }) {
@@ -82,10 +83,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label htmlFor="customer_id">Customer</Label>
-            <Select id="customer_id" name="customer_id" value={customerId} onChange={(e) => chooseCustomer(e.target.value)} required>
-              <option value="" disabled>Choose a customer…</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            <CustomerPicker id="customer_id" name="customer_id" customers={customers} value={customerId} onChange={chooseCustomer} required />
           </div>
           <div>
             <Label htmlFor="event_id" hint="Optional">Event</Label>

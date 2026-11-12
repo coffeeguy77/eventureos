@@ -170,7 +170,12 @@ export async function invoicesForJob(eventId: string): Promise<R<{ id: string; n
 }
 
 /** A new customer from someone invited to the calendar entry (name, email, phone from the notes). */
-export async function customerFromInvite(i: { name: string; company: string; email: string; phone: string }): Promise<R<{ id: string; name: string; existed: boolean }>> {
+/** "Add a new customer" from any customer picker (invoices, jobs). Reuses an existing customer with the same email. */
+export async function addCustomerQuick(i: { name: string; company: string; email: string; phone: string }): Promise<R<{ id: string; name: string; existed: boolean }>> {
+  return customerFromInvite(i, "added while choosing a customer");
+}
+
+export async function customerFromInvite(i: { name: string; company: string; email: string; phone: string }, from = "from a calendar invite"): Promise<R<{ id: string; name: string; existed: boolean }>> {
   try {
     const { supabase, org, user, profile } = await manager();
     const t = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -190,7 +195,7 @@ export async function customerFromInvite(i: { name: string; company: string; ema
       const parts = person.split(/\s+/);
       await supabase.from("contacts").insert({ organisation_id: org.id, customer_id: data.id, first_name: parts[0], last_name: parts.slice(1).join(" ") || null, email, phone: t(i.phone, 40), is_primary: true, created_by: user.id });
     }
-    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.created", entityType: "customer", entityId: data.id as string, customerId: data.id as string, summary: `${actorName(profile)} added client ${name} (from a calendar invite)` });
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "customer.created", entityType: "customer", entityId: data.id as string, customerId: data.id as string, summary: `${actorName(profile)} added client ${name} (${from})` });
     revalidatePath("/clients");
     return { ok: true, data: { id: data.id as string, name, existed: false } };
   } catch (e) { return fail(e); }

@@ -9,14 +9,14 @@ export default async function NewEventPage({ searchParams }: { searchParams: Pro
   const { supabase, org, user } = await requireOrg();
   const [members, { data: customers, error }] = await Promise.all([
     getMembers(org.id),
-    supabase.from("customers").select("id, name, company").eq("organisation_id", org.id).order("name"),
+    supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000),
   ]);
   if (error) throw new Error(`Could not load customers: ${error.message}`);
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader eyebrow="Events" title="New event" subtitle="For a customer you already work with. New leads should start as an enquiry." />
       <NewEventForm
-        customers={(customers ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        customers={(customers ?? []).map((c) => ({ id: c.id, name: c.name, company: c.company, email: c.email }))}
         members={members.map((m) => ({ id: m.id, name: m.full_name ?? m.email }))}
         me={user.id}
         defaultCustomer={sp.customer}

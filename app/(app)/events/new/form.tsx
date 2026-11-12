@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { CustomerPicker, type PickerCustomer } from "@/components/customers/customer-picker";
 import { createEvent } from "../actions";
 import { Card } from "@/components/ui/card";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -8,19 +9,17 @@ import { FormError, Input, Label, Select } from "@/components/ui/form";
 import { EVENT_TYPES } from "@/lib/status";
 
 export function NewEventForm({ customers, members, me, defaultCustomer }: {
-  customers: { id: string; name: string }[]; members: { id: string; name: string }[]; me: string; defaultCustomer?: string;
+  customers: PickerCustomer[]; members: { id: string; name: string }[]; me: string; defaultCustomer?: string;
 }) {
   const [state, action, pending] = useActionState(createEvent, undefined);
+  const [customerId, setCustomerId] = useState(defaultCustomer ?? "");
   return (
     <form action={action}>
       <Card className="p-4 sm:p-6">
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <Label htmlFor="customer_id">Customer</Label>
-            <Select id="customer_id" name="customer_id" defaultValue={defaultCustomer ?? ""} required>
-              <option value="" disabled>Choose a customer…</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
+            <CustomerPicker id="customer_id" name="customer_id" customers={customers} value={customerId} onChange={setCustomerId} required />
           </div>
           <div><Label htmlFor="name">Event name</Label><Input id="name" name="name" required placeholder="e.g. Annual staff breakfast" /></div>
           <div>

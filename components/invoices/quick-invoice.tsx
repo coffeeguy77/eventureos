@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerPicker } from "@/components/customers/customer-picker";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -25,14 +26,13 @@ const key = () => `r${Math.random().toString(36).slice(2, 9)}`;
 const fromLine = (l: InvLine): Row => ({ key: key(), description: l.description, quantity: String(l.quantity), unit: l.unit_amount.toFixed(2), gst: l.tax_rate === 10, item_code: l.item_code ?? null, account_code: l.account_code ?? null, service_id: l.service_id ?? null });
 
 export function QuickInvoice({ entryId, eventId, customers: allCustomers, priceList, initial, existing, today, terms, currency, cal, invitees }: {
-  entryId: string | null; eventId: string | null; customers: { id: string; name: string; terms: number | null }[]; priceList: Svc[];
+  entryId: string | null; eventId: string | null; customers: { id: string; name: string; company?: string | null; email?: string | null; terms: number | null }[]; priceList: Svc[];
   initial: { customer: string; name: string; date: string; venue: string }; existing: { id: string; number: string; total: number }[]; today: string; terms: number; currency: string;
   cal: CalDetails | null; invitees: Invitee[];
 }) {
   const [customers, setCustomers] = useState(allCustomers);
   const router = useRouter();
   const [customerId, setCustomerId] = useState(initial.customer);
-  const [filter, setFilter] = useState("");
   const [name, setName] = useState(initial.name);
   const [date, setDate] = useState(initial.date);
   const [venue, setVenue] = useState(initial.venue);
@@ -58,13 +58,6 @@ export function QuickInvoice({ entryId, eventId, customers: allCustomers, priceL
     void clubRatesFor(customerId).then((r) => { if (live && r.ok) setClub(r.data); });
     return () => { live = false; };
   }, [customerId]);
-
-  const shown = useMemo(() => {
-    const f = filter.trim().toLowerCase();
-    const list = f ? customers.filter((c) => c.name.toLowerCase().includes(f)) : customers;
-    const cur = customers.find((c) => c.id === customerId);
-    return cur && !list.includes(cur) ? [cur, ...list.slice(0, 199)] : list.slice(0, 200);
-  }, [customers, filter, customerId]);
 
   const lines = rows.map((r) => ({ quantity: num(r.quantity), unit_amount: num(r.unit), tax_rate: (r.gst ? 10 : 0) as 0 | 10 }));
   const totals = lineTotals(lines);
@@ -113,13 +106,7 @@ export function QuickInvoice({ entryId, eventId, customers: allCustomers, priceL
         <div className="grid gap-3 border-t border-line p-4 sm:grid-cols-2 sm:p-5">
           <div className="sm:col-span-2">
             <Label>Customer</Label>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-              <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search…" />
-              <Select value={customerId} onChange={(e) => chooseCustomer(e.target.value)}>
-                <option value="">Choose the customer…</option>
-                {shown.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </div>
+            <CustomerPicker customers={customers} value={customerId} onChange={chooseCustomer} onAdded={(c) => setCustomers((all) => all.some((x) => x.id === c.id) ? all : [{ id: c.id, name: c.name, company: c.company, email: c.email, terms: null }, ...all])} />
           </div>
           <div><Label>Job</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Breakfast event" /></div>
           <div className="grid grid-cols-2 gap-2">

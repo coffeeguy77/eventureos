@@ -24,7 +24,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const terms = Number.isFinite(Number(settings.default_payment_terms_days)) ? Number(settings.default_payment_terms_days) : 14;
 
   const [custRes, evRes, quoteRes, invRes, xeroRes] = await Promise.all([
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name"),
+    supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000),
     supabase.from("events").select("id, number, name, event_date, customer_id, status").eq("organisation_id", org.id)
       .neq("status", "cancelled").order("event_date", { ascending: false, nullsFirst: false }).limit(1000),
     supabase.from("quotes").select("id, number, title, customer_id, event_id, version:quote_versions!quotes_current_version_id_organisation_id_fkey(total)")
@@ -45,7 +45,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
       <PageHeader eyebrow="Invoices" title="New invoice"
         subtitle={xeroRes.data?.status === "connected" ? "Created here, then sent to Xero on the next sync." : <>Xero isn’t connected, so this invoice is managed in EventureOS. <a href="/settings/integrations" className="font-medium text-brand-700 underline underline-offset-2">Connect Xero</a></>} />
       <NewInvoiceForm
-        customers={(custRes.data ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        customers={(custRes.data ?? []).map((c) => ({ id: c.id, name: c.name, company: c.company, email: c.email }))}
         events={(evRes.data ?? []).map((e) => ({ id: e.id, label: `EV-${e.number} · ${e.name}${e.event_date ? ` · ${fmtDate(e.event_date)}` : ""}`, customerId: e.customer_id, date: (e.event_date as string | null) ?? null }))}
         quotes={quotes}
         depositPct={depositPct}

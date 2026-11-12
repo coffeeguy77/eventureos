@@ -64,7 +64,7 @@ export default async function QuickInvoicePage({ searchParams }: { searchParams:
   } : null;
 
   const [custRes, svcRes, invRes] = await Promise.all([
-    supabase.from("customers").select("id, name, payment_terms_days").eq("organisation_id", org.id).order("name").limit(5000),
+    supabase.from("customers").select("id, name, company, email, payment_terms_days").eq("organisation_id", org.id).order("name").limit(10000),
     supabase.from("services").select("id, name, description, unit_price, tax_rate, unit, code, xero_account_code, category").eq("organisation_id", org.id).eq("active", true).order("category").order("position"),
     ev ? supabase.from("invoices").select("id, number, total").eq("organisation_id", org.id).eq("event_id", ev.id).neq("status", "void") : Promise.resolve({ data: [] }),
   ]);
@@ -77,7 +77,7 @@ export default async function QuickInvoicePage({ searchParams }: { searchParams:
       <PageHeader eyebrow="Invoices" title="Invoice a job" subtitle="For a job booked over the phone — no quote needed. Copy a past invoice, use their rates or your price list, then send." />
       <QuickInvoice
         entryId={entry?.id ?? null} eventId={ev?.id ?? null}
-        customers={((custRes.data ?? []) as { id: string; name: string; payment_terms_days: number | null }[]).map((c) => ({ id: c.id, name: c.name, terms: c.payment_terms_days }))}
+        customers={((custRes.data ?? []) as { id: string; name: string; company: string | null; email: string | null; payment_terms_days: number | null }[]).map((c) => ({ id: c.id, name: c.name, company: c.company, email: c.email, terms: c.payment_terms_days }))}
         priceList={((svcRes.data ?? []) as { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null; code: string | null; xero_account_code: string | null; category: string | null }[])}
         initial={{ customer: startCustomer, name: ev?.name ?? entry?.title ?? "", date: ev?.event_date ?? entryDate ?? todayISO(tz), venue: ev?.venue ?? entry?.location ?? "" }}
         existing={((invRes.data ?? []) as { id: string; number: string; total: number }[]).map((x) => ({ ...x, total: Number(x.total) }))}
