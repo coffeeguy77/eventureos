@@ -23,7 +23,8 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   const depositPct = Number(settings.deposit_percent ?? 30) || 30;
   const terms = Number.isFinite(Number(settings.default_payment_terms_days)) ? Number(settings.default_payment_terms_days) : 14;
 
-  const [custRes, evRes, quoteRes, invRes, xeroRes] = await Promise.all([
+  const usesEvents = (org.settings as { uses_events?: unknown } | null)?.uses_events !== false;
+  const [custRes, evRes, quoteRes, invRes, xeroRes, svcRes] = await Promise.all([
     supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000),
     supabase.from("events").select("id, number, name, event_date, customer_id, status").eq("organisation_id", org.id)
       .neq("status", "cancelled").order("event_date", { ascending: false, nullsFirst: false }).limit(1000),
@@ -31,6 +32,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
       .eq("organisation_id", org.id).eq("status", "accepted").order("created_at", { ascending: false }),
     supabase.from("invoices").select("quote_id, total, status").eq("organisation_id", org.id).not("quote_id", "is", null).neq("status", "void"),
     supabase.from("integrations").select("status").eq("organisation_id", org.id).eq("provider", "xero").maybeSingle(),
+    supabase.from("services").select("id, name, description, unit_price, tax_rate, unit, code, xero_account_code, category").eq("organisation_id", org.id).eq("active", true).order("category").order("position"),
   ]);
   for (const r of [custRes, evRes, quoteRes, invRes]) if (r.error) throw new Error(`Could not load invoice options: ${r.error.message}`);
 
@@ -55,6 +57,9 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
         payBeforeEvent={settings.pay_before_event === true}
         currency={org.currency}
         initial={{ customer: sp.customer, event: sp.event, quote: sp.quote }}
+        usesEvents={usesEvents}
+        priceList={((svcRes.data ?? []) as { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null; code: string | null; xero_account_code: string | null; category: string | null }[])
+          .map((p) => ({ id: p.id, name: p.name, description: p.description, unit_price: Number(p.unit_price), tax_rate: Number(p.tax_rate), unit: p.unit, code: p.code, account: p.xero_account_code, category: p.category }))}
       />
     </div>
   );

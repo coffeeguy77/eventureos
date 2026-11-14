@@ -13,7 +13,7 @@ import { saveInvoiceLines } from "@/app/(app)/invoices/actions";
 
 export interface PriceItem { id: string; name: string; description: string | null; unit_price: number; tax_rate: number; unit: string | null; code: string | null; account: string | null; category: string | null }
 
-type Row = { key: string; description: string; quantity: string; unit_amount: string; tax_rate: 0 | 10; item_code: string | null; account_code: string | null; service_id: string | null };
+export type Row = { key: string; description: string; quantity: string; unit_amount: string; tax_rate: 0 | 10; item_code: string | null; account_code: string | null; service_id: string | null };
 const toRow = (l: InvLine, i: number): Row => ({ key: `r${i}-${Math.random().toString(36).slice(2, 7)}`, description: l.description, quantity: String(l.quantity), unit_amount: l.unit_amount.toFixed(2),
   tax_rate: l.tax_rate, item_code: l.item_code ?? null, account_code: l.account_code ?? null, service_id: l.service_id ?? null });
 const num = (v: string) => { const n = Number(String(v).replace(/[$,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
@@ -31,25 +31,10 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [pick, setPick] = useState("");
 
   const asLines = rows.map((r) => ({ quantity: num(r.quantity), unit_amount: num(r.unit_amount), tax_rate: r.tax_rate }));
   const totals = lineTotals(editing ? asLines : lines);
-  const groups = useMemo(() => {
-    const m = new Map<string, PriceItem[]>();
-    for (const p of priceList) m.set(p.category || "Other", [...(m.get(p.category || "Other") ?? []), p]);
-    return [...m.entries()];
-  }, [priceList]);
 
-  const set = (key: string, patch: Partial<Row>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const addFromList = (id: string) => {
-    const p = priceList.find((x) => x.id === id);
-    if (!p) return;
-    const inc = Math.round(Number(p.unit_price) * (1 + Number(p.tax_rate) / 100) * 100) / 100;
-    setRows((all) => [...all, { key: `n${Date.now()}`, description: [p.name, p.description?.trim()].filter(Boolean).join("\n"), quantity: "1", unit_amount: inc.toFixed(2),
-      tax_rate: Number(p.tax_rate) > 0 ? 10 : 0, item_code: p.code, account_code: p.account, service_id: p.id }]);
-    setPick("");
-  };
   const cancel = () => { setRows(lines.map(toRow)); setErr(null); setEditing(false); };
   const save = () => start(async () => {
     setErr(null); setOk(null);
@@ -83,7 +68,7 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
               </li>
             ))}
           </ul>
-          <dl className="mt-3 space-y-1 rounded-lg bg-zinc-50 px-3 py-2 text-[0.8125rem]">
+          <dl className="mt-3 space-y-1 rounded-lg bg-canvas px-3 py-2 text-[0.8125rem]">
             <div className="flex justify-between"><dt className="text-ink-muted">GST included</dt><dd className="tabular text-ink-muted">{money(totals.tax, currency, { cents: true })}</dd></div>
             <div className="flex justify-between font-semibold"><dt className="text-ink">Total</dt><dd className="tabular text-ink">{money(totals.total, currency, { cents: true })}</dd></div>
           </dl>
@@ -94,6 +79,50 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
           <p className="mb-3 text-[0.75rem] text-ink-muted">
             Prices include GST.{xero ? " Saving changes it in Xero too — Xero won't allow it once a payment is on the invoice." : ""}{paid > 0 ? ` ${money(paid, currency, { cents: true })} is already paid, so the total can't go below that.` : ""}
           </p>
+          <LineRows rows={rows} setRows={setRows} priceList={priceList} currency={currency} />
+          <div className={cn("mt-4 flex items-center justify-between rounded-lg bg-canvas px-3 py-2 text-[0.875rem] font-semibold", totals.total + 0.001 < paid && "text-rose-700")}>
+            <span>New total <span className="font-normal text-ink-muted">· GST {money(totals.tax, currency, { cents: true })}</span></span>
+            <span className="tabular">{money(totals.total, currency, { cents: true })}</span>
+          </div>
+          <FormError message={err} />
+          <div className="mt-3 flex justify-end gap-2">
+            <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={cancel} disabled={pending}>Cancel</Button>
+            <Button type="button" size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={save} disabled={pending || !rows.length}>
+              {pending ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</> : "Save invoice"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export const newRowKey = () => `n${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+export const blankRow = (): Row => ({ key: newRowKey(), description: "", quantity: "1", unit_amount: "0.00", tax_rate: 10, item_code: null, account_code: null, service_id: null });
+/** Rows as invoice lines (prices GST inclusive). */
+export const rowsToLines = (rows: Row[]) => rows.map((x) => ({ description: x.description, quantity: num(x.quantity), unit_amount: num(x.unit_amount), tax_rate: x.tax_rate,
+  item_code: x.item_code, account_code: x.account_code, service_id: x.service_id }));
+export const rowsTotals = (rows: Row[]) => lineTotals(rows.map((r) => ({ quantity: num(r.quantity), unit_amount: num(r.unit_amount), tax_rate: r.tax_rate })));
+
+/** The editable lines: description, qty, price (inc GST), GST, remove — plus "Add from the price list" and "One-off line". */
+export function LineRows({ rows, setRows, priceList, currency }: { rows: Row[]; setRows: React.Dispatch<React.SetStateAction<Row[]>>; priceList: PriceItem[]; currency: string }) {
+  const [pick, setPick] = useState("");
+  const groups = useMemo(() => {
+    const m = new Map<string, PriceItem[]>();
+    for (const p of priceList) m.set(p.category || "Other", [...(m.get(p.category || "Other") ?? []), p]);
+    return [...m.entries()];
+  }, [priceList]);
+  const set = (key: string, patch: Partial<Row>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const addFromList = (id: string) => {
+    const p = priceList.find((x) => x.id === id);
+    if (!p) return;
+    const inc = Math.round(Number(p.unit_price) * (1 + Number(p.tax_rate) / 100) * 100) / 100;
+    setRows((all) => [...all, { key: newRowKey(), description: [p.name, p.description?.trim()].filter(Boolean).join("\n"), quantity: "1", unit_amount: inc.toFixed(2),
+      tax_rate: Number(p.tax_rate) > 0 ? 10 : 0, item_code: p.code, account_code: p.account, service_id: p.id }]);
+    setPick("");
+  };
+  return (
+    <>
           <ul className="space-y-3">
             {rows.map((r) => (
               <li key={r.key} className="rounded-xl border border-line p-3">
@@ -132,23 +161,10 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
               </Select>
             )}
             <Button type="button" size="sm" variant="ghost" className="h-10 sm:h-8"
-              onClick={() => setRows((all) => [...all, { key: `n${Date.now()}`, description: "", quantity: "1", unit_amount: "0.00", tax_rate: 10, item_code: null, account_code: null, service_id: null }])}>
+              onClick={() => setRows((all) => [...all, { key: newRowKey(), description: "", quantity: "1", unit_amount: "0.00", tax_rate: 10, item_code: null, account_code: null, service_id: null }])}>
               <Plus className="h-3.5 w-3.5" />One-off line
             </Button>
           </div>
-          <div className={cn("mt-4 flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-[0.875rem] font-semibold", totals.total + 0.001 < paid && "text-rose-700")}>
-            <span>New total <span className="font-normal text-ink-muted">· GST {money(totals.tax, currency, { cents: true })}</span></span>
-            <span className="tabular">{money(totals.total, currency, { cents: true })}</span>
-          </div>
-          <FormError message={err} />
-          <div className="mt-3 flex justify-end gap-2">
-            <Button type="button" size="sm" variant="ghost" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={cancel} disabled={pending}>Cancel</Button>
-            <Button type="button" size="sm" variant="primary" className="h-10 flex-1 sm:h-8 sm:flex-none" onClick={save} disabled={pending || !rows.length}>
-              {pending ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</> : "Save invoice"}
-            </Button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

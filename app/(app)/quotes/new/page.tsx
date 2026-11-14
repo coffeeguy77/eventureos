@@ -3,11 +3,12 @@ import { requireOrg } from "@/lib/context";
 import { PageHeader } from "@/components/ui/page-header";
 import { AutoCreate, EventPicker, ExistingQuotes, type PickerEvent } from "@/components/quotes/new-quote";
 import { todayISO } from "@/lib/format";
+import { QuoteForCustomer } from "@/components/quotes/quote-for-customer";
 import type { EventStatus, QuoteStatus } from "@/lib/types";
 
 export const metadata = { title: "New quote" };
 
-export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ event?: string }> }) {
+export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ event?: string; customer?: string }> }) {
   const sp = await searchParams;
   const { supabase, org } = await requireOrg();
   const today = todayISO(org.timezone);
@@ -26,6 +27,17 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
         {quotes.length > 0
           ? <ExistingQuotes eventId={ev.id} eventName={ev.name} quotes={quotes} />
           : <AutoCreate eventId={ev.id} eventName={ev.name} />}
+      </div>
+    );
+  }
+
+  // Businesses that don't run events quote a customer directly
+  if ((org.settings as { uses_events?: unknown } | null)?.uses_events === false) {
+    const { data: cs } = await supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000);
+    return (
+      <div className="mx-auto max-w-3xl">
+        <PageHeader eyebrow="Quotes" title="New quote" subtitle="Choose the customer and say what it's for — then add the items." />
+        <QuoteForCustomer customers={(cs ?? []).map((c) => ({ id: c.id, name: c.name, company: c.company, email: c.email }))} initialCustomer={sp.customer && /^[0-9a-f-]{36}$/i.test(sp.customer) ? sp.customer : undefined} />
       </div>
     );
   }

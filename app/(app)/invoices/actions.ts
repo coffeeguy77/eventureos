@@ -191,14 +191,21 @@ export async function createInvoice(_prev: InvoiceFormState, form: FormData): Pr
   const eventId = str(form.get("event_id"));
   const quoteId = str(form.get("quote_id"));
   const kind = str(form.get("kind")) as (typeof KINDS)[number] | null;
-  const total = amount(form.get("amount"));
+  // Item by item (JSON lines from the builder), or one amount
+  let lines: InvLine[] | null = null;
+  const rawLines = str(form.get("lines"));
+  if (rawLines) {
+    try { const parsed = JSON.parse(rawLines); if (Array.isArray(parsed) && parsed.length) lines = cleanLines(parsed); }
+    catch (e) { return { error: e instanceof SyntaxError ? "The invoice lines couldn't be read — refresh and try again." : (e as Error).message }; }
+  }
+  const total = lines ? lineTotals(lines).total : amount(form.get("amount"));
   const issueDate = str(form.get("issue_date")) ?? todayISO(org.timezone);
   const dueDate = str(form.get("due_date"));
   const intent = str(form.get("intent")) === "send" ? "awaiting_payment" : "draft";
 
   if (!customerId || !UUID.test(customerId)) return { error: "Choose a customer." };
   if (!kind || !KINDS.includes(kind)) return { error: "Choose the invoice type." };
-  if (total == null || Number.isNaN(total) || total <= 0) return { error: "Enter an amount greater than zero." };
+  if (total == null || Number.isNaN(total) || total <= 0) return { error: lines ? "Add at least one line with a price." : "Enter an amount greater than zero." };
   if (total > 10_000_000) return { error: "That amount looks too large — check it and try again." };
   if (!DATE.test(issueDate)) return { error: "Choose an invoice date." };
   if (!dueDate || !DATE.test(dueDate)) return { error: "Choose a due date." };
@@ -226,9 +233,10 @@ export async function createInvoice(_prev: InvoiceFormState, form: FormData): Pr
   }
 
   const cents = Math.round(total * 100);
-  const gross = cents / 100;
-  const subtotal = Math.round(cents / 1.1) / 100; // prices include 10% GST, matching automated invoices
-  const tax = Math.round((gross - subtotal) * 100) / 100;
+  const lt = lines ? lineTotals(lines) : null;
+  const gross = lt ? lt.total : cents / 100;
+  const subtotal = lt ? lt.subtotal : Math.round(cents / 1.1) / 100; // prices include 10% GST, matching automated invoices
+  const tax = lt ? lt.tax : Math.round((gross - subtotal) * 100) / 100;
 
   const { data: inv, error } = await supabase.from("invoices").insert({
     organisation_id: org.id,
@@ -244,6 +252,7 @@ export async function createInvoice(_prev: InvoiceFormState, form: FormData): Pr
     status: intent,
     currency: org.currency,
     created_by: user.id,
+    ...(lines ? { line_items: lines } : {}),
   }).select("id, number").single();
   if (error) return { error: `Couldn’t create the invoice: ${error.message}` };
 

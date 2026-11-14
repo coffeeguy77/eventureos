@@ -1014,3 +1014,28 @@ export async function adminAcceptQuote(quoteId: string, acceptedBy: string, how:
     return inv?.length ? { invoiceHref: `/invoices/${inv[0].id}`, invoiceNumber: inv[0].number as string } : { invoiceHref: `/invoices/new?quote=${q.id}`, invoiceNumber: null };
   });
 }
+
+/**
+ * For businesses that don't run events (Settings → uses_events off): quote a customer directly. A quote always sits on
+ * a job record behind the scenes (accepting it, invoicing and follow-ups all hang off that), so one is made quietly,
+ * named after what the quote is for, with no date.
+ */
+export async function createQuoteForCustomer(customerId: string, title: string): Promise<ActionResult<never>> {
+  let eventId: string | null = null;
+  const res = await run(async () => {
+    assertId(customerId, "customer");
+    const name = String(title ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+    if (!name) fail("Say what the quote is for, e.g. \"Website redesign\".");
+    const { supabase, org, user, profile } = await requireOrg();
+    const { data: c } = await supabase.from("customers").select("id").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    if (!c) fail("That customer couldn't be found.");
+    const { data: ev, error } = await supabase.from("events").insert({
+      organisation_id: org.id, customer_id: customerId, name, status: "quoted", created_by: user.id,
+      internal_notes: `Made by ${actorName(profile)} to hold a quote (this business doesn't use events).`,
+    }).select("id").single();
+    if (error) fail(`Couldn't start the quote: ${error.message}`);
+    eventId = ev!.id as string;
+  });
+  if (!res.ok) return res;
+  return createQuoteForEvent(eventId!);
+}

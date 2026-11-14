@@ -2,6 +2,7 @@
 
 import { CustomerPicker, type PickerCustomer } from "@/components/customers/customer-picker";
 import { useActionState, useState } from "react";
+import { LineRows, blankRow, rowsToLines, rowsTotals, type PriceItem, type Row } from "@/components/invoices/lines-editor";
 import { createInvoice, type InvoiceFormState } from "../actions";
 import { Card } from "@/components/ui/card";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -20,20 +21,26 @@ const KINDS: { key: Kind; label: string; hint: string }[] = [
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, today, defaultDue, payBeforeEvent, currency, initial }: {
+export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, today, defaultDue, payBeforeEvent, currency, initial, usesEvents, priceList }: {
   customers: PickerCustomer[]; events: { id: string; label: string; customerId: string; date: string | null }[]; quotes: QuoteOption[];
   depositPct: number; terms: number; today: string; defaultDue: string; payBeforeEvent: boolean; currency: string;
   initial: { customer?: string; event?: string; quote?: string };
+  /** false for businesses that don't run events (Settings): no event, deposit/final or pay-before-event options */
+  usesEvents: boolean;
+  priceList: PriceItem[];
 }) {
   const initQuote = quotes.find((q) => q.id === initial.quote) ?? null;
   const initEvent = events.find((e) => e.id === initial.event) ?? null;
   const [customerId, setCustomerId] = useState(initQuote?.customerId ?? initEvent?.customerId ?? initial.customer ?? "");
   const [eventId, setEventId] = useState(initQuote?.eventId ?? initEvent?.id ?? "");
   const [quoteId, setQuoteId] = useState(initQuote?.id ?? "");
-  const [kind, setKind] = useState<Kind>(initQuote && initQuote.invoiced > 0 ? "final" : "deposit");
+  const [kind, setKind] = useState<Kind>(!usesEvents ? "full" : initQuote && initQuote.invoiced > 0 ? "final" : initQuote ? "deposit" : "full");
+  // Bill item by item (price list or one-off lines), or as one amount (e.g. a deposit on an accepted quote)
+  const [mode, setMode] = useState<"items" | "amount">(initQuote ? "amount" : "items");
+  const [rows, setRows] = useState<Row[]>(() => [blankRow()]);
   const [amount, setAmount] = useState(initQuote ? suggest(initQuote, initQuote.invoiced > 0 ? "final" : "deposit") : "");
   const [issueDate, setIssueDate] = useState(today);
-  const [payBefore, setPayBefore] = useState(payBeforeEvent);
+  const [payBefore, setPayBefore] = useState(usesEvents && payBeforeEvent);
   const [dueDate, setDueDate] = useState(() => autoDue(today, initQuote?.eventId ?? initEvent?.id ?? "", payBeforeEvent) ?? defaultDue);
   const [state, action, pending] = useActionState<InvoiceFormState, FormData>(createInvoice, undefined);
 
@@ -85,14 +92,14 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
             <Label htmlFor="customer_id">Customer</Label>
             <CustomerPicker id="customer_id" name="customer_id" customers={customers} value={customerId} onChange={chooseCustomer} required />
           </div>
-          <div>
+          {usesEvents && <div>
             <Label htmlFor="event_id" hint="Optional">Event</Label>
             <Select id="event_id" name="event_id" value={eventId} onChange={(e) => chooseEvent(e.target.value)} disabled={!customerId}>
               <option value="">No event</option>
               {custEvents.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
             </Select>
-          </div>
-          <div>
+          </div>}
+          {quotes.length > 0 && <div className={usesEvents ? "" : "sm:col-span-2"}>
             <Label htmlFor="quote_id" hint="Accepted quotes only">Quote</Label>
             <Select id="quote_id" name="quote_id" value={quoteId} onChange={(e) => chooseQuote(e.target.value)} disabled={!customerId}>
               <option value="">No quote</option>
@@ -103,9 +110,9 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
                 Quote total {money(quote.total, currency)}{quote.invoiced > 0 ? ` · ${money(quote.invoiced, currency)} already invoiced` : " · nothing invoiced yet"}
               </p>
             )}
-          </div>
+          </div>}
 
-          <div className="sm:col-span-2">
+          {usesEvents && <div className="sm:col-span-2">
             <Label>Type</Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup">
               {KINDS.map((k) => (
@@ -117,20 +124,43 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
                 </button>
               ))}
             </div>
-            <input type="hidden" name="kind" value={kind} />
-          </div>
+          </div>}
+          <input type="hidden" name="kind" value={kind} />
 
+          <div className="sm:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>What it&apos;s for</Label>
+              <div className="inline-flex rounded-lg bg-canvas p-0.5 ring-1 ring-inset ring-line" role="radiogroup" aria-label="How to bill">
+                {([["items", "Item by item"], ["amount", "One amount"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="radio" aria-checked={mode === k} onClick={() => { setMode(k); if (k === "items" && (kind === "deposit" || kind === "final")) setKind("full"); }}
+                    className={cn("rounded-md px-3 py-1.5 text-[0.8125rem] font-medium", mode === k ? "bg-surface text-ink shadow-sm" : "text-ink-muted hover:text-ink")}>{l}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {mode === "items" ? (
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-[0.75rem] text-ink-muted">Add items from your price list or type one-off lines. Prices include GST.</p>
+              <LineRows rows={rows} setRows={setRows} priceList={priceList} currency={currency} />
+              <input type="hidden" name="lines" value={JSON.stringify(rowsToLines(rows.filter((r) => r.description.trim() || Number(r.unit_amount) > 0)))} />
+              <div className="mt-3 flex items-center justify-between rounded-lg bg-canvas px-3 py-2 text-[0.875rem] font-semibold text-ink">
+                <span>Total <span className="font-normal text-ink-muted">· GST {money(rowsTotals(rows).tax, currency, { cents: true })}</span></span>
+                <span className="tabular">{money(rowsTotals(rows).total, currency, { cents: true })}</span>
+              </div>
+            </div>
+          ) : (
           <div>
             <Label htmlFor="amount" hint="Including GST">Amount</Label>
             <Input id="amount" name="amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="0.00" />
             {Number.isFinite(n) && n > 0 && <p className="mt-1 text-[0.75rem] text-ink-muted">{money(n, currency)} · GST {money(n - Math.round((n * 100) / 1.1) / 100, currency)}</p>}
           </div>
-          <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
+          )}
+          <div className={cn("grid gap-5 sm:grid-cols-2 sm:gap-3", mode === "items" && "sm:col-span-2")}>
             <div><Label htmlFor="issue_date">Date</Label><Input id="issue_date" name="issue_date" type="date" value={issueDate} required
               onChange={(e) => { setIssueDate(e.target.value); const d = autoDue(e.target.value, eventId, payBefore); if (d) setDueDate(d); }} /></div>
             <div><Label htmlFor="due_date" hint={`${terms}-day terms`}>Due</Label><Input id="due_date" name="due_date" type="date" value={dueDate} min={issueDate} required onChange={(e) => setDueDate(e.target.value)} /></div>
           </div>
-          <div className="sm:col-span-2">
+          {usesEvents && <div className="sm:col-span-2">
             <label className="flex cursor-pointer items-start gap-2.5 text-[0.8125rem] text-ink">
               <input type="checkbox" checked={payBefore} className="mt-0.5 h-4 w-4 rounded border-line-strong text-brand-600"
                 onChange={(e) => { setPayBefore(e.target.checked); const d = autoDue(issueDate, eventId, e.target.checked); if (d) setDueDate(d); }} />
@@ -144,7 +174,7 @@ export function NewInvoiceForm({ customers, events, quotes, depositPct, terms, t
                 The event is on {fmtDate(events.find((e) => e.id === eventId)?.date ?? null)} — before the normal due date — so this invoice is due now.
               </p>
             )}
-          </div>
+          </div>}
         </div>
         <p className="mt-5 text-[0.75rem] text-ink-muted">The invoice number is assigned automatically.</p>
         <div className="mt-4"><FormError message={state?.error} /></div>

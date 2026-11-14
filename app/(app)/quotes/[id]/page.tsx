@@ -165,7 +165,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
               <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-ink-muted">
                 <Badge tone={s.tone} dot>{s.label}</Badge>
                 <Link href={`/clients/${q.customer.id}`} className="font-medium text-ink hover:text-brand-700">{q.customer.name}</Link>
-                <Link href={`/events/${q.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{q.event.number} · {q.event.name}{q.event.event_date ? ` · ${fmtDate(q.event.event_date)}` : ""}</Link>
+                {(org.settings as { uses_events?: unknown } | null)?.uses_events !== false && <Link href={`/events/${q.event.id}?tab=quote`} className="min-w-0 break-words hover:text-brand-700">EV-{q.event.number} · {q.event.name}{q.event.event_date ? ` · ${fmtDate(q.event.event_date)}` : ""}</Link>}
                 <span>Issued {fmtDate(q.issue_date)}</span>
                 <span>Expires {fmtDate(q.expiry_date)}</span>
               </div>
@@ -281,7 +281,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
     const { data: t } = await supabase.from("email_threads").select("id, subject, event_id, enquiry_id")
       .eq("organisation_id", org.id).eq("id", sp.reply).maybeSingle();
     if (t && (t.event_id === q.event.id || (ev?.enquiry_id && t.enquiry_id === ev.enquiry_id))) {
-      replyTo = { threadId: t.id, subject: t.subject ?? "(no subject)", backHref: t.enquiry_id ? `/enquiries/${t.enquiry_id}` : `/events/${q.event.id}` };
+      replyTo = { threadId: t.id, subject: t.subject ?? "(no subject)", backHref: t.enquiry_id ? `/enquiries/${t.enquiry_id}` : (org.settings as { uses_events?: unknown } | null)?.uses_events === false ? `/clients/${q.customer.id}` : `/events/${q.event.id}` };
     }
   }
 
