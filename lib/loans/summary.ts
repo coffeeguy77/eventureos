@@ -1,3 +1,5 @@
+import { businessShares } from "./analysis";
+
 /** The numbers a broker looks at first, worked out from the answers. All yearly unless named monthly. */
 export interface LoanSummary {
   amount: number | null; value: number | null; deposit: number | null; lvr: number | null;
@@ -12,6 +14,7 @@ const sum = (list: Record<string, string>[], k: string) => list.reduce((t, r) =>
 export function summarise(a: Record<string, unknown>, applicants: number): LoanSummary {
   let income = 0;
   for (let i = 1; i <= applicants; i++) income += num(a[`a${i}.salary`]) + num(a[`a${i}.directors_wages`]) + num(a[`a${i}.other_income`]);
+  income += businessShares(a, applicants).reduce((t, x) => t + x, 0);
   const props = rows(a, "properties"), cards = rows(a, "cards"), loans = rows(a, "loans");
   const rentIncome = props.reduce((t, r) => t + num(r.rent) * (r.rent_period === "Per month" ? 12 : 52), 0);
   const assets = sum(props, "value") + sum(rows(a, "vehicles"), "value") + sum(rows(a, "savings"), "amount") + sum(rows(a, "super"), "amount") + sum(rows(a, "other_assets"), "value") + num(a.contents);

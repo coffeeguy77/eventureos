@@ -140,6 +140,18 @@ export function steps(applicants: number): Step[] {
         { key: "other_income", label: "Other income (yearly)", type: "money", half: true, hint: "Bonuses, overtime, dividends, Centrelink" },
         { key: "other_income_what", label: "What is the other income?", type: "text", half: true },
       ],
+      lists: [{
+        key: "businesses", label: "Business income (your companies and trusts)", item: "business",
+        hint: "From the latest financial statements. Don't include wages or fees already entered above.",
+        fields: [
+          { key: "name", label: "Company or trust", type: "text", half: true },
+          { key: "owner", label: "Whose", type: "select", owner: true, options: owner, half: true, hint: "Joint is split evenly" },
+          { key: "fy", label: "Financial year", type: "text", half: true, hint: "e.g. FY24/25" },
+          { key: "result", label: "Result", type: "choice", options: ["Profit", "Loss"], half: true },
+          { key: "net_profit", label: "Net profit or loss before tax", type: "money", half: true },
+          { key: "addbacks", label: "Add-backs", type: "money", half: true, optional: true, hint: "Optional — e.g. depreciation, interest, one-off costs" },
+        ],
+      }],
     },
     {
       key: "property", title: "Properties", intro: "Every property you own, including your home.",
@@ -155,6 +167,7 @@ export function steps(applicants: number): Step[] {
           { key: "repayment", label: "Repayment per month", type: "money", half: true },
           { key: "rent", label: "Rent received", type: "money", half: true, hint: "Leave blank if it isn't rented" },
           { key: "rent_period", label: "Rent is paid", type: "choice", options: ["Per week", "Per month"], half: true },
+          { key: "own_business", label: "Rented to my own business (rent counted in full)", type: "check", optional: true },
         ],
       }],
     },

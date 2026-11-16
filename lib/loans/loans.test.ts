@@ -115,3 +115,21 @@ test("rent per week or per month", async () => {
   assert.equal(yearlyRent([{ rent: "450" }, { rent: "8,900", rent_period: "Per month" }]), 450 * 52 + 8900 * 12);
   assert.equal(yearlyRent([{ rent: "500", rent_period: "Per week" }]), 26000);
 });
+
+import { businessShares, countedRent } from "./analysis";
+test("business income: profit and loss, add-backs, split by owner", () => {
+  const a = { businesses: [
+    { owner: "Joint", result: "Profit", net_profit: "89,741" },
+    { owner: "Joint", result: "Loss", net_profit: "3,352" },
+    { owner: "Applicant 1", result: "Profit", net_profit: "10,000", addbacks: "5,000" },
+  ] };
+  assert.deepEqual(businessShares(a, 2), [(89741 - 3352) / 2 + 15000, (89741 - 3352) / 2]);
+  assert.deepEqual(businessShares(a, 1), [89741 - 3352 + 15000]);
+  const m = analyse({ ...a, "a1.salary": "0" }, 2, ["A", "B"], []);
+  assert.equal(m.applicants[0].business, (89741 - 3352) / 2 + 15000);
+  assert.equal(m.incomeGross, 89741 - 3352 + 15000);
+});
+test("rent from your own business is counted in full", () => {
+  const props: Record<string, string>[] = [{ rent: "8900", rent_period: "Per month", own_business: "yes" }, { rent: "450", rent_period: "Per week" }];
+  assert.equal(countedRent(props, 0.8), Math.round(8900 * 12 + 450 * 52 * 0.8));
+});

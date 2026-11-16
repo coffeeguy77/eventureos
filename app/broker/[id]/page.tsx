@@ -174,8 +174,8 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
 
             </div>,
             properties: <div className="space-y-5">
-        <Section title="Assets & debts" id="assets-debts">
-          {[...(step("property").lists ?? []), ...(step("assets").lists ?? []), ...(step("debts").lists ?? [])].map((l) => {
+        <Section title="Business income, assets & debts" id="assets-debts">
+          {[...(step("work").lists ?? []), ...(step("property").lists ?? []), ...(step("assets").lists ?? []), ...(step("debts").lists ?? [])].map((l) => {
             const rows = list(l.key);
             return (
               <div key={l.key} className="mb-5 last:mb-0">

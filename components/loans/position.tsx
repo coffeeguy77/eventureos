@@ -428,8 +428,9 @@ function Income({ m }: { m: Metrics }) {
       { who: p.name, label: "Salary or wages", value: p.salary, color: S(1 + i * 2) },
       { who: p.name, label: "Director's wages", value: p.directors, color: S(2 + i * 2) },
       { who: p.name, label: "Other income", value: p.other, color: S(5) },
+      { who: p.name, label: "Business profit (share)", value: p.business, color: S(3 + i * 2) },
     ]),
-    { who: "Property", label: "Rent (80% counted)", value: m.rentCounted, color: S(6) },
+    { who: "Property", label: m.rentCounted === Math.round(m.rentGross * m.assumptions.rentShading) ? `Rent (${Math.round(m.assumptions.rentShading * 100)}% counted)` : "Rent (counted)", value: m.rentCounted, color: S(6) },
   ].filter((r) => r.value > 0).sort((a, b) => b.value - a.value);
   const max = Math.max(...rows.map((r) => r.value), 1);
   return (

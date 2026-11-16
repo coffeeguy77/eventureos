@@ -5,7 +5,8 @@
  * Assumptions are explicit and returned with the figures so they're shown next to them:
  *  - tax: 2026-27 resident rates (0 to $18,200; 15% to $45,000; 30% to $135,000; 37% to $190,000; 45% above) + 2% Medicare levy,
  *    per person, no offsets or deductions — an estimate of take-home pay, not a tax calculation
- *  - rent counted at 80% (the usual lender shading), business profit only when no wage figure covers it
+ *  - rent counted at 80% (the usual lender shading), in full when it's paid by the applicants' own business
+ *  - business profit (net before tax + any add-backs, a loss reduces it) from the Business income list, split by owner
  *  - credit cards: 3% of the limit per month; new loan: principal & interest over 30 years at the assessment rate
  */
 import type { FlatReport } from "./server";
@@ -17,7 +18,7 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = { assessmentRate: 9, termYears: 
 export interface BusinessYear { org: string; fy: string; revenue: number | null; grossProfit: number | null; netProfit: number | null; assets: number | null; liabilities: number | null; equity: number | null }
 
 export interface Metrics {
-  applicants: { name: string; gross: number; salary: number; directors: number; other: number; tax: number; net: number }[];
+  applicants: { name: string; gross: number; salary: number; directors: number; other: number; business: number; tax: number; net: number }[];
   rentGross: number; rentCounted: number;
   /** each applicant's own assets and debts, joint ones, and anything without an owner (e.g. home contents) */
   byOwner: { owner: string; assets: number; debts: number; net: number }[];
@@ -40,7 +41,24 @@ const sum = (l: Record<string, string>[], k: string) => l.reduce((t, r) => t + n
 
 /** A year of rent from the properties list: each one per week (the default) or per month, as the client chose. */
 export function yearlyRent(props: Record<string, string>[]): number {
-  return Math.round(props.reduce((t, r) => t + num(r.rent) * (r.rent_period === "Per month" ? 12 : 52), 0));
+  return Math.round(props.reduce((t, r) => t + rowRent(r), 0));
+}
+const rowRent = (r: Record<string, string>) => num(r.rent) * (r.rent_period === "Per month" ? 12 : 52);
+/** rent counted for servicing: shaded, except rent paid by the applicants' own business (counted in full) */
+export function countedRent(props: Record<string, string>[], shading: number): number {
+  return Math.round(props.reduce((t, r) => t + rowRent(r) * (r.own_business === "yes" ? 1 : shading), 0));
+}
+/** each applicant's yearly share of business profit (a loss is negative; Joint or blank is split evenly) */
+export function businessShares(a: Record<string, unknown>, applicants: number): number[] {
+  const out = Array.from({ length: applicants }, () => 0);
+  if (!applicants) return out;
+  for (const r of rows(a, "businesses")) {
+    const v = (r.result === "Loss" ? -Math.abs(num(r.net_profit)) : Math.abs(num(r.net_profit))) + Math.abs(num(r.addbacks));
+    const m = /^Applicant (\d)$/.exec(r.owner ?? "");
+    if (m && +m[1] >= 1 && +m[1] <= applicants) out[+m[1] - 1] += v;
+    else for (let i = 0; i < applicants; i++) out[i] += v / applicants;
+  }
+  return out;
 }
 
 /** Yearly tax + Medicare on a person's taxable income (2026-27 resident rates, no offsets). */
@@ -75,13 +93,14 @@ export function businessYear(org: string, fy: string, pl: FlatReport | null, bs:
 }
 
 export function analyse(a: Record<string, unknown>, applicants: number, names: string[], business: BusinessYear[], as: Assumptions = DEFAULT_ASSUMPTIONS): Metrics {
+  const biz = businessShares(a, applicants);
   const people = Array.from({ length: applicants }, (_, i) => {
-    const salary = num(a[`a${i + 1}.salary`]), directors = num(a[`a${i + 1}.directors_wages`]), other = num(a[`a${i + 1}.other_income`]);
-    const gross = salary + directors + other, tax = taxOn(gross);
-    return { name: names[i] ?? `Applicant ${i + 1}`, gross, salary, directors, other, tax, net: gross - tax };
+    const salary = num(a[`a${i + 1}.salary`]), directors = num(a[`a${i + 1}.directors_wages`]), other = num(a[`a${i + 1}.other_income`]), business = biz[i];
+    const gross = salary + directors + other + business, tax = taxOn(gross);
+    return { name: names[i] ?? `Applicant ${i + 1}`, gross, salary, directors, other, business, tax, net: gross - tax };
   });
   const props = rows(a, "properties"), cards = rows(a, "cards"), loans = rows(a, "loans");
-  const rentGross = yearlyRent(props), rentCounted = Math.round(rentGross * as.rentShading);
+  const rentGross = yearlyRent(props), rentCounted = countedRent(props, as.rentShading);
   // rent is split evenly between applicants for tax (an estimate)
   const rentTax = applicants ? people.reduce((t, p) => t + (taxOn(p.gross + rentCounted / applicants) - p.tax), 0) : 0;
   const incomeGross = people.reduce((t, p) => t + p.gross, 0) + rentCounted;
