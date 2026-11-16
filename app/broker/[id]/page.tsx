@@ -187,7 +187,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
                         <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{l.item} {n + 1}</p>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
                           {l.fields.filter((f) => r[f.key]).map((f) => (
-                            <div key={f.key} className={cn("min-w-0", (f.type === "text" || f.type === "textarea") && "col-span-2")}>
+                            <div key={f.key} className={cn("min-w-0", (f.type === "text" || f.type === "textarea" || f.owner) && "col-span-2")}>
                               <dt className="text-[0.6875rem] text-ink-faint">{f.label}</dt>
                               <dd className={cn("text-[0.875rem] text-ink [overflow-wrap:anywhere]", f.type === "money" && "tabular-nums")}>{f.owner ? ownerLabel(r[f.key], fullNames) : show(f, r[f.key])}</dd>
                             </div>

@@ -275,13 +275,12 @@ function Waterfall({ m }: { m: Metrics }) {
         {bars.map((b) => {
           const a = pos(Math.min(b.from, b.to)), z = pos(Math.max(b.from, b.to));
           return (
-            <div key={b.label} className={cn("grid grid-cols-[5.5rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-[0.8125rem]", b.total && "border-t border-line pt-2.5 font-semibold")}
+            <div key={b.label} className={cn("text-[0.8125rem]", b.total && "border-t border-line pt-2.5 font-semibold")}
               {...tipFor({ title: b.label, rows: [{ label: "a month", value: aud(b.value), color: b.color }, ...(b.total ? [] : [{ label: "running total", value: aud(b.to) }])], note: b.note })}>
-              <span className="truncate text-ink-muted">{b.label}</span>
-              <span className="relative h-3.5 rounded-full bg-canvas">
+              <span className="mb-1 flex items-baseline justify-between gap-2"><span className="truncate text-ink-muted">{b.label}</span><span className="tabular-nums text-ink">{aud(b.value)}</span></span>
+              <span className="relative block h-3 rounded-full bg-canvas">
                 <span className="absolute inset-y-0 rounded-full" style={{ left: `${a}%`, width: `${Math.max(1.5, z - a)}%`, background: b.color, ...grow(on, "x", b.value >= 0 ? "left center" : "right center") }} />
               </span>
-              <span className="text-right tabular-nums text-ink">{aud(b.value)}</span>
             </div>
           );
         })}
