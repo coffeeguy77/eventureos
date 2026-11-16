@@ -14,6 +14,7 @@ import { businessYears } from "@/lib/loans/assess";
 import type { SavedAnalysis } from "@/lib/loans/analysis";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120; // the AI analysis runs from this page
 
 function show(f: Field, v: unknown): string {
   if (v == null || v === "") return "";

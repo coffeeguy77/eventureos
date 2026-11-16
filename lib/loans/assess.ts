@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseJSONObject } from "@/lib/ai/claude";
-import { callClaudeRaw } from "@/lib/ai/reply";
+import { ANTHROPIC_URL, anthropicHeaders } from "@/lib/ai/claude";
+import { replyModel } from "@/lib/ai/reply";
 import { orgAiKey } from "@/lib/ai/key";
 import { analyse, businessYear, DEFAULT_ASSUMPTIONS, type Assessment, type Assumptions, type BusinessYear, type SavedAnalysis } from "./analysis";
 import { applicantNames, type FlatReport, type LoanFileRow } from "./server";
@@ -46,11 +46,10 @@ Rules:
 - Figures marked est are estimates from stated assumptions; treat them that way.
 - Be specific: cite the actual figures (e.g. "LVR 75%", "surplus $1,240/month at 9%").
 - Australian English, plain and professional. No advice to the client; this is the broker's working assessment.
-Reply with ONLY JSON:
-{"rating":"Strong"|"Sound"|"Stretched"|"Weak","score":0-100,"headline":"one line","summary":"3-5 sentences","strengths":["…"],"risks":["…"],"mitigants":["…"],"questions":["what the broker should confirm or collect"]}`;
+- If the figures are thin (much not answered yet), still give an assessment of what IS there, rate it on that, and list what's missing under questions.
+Record your assessment with the record_assessment tool.`;
   const key = await orgAiKey(file.organisation_id);
-  const raw = await callClaudeRaw(key, system, `CLIENT FIGURES (JSON):\n${JSON.stringify(facts)}`, 1400, 60_000);
-  const o = parseJSONObject(raw);
+  const o = await assessWithTool(key, system, `CLIENT FIGURES (JSON):\n${JSON.stringify(facts)}`);
   const assessment: Assessment = {
     rating: pick(o.rating, ["Strong", "Sound", "Stretched", "Weak"] as const, "Sound"),
     score: Math.max(0, Math.min(100, Math.round(Number(o.score) || 0))),
@@ -68,4 +67,44 @@ export function cleanAssumptions(as?: Partial<Assumptions>): Partial<Assumptions
   if (as?.assessmentRate !== undefined && Number.isFinite(Number(as.assessmentRate))) o.assessmentRate = Math.min(20, Math.max(1, Math.round(Number(as.assessmentRate) * 100) / 100));
   if (as?.termYears !== undefined && Number.isFinite(Number(as.termYears))) o.termYears = Math.min(40, Math.max(5, Math.round(Number(as.termYears))));
   return o;
+}
+
+const TOOL = {
+  name: "record_assessment",
+  description: "Record the broker-facing assessment of the client's financial position.",
+  input_schema: {
+    type: "object",
+    properties: {
+      rating: { type: "string", enum: ["Strong", "Sound", "Stretched", "Weak"] },
+      score: { type: "integer", minimum: 0, maximum: 100, description: "Overall strength of the position, 0-100" },
+      headline: { type: "string", description: "One line" },
+      summary: { type: "string", description: "3-5 sentences citing the actual figures" },
+      strengths: { type: "array", items: { type: "string" }, maxItems: 6 },
+      risks: { type: "array", items: { type: "string" }, maxItems: 6 },
+      mitigants: { type: "array", items: { type: "string" }, maxItems: 6 },
+      questions: { type: "array", items: { type: "string" }, maxItems: 8, description: "What the broker should confirm or collect" },
+    },
+    required: ["rating", "score", "headline", "summary", "strengths", "risks", "mitigants", "questions"],
+  },
+};
+
+/** Ask Claude for the assessment as a forced tool call, so the answer always comes back as structured data. */
+async function assessWithTool(key: string | null, system: string, user: string): Promise<Record<string, unknown>> {
+  if (!key) throw new Error("The AI analysis needs a Claude API key — add one in Settings → Integrations.");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90_000);
+  try {
+    const res = await fetch(ANTHROPIC_URL, {
+      method: "POST", signal: ctrl.signal, headers: anthropicHeaders(key),
+      body: JSON.stringify({ model: replyModel(), max_tokens: 3000, system, tools: [TOOL], tool_choice: { type: "tool", name: TOOL.name }, messages: [{ role: "user", content: user }] }),
+    });
+    if (!res.ok) throw new Error(`The AI service said ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = (await res.json()) as { stop_reason?: string; content?: { type: string; name?: string; input?: Record<string, unknown> }[] };
+    const call = j.content?.find((c) => c.type === "tool_use" && c.name === TOOL.name);
+    if (!call?.input) throw new Error(j.stop_reason === "max_tokens" ? "The AI's answer was cut short — try again." : "The AI didn't return an assessment — try again.");
+    return call.input;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") throw new Error("The AI took too long to reply — try again.");
+    throw e;
+  } finally { clearTimeout(timer); }
 }

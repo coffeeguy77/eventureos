@@ -8,6 +8,7 @@ import { money } from "@/lib/format";
 import { liveFile } from "../actions";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120; // the AI analysis runs from this page
 
 export default async function LoanFilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
