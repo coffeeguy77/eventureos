@@ -113,9 +113,9 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
             </div>
             <p className="mt-1 text-[0.9375rem] text-ink-muted">{purposeLabel} · {file.applicants > 1 ? "Joint application" : "Single applicant"}{file.submitted_at ? ` · signed and sent ${when(file.submitted_at, tz)}` : file.client_seen_at ? ` · client last active ${when(file.client_seen_at, tz)}` : ""}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 print:hidden md:flex md:shrink-0">
-            <PrintButton className="inline-flex h-11 justify-center items-center gap-2 rounded-xl bg-surface px-4 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Download className="h-4 w-4" />Export report</PrintButton>
-            <a href="#applicants" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 text-[0.9375rem] font-semibold text-white hover:bg-emerald-900">Review application<ArrowRight className="h-4 w-4" /></a>
+          <div className="grid grid-cols-1 gap-2 print:hidden min-[340px]:grid-cols-2 md:flex md:shrink-0">
+            <PrintButton className="inline-flex h-11 justify-center items-center gap-2 whitespace-nowrap rounded-xl bg-surface px-3 text-[0.875rem] sm:px-4 sm:text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Download className="h-4 w-4" />Export report</PrintButton>
+            <a href="#applicants" className="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-emerald-800 px-3 text-[0.875rem] sm:px-4 sm:text-[0.9375rem] font-semibold text-white hover:bg-emerald-900"><span className="sm:hidden">Review</span><span className="hidden sm:inline">Review application</span><ArrowRight className="h-4 w-4" /></a>
           </div>
         </div>
 
@@ -267,7 +267,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
                     ...signed.map((x) => ({ at: x.signed_at, text: `${x.signed_name} signed` })),
                     ...parts.messages.filter((x) => x.from_side === "system").map((x) => ({ at: x.created_at, text: x.body }))]
                     .sort((p, q) => q.at.localeCompare(p.at)).slice(0, 40).map((e, n) => (
-                      <li key={n} className="flex gap-3 text-[0.8125rem]"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" /><span className="min-w-0 flex-1 text-ink">{e.text}<span className="block text-[0.6875rem] text-ink-faint">{when(e.at, tz)}</span></span></li>
+                      <li key={n} className="flex gap-3 text-[0.8125rem]"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" /><span className="min-w-0 flex-1 text-ink [overflow-wrap:anywhere]">{e.text}<span className="block text-[0.6875rem] text-ink-faint">{when(e.at, tz)}</span></span></li>
                     ))}
                 </ol>
               </Section>
