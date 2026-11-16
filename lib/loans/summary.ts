@@ -13,7 +13,7 @@ export function summarise(a: Record<string, unknown>, applicants: number): LoanS
   let income = 0;
   for (let i = 1; i <= applicants; i++) income += num(a[`a${i}.salary`]) + num(a[`a${i}.directors_wages`]) + num(a[`a${i}.other_income`]);
   const props = rows(a, "properties"), cards = rows(a, "cards"), loans = rows(a, "loans");
-  const rentIncome = sum(props, "rent") * 52;
+  const rentIncome = props.reduce((t, r) => t + num(r.rent) * (r.rent_period === "Per month" ? 12 : 52), 0);
   const assets = sum(props, "value") + sum(rows(a, "vehicles"), "value") + sum(rows(a, "savings"), "amount") + sum(rows(a, "super"), "amount") + sum(rows(a, "other_assets"), "value") + num(a.contents);
   const liabilities = sum(props, "balance") + sum(cards, "balance") + sum(loans, "balance");
   const monthlyLiving = ["exp_groceries", "exp_utilities", "exp_transport", "exp_insurance", "exp_education", "exp_rent", "exp_other"].reduce((t, k) => t + num(a[k]), 0);

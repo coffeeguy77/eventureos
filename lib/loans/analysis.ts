@@ -38,6 +38,11 @@ const num = (v: unknown) => { const n = Number(String(v ?? "").replace(/[^\d.-]/
 const rows = (a: Record<string, unknown>, k: string) => (Array.isArray(a[k]) ? (a[k] as Record<string, string>[]) : []);
 const sum = (l: Record<string, string>[], k: string) => l.reduce((t, r) => t + num(r[k]), 0);
 
+/** A year of rent from the properties list: each one per week (the default) or per month, as the client chose. */
+export function yearlyRent(props: Record<string, string>[]): number {
+  return Math.round(props.reduce((t, r) => t + num(r.rent) * (r.rent_period === "Per month" ? 12 : 52), 0));
+}
+
 /** Yearly tax + Medicare on a person's taxable income (2026-27 resident rates, no offsets). */
 export function taxOn(income: number): number {
   const i = Math.max(0, income);
@@ -76,7 +81,7 @@ export function analyse(a: Record<string, unknown>, applicants: number, names: s
     return { name: names[i] ?? `Applicant ${i + 1}`, gross, salary, directors, other, tax, net: gross - tax };
   });
   const props = rows(a, "properties"), cards = rows(a, "cards"), loans = rows(a, "loans");
-  const rentGross = sum(props, "rent") * 52, rentCounted = Math.round(rentGross * as.rentShading);
+  const rentGross = yearlyRent(props), rentCounted = Math.round(rentGross * as.rentShading);
   // rent is split evenly between applicants for tax (an estimate)
   const rentTax = applicants ? people.reduce((t, p) => t + (taxOn(p.gross + rentCounted / applicants) - p.tax), 0) : 0;
   const incomeGross = people.reduce((t, p) => t + p.gross, 0) + rentCounted;

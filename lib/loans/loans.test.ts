@@ -109,3 +109,9 @@ test("home contents are household (joint), hidden loan answers ignored", () => {
   assert.equal(m.loan.deposit, null);
   assert.equal(m.loan.value, 1200000);
 });
+
+test("rent per week or per month", async () => {
+  const { yearlyRent } = await import("./analysis");
+  assert.equal(yearlyRent([{ rent: "450" }, { rent: "8,900", rent_period: "Per month" }]), 450 * 52 + 8900 * 12);
+  assert.equal(yearlyRent([{ rent: "500", rent_period: "Per week" }]), 26000);
+});
