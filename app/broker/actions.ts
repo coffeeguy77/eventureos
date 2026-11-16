@@ -32,3 +32,18 @@ export async function brokerMessage(fileId: string, body: string): Promise<R<Loa
     return { ok: true, data: data as LoanMsg };
   } catch { return { ok: false, error: "Couldn't send." }; }
 }
+
+/** A broker (or the business previewing) runs the financial-position analysis. */
+export async function brokerAnalyse(fileId: string, as: { assessmentRate?: number }): Promise<R<import("@/lib/loans/analysis").SavedAnalysis>> {
+  try {
+    const acc = await brokerAccess(fileId);
+    if (!acc) return { ok: false, error: "You're signed out — sign in again." };
+    const db = serviceDb();
+    const { FILE_COLS } = await import("@/lib/loans/server");
+    const { data } = await db.from("loan_files").select(FILE_COLS).eq("id", fileId).maybeSingle();
+    if (!data) return { ok: false, error: "Not found." };
+    const { runAssessment } = await import("@/lib/loans/assess");
+    const by = acc.kind === "broker" ? `${acc.broker.name}${acc.broker.company ? ` (${acc.broker.company})` : ""}` : acc.name;
+    return { ok: true, data: await runAssessment(db, data as import("@/lib/loans/server").LoanFileRow, by, as) };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't analyse." }; }
+}

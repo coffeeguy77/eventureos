@@ -11,10 +11,11 @@ import { Input, Select, Textarea } from "@/components/ui/form";
 import { fieldShown, stepProgress, steps as allSteps, type Field } from "@/lib/loans/form";
 import type { DocRequest } from "@/lib/loans/server";
 import {
-  addBrokerToFile, removeBrokerFromFile, sendBrokerSignIn,
+  addBrokerToFile, analyseLoanFile, removeBrokerFromFile, sendBrokerSignIn,
   addRequest, emailLoanLink, liveFile, loanDocLink, removeRequest, sendBrokerMessage, setRequest, updateLoanFile, type LiveFile,
 } from "@/app/(app)/loans/actions";
 import { STATUS_LABEL, STATUS_ORDER } from "./status";
+import { FinancialPosition } from "./position";
 
 const ago = (iso: string | null) => {
   if (!iso) return "never";
@@ -80,6 +81,8 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
         </Select>
       </Card>
       {err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[0.875rem] text-rose-800 ring-1 ring-inset ring-rose-200">{err}</p>}
+
+      <FinancialPosition answers={f.answers} applicants={f.applicants} names={names} business={d.business} saved={d.analysis} run={(as) => analyseLoanFile(f.id, as)} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {/* answers */}

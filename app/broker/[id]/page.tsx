@@ -6,10 +6,12 @@ import { brokerAccess } from "@/lib/loans/broker-auth";
 import { CONSENTS, fieldShown, steps as allSteps, type Field } from "@/lib/loans/form";
 import { logOnce } from "@/lib/loans/log";
 import { applicantNames, FILE_COLS, fileParts, serviceDb, type LoanFileRow } from "@/lib/loans/server";
-import { aud, summarise } from "@/lib/loans/summary";
+import { aud } from "@/lib/loans/summary";
 import { STATUS_LABEL } from "@/components/loans/status";
 import { brokerSignOutAction } from "../actions";
-import { AutoRefresh, BrokerMessages } from "../ui";
+import { AutoRefresh, BrokerMessages, BrokerPosition } from "../ui";
+import { businessYears } from "@/lib/loans/assess";
+import type { SavedAnalysis } from "@/lib/loans/analysis";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,9 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
     db.from("loan_signatures").select("applicant, signed_name, image, signed_at, ip").eq("file_id", file.id).then((r) => r, () => ({ data: null })),
   ]);
   const tz = org?.timezone ?? "Australia/Sydney";
+  const business = await businessYears(db, file.id);
+  const { data: an } = await db.from("loan_files").select("analysis").eq("id", file.id).maybeSingle().then((r) => r, () => ({ data: null }));
+  const analysis = ((an as { analysis?: unknown } | null)?.analysis ?? null) as SavedAnalysis | null;
   if (acc.kind === "broker") await logOnce(30 * 60e3, { orgId: file.organisation_id, fileId: file.id, kind: "broker", name: acc.broker.name, email: acc.broker.email, action: "viewed_file" });
 
   const a = file.answers;
@@ -64,7 +69,6 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
   const fullNames = names.map((n, i) => [a[`a${i + 1}.first_name`], a[`a${i + 1}.last_name`]].filter(Boolean).join(" ") || n);
   const steps = allSteps(file.applicants);
   const step = (k: string) => steps.find((s) => s.key === k)!;
-  const s = summarise(a, file.applicants);
   const live = !!file.client_seen_at && Date.now() - new Date(file.client_seen_at).getTime() < 30_000;
   const needed = parts.requests.filter((r) => r.status === "needed" || r.status === "redo").length;
   const signed = (sigs ?? []) as { applicant: number; signed_name: string; image: string; signed_at: string; ip: string | null }[];
@@ -91,7 +95,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
           {acc.kind === "broker" && <form action={brokerSignOutAction} className="print:hidden"><button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button></form>}
         </div>
         <nav className="mx-auto flex max-w-6xl gap-4 overflow-x-auto px-4 pb-2 text-[0.8125rem] text-ink-muted sm:px-6 print:hidden">
-          {[["summary", "Summary"], ["applicants", "Applicants"], ["loan", "Loan"], ["position", "Assets & debts"], ["costs", "Living costs"], ["documents", "Documents"], ["signed", "Consent & signatures"], ["messages", "Messages"]].map(([k, l]) => <a key={k} href={`#${k}`} className="shrink-0 hover:text-ink">{l}</a>)}
+          {[["position", "Financial position"], ["applicants", "Applicants"], ["loan", "Loan"], ["position", "Assets & debts"], ["costs", "Living costs"], ["documents", "Documents"], ["signed", "Consent & signatures"], ["messages", "Messages"]].map(([k, l]) => <a key={k} href={`#${k}`} className="shrink-0 hover:text-ink">{l}</a>)}
         </nav>
       </header>
 
@@ -101,15 +105,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
           {" · "}{needed ? `${needed} document${needed === 1 ? "" : "s"} outstanding` : "all documents in"}
         </p>
 
-        <section id="summary" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {[
-            ["Loan amount", aud(s.amount)], ["Property value", aud(s.value)], ["LVR", s.lvr == null ? "—" : `${s.lvr}%`],
-            ["Income (yearly)", aud(s.income)], ["Net position", aud(s.net)], ["Living costs / month", aud(s.monthlyLiving)],
-          ].map(([l, v]) => (
-            <div key={l} className="rounded-2xl border border-line bg-surface p-4"><p className="text-[0.75rem] text-ink-faint">{l}</p><p className="mt-1 text-[1.25rem] font-bold tabular-nums">{v}</p></div>
-          ))}
-        </section>
-        <p className="-mt-2 text-[0.75rem] text-ink-faint">Worked out from the client&apos;s answers: assets {aud(s.assets)} less debts {aud(s.liabilities)}; income includes rent ({aud(s.rentIncome)} a year); monthly repayments {aud(s.monthlyRepayments)}; card limits {aud(s.cardLimits)}.</p>
+        <div id="position" className="scroll-mt-24"><BrokerPosition fileId={file.id} answers={a} applicants={file.applicants} names={names} business={business} saved={analysis} /></div>
 
         <Section title="Applicants" id="applicants">
           <div className={cn("grid gap-6", file.applicants > 1 && "lg:grid-cols-2")}>

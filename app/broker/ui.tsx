@@ -4,7 +4,9 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Mail, Send } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { brokerMessage, requestBrokerLink } from "./actions";
+import { brokerAnalyse, brokerMessage, requestBrokerLink } from "./actions";
+import { FinancialPosition } from "@/components/loans/position";
+import type { BusinessYear, SavedAnalysis } from "@/lib/loans/analysis";
 import type { LoanMsg } from "@/lib/loans/server";
 
 const box = "h-11 w-full rounded-lg border border-line bg-surface px-3 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
@@ -70,4 +72,8 @@ export function BrokerMessages({ fileId, msgs, preview, clientName }: { fileId: 
       </div>
     </div>
   );
+}
+
+export function BrokerPosition({ fileId, answers, applicants, names, business, saved }: { fileId: string; answers: Record<string, unknown>; applicants: number; names: string[]; business: BusinessYear[]; saved: SavedAnalysis | null }) {
+  return <FinancialPosition answers={answers} applicants={applicants} names={names} business={business} saved={saved} run={(as) => brokerAnalyse(fileId, as)} />;
 }

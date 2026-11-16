@@ -45,3 +45,29 @@ test("summary: income, net position, LVR", () => {
   assert.equal(s.lvr, 75);
   assert.equal(s.monthlyLiving, 2000);
 });
+
+import { analyse, businessYear, repayment, taxOn } from "./analysis";
+test("tax estimate (2026-27 resident rates + Medicare)", () => {
+  assert.equal(taxOn(18_200), 364);
+  assert.equal(taxOn(45_000), 4_020 + 900);
+  assert.equal(taxOn(100_000), 4_020 + 16_500 + 2_000);
+  assert.equal(taxOn(200_000), 4_020 + 27_000 + 20_350 + 4_500 + 4_000);
+});
+test("repayments", () => {
+  assert.equal(Math.round(repayment(600_000, 6, 30)), 3597);
+  assert.equal(repayment(0, 6, 30), 0);
+});
+test("analysis: cash flow and stress test", () => {
+  const m = analyse({ "a1.salary": "150000", amount: "500000", property_value: "800000", cards: [{ limit: "10000", balance: "0" }], exp_groceries: "2000" }, 1, ["Shaun"], []);
+  assert.equal(m.monthly.cardCommitment, 300);
+  assert.equal(m.monthly.netIncome, Math.round((150000 - taxOn(150000)) / 12));
+  assert.equal(m.monthly.surplus, m.monthly.netIncome - 2000 - 300 - m.monthly.newLoan);
+  assert.equal(m.loan.lvr, 62.5);
+  assert.equal(m.stress.length, 6);
+  assert.ok(m.stress[0].surplus > m.stress[5].surplus);
+});
+test("Xero headline lines", () => {
+  const pl = { name: "P&L", titles: [], rows: [{ type: "total" as const, cells: ["Total Trading Income", "250,000.00"] }, { type: "row" as const, cells: ["Net Profit", "42,500.50"] }] };
+  const y = businessYear("Bean Culture", "FY25/26", pl, null);
+  assert.equal(y.revenue, 250000); assert.equal(y.netProfit, 42500.5); assert.equal(y.assets, null);
+});

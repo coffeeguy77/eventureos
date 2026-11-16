@@ -103,3 +103,6 @@ alter table public.loan_access_log enable row level security;
 drop policy if exists loan_access_log_select on public.loan_access_log;
 create policy loan_access_log_select on public.loan_access_log for select to authenticated using (public.is_org_staff(organisation_id));
 -- written by the server only (no insert/update/delete policies), so the log can't be edited from a browser
+
+-- The latest financial-position analysis (figures + the AI's assessment), shown to the team and the file's brokers
+alter table public.loan_files add column if not exists analysis jsonb;
