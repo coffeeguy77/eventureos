@@ -1,4 +1,5 @@
 import "server-only";
+import { strs } from "./ai-lists";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANTHROPIC_URL, anthropicHeaders } from "@/lib/ai/claude";
 import { replyModel } from "@/lib/ai/reply";
@@ -16,7 +17,6 @@ export async function businessYears(db: SupabaseClient, fileId: string): Promise
 }
 
 const pick = <T extends string>(v: unknown, list: readonly T[], d: T) => (list.includes(v as T) ? (v as T) : d);
-const strs = (v: unknown, n: number) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.slice(0, 400)).slice(0, n) : []);
 
 /** Work out the figures and ask Claude for an assessment; saved on the file. */
 export async function runAssessment(db: SupabaseClient, file: LoanFileRow, by: string, as?: Partial<Assumptions>): Promise<SavedAnalysis> {
@@ -53,7 +53,11 @@ Rules:
 - If the figures are thin (much not answered yet), still give an assessment of what IS there, rate it on that, and list what's missing under questions.
 Record your assessment with the record_assessment tool.`;
   const key = await orgAiKey(file.organisation_id);
-  const o = await assessWithTool(key, system, `CLIENT FIGURES (JSON):\n${JSON.stringify(facts)}`);
+  const ask = () => assessWithTool(key, system, `CLIENT FIGURES (JSON):\n${JSON.stringify(facts)}`);
+  const t0 = Date.now();
+  let o = await ask();
+  // an answer with no strengths, risks, mitigants or questions at all is a bad reply: ask once more
+  if (!["strengths", "risks", "mitigants", "questions"].some((k) => strs(o[k], 8).length) && Date.now() - t0 < 40_000) o = await ask();
   const assessment: Assessment = {
     rating: pick(o.rating, ["Strong", "Sound", "Stretched", "Weak"] as const, "Sound"),
     score: Math.max(0, Math.min(100, Math.round(Number(o.score) || 0))),

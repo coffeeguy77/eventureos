@@ -144,7 +144,10 @@ export function FinancialPosition({ answers, applicants, names, business, saved:
             )}
           </div>
           {err && <p className="mx-5 mb-4 rounded-lg bg-rose-50 px-3 py-2 text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-200 sm:mx-6">{err}</p>}
-          {ai && (
+          {ai && ![ai.strengths, ai.risks, ai.mitigants, ai.questions].some((l) => l.length) && (
+            <p className="border-t border-line px-5 py-4 text-[0.8125rem] text-ink-muted sm:px-6">The last run came back without strengths, risks or questions. Press Re-analyse to fill them in.</p>
+          )}
+          {ai && [ai.strengths, ai.risks, ai.mitigants, ai.questions].some((l) => l.length) && (
             <div className="grid gap-px border-t border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
               <Points title="Strengths" icon={<CheckCircle2 className="h-4 w-4" style={{ color: GOOD }} />} items={ai.strengths} />
               <Points title="Risks" icon={<AlertTriangle className="h-4 w-4" style={{ color: WARN }} />} items={ai.risks} />
@@ -155,7 +158,7 @@ export function FinancialPosition({ answers, applicants, names, business, saved:
         </div>
 
         {/* headline numbers */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <Tile label="Net worth" value={aud(m.netWorth)} status={m.netWorth >= 0 ? ["good", "Positive"] : ["bad", "Negative"]} />
           <Tile label="Gross income" value={aud(m.incomeGross)} sub="a year" />
           <Tile label="Take-home" value={aud(m.incomeNetMonthly)} sub="a month, est." />
@@ -201,10 +204,10 @@ function Tile({ label, value, sub, status }: { label: string; value: string; sub
   const c = status ? { good: GOOD, warn: WARN, bad: BAD }[status[0]] : null;
   const Icon = status?.[0] === "good" ? TrendingUp : status ? TrendingDown : null;
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-line bg-surface p-4">
+    <div className="relative min-w-0 overflow-hidden rounded-2xl border border-line bg-surface p-3.5 sm:p-4">
       {c && <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: c }} />}
       <p className="text-[0.75rem] font-medium text-ink-muted">{label}</p>
-      <p className="mt-1 text-[1.375rem] font-bold leading-tight tabular-nums text-ink">{value}</p>
+      <p className="mt-1 break-words text-[1.1875rem] font-bold leading-tight tabular-nums text-ink sm:text-[1.375rem]">{value}</p>
       {status && Icon ? <p className="mt-1 flex items-center gap-1 text-[0.6875rem] font-medium text-ink-muted"><Icon className="h-3.5 w-3.5" style={{ color: c! }} />{status[1]}{sub ? ` · ${sub}` : ""}</p>
         : sub ? <p className="mt-1 text-[0.6875rem] text-ink-faint">{sub}</p> : null}
     </div>
@@ -264,6 +267,27 @@ function Waterfall({ m }: { m: Metrics }) {
   const bw = plotW / steps.length, barW = Math.min(64, bw * 0.62);
   let run = 0;
   const bars = steps.map((s) => { const from = s.total ? 0 : run, to = s.total ? s.value : run + s.value; if (!s.total) run = to; return { ...s, from, to }; });
+  if (w > 0 && w < 420) {
+    // phones: one row per step, the bar floating where it sits in the running total
+    const span = (yMax - yMin) || 1, pos = (v: number) => ((v - yMin) / span) * 100;
+    return (
+      <div ref={ref} className="w-full space-y-2.5" role="img" aria-label={`Monthly cash flow: take-home ${aud(m.monthly.netIncome)}, surplus ${aud(m.monthly.surplus)}`}>
+        {bars.map((b) => {
+          const a = pos(Math.min(b.from, b.to)), z = pos(Math.max(b.from, b.to));
+          return (
+            <div key={b.label} className={cn("grid grid-cols-[5.5rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-[0.8125rem]", b.total && "border-t border-line pt-2.5 font-semibold")}
+              {...tipFor({ title: b.label, rows: [{ label: "a month", value: aud(b.value), color: b.color }, ...(b.total ? [] : [{ label: "running total", value: aud(b.to) }])], note: b.note })}>
+              <span className="truncate text-ink-muted">{b.label}</span>
+              <span className="relative h-3.5 rounded-full bg-canvas">
+                <span className="absolute inset-y-0 rounded-full" style={{ left: `${a}%`, width: `${Math.max(1.5, z - a)}%`, background: b.color, ...grow(on, "x", b.value >= 0 ? "left center" : "right center") }} />
+              </span>
+              <span className="text-right tabular-nums text-ink">{aud(b.value)}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div ref={ref} className="w-full">
       {w > 0 && (

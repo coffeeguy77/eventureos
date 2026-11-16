@@ -105,17 +105,17 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6">
-        <div className="mb-5 flex flex-wrap items-start gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start">
+          <div className="min-w-0 md:flex-1">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-serif text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.125rem]">{fullNames.join(" & ") || file.title}</h1>
+              <h1 className="font-serif text-[1.5rem] font-semibold leading-tight text-ink [overflow-wrap:anywhere] min-[400px]:text-[1.75rem] sm:text-[2.125rem]">{fullNames.join(" & ") || file.title}</h1>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[0.8125rem] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />{STATUS_LABEL[file.status] ?? file.status}</span>
             </div>
             <p className="mt-1 text-[0.9375rem] text-ink-muted">{purposeLabel} · {file.applicants > 1 ? "Joint application" : "Single applicant"}{file.submitted_at ? ` · signed and sent ${when(file.submitted_at, tz)}` : file.client_seen_at ? ` · client last active ${when(file.client_seen_at, tz)}` : ""}</p>
           </div>
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <PrintButton className="inline-flex h-11 items-center gap-2 rounded-xl bg-surface px-4 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Download className="h-4 w-4" />Export report</PrintButton>
-            <a href="#applicants" className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-4 text-[0.9375rem] font-semibold text-white hover:bg-emerald-900">Review application<ArrowRight className="h-4 w-4" /></a>
+          <div className="grid grid-cols-2 gap-2 print:hidden md:flex md:shrink-0">
+            <PrintButton className="inline-flex h-11 justify-center items-center gap-2 rounded-xl bg-surface px-4 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Download className="h-4 w-4" />Export report</PrintButton>
+            <a href="#applicants" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-800 px-4 text-[0.9375rem] font-semibold text-white hover:bg-emerald-900">Review application<ArrowRight className="h-4 w-4" /></a>
           </div>
         </div>
 
@@ -180,14 +180,29 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
             return (
               <div key={l.key} className="mb-5 last:mb-0">
                 <p className="mb-1.5 text-[0.875rem] font-semibold">{l.label}</p>
-                {!rows.length ? <p className="text-[0.8125rem] text-ink-faint">{a[`${l.key}__none`] === true ? "None" : "Not answered"}</p> : (
-                  <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-line">
+                {!rows.length ? <p className="text-[0.8125rem] text-ink-faint">{a[`${l.key}__none`] === true ? "None" : "Not answered"}</p> : (<>
+                  <div className="space-y-2.5 sm:hidden">
+                    {rows.map((r, n) => (
+                      <dl key={n} className="rounded-xl p-3.5 ring-1 ring-inset ring-line">
+                        <p className="mb-2 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{l.item} {n + 1}</p>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+                          {l.fields.filter((f) => r[f.key]).map((f) => (
+                            <div key={f.key} className={cn("min-w-0", (f.type === "text" || f.type === "textarea") && "col-span-2")}>
+                              <dt className="text-[0.6875rem] text-ink-faint">{f.label}</dt>
+                              <dd className={cn("text-[0.875rem] text-ink [overflow-wrap:anywhere]", f.type === "money" && "tabular-nums")}>{f.owner ? ownerLabel(r[f.key], fullNames) : show(f, r[f.key])}</dd>
+                            </div>
+                          ))}
+                        </div>
+                      </dl>
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto rounded-xl ring-1 ring-inset ring-line sm:block">
                     <table className="w-full min-w-[520px] text-[0.8125rem]">
-                      <thead className="bg-canvas text-left text-ink-faint"><tr>{l.fields.map((f) => <th key={f.key} className="px-3 py-2 font-medium">{f.label}</th>)}</tr></thead>
-                      <tbody>{rows.map((r, n) => <tr key={n} className="border-t border-line">{l.fields.map((f) => <td key={f.key} className={cn("px-3 py-2", f.type === "money" && "tabular-nums")}>{(f.owner && r[f.key] ? ownerLabel(r[f.key], fullNames) : show(f, r[f.key])) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
+                      <thead className="bg-canvas text-left text-ink-faint"><tr>{l.fields.map((f) => <th key={f.key} className={cn("px-3 py-2 align-bottom font-medium", f.type === "text" || f.type === "textarea" ? "min-w-[11rem]" : "min-w-[6.5rem]")}>{f.label}</th>)}</tr></thead>
+                      <tbody>{rows.map((r, n) => <tr key={n} className="border-t border-line">{l.fields.map((f) => <td key={f.key} className={cn("px-3 py-2 align-top", f.type === "money" && "whitespace-nowrap tabular-nums")}>{(f.owner && r[f.key] ? ownerLabel(r[f.key], fullNames) : show(f, r[f.key])) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
                     </table>
                   </div>
-                )}
+                </>)}
               </div>
             );
           })}

@@ -134,3 +134,12 @@ test("rent from your own business is counted in full", () => {
   const props: Record<string, string>[] = [{ rent: "8900", rent_period: "Per month", own_business: "yes" }, { rent: "450", rent_period: "Per week" }];
   assert.equal(countedRent(props, 0.8), Math.round(8900 * 12 + 450 * 52 * 0.8));
 });
+
+import { strs } from "./ai-lists";
+test("AI lists are accepted as arrays, JSON strings, bullets or objects", () => {
+  assert.deepEqual(strs(["a", "b"], 6), ["a", "b"]);
+  assert.deepEqual(strs('["a","b"]', 6), ["a", "b"]);
+  assert.deepEqual(strs("- a\n- b", 6), ["a", "b"]);
+  assert.deepEqual(strs([{ text: "a" }], 6), ["a"]);
+  assert.deepEqual(strs(undefined, 6), []);
+});

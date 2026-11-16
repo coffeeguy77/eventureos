@@ -87,7 +87,7 @@ export function LoanOverview({ answers: a, applicants, names, fullNames, request
         <div className="relative flex flex-wrap items-center gap-6">
           <div className="min-w-0 flex-1 basis-80">
             <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-[#6ee7b7]">Application insight{ai ? ` · ${ai.rating}` : ""}</p>
-            <h2 className="mt-2 font-serif text-[1.5rem] font-semibold leading-tight sm:text-[1.875rem]">{ai?.headline || (answered > 0.2 ? "Taking shape — run the assessment for a full review." : "Getting started.")}</h2>
+            <h2 className="mt-2 font-serif text-[1.3125rem] font-semibold leading-tight [overflow-wrap:anywhere] min-[400px]:text-[1.5rem] sm:text-[1.875rem]">{ai?.headline || (answered > 0.2 ? "Taking shape — run the assessment for a full review." : "Getting started.")}</h2>
             <p className="mt-2 max-w-2xl text-[0.9375rem] text-white/75">{actions[0] ? `${actions[0].title}${actions[0].sub ? ` — ${actions[0].sub.toLowerCase()}` : ""} is the next priority.` : "Everything's in — ready for lender matching."}</p>
             <a href={links.assessment} className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[0.875rem] font-semibold text-white ring-1 ring-inset ring-white/40 hover:bg-white/10">{ai ? "View assessment" : "Run assessment"}<ArrowRight className="h-4 w-4" /></a>
           </div>
@@ -212,7 +212,19 @@ export function LoanOverview({ answers: a, applicants, names, fullNames, request
 
         {/* applicants */}
         <Card className="lg:col-span-12" title="Applicants">
-          <div className="-mx-1 overflow-x-auto">
+          <div className="space-y-2.5 sm:hidden">
+            {people.map((p, i) => (
+              <a key={i} href={links.applicants} className="block rounded-xl p-3.5 ring-1 ring-inset ring-line">
+                <span className="flex items-center justify-between gap-2"><span className="flex min-w-0 items-center gap-2 font-semibold text-ink"><User className="h-4 w-4 shrink-0 text-ink-faint" /><span className="truncate">{p.name}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-ink-faint" /></span>
+                <span className="mt-1 block text-[0.8125rem] text-ink-muted">{p.employment}{p.income ? <> · <b className="font-semibold tabular-nums text-ink">{aud(p.income)}</b> a year</> : null}</span>
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {p.v === "verified" ? <Chip tone="good">✓ Verified</Chip> : p.v === "received" ? <Chip tone="info">Received — to check</Chip> : p.v === "pending" ? <Chip tone="warn">Pending{p.missing ? ` (${p.missing})` : ""}</Chip> : null}
+                  {p.signed ? <Chip tone="good">✓ Signed</Chip> : <Chip tone="warn">Not signed yet</Chip>}
+                </span>
+              </a>
+            ))}
+          </div>
+          <div className="-mx-1 hidden overflow-x-auto sm:block">
             <table className="w-full min-w-[620px] text-[0.8125rem]">
               <thead><tr className="text-left text-[0.6875rem] font-semibold uppercase tracking-wider text-ink-faint"><th className="px-1 pb-2">Applicant</th><th className="px-1 pb-2">Employment</th><th className="px-1 pb-2">Income (annual)</th><th className="px-1 pb-2">Verification</th><th className="px-1 pb-2">Signed</th><th className="px-1 pb-2" /></tr></thead>
               <tbody>
