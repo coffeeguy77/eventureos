@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Lock, Minus, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -16,8 +16,10 @@ const inc = (p: number, t: number) => p * (1 + t / 100);
  * "Change your order" on the quote link: more or fewer of the catering and drinks, take them off, or add catering from
  * the menu. Saving makes the next version of the quote, shown straight away, ready to accept.
  */
-export function CustomerChange({ token, lines, catalogue, currency, businessName, preview = false }: {
+export function CustomerChange({ token, lines, catalogue, currency, businessName, preview = false, assumed = null }: {
   token: string; lines: ChangeLine[]; catalogue: ChangeItem[]; currency: string; businessName: string;
+  /** A line whose number was assumed (they didn't say how many) — asked about up front */
+  assumed?: { id: string; quantity: number } | null;
   /** The business looking at the customer's page: everything works, but nothing is saved */
   preview?: boolean;
 }) {
@@ -30,6 +32,12 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // "Change the number" links (#change-order) open the editor
+  useEffect(() => {
+    const check = () => { if (window.location.hash === "#change-order") { setDone(null); setOpen(true); } };
+    check(); window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
 
   const groups = useMemo(() => {
     const m = new Map<string, ChangeItem[]>();
@@ -58,7 +66,12 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
 
   if (!open) {
     return (
-      <div className="rounded-2xl border border-line bg-surface p-5 print:hidden">
+      <div id="change-order" className="scroll-mt-4 rounded-2xl border border-line bg-surface p-5 print:hidden">
+        {assumed && !done && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-[0.875rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+            <b>How many people?</b> You didn&apos;t mention numbers, so we&apos;ve quoted for {assumed.quantity}. Change the number here and your quote updates straight away.
+          </p>
+        )}
         {done && <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-[0.875rem] text-emerald-900 ring-1 ring-inset ring-emerald-200">{done}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1">
@@ -67,7 +80,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
           </div>
           <button type="button" onClick={() => { setDone(null); setOpen(true); }}
             className="inline-flex h-11 items-center gap-2 rounded-xl px-4 text-[0.9375rem] font-semibold text-[color:var(--portal-brand-ink)] ring-1 ring-inset ring-[color:var(--portal-brand)] hover:bg-zinc-50">
-            <Pencil className="h-4 w-4" />Change your order
+            <Pencil className="h-4 w-4" />{assumed && !done ? "Change the number" : "Change your order"}
           </button>
         </div>
       </div>
@@ -75,7 +88,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
   }
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 sm:p-5 print:hidden">
+    <div id="change-order" className="scroll-mt-4 rounded-2xl border border-line bg-surface p-4 sm:p-5 print:hidden">
       <p className="text-[1rem] font-semibold text-ink">Change your order</p>
       <p className="mb-3 text-[0.8125rem] text-ink-muted">Items with a lock are set by {businessName} — contact us to change those.</p>
       <ul className="divide-y divide-line rounded-xl border border-line">
@@ -85,7 +98,8 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
           return (
             <li key={l.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5", gone && "bg-zinc-50")}>
               <div className="min-w-0 flex-1">
-                <p className={cn("text-[0.875rem] font-medium", gone ? "text-ink-faint line-through" : "text-ink")}>{l.name}</p>
+                <p className={cn("text-[0.875rem] font-medium", gone ? "text-ink-faint line-through" : "text-ink")}>{l.name}
+                  {assumed?.id === l.id && !gone && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-[0.6875rem] font-semibold text-amber-800">How many? We guessed {assumed.quantity}</span>}</p>
                 <p className="text-[0.75rem] text-ink-faint">{money(l.unit_price, currency, { cents: true })}{l.unit ? ` / ${l.unit}` : ""} + GST</p>
               </div>
               {!l.editable ? (

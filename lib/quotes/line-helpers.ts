@@ -32,7 +32,9 @@ export interface StaffDetails {
   // Older single-day shape (still read): start, end, staff, setup_minutes
   start?: string | null; end?: string | null; staff?: number; setup_minutes?: number;
 }
-export interface ServesDetails { kind: "serves"; hot: number; cold: number }
+export interface ServesDetails { kind: "serves"; hot: number; cold: number;
+  /** The customer didn't say how many — this number was assumed (cleared as soon as anyone changes it) */
+  assumed?: boolean }
 /**
  * Travel to a job (e.g. the coffee van): kilometres each way, doubled for the return trip, for each day it goes out.
  * The driving time is charged on the barista line (travel_minutes each way) and lengthens the shift and calendar entry.

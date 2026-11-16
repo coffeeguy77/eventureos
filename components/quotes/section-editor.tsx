@@ -8,6 +8,7 @@ import { lineTotal, parseNum } from "./calc";
 import { draftNums, type BoolField, type ItemDraft, type NumField, type TextField } from "./draft";
 import { QuickAdd } from "./quick-add";
 import type { CatalogueItem, QSection } from "./types";
+import { SmartDateInput } from "@/components/ui/smart-date";
 import { dayLabel, minutesText, nextShiftDay, servesLine, setupTime, shiftDays, staffLine, travelLine, type LineDetails, type ServesDetails, type ShiftDay, type StaffDetails, type TravelDetails } from "@/lib/quotes/line-helpers";
 import { shortTime } from "@/lib/calendar/job-invite";
 import type { StaffRule } from "@/lib/pricing/engine";
@@ -339,7 +340,7 @@ function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper;
   if (helper.kind === "serves") {
     const d: ServesDetails = it.details?.kind === "serves" ? it.details : { kind: "serves", hot: Number(it.quantity) || 0, cold: 0 };
     const set = (k: "hot" | "cold", v: string) => {
-      const next: ServesDetails = { ...d, [k]: Math.max(0, Math.round(Number(v) || 0)) };
+      const next: ServesDetails = { kind: "serves", hot: d.hot, cold: d.cold, [k]: Math.max(0, Math.round(Number(v) || 0)) };
       const r = servesLine(next, helper.base);
       h.onDetails(it.id, next, r);
     };
@@ -351,6 +352,8 @@ function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper;
         <label className="w-24"><span className="mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint">Cold drinks</span>
           <input type="number" min={0} inputMode="numeric" value={d.cold} onChange={(e) => set("cold", e.target.value)} className={cn(helperInput, "tabular text-right")} aria-label="Cold drinks" /></label>
         <span className="pb-2 text-[0.75rem] text-ink-muted">= <b className="text-ink">{d.hot + d.cold}</b> drinks{d.cold === 0 ? " · add cold drinks to offer iced options" : ""}</span>
+        {d.assumed && <p className="basis-full rounded-md bg-amber-50 px-2 py-1.5 text-[0.75rem] text-amber-900 ring-1 ring-inset ring-amber-200">
+          The customer didn&apos;t say how many, so this is an assumed number. Their quote tells them and lets them change it — or change it here.</p>}
       </div>
     );
   }
@@ -447,8 +450,8 @@ function StaffHelper({ it, helper, saved, h }: { it: ItemDraft; helper: Extract<
           const calc = r?.days[i];
           return (
             <li key={i} className={cn("flex flex-wrap items-end gap-2", i > 0 && "border-t border-line pt-2")}>
-              <label className="w-[8.5rem]"><span className={lab}>{day.date ? dayLabel(day, i).split(" ").slice(0, 1).join("") : `Day ${i + 1}`} · date</span>
-                <input type="date" value={day.date ?? ""} onChange={(e) => setDay(i, { date: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} date (optional)`} /></label>
+              <div className="w-[8.5rem]"><span className={lab}>{day.date ? dayLabel(day, i).split(" ").slice(0, 1).join("") : `Day ${i + 1}`} · date</span>
+                <SmartDateInput value={day.date} onChange={(v) => setDay(i, { date: v })} inputClassName={helperInput} ariaLabel={`Day ${i + 1} date (optional)`} /></div>
               <label className="w-[7rem]"><span className={lab}>Service starts</span>
                 <input type="time" value={day.start ?? ""} onChange={(e) => setDay(i, { start: e.target.value || null })} className={helperInput} aria-label={`Day ${i + 1} service starts`} /></label>
               <label className="w-[7rem]"><span className={lab}>Service ends</span>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, unstable_rethrow } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ExternalLink, AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, X } from "lucide-react";
+import { ExternalLink, AlertCircle, Calculator, Check, UtensilsCrossed, CheckCircle2, Copy, Eye, LayoutTemplate, Loader2, Mail, Plus, Reply, Send, Sparkles, X } from "lucide-react";
 import {
   addItem, addSection, deleteItem, deleteQuote, deleteSection, duplicateQuote, moveItem, moveSection, previewQuote,
   publishQuote, recordQuoteResponse, updateItem, updateQuoteHeader, updateSection, applyCustomerPricing, importXeroQuote, adminAcceptQuote,
@@ -23,6 +23,8 @@ import type { QuoteStatus } from "@/lib/types";
 import { parseNum, priceStr, numStr, quoteTotals } from "./calc";
 import { draftNums, fieldPatch, NUM_FIELDS, toDraft, type BoolField, type ItemDraft, type NumField } from "./draft";
 import { QuoteAttachments } from "./attachments";
+import { SmartDateInput } from "@/components/ui/smart-date";
+import { AutoQuotePanel } from "./auto-quote";
 import { PriceJobPanel, type PricingPackage } from "./price-job";
 import { MenuPicker } from "./menu-picker";
 import type { PricedService } from "@/lib/pricing/engine";
@@ -587,6 +589,12 @@ export function QuoteBuilder(p: BuilderProps) {
 
   const [pricing, setPricing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
+  function onAutoQuote(r: { section: QSection; items: QItem[]; replaced: boolean }) {
+    if (r.replaced) { setSections([r.section]); setItems(r.items.map(toDraft)); }
+    else { setSections((all) => all.some((x) => x.id === r.section.id) ? all : [...all, r.section]); setItems((all) => [...all, ...r.items.filter((a) => !all.some((i) => i.id === a.id)).map(toDraft)]); }
+    router.refresh();
+  }
   function onTemplate(secs: QSection[], added: QItem[], name: string, missing: number) {
     setTplOpen(false);
     setSections((all) => [...all, ...secs.filter((x) => !all.some((y) => y.id === x.id))]);
@@ -762,6 +770,9 @@ export function QuoteBuilder(p: BuilderProps) {
               currency={currency} catalogue={p.catalogue} adding={addingIn === s.id} h={h}
             />
           ))}
+          {autoOpen && (
+            <AutoQuotePanel quoteId={quote.id} hasLines={items.some((i) => i.name.trim())} flushAll={flushAll} onClose={() => setAutoOpen(false)} onDone={onAutoQuote} />
+          )}
           {pricing && (
             <PriceJobPanel quoteId={quote.id} packages={p.pricing.packages} services={p.pricing.services} defaults={p.pricing.defaults}
               currency={currency} onClose={() => setPricing(false)} onAdded={onPriced} />
@@ -773,7 +784,13 @@ export function QuoteBuilder(p: BuilderProps) {
             <MenuPicker quoteId={quote.id} services={p.pricing.services} guests={p.pricing.defaults.guests}
               currency={currency} onClose={() => setMenuOpen(false)} onAdded={onPriced} />
           )}
-          <div className={cn("grid gap-2", p.templates ? "grid-cols-2 sm:grid-cols-4" : "sm:grid-cols-3")}>
+          <div className={cn("grid gap-2", p.templates ? (p.emails?.length ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4") : (p.emails?.length ? "grid-cols-2 sm:grid-cols-4" : "sm:grid-cols-3"))}>
+            {!!p.emails?.length && (
+              <button type="button" onClick={() => { setAutoOpen(true); setTplOpen(false); setMenuOpen(false); setPricing(false); }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">
+                <Sparkles className="h-4 w-4" />Auto quote
+              </button>
+            )}
             {p.templates && (
               <button type="button" onClick={() => { setTplOpen(true); setMenuOpen(false); setPricing(false); }}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-brand-300 bg-brand-50/40 py-3 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">
@@ -1169,8 +1186,8 @@ function EventDateField({ eventId, date, onError }: { eventId: string; date: str
   return (
     <label className="flex items-center gap-1.5">
       <span>Event date</span>
-      <input type="date" value={value} onChange={(e) => save(e.target.value)} aria-label="Event date (leave blank for TBC)"
-        className="h-9 rounded-md border border-line bg-surface px-1.5 text-[0.7812rem] text-ink sm:h-7 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60" />
+      <SmartDateInput value={value || null} onChange={(v) => save(v ?? "")} disabled={pending} ariaLabel="Event date (leave blank for TBC)" className="w-[7.5rem]"
+        inputClassName="h-9 rounded-md border border-line bg-surface px-1.5 text-[0.7812rem] text-ink sm:h-7 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60" />
       {!value && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">TBC</span>}
       {value && <button type="button" onClick={() => save("")} disabled={pending} className="text-[0.75rem] text-ink-faint hover:text-ink hover:underline">Set to TBC</button>}
     </label>

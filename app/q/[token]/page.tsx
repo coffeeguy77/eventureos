@@ -77,6 +77,10 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
   const isCopy = d.recipient.role === "copy" || preview;
   // Can they change the catering / drinks themselves? (Settings → Automations; on unless switched off)
   const edit = open && (!isCopy || preview) ? await loadCustomerEdit(createServiceClient(), token).catch(() => null) : null;
+  // A number the business assumed because they didn't say how many — asked about at the top, changed below
+  const assumedLine = edit?.ok && (!edit.data.busy || preview)
+    ? edit.data.lines.find((l) => l.editable && !l.is_optional && (l.details as { kind?: string; assumed?: boolean } | null)?.kind === "serves" && (l.details as { assumed?: boolean }).assumed) ?? null
+    : null;
 
   return (
     <main style={brandVars(safeColour(d.org.brand_colour))} className="min-h-screen bg-canvas [color-scheme:light] print:bg-white">
@@ -114,6 +118,13 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
           </Banner>
         )}
 
+        {assumedLine && (
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-[0.875rem] text-amber-900 ring-1 ring-inset ring-amber-200 print:hidden">
+            <span className="min-w-0 flex-1"><b>How many people?</b> You didn&apos;t mention numbers, so we&apos;ve quoted for {Number(assumedLine.quantity)}. You can change it and the quote updates straight away.</span>
+            <a href="#change-order" className="inline-flex h-10 items-center rounded-lg bg-surface px-3.5 font-semibold text-amber-900 ring-1 ring-inset ring-amber-300 hover:bg-amber-100">Change the number</a>
+          </div>
+        )}
+
         <QuoteDocument snap={snap} currency={cur} orgName={d.org.name} logoUrl={d.org.logo_url} quoteNumber={d.quote.number} customerName={d.customer?.name} billTo={billTo}
           eventLabel={d.event ? `${d.event.name}${d.event.event_date ? ` · ${fmtDate(d.event.event_date, "long")}` : ""}${d.event.venue ? ` · ${d.event.venue}` : ""}` : undefined}
           eventDate={d.event ? d.event.event_date ?? null : undefined}
@@ -125,6 +136,7 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
         {edit?.ok && (!edit.data.busy || preview) && (
           <div className="mt-6">
             <CustomerChange token={token} preview={preview} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}
+              assumed={assumedLine ? { id: assumedLine.id, quantity: Number(assumedLine.quantity) } : null}
               lines={edit.data.lines.filter((l) => !l.is_optional).map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, editable: l.editable, section: l.section }))} />
           </div>
         )}

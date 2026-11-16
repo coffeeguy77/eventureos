@@ -680,6 +680,10 @@ export interface PriceJobInput {
   /** Delivery left off but shown as an optional extra the customer can ask for. */
   offerDelivery?: boolean;
   sectionTitle?: string;
+  /** The day of the job (YYYY-MM-DD), put on the staff line */
+  date?: string | null;
+  /** The number of serves is a guess (the customer didn't say) — flagged so their quote lets them change it */
+  assumedServes?: boolean;
 }
 
 const hhmm = (v: string, label: string) => {
@@ -729,12 +733,12 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       is_optional: !!l.optional,
       // Remember how the line was worked out so its helper (times / hot+cold) opens filled in
       ...(l.kind === "staff" && timed ? (() => {
-        const det = { kind: "staff" as const, days: [{ date: null, start: input.start, end: input.end, setup_minutes: rules.staff?.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, staff) }] };
+        const det = { kind: "staff" as const, days: [{ date: input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : null, start: input.start, end: input.end, setup_minutes: rules.staff?.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, staff) }] };
         const calc = staffLine(det, rules.staff ?? null, rules.staff?.label ?? "staff");
         return { details: det, ...(calc ? { description: calc.description } : {}) };
       })() : {}),
       ...(l.kind === "per_serve" ? (() => {
-        const det = { kind: "serves" as const, hot: Math.round(l.quantity), cold: 0 };
+        const det = { kind: "serves" as const, hot: Math.round(l.quantity), cold: 0, ...(input.assumedServes ? { assumed: true } : {}) };
         return { details: det, description: servesLine(det, l.description).description };
       })() : {}),
     }))).select(ITEM_COLS);
@@ -1038,4 +1042,74 @@ export async function createQuoteForCustomer(customerId: string, title: string):
   });
   if (!res.ok) return res;
   return createQuoteForEvent(eventId!);
+}
+
+// ---------------------------------------------------------------------------
+// Auto quote: read the job from the customer's emails and price it from the price list
+// ---------------------------------------------------------------------------
+
+export interface AutoQuoteResult {
+  section: QSection; items: QItem[]; replaced: boolean;
+  /** What was read from the emails, for the person quoting to check */
+  read: { packageName: string; date: string | null; start: string | null; end: string | null; serves: number; staff: number; assumedServes: boolean };
+  notes: string[];
+}
+
+/**
+ * "Auto quote": Claude reads the job's emails (the event's and its enquiry's) for the package, day, times and how many
+ * serves; the lines are then priced by the pricing engine from the saved price list, exactly like "Price a job".
+ * When they didn't say how many, 100 serves is quoted and flagged, so their quote tells them and lets them change it.
+ * `replace` clears the quote's lines first; otherwise the new section goes below what's there.
+ */
+export async function autoQuoteFromEmails(quoteId: string, replace: boolean): Promise<ActionResult<AutoQuoteResult>> {
+  return run(async () => {
+    const { supabase, org, role } = await requireOrg();
+    if (role === "staff" || role === "customer") fail("Only the office team can build quotes.");
+    const q = await loadQuote(supabase, org.id, quoteId);
+    assertEditable(q);
+    const { data: ev } = await supabase.from("events").select("enquiry_id, event_date").eq("id", q.event_id).eq("organisation_id", org.id).maybeSingle();
+    const filter = [`event_id.eq.${q.event_id}`, ev?.enquiry_id ? `enquiry_id.eq.${ev.enquiry_id}` : null].filter(Boolean).join(",");
+    const { data: thr } = await supabase.from("email_threads").select("id").eq("organisation_id", org.id).or(filter).neq("classification", "spam").limit(6);
+    const ids = (thr ?? []).map((t) => t.id as string);
+    const { data: msgs } = ids.length
+      ? await supabase.from("email_messages").select("direction, from_name, from_email, sent_at, body_text").in("thread_id", ids).order("sent_at", { ascending: true }).limit(40)
+      : { data: [] };
+    const messages = ((msgs ?? []) as { direction: string; from_name: string | null; from_email: string; sent_at: string; body_text: string | null }[])
+      .map((m) => ({ direction: m.direction, from: m.from_name ?? m.from_email, at: m.sent_at, body: m.body_text }));
+    if (!messages.some((m) => m.direction === "inbound")) fail("There are no emails from the customer on this job to read.");
+
+    const { data: pkgs, error: pErr } = await supabase.from("service_packages").select("id, name, summary, rules").eq("organisation_id", org.id).eq("active", true).order("position");
+    if (pErr) fail(`Couldn't load your packages: ${pErr.message}`);
+    const packages = (pkgs ?? []) as { id: string; name: string; summary: string | null; rules: PackageRules }[];
+    if (!packages.length) fail("Set up a package in Settings → Services & pricing first — Auto quote prices from it.");
+
+    const { readJobFromEmails, DEFAULT_SERVES } = await import("@/lib/ai/auto-quote");
+    const { orgAiKey } = await import("@/lib/ai/key");
+    const today = todayISO(org.timezone);
+    const job = await readJobFromEmails(await orgAiKey(org.id), { name: org.name, timezone: org.timezone }, today, messages, packages);
+    const pkg = job.packageName ? packages.find((p) => p.name.toLowerCase() === job.packageName!.toLowerCase()) : undefined;
+    if (!pkg) fail("Couldn't tell which package fits from the emails — use “Price a job” to choose one.");
+    const timed = needsTimes(pkg!.rules ?? {});
+    if (timed && (!job.start || !job.end)) fail(`The emails don't give the service times, so it can't be priced yet — use “Price a job” and enter them.${job.notes.length ? ` (${job.notes.join(" ")})` : ""}`);
+    const assumedServes = timed && job.serves == null;
+    const serves = timed ? job.serves ?? DEFAULT_SERVES : 0;
+    const { serviceHours, suggestedStaff } = await import("@/lib/pricing/engine");
+    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const staff = timed ? job.staff ?? suggestedStaff(pkg!.rules, serves, serviceHours(mins(job.start!), mins(job.end!))) : 0;
+    const date = job.date ?? (ev?.event_date as string | null) ?? null;
+
+    if (replace) {
+      const { error: dI } = await supabase.from("quote_items").delete().eq("quote_id", q.id).eq("organisation_id", org.id);
+      if (dI) fail(`Couldn't clear the current lines: ${dI.message}`);
+      const { error: dS } = await supabase.from("quote_sections").delete().eq("quote_id", q.id).eq("organisation_id", org.id);
+      if (dS) fail(`Couldn't clear the current sections: ${dS.message}`);
+    }
+    const added = await addPricedSection(q.id, { packageId: pkg!.id, start: timed ? job.start! : "", end: timed ? job.end! : "", serves, staff, includeDelivery: true, date, assumedServes });
+    if (!added.ok) fail(added.error);
+    const notes = [...job.notes];
+    if (job.date && ev?.event_date && job.date !== ev.event_date) notes.unshift(`The emails say ${fmtDate(job.date)}, but the job is set for ${fmtDate(ev.event_date as string)} — check which is right.`);
+    if (assumedServes) notes.unshift(`They didn't say how many, so it's quoted for ${DEFAULT_SERVES}. Their quote tells them and lets them change the number — the price updates for them.`);
+    return { section: added.data.section, items: added.data.items, replaced: replace,
+      read: { packageName: pkg!.name, date, start: job.start, end: job.end, serves, staff, assumedServes }, notes };
+  });
 }
