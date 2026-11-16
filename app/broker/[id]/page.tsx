@@ -74,6 +74,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
   const steps = allSteps(file.applicants);
   const step = (k: string) => steps.find((s) => s.key === k)!;
   const live = !!file.client_seen_at && Date.now() - new Date(file.client_seen_at).getTime() < 30_000;
+  const active = live && !!file.client_focus?.at && Date.now() - new Date(file.client_focus.at).getTime() < 90_000;
   const needed = parts.requests.filter((r) => r.status === "needed" || r.status === "redo").length;
   const signed = (sigs ?? []) as { applicant: number; signed_name: string; image: string; signed_at: string; ip: string | null }[];
   const docHref = (docId: string, dl = false) => `/broker/${file.id}/doc/${docId}${dl ? "?dl=1" : ""}`;
@@ -97,7 +98,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
             {acc.kind === "broker" ? <Link href="/broker" className="font-medium text-emerald-700 hover:underline">Clients</Link> : <span className="font-medium text-emerald-700">{org?.name}</span>}
             <span className="mx-2 text-ink-faint">/</span><span className="text-ink">{fullNames.join(" & ") || file.title}</span>
           </nav>
-          {live && <span className="hidden items-center gap-1.5 text-[0.75rem] font-medium text-emerald-700 sm:inline-flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Client filling in now{file.client_focus?.label ? ` — ${file.client_focus.label}` : ""}</span>}
+          {live && <span className="hidden items-center gap-1.5 text-[0.75rem] font-medium text-emerald-700 sm:inline-flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />{active ? `Client filling in now${file.client_focus?.label ? ` — ${file.client_focus.label}` : ""}` : "Client has the form open"}</span>}
           <SchemeToggle />
           {acc.kind === "broker" && <form action={brokerSignOutAction} className="print:hidden"><button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button></form>}
         </div>

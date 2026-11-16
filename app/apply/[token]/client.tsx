@@ -67,11 +67,16 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
   const pending = useRef<Answers>({});
   const focus = useRef<{ step: string; field?: string; label?: string } | null>({ step: step.key });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFocus = useRef<string | null>(null);
   const lastMsg = useRef<string | null>(initialMsgs.at(-1)?.created_at ?? null);
   const flush = useCallback(async () => {
     const patch = pending.current; pending.current = {};
     if (Object.keys(patch).length) setSaving("saving");
-    const r = await saveAnswers(token, patch, focus.current, lastMsg.current).catch(() => null);
+    // only tell the broker where we are when it moved or something was typed; the 6s poll alone isn't activity
+    const fNow = JSON.stringify(focus.current);
+    const sendFocus = fNow !== lastFocus.current || Object.keys(patch).length > 0;
+    const r = await saveAnswers(token, patch, sendFocus ? focus.current : null, lastMsg.current).catch(() => null);
+    if (r?.ok && sendFocus) lastFocus.current = fNow;
     if (!r || !r.ok) { pending.current = { ...patch, ...pending.current }; setSaving("error"); return; }
     if (Object.keys(patch).length) setSaving("saved");
     setStatus(r.data.status);

@@ -58,7 +58,9 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
   const live = !!f.client_seen_at && Date.now() - new Date(f.client_seen_at).getTime() < 20_000;
   const steps = allSteps(f.applicants);
   const names = Array.from({ length: f.applicants }, (_, i) => String(f.answers[`a${i + 1}.first_name`] ?? "").trim() || `Applicant ${i + 1}`);
-  const focusKey = live ? f.client_focus?.field ?? null : null;
+  // "filling in" only while they're moving between boxes or typing; an open, idle form just counts as open
+  const active = live && !!f.client_focus?.at && Date.now() - new Date(f.client_focus.at).getTime() < 90_000;
+  const focusKey = active ? f.client_focus?.field ?? null : null;
 
   return (
     <div className="space-y-4">
@@ -68,7 +70,7 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
           {live ? (
             <p className="flex items-center gap-2 text-[0.9375rem] font-medium text-ink">
               <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>
-              Filling it in now{f.client_focus?.label ? <> — <span className="text-brand-700 dark:text-brand-300">{f.client_focus.label}</span></> : f.client_focus?.step ? <> — {steps.find((s) => s.key === f.client_focus?.step)?.title}</> : null}
+              {active ? "Filling it in now" : "Has the form open"}{active && f.client_focus?.label ? <> — <span className="text-brand-700 dark:text-brand-300">{f.client_focus.label}</span></> : active && f.client_focus?.step ? <> — {steps.find((s) => s.key === f.client_focus?.step)?.title}</> : null}
             </p>
           ) : (
             <p className="text-[0.9375rem] text-ink-muted">{f.client_seen_at ? `Last on the form ${ago(f.client_seen_at)}` : "Hasn't opened the link yet"}{f.submitted_at ? ` · sent to you ${ago(f.submitted_at)}` : ""}</p>
