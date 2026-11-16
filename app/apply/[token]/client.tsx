@@ -11,7 +11,9 @@ import { createClient } from "@/lib/supabase/client";
 import { SmartDateInput } from "@/components/ui/smart-date";
 import { fieldShown, stepProgress, steps as allSteps, type Field, type ListDef } from "@/lib/loans/form";
 import type { DocRequest, LoanMsg } from "@/lib/loans/server";
+import { SignaturePad } from "@/components/loans/signature-pad";
 import {
+  clearSignature, saveSignature,
   disconnectGmail, finishUpload, markNotApplicable, removeUpload, rescanGmail, saveAnswers, sendClientMessage, shareGmailFiles,
   startUpload, submitApplication, viewMyDoc,
 } from "./actions";
@@ -24,12 +26,16 @@ type Conn = {
   years: string[];
 };
 
+/** Money is saved as plain digits ("1000000") and shown with commas ("1,000,000") as they type. */
+const plainMoney = (s: string) => { const [w, ...d] = s.replace(/[^\d.]/g, "").split("."); return d.length ? `${w}.${d.join("").slice(0, 2)}` : w; };
+const withCommas = (s: string) => { const [w, d] = plainMoney(s).split("."); return (w ? Number(w).toLocaleString("en-AU") : "") + (d !== undefined ? `.${d}` : ""); };
 const box = "h-11 w-full rounded-lg border border-line bg-surface px-3 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:border-[var(--portal-brand)] focus:outline-none focus:ring-2 focus:ring-[color:var(--portal-brand)]/20 disabled:opacity-60";
 const lab = "mb-1 block text-[0.8125rem] font-medium text-ink";
 const brandBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--portal-brand)] px-5 text-[0.9375rem] font-semibold text-white disabled:opacity-50";
 const plainBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-[0.9375rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-canvas disabled:opacity-50";
 
-export function ApplyClient({ token, org, file, requests: initialReqs, documents: initialDocs, messages: initialMsgs, connections, fys, flash, legal }: {
+export function ApplyClient({ token, org, file, requests: initialReqs, documents: initialDocs, messages: initialMsgs, connections, fys, flash, legal, signatures: initialSigs }: {
+  signatures: { applicant: number; signed_name: string; image: string; signed_at: string }[];
   legal: { privacy: string | null; creditGuide: string | null };
   token: string;
   org: { name: string; logo: string | null; email: string | null; phone: string | null };
@@ -46,6 +52,7 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
   const [msgs, setMsgs] = useState(initialMsgs);
   const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [chatOpen, setChatOpen] = useState(false);
+  const [sigs, setSigs] = useState(initialSigs);
   const locked = !["invited", "in_progress"].includes(status);
   const step = steps[stepIx];
   const names = Array.from({ length: file.applicants }, (_, i) => String(answers[`a${i + 1}.first_name`] ?? "").trim() || `Applicant ${i + 1}`);
@@ -150,10 +157,13 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
                   <fieldset key={i} className="space-y-3 rounded-xl p-3 ring-1 ring-inset ring-line">
                     <legend className="px-1 text-[0.9375rem] font-semibold">{file.applicants > 1 ? n : "Your consent"}</legend>
                     <FieldGrid fields={step.perApplicant!.filter((f) => f.key !== "c_credit_guide" || legal.creditGuide)} prefix={`a${i + 1}.`} answers={answers} set={set} onFocus={onFocus} disabled={locked} who={file.applicants > 1 ? n : ""} />
+                    <SignBlock token={token} applicant={i + 1} who={file.applicants > 1 ? n : ""} locked={locked} suggested={[answers[`a${i + 1}.first_name`], answers[`a${i + 1}.last_name`]].filter(Boolean).join(" ")}
+                      sig={sigs.find((x) => x.applicant === i + 1) ?? null} onSigned={(x) => setSigs((all) => [...all.filter((y) => y.applicant !== i + 1), ...(x ? [x] : [])])}
+                      onFocus={() => onFocus(`a${i + 1}.signature`, `${file.applicants > 1 ? `${n} · ` : ""}Signing`)} />
                   </fieldset>
                 ))}
               </>}
-              consentsDone={names.every((_, i) => step.perApplicant!.filter((f) => f.key !== "c_credit_guide" || legal.creditGuide).every((f) => answers[`a${i + 1}.${f.key}`] === "yes"))} />
+              consentsDone={names.every((_, i) => sigs.some((x) => x.applicant === i + 1) && step.perApplicant!.filter((f) => f.key !== "c_credit_guide" || legal.creditGuide).every((f) => answers[`a${i + 1}.${f.key}`] === "yes"))} />
           )}
         </div>
       </section>
@@ -214,7 +224,7 @@ function FieldInput({ f, id, value, onChange, onFocus, disabled }: { f: Field; i
   if (f.type === "date") return <SmartDateInput value={/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null} onChange={(x) => onChange(x ?? "")} disabled={disabled} ariaLabel={f.label} placeholder="dd/mm/yyyy" inputClassName={box} />;
   if (f.type === "money") return (
     <span className="relative block"><span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint">$</span>
-      <input id={id} inputMode="decimal" value={v} disabled={disabled} onFocus={onFocus} onChange={(e) => onChange(e.target.value.replace(/[^\d.,]/g, ""))} className={cn(box, "pl-7 tabular")} /></span>
+      <input id={id} inputMode="decimal" value={withCommas(v)} disabled={disabled} onFocus={onFocus} onChange={(e) => onChange(plainMoney(e.target.value))} className={cn(box, "pl-7 tabular")} /></span>
   );
   return <input id={id} type={f.type === "number" ? "text" : f.type} inputMode={f.type === "number" ? "numeric" : f.type === "tel" ? "tel" : undefined} autoComplete="off" value={v} disabled={disabled} onFocus={onFocus} onChange={(e) => onChange(e.target.value)} className={box} />;
 }
@@ -498,7 +508,7 @@ function Review({ token, steps, applicants, answers, needed, names, locked, orgN
           <label htmlFor="consent" className={cn(lab, "mt-3")}>Type your full name to confirm{applicants > 1 ? " (for all applicants)" : ""}</label>
           <input id="consent" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" className={box} />
           {err && <p className="mt-2 text-[0.8125rem] text-rose-700">{err}</p>}
-          {!consentsDone && <p className="mt-2 text-[0.8125rem] text-ink-muted">Tick every box above{applicants > 1 ? " for each person" : ""} to send.</p>}
+          {!consentsDone && <p className="mt-2 text-[0.8125rem] text-ink-muted">Tick every box and sign above{applicants > 1 ? " for each person" : ""} to send.</p>}
           <button type="button" disabled={pending || name.trim().length < 2 || !consentsDone} onClick={send} className={cn(brandBtn, "mt-3 w-full sm:w-auto")}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send my application</button>
           </div>
         </div>
@@ -549,6 +559,47 @@ function Chat({ token, orgName, msgs, setMsgs, open, setOpen, unread, about }: {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && text.trim()) { e.preventDefault(); send(); } }} />
         <button type="button" disabled={pending || !text.trim()} onClick={send} className={cn(brandBtn, "h-auto px-3")} aria-label="Send">{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</button>
       </div>
+    </div>
+  );
+}
+
+function SignBlock({ token, applicant, who, locked, suggested, sig, onSigned, onFocus }: {
+  token: string; applicant: number; who: string; locked: boolean; suggested: string;
+  sig: { applicant: number; signed_name: string; image: string; signed_at: string } | null;
+  onSigned: (s: { applicant: number; signed_name: string; image: string; signed_at: string } | null) => void; onFocus: () => void;
+}) {
+  const [name, setName] = useState(sig?.signed_name ?? suggested);
+  const [png, setPng] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (sig) return (
+    <div className="rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={sig.image} alt={`Signature of ${sig.signed_name}`} className="h-16 w-auto dark:invert" />
+      <p className="mt-1 text-[0.875rem] font-medium text-ink"><Check className="mr-1 inline h-4 w-4 text-emerald-600" />Signed by {sig.signed_name}</p>
+      <p className="text-[0.75rem] text-ink-faint">{new Date(sig.signed_at).toLocaleString("en-AU", { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+      {!locked && <button type="button" disabled={pending} onClick={() => start(async () => { const r = await clearSignature(token, applicant); if (r.ok) { onSigned(null); setPng(null); } else setErr(r.error); })} className="mt-1 text-[0.8125rem] text-ink-muted underline-offset-2 hover:text-ink hover:underline">Sign again</button>}
+      {err && <p className="mt-1 text-[0.8125rem] text-rose-700">{err}</p>}
+    </div>
+  );
+  return (
+    <div className="space-y-2" onFocusCapture={onFocus} onPointerDownCapture={onFocus}>
+      <p className="text-[0.875rem] font-medium text-ink">Sign below{who ? ` — ${who}` : ""}, with your finger, stylus or mouse</p>
+      <SignaturePad onChange={setPng} disabled={locked} label={`Signature${who ? ` for ${who}` : ""}`} />
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-0 flex-1 basis-56">
+          <label htmlFor={`sig-name-${applicant}`} className={lab}>Full name</label>
+          <input id={`sig-name-${applicant}`} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" disabled={locked} className={box} />
+        </div>
+        <button type="button" disabled={locked || pending || !png || name.trim().length < 2} className={brandBtn}
+          onClick={() => start(async () => {
+            setErr(null);
+            const r = await saveSignature(token, applicant, name, png!);
+            if (!r.ok) { setErr(r.error); return; }
+            onSigned({ applicant, signed_name: name.trim(), image: png!, signed_at: r.data.signed_at });
+          })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save signature</button>
+      </div>
+      {err && <p className="text-[0.8125rem] text-rose-700">{err}</p>}
     </div>
   );
 }

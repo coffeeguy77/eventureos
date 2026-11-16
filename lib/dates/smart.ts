@@ -24,6 +24,9 @@ export function resolveDate(text: string, today: string): string | null {
     const mi = MONTHS.indexOf(r[2].slice(0, 3)); if (mi < 0) return null;
     d = +r[1]; m = mi + 1; if (r[3]) y = r[3].length === 2 ? 2000 + +r[3] : +r[3];
   } else return null;
+  if (y !== null && y < 100) y = 2000 + y;
+  // a two-digit year more than 10 years ahead is last century (a birthday: 11/11/77 → 1977)
+  if (y !== null && y > Number(today.slice(0, 4)) + 10 && /\/(\d{2})$|[\s-](\d{2})$/.test(s)) y -= 100;
   if (m < 1 || m > 12 || d < 1 || d > 31) return null;
   const year = y ?? smartYear(m, today);
   const dt = new Date(Date.UTC(year, m - 1, d));
@@ -36,3 +39,19 @@ export const showDMY = (iso: string | null | undefined) => {
   const r = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
   return r ? `${Number(r[3])}/${Number(r[2])}/${r[1]}` : "";
 };
+
+/**
+ * As you type digits, the slashes go in for you: "11" → "11/", "1111" → "11/11/", "11111977" → "11/11/1977".
+ * Typing your own slash after one digit pads it ("1/" → "01/"). Words ("30 Nov") and deleting are left alone.
+ */
+export function autoSlash(raw: string, prev: string): string {
+  if (raw.length < prev.length || /[^\d/]/.test(raw)) return raw;
+  const segs: string[] = []; let cur = "";
+  for (const ch of raw) {
+    if (ch === "/") { if (cur && segs.length < 2) { segs.push(cur.padStart(2, "0")); cur = ""; } continue; }
+    cur += ch;
+    if (segs.length < 2 && cur.length === 2) { segs.push(cur); cur = ""; }
+    else if (segs.length === 2 && cur.length > 4) cur = cur.slice(0, 4);
+  }
+  return segs.length < 2 && !cur ? segs.join("/") + (segs.length ? "/" : "") : [...segs, cur].join("/");
+}

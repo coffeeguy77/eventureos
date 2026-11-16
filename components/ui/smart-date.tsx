@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { resolveDate, showDMY } from "@/lib/dates/smart";
+import { autoSlash, resolveDate, showDMY } from "@/lib/dates/smart";
 
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
@@ -34,10 +34,10 @@ export function SmartDateInput({ value, onChange, today, className, inputClassNa
   };
   return (
     <span className={cn("relative flex items-center", className)}>
-      <input type="text" inputMode="text" autoComplete="off" value={text} placeholder={placeholder} disabled={disabled} aria-label={ariaLabel} aria-invalid={bad || undefined}
+      <input type="text" inputMode="numeric" autoComplete="off" value={text} placeholder={placeholder} disabled={disabled} aria-label={ariaLabel} aria-invalid={bad || undefined}
         title={bad ? "Type a date like 30/11 or 30/11/2026" : "Type 30/11 — the year fills in for you"}
         onFocus={() => { focused.current = true; }}
-        onChange={(e) => { setText(e.target.value); if (bad) setBad(false); }}
+        onChange={(e) => { setText(autoSlash(e.target.value, text)); if (bad) setBad(false); }}
         onBlur={() => { focused.current = false; commit(); }}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); } }}
         className={cn("w-full pr-8 tabular", inputClassName, bad && "border-rose-400 text-rose-700 focus:border-rose-400 focus:ring-rose-100")} />

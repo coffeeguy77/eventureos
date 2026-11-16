@@ -34,3 +34,14 @@ test("labels", () => {
   assert.equal(labelFor("a2.salary", 2, ["Shaun", "Cara"]), "Cara · Salary or wages (gross, yearly)");
   assert.equal(labelFor("vehicles", 1), "Motor vehicles");
 });
+
+import { summarise } from "./summary";
+test("summary: income, net position, LVR", () => {
+  const s = summarise({ "a1.salary": "120000", "a2.directors_wages": "80,000", amount: "600000", property_value: "800000",
+    properties: [{ value: "900000", balance: "400000", rent: "500", repayment: "2500" }], cards: [{ limit: "10000", balance: "2000" }],
+    savings: [{ amount: "50000" }], exp_groceries: "1200", exp_other: "800" }, 2);
+  assert.equal(s.income, 120000 + 80000 + 500 * 52);
+  assert.equal(s.net, 900000 + 50000 - 400000 - 2000);
+  assert.equal(s.lvr, 75);
+  assert.equal(s.monthlyLiving, 2000);
+});

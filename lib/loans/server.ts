@@ -59,7 +59,7 @@ export const storagePath = (orgId: string, fileId: string, name: string) => `${o
 
 /** Store bytes as a document on the file (and tick its request off). */
 export async function saveDocument(db: SupabaseClient, f: { id: string; organisation_id: string }, doc: {
-  name: string; bytes: Uint8Array | Buffer; mime: string | null; requestId: string | null; source: "upload" | "email" | "gmail" | "xero" | "broker"; detail?: string | null;
+  name: string; bytes: Uint8Array | Buffer; mime: string | null; requestId: string | null; source: "upload" | "email" | "gmail" | "xero" | "broker" | "signed"; detail?: string | null;
 }) {
   const path = storagePath(f.organisation_id, f.id, doc.name);
   const { error: upErr } = await db.storage.from(LOAN_BUCKET).upload(path, doc.bytes, { contentType: doc.mime ?? "application/octet-stream", upsert: false });

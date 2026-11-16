@@ -17,10 +17,13 @@ export default async function ApplyPage({ params, searchParams }: { params: Prom
   const db = serviceDb();
   const file = await fileByToken(db, token);
   if (!file) notFound();
-  const [{ data: org }, parts] = await Promise.all([
+  const [{ data: org }, parts, sigRes] = await Promise.all([
     db.from("organisations").select("name, logo_url, brand_colour, contact_email, contact_phone, timezone, settings").eq("id", file.organisation_id).single(),
     fileParts(db, file.id),
+    db.from("loan_signatures").select("applicant, signed_name, image, signed_at").eq("file_id", file.id).then((r) => r, () => ({ data: null })),
   ]);
+  const { logOnce } = await import("@/lib/loans/log");
+  await logOnce(30 * 60e3, { orgId: file.organisation_id, fileId: file.id, kind: "client", name: String(file.answers["a1.first_name"] ?? file.contact_name ?? "Client"), action: "opened_link" });
   if (!org) notFound();
   const today = todayISO(org.timezone ?? "Australia/Sydney");
   // what the client may see about their own connections: Gmail finds (theirs), Xero just names and years
@@ -45,6 +48,7 @@ export default async function ApplyPage({ params, searchParams }: { params: Prom
         connections={connections}
         fys={lastTwoFYs(today).map((f) => f.label)}
         legal={{ privacy, creditGuide: guide }}
+        signatures={((sigRes.data ?? []) as { applicant: number; signed_name: string; image: string; signed_at: string }[])}
         flash={{ step: sp.step ?? null, error: sp.error ?? null, connected: sp.connected ?? null, found: sp.found ? Number(sp.found) : null }}
       />
     </main>

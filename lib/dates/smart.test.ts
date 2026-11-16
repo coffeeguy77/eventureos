@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveDate, showDMY } from "./smart";
+import { autoSlash, resolveDate, showDMY } from "./smart";
 
 const T = "2026-11-16";
 test("no year: this year, or next year when the month is earlier", () => {
@@ -28,3 +28,20 @@ test("not dates", () => {
   assert.equal(resolveDate("", T), null);
 });
 test("shows d/m/yyyy", () => assert.equal(showDMY("2027-01-05"), "5/1/2027"));
+
+test("two-digit birth years", () => {
+  assert.equal(resolveDate("11/11/77", T), "1977-11-11");
+  assert.equal(resolveDate("11/11/1977", T), "1977-11-11");
+  assert.equal(resolveDate("30/1/27", T), "2027-01-30");
+});
+test("slashes go in as you type", () => {
+  assert.equal(autoSlash("1", ""), "1");
+  assert.equal(autoSlash("11", "1"), "11/");
+  assert.equal(autoSlash("11/1", "11/"), "11/1");
+  assert.equal(autoSlash("11/11", "11/1"), "11/11/");
+  assert.equal(autoSlash("11/11/1977", "11/11/197"), "11/11/1977");
+  assert.equal(autoSlash("11111977", "1111197"), "11/11/1977");
+  assert.equal(autoSlash("1/", "1"), "01/");
+  assert.equal(autoSlash("11/", "11/1"), "11/");   // deleting is left alone
+  assert.equal(autoSlash("30 N", "30 "), "30 N");
+});

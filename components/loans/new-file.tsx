@@ -33,7 +33,7 @@ export function NewLoanFile() {
             <Select id="lf-type" value={f.loan_type} onChange={(e) => set({ loan_type: e.target.value })}>
               <option value="">Not sure yet</option>{["Home loan", "Investment loan", "Refinance", "Equity release", "Business loan", "Car / equipment", "Other"].map((o) => <option key={o}>{o}</option>)}
             </Select></div>
-          <div><Label htmlFor="lf-amt" hint="optional">Amount</Label><Input id="lf-amt" inputMode="decimal" value={f.amount} onChange={(e) => set({ amount: e.target.value })} placeholder="$" /></div>
+          <div><Label htmlFor="lf-amt" hint="optional">Amount</Label><Input id="lf-amt" inputMode="numeric" value={f.amount ? `$${Number(f.amount).toLocaleString("en-AU")}` : ""} onChange={(e) => set({ amount: e.target.value.replace(/\D/g, "").slice(0, 12) })} placeholder="$" /></div>
           <div><Label htmlFor="lf-title" hint="optional">File name</Label><Input id="lf-title" value={f.title} onChange={(e) => set({ title: e.target.value })} placeholder="Name — loan application" /></div>
         </div>
         <p className="mt-3 text-[0.75rem] text-ink-muted">The usual documents list is added for you (ID, tax, payslips, statements, rates, rental) — change it on the file.</p>

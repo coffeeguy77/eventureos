@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
-  Check, CheckCircle2, CircleDashed, Copy, ExternalLink, FileText, Loader2, Mail, MessageCircle, Plus, RotateCcw, Send, Trash2, X,
+  Check, CheckCircle2, CircleDashed, Copy, ExternalLink, Eye, History, UserPlus, FileText, Loader2, Mail, MessageCircle, Plus, RotateCcw, Send, Trash2, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Input, Select, Textarea } from "@/components/ui/form";
 import { fieldShown, stepProgress, steps as allSteps, type Field } from "@/lib/loans/form";
 import type { DocRequest } from "@/lib/loans/server";
 import {
+  addBrokerToFile, removeBrokerFromFile, sendBrokerSignIn,
   addRequest, emailLoanLink, liveFile, loanDocLink, removeRequest, sendBrokerMessage, setRequest, updateLoanFile, type LiveFile,
 } from "@/app/(app)/loans/actions";
 import { STATUS_LABEL, STATUS_ORDER } from "./status";
@@ -73,6 +74,7 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
           <p className="mt-0.5 text-[0.75rem] text-ink-faint">Updates every few seconds while this page is open.</p>
         </div>
         <LinkBox fileId={f.id} link={link} hasEmail={!!(f.contact_email || f.answers["a1.email"])} />
+        <a href={`/broker/${f.id}`} target="_blank" rel="noopener" className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Eye className="h-4 w-4" />View as broker</a>
         <Select aria-label="Status" value={f.status} className="w-auto" onChange={async (e) => { const r = await updateLoanFile(f.id, { status: e.target.value }); if (!r.ok) setErr(r.error); refresh(); }}>
           {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
         </Select>
@@ -138,6 +140,8 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
               </ul>
             )}
           </Card>
+          <Brokers fileId={f.id} on={d.brokers} all={d.allBrokers} onChange={refresh} />
+          <Activity log={d.log} />
           <Notes fileId={f.id} initial={f.notes ?? ""} />
         </div>
       </div>
@@ -290,6 +294,85 @@ function Notes({ fileId, initial }: { fileId: string; initial: string }) {
       <h3 className="mb-2 text-[0.9375rem] font-semibold text-ink">Your notes <span className="text-[0.75rem] font-normal text-ink-faint">(only your team sees these)</span></h3>
       <Textarea rows={4} value={v} onChange={(e) => { setV(e.target.value); setSaved(false); }} onBlur={async () => { if (v !== initial) { const r = await updateLoanFile(fileId, { notes: v }); setSaved(r.ok); } }} />
       {saved && <p className="mt-1 text-[0.75rem] text-ink-muted">Saved</p>}
+    </Card>
+  );
+}
+
+const ACTION: Record<string, string> = {
+  signed_in: "signed in", viewed_file: "viewed the application", opened_document: "opened", downloaded_document: "downloaded",
+  link_sent: "", opened_link: "opened their application link", uploaded: "uploaded", signed: "signed", sent_application: "sent the application",
+};
+
+function Activity({ log }: { log: LiveFile["log"] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? log : log.slice(0, 12);
+  return (
+    <Card className="p-4">
+      <div className="mb-2 flex items-center gap-2"><History className="h-4 w-4 text-ink-faint" /><h3 className="flex-1 text-[0.9375rem] font-semibold text-ink">Activity</h3><span className="text-[0.75rem] text-ink-faint">who looked, opened and downloaded</span></div>
+      {log.length === 0 ? <p className="text-[0.8125rem] text-ink-muted">Nothing yet. Every visit, view and download by your brokers and the client shows here with the time.</p> : (
+        <ul className="space-y-1.5 text-[0.8125rem]">
+          {shown.map((x) => (
+            <li key={x.id} className="flex gap-2">
+              <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", x.actor_kind === "broker" ? "bg-brand-500" : x.actor_kind === "client" ? "bg-emerald-500" : "bg-ink-faint")} />
+              <span className="min-w-0 flex-1">
+                <b className="text-ink">{x.actor_name ?? x.actor_email ?? x.actor_kind}</b>{x.actor_kind === "broker" ? " (broker)" : ""} {x.action === "link_sent" ? (x.detail ?? "") : <>{ACTION[x.action] ?? x.action}{x.detail ? <> <span className="text-ink">{x.detail}</span></> : null}</>}
+                <span className="block text-[0.6875rem] text-ink-faint">{new Date(x.at).toLocaleString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" })}{x.ip ? ` · IP ${x.ip}` : ""}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {log.length > 12 && <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAll(!all)}>{all ? "Show less" : `Show all ${log.length}`}</Button>}
+    </Card>
+  );
+}
+
+function Brokers({ fileId, on, all, onChange }: { fileId: string; on: LiveFile["brokers"]; all: LiveFile["allBrokers"]; onChange: () => void }) {
+  const [adding, setAdding] = useState(false);
+  const [pick, setPick] = useState("");
+  const [f, setF] = useState({ name: "", email: "", company: "" });
+  const [send, setSend] = useState(true);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const others = all.filter((b) => !on.some((x) => x.id === b.id));
+  const go = (p: Promise<{ ok: true; data: unknown } | { ok: false; error: string }>) => start(async () => { const r = await p; setMsg(r.ok ? (typeof r.data === "string" ? r.data : null) : r.error); if (r.ok) { setAdding(false); setF({ name: "", email: "", company: "" }); setPick(""); } onChange(); });
+  return (
+    <Card className="p-4">
+      <h3 className="mb-1 text-[0.9375rem] font-semibold text-ink">Brokers</h3>
+      <p className="mb-2 text-[0.75rem] text-ink-muted">They see this application on a private broker page — signed in by a link emailed to them. No password; nothing is public.</p>
+      {on.length === 0 ? <p className="text-[0.8125rem] text-ink-faint">Not shared with a broker yet.</p> : (
+        <ul className="space-y-1.5">
+          {on.map((b) => (
+            <li key={b.id} className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 ring-1 ring-inset ring-line">
+              <span className="min-w-0 flex-1 text-[0.8125rem]"><b className="text-ink">{b.name}</b>{b.company ? ` · ${b.company}` : ""}<span className="block truncate text-[0.75rem] text-ink-faint">{b.email} · {b.last_seen_at ? `last on ${ago(b.last_seen_at)}` : "hasn't signed in yet"}</span></span>
+              <Button size="sm" variant="ghost" disabled={pending} onClick={() => go(sendBrokerSignIn(fileId, b.id))}><Mail className="h-4 w-4" />Send link</Button>
+              <button type="button" title="Stop sharing" disabled={pending} onClick={() => go(removeBrokerFromFile(fileId, b.id))} className="rounded p-1 text-ink-faint hover:bg-rose-50 hover:text-rose-600"><X className="h-4 w-4" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {msg && <p className="mt-2 text-[0.8125rem] text-ink-muted">{msg}</p>}
+      {adding ? (
+        <div className="mt-3 space-y-2">
+          {others.length > 0 && (
+            <Select aria-label="Choose a broker" value={pick} onChange={(e) => setPick(e.target.value)}>
+              <option value="">New broker…</option>{others.map((b) => <option key={b.id} value={b.id}>{b.name}{b.company ? ` (${b.company})` : ""}</option>)}
+            </Select>
+          )}
+          {!pick && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+              <Input placeholder="Company" value={f.company} onChange={(e) => setF({ ...f, company: e.target.value })} />
+              <Input placeholder="Email" type="email" className="sm:col-span-2" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-[0.8125rem] text-ink"><input type="checkbox" checked={send} onChange={(e) => setSend(e.target.checked)} className="h-4 w-4" />Email them a sign-in link now</label>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" disabled={pending} onClick={() => go(addBrokerToFile(fileId, pick ? { brokerId: pick, send } : { ...f, send }))}>{pending && <Loader2 className="h-4 w-4 animate-spin" />}Share with broker</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </div>
+      ) : <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAdding(true)}><UserPlus className="h-4 w-4" />Add a broker</Button>}
     </Card>
   );
 }

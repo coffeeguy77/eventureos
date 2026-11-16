@@ -63,6 +63,9 @@ export interface LiveFile {
   file: LoanFileRow; requests: DocRequest[]; documents: LoanDoc[]; messages: LoanMsg[];
   connections: Pick<LoanConn, "id" | "provider" | "account_label" | "status" | "last_pulled_at" | "error">[];
   xeroReports: { tenant: string; fy: string }[]; gmailFound: number;
+  brokers: { id: string; name: string; email: string; company: string | null; last_seen_at: string | null }[];
+  allBrokers: { id: string; name: string; email: string; company: string | null }[];
+  log: { id: string; actor_kind: string; actor_name: string | null; actor_email: string | null; action: string; detail: string | null; ip: string | null; at: string }[];
 }
 
 /** Everything on the file, for the live view (polled every few seconds while it's open). */
@@ -76,6 +79,15 @@ export async function liveFile(fileId: string): Promise<R<LiveFile>> {
       supabase.from("loan_connections").select(CONN_COLS).eq("file_id", file.id).order("connected_at"),
     ]);
     const conns = (c.data ?? []) as LoanConn[];
+    // brokers and the activity log arrive with 0107_loan_brokers.sql — until then, empty
+    const [fb, ab, lg] = await Promise.all([
+      supabase.from("loan_file_brokers").select("broker_id").eq("file_id", file.id).then((r) => r, () => ({ data: null })),
+      supabase.from("loan_brokers").select("id, name, email, company, last_seen_at, active").eq("organisation_id", file.organisation_id).order("name").then((r) => r, () => ({ data: null })),
+      supabase.from("loan_access_log").select("id, actor_kind, actor_name, actor_email, action, detail, ip, at").or(`file_id.eq.${file.id},and(file_id.is.null,action.eq.signed_in)`).order("at", { ascending: false }).limit(150).then((r) => r, () => ({ data: null })),
+    ]);
+    const onFile = new Set(((fb.data ?? []) as { broker_id: string }[]).map((x) => x.broker_id));
+    const all = ((ab.data ?? []) as { id: string; name: string; email: string; company: string | null; last_seen_at: string | null; active: boolean }[]).filter((x) => x.active);
+    const brokerEmails = new Set(all.filter((x) => onFile.has(x.id)).map((x) => x.email.toLowerCase()));
     // client messages the broker has now seen
     const unread = ((m.data ?? []) as LoanMsg[]).filter((x) => x.from_side === "client" && !x.read_at).map((x) => x.id);
     if (unread.length) await supabase.from("loan_messages").update({ read_at: new Date().toISOString() }).in("id", unread);
@@ -83,6 +95,10 @@ export async function liveFile(fileId: string): Promise<R<LiveFile>> {
       file, requests: (r.data ?? []) as DocRequest[], documents: (d.data ?? []) as LoanDoc[], messages: (m.data ?? []) as LoanMsg[],
       connections: conns.map(({ id, provider, account_label, status, last_pulled_at, error }) => ({ id, provider, account_label, status, last_pulled_at, error })),
       xeroReports: conns.filter((x) => x.provider === "xero").flatMap((x) => (((x.data ?? {}) as { reports?: { tenant: string; fy: string }[] }).reports ?? []).map((y) => ({ tenant: y.tenant, fy: y.fy }))),
+      brokers: all.filter((x) => onFile.has(x.id)).map(({ id, name, email, company, last_seen_at }) => ({ id, name, email, company, last_seen_at })),
+      allBrokers: all.map(({ id, name, email, company }) => ({ id, name, email, company })),
+      // sign-ins are logged without a file: show those of this file's brokers
+      log: ((lg.data ?? []) as LiveFile["log"]).filter((x) => x.action !== "signed_in" || (x.actor_email && brokerEmails.has(x.actor_email.toLowerCase()))),
       gmailFound: conns.filter((x) => x.provider === "gmail" && x.status === "connected").reduce((t, x) => t + ((((x.data ?? {}) as { found?: unknown[] }).found ?? []).length), 0),
     };
   });
@@ -165,13 +181,15 @@ export async function updateLoanFile(fileId: string, patch: { status?: string; t
 /** A short-lived link to open or download a document. */
 export async function loanDocLink(fileId: string, docId: string): Promise<R<string>> {
   return run(async () => {
-    const { file } = await own(fileId);
+    const { file, profile } = await own(fileId);
     if (!UUID.test(docId)) throw new Error("Not found.");
     const db = serviceDb();
     const { data: d } = await db.from("loan_documents").select("storage_path, name").eq("id", docId).eq("file_id", file.id).maybeSingle();
     if (!d) throw new Error("Not found.");
     const { data } = await db.storage.from(LOAN_BUCKET).createSignedUrl(d.storage_path, 300);
     if (!data) throw new Error("Couldn't open it.");
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: file.organisation_id, fileId: file.id, kind: "staff", name: (profile?.full_name as string | undefined) ?? "Team", action: "opened_document", detail: d.name as string });
     return data.signedUrl;
   });
 }
@@ -190,6 +208,8 @@ export async function emailLoanLink(fileId: string, origin: string): Promise<R<s
     const html = `<p>Hi ${esc(first)},</p><p>Here's your secure link to start your loan application with ${esc(org.name)}:</p><p><a href="${link}" style="display:inline-block;padding:12px 20px;background:#6028EC;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Start my application</a></p><p>It saves as you go, so you can stop and come back any time. Upload your documents there too — or connect Xero or Gmail and they're found for you. If you get stuck, message us from the page and we'll help.</p><p>Thanks,<br>${esc(org.name)}</p>`;
     const { sendAsBusiness } = await import("@/lib/email/business-send");
     const r = await sendAsBusiness(serviceDb(), org.id, { to: [to], subject: `Your loan application with ${org.name}`, html, text });
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: org.id, fileId: file.id, kind: "staff", name: org.name, action: "link_sent", detail: `Client link emailed to ${to}` });
     return `Sent to ${to}${r.via === "gmail" ? " from your Gmail" : ""}.`;
   });
 }
@@ -229,6 +249,67 @@ export async function saveLoanSettings(i: { privacy?: string; credit_guide?: { p
     const { error } = await db.from("organisations").update({ settings: { ...settings, loans } }).eq("id", org.id);
     if (error) throw new Error(error.message);
     revalidatePath("/loans/settings");
+    return null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Brokers: people outside the business who can see a loan file on /broker (signed in by an emailed link)
+// ---------------------------------------------------------------------------
+
+export async function addBrokerToFile(fileId: string, i: { brokerId?: string; name?: string; email?: string; company?: string; send: boolean }): Promise<R<string>> {
+  return run(async () => {
+    const { supabase, file, org, profile } = await own(fileId);
+    let brokerId = i.brokerId && UUID.test(i.brokerId) ? i.brokerId : null;
+    if (!brokerId) {
+      const email = String(i.email ?? "").trim().toLowerCase().slice(0, 254), name = String(i.name ?? "").trim().slice(0, 160);
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter the broker's email address.");
+      if (!name) throw new Error("Enter the broker's name.");
+      const { data: found } = await supabase.from("loan_brokers").select("id").eq("organisation_id", org.id).ilike("email", email).maybeSingle();
+      if (found) { brokerId = found.id as string; await supabase.from("loan_brokers").update({ active: true, name, company: String(i.company ?? "").trim().slice(0, 160) || null }).eq("id", brokerId); }
+      else {
+        const { data: b, error } = await supabase.from("loan_brokers").insert({ organisation_id: org.id, name, email, company: String(i.company ?? "").trim().slice(0, 160) || null }).select("id").single();
+        if (error) throw new Error(/loan_brokers/.test(error.message) ? "Run the database update 0107_loan_brokers.sql first." : error.message);
+        brokerId = b.id as string;
+      }
+    }
+    const { error: lErr } = await supabase.from("loan_file_brokers").upsert({ file_id: file.id, broker_id: brokerId, organisation_id: org.id }, { onConflict: "file_id,broker_id" });
+    if (lErr) throw new Error(lErr.message);
+    const { data: b } = await supabase.from("loan_brokers").select("name, email").eq("id", brokerId).single();
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: org.id, fileId: file.id, kind: "staff", name: (profile?.full_name as string | undefined) ?? org.name, action: "link_sent", detail: `Shared with ${b?.name} <${b?.email}>${i.send ? " — sign-in link emailed" : ""}` });
+    if (i.send && b?.email) {
+      const { sendBrokerLink } = await import("@/lib/loans/broker-auth");
+      const r = await sendBrokerLink(b.email as string, { invitedBy: org.name });
+      if (!r.ok) throw new Error(`Added, but the email didn't send: ${r.error}`);
+      return `Shared with ${b.name} — sign-in link emailed to ${b.email}.`;
+    }
+    return `Shared with ${b?.name}.`;
+  });
+}
+
+export async function sendBrokerSignIn(fileId: string, brokerId: string): Promise<R<string>> {
+  return run(async () => {
+    const { supabase, file, org } = await own(fileId);
+    if (!UUID.test(brokerId)) throw new Error("Not found.");
+    const { data: link } = await supabase.from("loan_file_brokers").select("broker_id").eq("file_id", file.id).eq("broker_id", brokerId).maybeSingle();
+    if (!link) throw new Error("That broker isn't on this file.");
+    const { data: b } = await supabase.from("loan_brokers").select("name, email").eq("id", brokerId).single();
+    const { sendBrokerLink } = await import("@/lib/loans/broker-auth");
+    const r = await sendBrokerLink(b!.email as string, { invitedBy: org.name });
+    if (!r.ok) throw new Error(r.error);
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: org.id, fileId: file.id, kind: "staff", name: org.name, action: "link_sent", detail: `Sign-in link emailed to ${b!.name} <${b!.email}>` });
+    return `Sign-in link emailed to ${b!.email}.`;
+  });
+}
+
+export async function removeBrokerFromFile(fileId: string, brokerId: string): Promise<R<null>> {
+  return run(async () => {
+    const { supabase, file } = await own(fileId);
+    if (!UUID.test(brokerId)) throw new Error("Not found.");
+    const { error } = await supabase.from("loan_file_brokers").delete().eq("file_id", file.id).eq("broker_id", brokerId);
+    if (error) throw new Error(error.message);
     return null;
   });
 }

@@ -95,6 +95,8 @@ export async function finishUpload(token: string, path: string, requestId: strin
     if (error) throw new Error(`Couldn't save the file: ${error.message}`);
     const now = new Date().toISOString();
     if (req) await db.from("loan_doc_requests").update({ status: "received", updated_at: now }).eq("id", req).in("status", ["needed", "redo"]);
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: String(f.answers["a1.first_name"] ?? f.contact_name ?? "Client"), action: "uploaded", detail: safeName(name) });
     await db.from("loan_files").update({ updated_at: now, client_seen_at: now, ...(f.status === "invited" ? { status: "in_progress" } : {}) }).eq("id", f.id);
     return data as LoanDoc;
   });
@@ -140,6 +142,8 @@ export async function viewMyDoc(token: string, docId: string): Promise<R<string>
     if (!d) throw new Error("Not found.");
     const { data } = await db.storage.from(LOAN_BUCKET).createSignedUrl(d.storage_path, 120);
     if (!data) throw new Error("Couldn't open it.");
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: String(f.answers["a1.first_name"] ?? f.contact_name ?? "Client"), action: "opened_document", detail: d.name as string });
     return data.signedUrl;
   });
 }
@@ -191,9 +195,64 @@ export async function submitApplication(token: string, consentName: string): Pro
       if (c.key === "c_credit_guide" && !hasGuide) continue;
       if (f.answers[`a${a}.${c.key}`] !== "yes") throw new Error(`Please tick "${c.label}"${f.applicants > 1 ? ` for applicant ${a}` : ""}.`);
     }
+    // every applicant signs
+    const { data: sigs, error: sErr } = await db.from("loan_signatures").select("applicant, signed_name, image, signed_at, ip, user_agent").eq("file_id", f.id);
+    if (sErr) throw new Error("Signing isn't switched on yet — ask your broker.");
+    for (let a = 1; a <= f.applicants; a++) if (!(sigs ?? []).some((x) => x.applicant === a)) throw new Error(f.applicants > 1 ? `Applicant ${a} still needs to sign.` : "Please sign first.");
     const now = new Date().toISOString();
     await db.from("loan_files").update({ status: "submitted", submitted_at: now, consent_name: name, consent_at: now, updated_at: now }).eq("id", f.id);
-    await db.from("loan_messages").insert({ organisation_id: f.organisation_id, file_id: f.id, from_side: "system", body: `Application sent by ${name}.` });
+    await db.from("loan_messages").insert({ organisation_id: f.organisation_id, file_id: f.id, from_side: "system", body: `Application signed and sent by ${name}.` });
+    { const { logAccess } = await import("@/lib/loans/log"); await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name, action: "sent_application" }); }
+    // the signed application, as a PDF on the file
+    try {
+      const [{ data: o }, { data: reqs }, { data: docs }] = await Promise.all([
+        db.from("organisations").select("name, timezone").eq("id", f.organisation_id).single(),
+        db.from("loan_doc_requests").select("id, label, status, applicant").eq("file_id", f.id).order("position"),
+        db.from("loan_documents").select("request_id, name").eq("file_id", f.id),
+      ]);
+      const { applicantNames, saveDocument } = await import("@/lib/loans/server");
+      const { buildSignedApplication } = await import("@/lib/loans/pdf");
+      const names = applicantNames(f);
+      const bytes = await buildSignedApplication({
+        org: o?.name ?? "", title: f.title, applicants: f.applicants, names, answers: f.answers, sentAt: now, timezone: o?.timezone ?? "Australia/Sydney",
+        signatures: (sigs ?? []) as { applicant: number; signed_name: string; image: string; signed_at: string; ip: string | null; user_agent: string | null }[],
+        documents: (reqs ?? []).map((r) => ({ label: `${r.applicant ? `${names[r.applicant - 1]}: ` : ""}${r.label}`, status: r.status, files: (docs ?? []).filter((d) => d.request_id === r.id).map((d) => d.name) })),
+      });
+      await saveDocument(db, f, { name: `Signed application ${now.slice(0, 10)}.pdf`, bytes, mime: "application/pdf", requestId: null, source: "signed", detail: `Signed by ${(sigs ?? []).map((x) => x.signed_name).join(", ")}` });
+    } catch (e) {
+      await db.from("loan_messages").insert({ organisation_id: f.organisation_id, file_id: f.id, from_side: "system", body: `The signed PDF couldn't be made: ${e instanceof Error ? e.message : "unknown"}`.slice(0, 400) });
+    }
+    return null;
+  });
+}
+
+/** Sign: their drawn signature (PNG) and typed name, with the time, IP and browser — one per applicant. */
+export async function saveSignature(token: string, applicant: number, name: string, image: string): Promise<R<{ signed_at: string }>> {
+  return run(async () => {
+    const { db, f } = await open(token);
+    if (locked(f.status)) throw new Error("Your application has already been sent.");
+    const a = Math.round(Number(applicant));
+    if (!(a >= 1 && a <= f.applicants)) throw new Error("Not found.");
+    const n = String(name ?? "").trim().slice(0, 160);
+    if (n.length < 2) throw new Error("Type your full name next to your signature.");
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 380_000) throw new Error("Please sign again — that signature didn't come through.");
+    const { headers } = await import("next/headers");
+    const h = await headers();
+    const ip = (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "").split(",")[0].trim().slice(0, 80) || null;
+    const now = new Date().toISOString();
+    const { error } = await db.from("loan_signatures").upsert({ organisation_id: f.organisation_id, file_id: f.id, applicant: a, signed_name: n, image, signed_at: now, ip, user_agent: (h.get("user-agent") ?? "").slice(0, 400) || null }, { onConflict: "file_id,applicant" });
+    if (error) throw new Error(/loan_signatures/.test(error.message) ? "Signing isn't switched on yet — ask your broker." : `Couldn't save your signature: ${error.message}`);
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: n, action: "signed", detail: f.applicants > 1 ? `Applicant ${a}` : null });
+    return { signed_at: now };
+  });
+}
+
+export async function clearSignature(token: string, applicant: number): Promise<R<null>> {
+  return run(async () => {
+    const { db, f } = await open(token);
+    if (locked(f.status)) throw new Error("Your application has already been sent.");
+    await db.from("loan_signatures").delete().eq("file_id", f.id).eq("applicant", Math.round(Number(applicant)));
     return null;
   });
 }
