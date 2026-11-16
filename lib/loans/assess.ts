@@ -29,7 +29,7 @@ export async function runAssessment(db: SupabaseClient, file: LoanFileRow, by: s
   const m = analyse(file.answers, file.applicants, names, business, assumptions);
   const a = file.answers;
   const facts = {
-    applicants: m.applicants.map((p, i) => ({ name: p.name, employment: a[`a${i + 1}.employment`] ?? null, occupation: a[`a${i + 1}.occupation`] ?? null, employed_since: a[`a${i + 1}.employed_since`] ?? null, dependants: a[`a${i + 1}.dependants`] ?? null, residential: a[`a${i + 1}.residential`] ?? null, gross_yearly: p.gross, business_profit_share: p.business, est_tax: p.tax })),
+    applicants: m.applicants.map((p, i) => ({ name: p.name, employment: a[`a${i + 1}.employment`] ?? null, occupation: a[`a${i + 1}.occupation`] ?? null, employed_since: a[`a${i + 1}.employed_since`] ?? null, dependants: a[`a${i + 1}.dependants`] ?? null, residential: a[`a${i + 1}.residential`] ?? null, gross_yearly_total: p.gross, of_which: { salary: p.salary, directors_wages: p.directors, other_income: p.other, business_profit_share: p.business }, est_tax: p.tax })),
     business_income_entered: (Array.isArray(a.businesses) ? (a.businesses as Record<string, string>[]) : []).map((r) => ({ name: r.name ?? null, owner: r.owner ? ownerLabel(r.owner, names) : null, fy: r.fy ?? null, result: r.result ?? null, net_before_tax: r.net_profit ?? null, addbacks: r.addbacks ?? null, left_out_of_income: r.exclude === "yes", note: r.note ?? null })),
     rent_note: "Rent from a property rented to the applicants' own business is counted in full; other rent at the shading rate.",
     // only the loan questions asked for this purpose (answers to hidden questions are left out)
