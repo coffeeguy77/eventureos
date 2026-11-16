@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, CheckCircle2, CircleDashed, Download, Eye, FileText, LogOut, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { brokerAccess } from "@/lib/loans/broker-auth";
-import { CONSENTS, fieldShown, steps as allSteps, type Field } from "@/lib/loans/form";
+import { CONSENTS, fieldShown, ownerLabel, steps as allSteps, type Field } from "@/lib/loans/form";
 import { logOnce } from "@/lib/loans/log";
 import { applicantNames, FILE_COLS, fileParts, serviceDb, type LoanFileRow } from "@/lib/loans/server";
 import { aud } from "@/lib/loans/summary";
@@ -136,7 +136,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
                   <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-line">
                     <table className="w-full min-w-[520px] text-[0.8125rem]">
                       <thead className="bg-canvas text-left text-ink-faint"><tr>{l.fields.map((f) => <th key={f.key} className="px-3 py-2 font-medium">{f.label}</th>)}</tr></thead>
-                      <tbody>{rows.map((r, n) => <tr key={n} className="border-t border-line">{l.fields.map((f) => <td key={f.key} className={cn("px-3 py-2", f.type === "money" && "tabular-nums")}>{show(f, r[f.key]) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
+                      <tbody>{rows.map((r, n) => <tr key={n} className="border-t border-line">{l.fields.map((f) => <td key={f.key} className={cn("px-3 py-2", f.type === "money" && "tabular-nums")}>{(f.owner && r[f.key] ? ownerLabel(r[f.key], fullNames) : show(f, r[f.key])) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
                     </table>
                   </div>
                 )}

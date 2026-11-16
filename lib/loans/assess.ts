@@ -5,6 +5,7 @@ import { callClaudeRaw } from "@/lib/ai/reply";
 import { orgAiKey } from "@/lib/ai/key";
 import { analyse, businessYear, DEFAULT_ASSUMPTIONS, type Assessment, type Assumptions, type BusinessYear, type SavedAnalysis } from "./analysis";
 import { applicantNames, type FlatReport, type LoanFileRow } from "./server";
+import { ownerLabel } from "./form";
 
 /** The Xero years pulled for a file, as headline figures. */
 export async function businessYears(db: SupabaseClient, fileId: string): Promise<BusinessYear[]> {
@@ -29,6 +30,8 @@ export async function runAssessment(db: SupabaseClient, file: LoanFileRow, by: s
   const a = file.answers;
   const facts = {
     applicants: m.applicants.map((p, i) => ({ name: p.name, employment: a[`a${i + 1}.employment`] ?? null, occupation: a[`a${i + 1}.occupation`] ?? null, employed_since: a[`a${i + 1}.employed_since`] ?? null, dependants: a[`a${i + 1}.dependants`] ?? null, residential: a[`a${i + 1}.residential`] ?? null, gross_yearly: p.gross, est_tax: p.tax })),
+    loan_answers: Object.fromEntries(["purpose", "property_type", "first_home", "property_value", "deposit", "deposit_source", "security_address", "security_value", "refi_balance", "refi_why", "consolidate_amount", "equity_for", "asset_what", "asset_price", "asset_trade", "business_for"].filter((k) => a[k]).map((k) => [k, a[k]])),
+    ownership: m.byOwner.map((o) => ({ ...o, owner: ownerLabel(o.owner, names) })),
     loan: { purpose: a.purpose ?? null, amount: m.loan.amount, value: m.loan.value, deposit: m.loan.deposit, deposit_source: a.deposit_source ?? null, lvr_pct: m.loan.lvr, rate_type: a.rate_type ?? null, repayments: a.repay_type ?? null, first_home: a.first_home ?? null, timeframe: a.timeframe ?? null },
     looking_ahead: { changes: a.changes ?? null, what: a.changes_what ?? null, how: a.changes_how ?? null },
     income: { gross_yearly_incl_rent: m.incomeGross, rent_gross: m.rentGross, rent_counted: m.rentCounted, net_monthly_est: m.incomeNetMonthly },

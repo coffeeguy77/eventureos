@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form";
-import { fieldShown, stepProgress, steps as allSteps, type Field } from "@/lib/loans/form";
+import { fieldShown, ownerLabel, stepProgress, steps as allSteps, type Field } from "@/lib/loans/form";
 import type { DocRequest } from "@/lib/loans/server";
 import {
   addBrokerToFile, analyseLoanFile, removeBrokerFromFile, sendBrokerSignIn,
@@ -96,12 +96,16 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
                   <h3 className="flex-1 text-[0.9375rem] font-semibold text-ink">{s.title}{onIt && <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">On this now</span>}</h3>
                   {p !== null && <span className={cn("text-[0.75rem]", p >= 100 ? "text-emerald-700" : "text-ink-muted")}>{p}%</span>}
                 </div>
-                {s.perApplicant && names.map((n, i) => (
-                  <div key={i} className="mb-2">
-                    {f.applicants > 1 && <p className="mb-1 text-[0.75rem] font-semibold uppercase tracking-wide text-ink-faint">{n}</p>}
-                    <Rows fields={s.perApplicant!} prefix={`a${i + 1}.`} answers={f.answers} changed={changed} focus={focusKey} />
+                {s.perApplicant && (
+                  <div className={cn("grid gap-4", f.applicants > 1 && "xl:grid-cols-2")}>
+                    {names.map((n, i) => (
+                      <div key={i} className={cn(f.applicants > 1 && "rounded-xl p-3 ring-1 ring-inset ring-line")}>
+                        {f.applicants > 1 && <p className="mb-1 text-[0.8125rem] font-semibold text-ink">{n}</p>}
+                        <Rows fields={s.perApplicant!} prefix={`a${i + 1}.`} answers={f.answers} changed={changed} focus={focusKey} single={f.applicants > 1} />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
                 {s.fields && <Rows fields={s.fields} prefix="" answers={f.answers} changed={changed} focus={focusKey} />}
                 {s.lists?.map((l) => {
                   const rows = (Array.isArray(f.answers[l.key]) ? f.answers[l.key] : []) as Record<string, string>[];
@@ -112,7 +116,7 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
                         <div className="mt-1 overflow-x-auto">
                           <table className="w-full text-[0.8125rem]">
                             <thead><tr className="text-left text-ink-faint">{l.fields.map((x) => <th key={x.key} className="pb-1 pr-3 font-medium">{x.label}</th>)}</tr></thead>
-                            <tbody>{rows.map((r, i) => <tr key={i} className="border-t border-line">{l.fields.map((x) => <td key={x.key} className="py-1 pr-3 text-ink">{show(x, r[x.key]) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
+                            <tbody>{rows.map((r, i) => <tr key={i} className="border-t border-line">{l.fields.map((x) => <td key={x.key} className="py-1 pr-3 text-ink">{(x.owner && r[x.key] ? ownerLabel(r[x.key], names) : show(x, r[x.key])) || <span className="text-ink-faint">—</span>}</td>)}</tr>)}</tbody>
                           </table>
                         </div>
                       )}
@@ -152,9 +156,9 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
   );
 }
 
-function Rows({ fields, prefix, answers, changed, focus }: { fields: Field[]; prefix: string; answers: Record<string, unknown>; changed: Record<string, number>; focus: string | null }) {
+function Rows({ fields, prefix, answers, changed, focus, single }: { fields: Field[]; prefix: string; answers: Record<string, unknown>; changed: Record<string, number>; focus: string | null; single?: boolean }) {
   return (
-    <dl className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+    <dl className={cn("grid gap-x-4 gap-y-1", single ? "sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2" : "sm:grid-cols-2")}>
       {fields.filter((x) => fieldShown(x, answers, prefix)).map((x) => {
         const k = `${prefix}${x.key}`; const v = show(x, answers[k]);
         return (

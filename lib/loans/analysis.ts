@@ -18,6 +18,8 @@ export interface BusinessYear { org: string; fy: string; revenue: number | null;
 export interface Metrics {
   applicants: { name: string; gross: number; salary: number; directors: number; other: number; tax: number; net: number }[];
   rentGross: number; rentCounted: number;
+  /** each applicant's own assets and debts, joint ones, and anything without an owner (e.g. home contents) */
+  byOwner: { owner: string; assets: number; debts: number; net: number }[];
   incomeGross: number; incomeNetMonthly: number;
   assets: { property: number; super: number; savings: number; vehicles: number; other: number; contents: number; total: number };
   debts: { mortgages: number; cards: number; loans: number; total: number; cardLimits: number };
@@ -85,7 +87,16 @@ export function analyse(a: Record<string, unknown>, applicants: number, names: s
   assets.total = assets.property + assets.super + assets.savings + assets.vehicles + assets.other + assets.contents;
   const debts = { mortgages: sum(props, "balance"), cards: sum(cards, "balance"), loans: sum(loans, "balance"), total: 0, cardLimits: sum(cards, "limit") };
   debts.total = debts.mortgages + debts.cards + debts.loans;
-  const amount = num(a.amount) || null, value = num(a.property_value) || null, deposit = num(a.deposit) || null;
+  const amount = num(a.amount) || null, value = num(a.property_value) || num(a.security_value) || null, deposit = num(a.deposit) || null;
+  // who owns what: each applicant on their own, and jointly held
+  const owners = [...Array.from({ length: applicants }, (_, i) => `Applicant ${i + 1}`), ...(applicants > 1 ? ["Joint"] : [])];
+  const byOwner = owners.map((o) => {
+    const mine = (k: string) => rows(a, k).filter((r) => (r.owner || (applicants === 1 ? "Applicant 1" : "")) === o);
+    const as_ = sum(mine("properties"), "value") + sum(mine("vehicles"), "value") + sum(mine("savings"), "amount") + sum(mine("super"), "amount") + sum(mine("other_assets"), "value");
+    const ds = sum(mine("properties"), "balance") + sum(mine("cards"), "balance") + sum(mine("loans"), "balance");
+    return { owner: o, assets: as_, debts: ds, net: as_ - ds };
+  });
+  const listed = byOwner.reduce((t, x) => t + x.assets, 0), listedD = byOwner.reduce((t, x) => t + x.debts, 0);
   const living = ["exp_groceries", "exp_utilities", "exp_transport", "exp_insurance", "exp_education", "exp_rent", "exp_other"].reduce((t, k) => t + num(a[k]), 0);
   const existingRepayments = sum(props, "repayment") + sum(loans, "repayment");
   const cardCommitment = Math.round(debts.cardLimits * as.cardRate);
@@ -95,6 +106,7 @@ export function analyse(a: Record<string, unknown>, applicants: number, names: s
   const surplus = netIncome - living - existingRepayments - cardCommitment - newLoan;
   const debtAfter = debts.total + (amount ?? 0);
   return {
+    byOwner: [...byOwner, ...((assets.total - listed) > 0 || (debts.total - listedD) > 0 ? [{ owner: "Not assigned", assets: assets.total - listed, debts: debts.total - listedD, net: assets.total - listed - (debts.total - listedD) }] : [])],
     applicants: people, rentGross, rentCounted, incomeGross, incomeNetMonthly: netIncome,
     assets, debts, netWorth: assets.total - debts.total,
     monthly: { netIncome, living, existingRepayments, cardCommitment, newLoan, surplus },

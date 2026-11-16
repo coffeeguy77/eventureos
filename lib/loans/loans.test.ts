@@ -71,3 +71,21 @@ test("Xero headline lines", () => {
   const y = businessYear("Bean Culture", "FY25/26", pl, null);
   assert.equal(y.revenue, 250000); assert.equal(y.netProfit, 42500.5); assert.equal(y.assets, null);
 });
+
+test("loan questions follow the purpose", () => {
+  const loan = steps(2).find((s) => s.key === "loan")!;
+  const shown = (purpose: string) => loan.fields!.filter((f) => fieldShown(f, { purpose })).map((f) => f.key);
+  const dc = shown("Debt consolidation");
+  assert.ok(!dc.includes("property_value") && !dc.includes("deposit") && !dc.includes("first_home"));
+  assert.ok(dc.includes("security_value") && dc.includes("consolidate_amount") && dc.includes("rate_type"));
+  const buy = shown("Buy a home");
+  assert.ok(buy.includes("property_value") && buy.includes("deposit") && !buy.includes("security_value"));
+  const car = shown("Car or equipment");
+  assert.ok(car.includes("asset_price") && !car.includes("rate_type") && !car.includes("property_value"));
+  assert.ok(shown("Buy a home|Debt consolidation").includes("security_value"));
+});
+test("owners shown by name", async () => {
+  const { ownerLabel } = await import("./form");
+  assert.equal(ownerLabel("Applicant 2", ["Shaun", "Cara"]), "Cara");
+  assert.equal(ownerLabel("Joint", ["Shaun", "Cara"]), "Joint (Shaun & Cara)");
+});

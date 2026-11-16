@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/client";
 import { SmartDateInput } from "@/components/ui/smart-date";
-import { fieldShown, stepProgress, steps as allSteps, type Field, type ListDef } from "@/lib/loans/form";
+import { fieldShown, ownerLabel, stepProgress, steps as allSteps, type Field, type ListDef } from "@/lib/loans/form";
 import type { DocRequest, LoanMsg } from "@/lib/loans/server";
 import { SignaturePad } from "@/components/loans/signature-pad";
 import {
@@ -141,7 +141,7 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
             </fieldset>
           ))}
           {step.fields && <FieldGrid fields={step.fields} prefix="" answers={answers} set={set} onFocus={onFocus} disabled={locked} who="" />}
-          {step.lists?.map((l) => <ListEditor key={l.key} def={l} answers={answers} set={set} onFocus={onFocus} disabled={locked} />)}
+          {step.lists?.map((l) => <ListEditor key={l.key} def={l} answers={answers} set={set} onFocus={onFocus} disabled={locked} names={names} />)}
           {step.special === "documents" && (
             <Documents token={token} names={names} requests={requests} setRequests={setRequests} docs={docs} setDocs={setDocs} inbound={file.inbound} locked={locked} orgName={org.name}
               onFocus={(label) => { focus.current = { step: "documents", label }; schedule(200); }} />
@@ -184,7 +184,7 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
 
 // ------------------------------------------------------------------------------------------------
 
-function FieldInput({ f, id, value, onChange, onFocus, disabled }: { f: Field; id: string; value: unknown; onChange: (v: string) => void; onFocus: () => void; disabled: boolean }) {
+function FieldInput({ f, id, value, onChange, onFocus, disabled, names = [] }: { f: Field; id: string; value: unknown; onChange: (v: string) => void; onFocus: () => void; disabled: boolean; names?: string[] }) {
   const v = value == null ? "" : String(value);
   if (f.type === "choice" || f.type === "multi") {
     const picked = f.type === "multi" ? v.split("|").filter(Boolean) : [v];
@@ -217,7 +217,7 @@ function FieldInput({ f, id, value, onChange, onFocus, disabled }: { f: Field; i
   );
   if (f.type === "select") return (
     <select id={id} value={v} disabled={disabled} onFocus={onFocus} onChange={(e) => onChange(e.target.value)} className={box}>
-      <option value="">Choose…</option>{f.options!.map((o) => <option key={o} value={o}>{o}</option>)}
+      <option value="">Choose…</option>{f.options!.map((o) => <option key={o} value={o}>{f.owner ? ownerLabel(o, names) : o}</option>)}
     </select>
   );
   if (f.type === "textarea") return <textarea id={id} value={v} disabled={disabled} onFocus={onFocus} onChange={(e) => onChange(e.target.value)} rows={4} className={cn(box, "h-auto py-2")} />;
@@ -246,7 +246,7 @@ function FieldGrid({ fields, prefix, answers, set, onFocus, disabled, who }: { f
   );
 }
 
-function ListEditor({ def, answers, set, onFocus, disabled }: { def: ListDef; answers: Answers; set: (k: string, v: unknown) => void; onFocus: (k: string, l: string) => void; disabled: boolean }) {
+function ListEditor({ def, answers, set, onFocus, disabled, names }: { def: ListDef; answers: Answers; set: (k: string, v: unknown) => void; onFocus: (k: string, l: string) => void; disabled: boolean; names: string[] }) {
   const rows = (Array.isArray(answers[def.key]) ? answers[def.key] : []) as Record<string, string>[];
   const none = answers[`${def.key}__none`] === true;
   const update = (i: number, k: string, v: string) => set(def.key, rows.map((r, n) => (n === i ? { ...r, [k]: v } : r)));
@@ -273,7 +273,7 @@ function ListEditor({ def, answers, set, onFocus, disabled }: { def: ListDef; an
                 return (
                   <div key={f.key} className={f.half ? "" : "sm:col-span-2"}>
                     <label htmlFor={id} className={lab}>{f.label}</label>
-                    <FieldInput f={f} id={id} value={r[f.key]} disabled={disabled} onChange={(v) => update(i, f.key, v)} onFocus={() => onFocus(def.key, `${def.label} · ${def.item} ${i + 1} · ${f.label}`)} />
+                    <FieldInput f={f} id={id} value={r[f.key]} disabled={disabled} names={names} onChange={(v) => update(i, f.key, v)} onFocus={() => onFocus(def.key, `${def.label} · ${def.item} ${i + 1} · ${f.label}`)} />
                     {f.hint && <p className="mt-1 text-[0.75rem] text-ink-faint">{f.hint}</p>}
                   </div>
                 );

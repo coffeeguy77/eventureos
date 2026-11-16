@@ -1,6 +1,6 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { CONSENTS, fieldShown, steps as allSteps, type Field } from "./form";
+import { CONSENTS, fieldShown, ownerLabel, steps as allSteps, type Field } from "./form";
 
 export interface SignedPdfInput {
   org: string;
@@ -87,7 +87,7 @@ export async function buildSignedApplication(i: SignedPdfInput): Promise<Uint8Ar
       const rows = (Array.isArray(i.answers[l.key]) ? i.answers[l.key] : []) as Record<string, string>[];
       text(l.label, { f: bold, size: 10, gap: 5 });
       if (!rows.length) { text(i.answers[`${l.key}__none`] === true ? "None" : "-", { size: 10, color: MUTED, x: M + 10 }); continue; }
-      rows.forEach((r, n) => text(`${n + 1}. ${l.fields.map((f) => `${f.label}: ${show(f, r[f.key]) || "-"}`).join("  ·  ").replace(/·/g, "-")}`, { size: 9.5, x: M + 10 }));
+      rows.forEach((r, n) => text(`${n + 1}. ${l.fields.map((f) => `${f.label}: ${(f.owner && r[f.key] ? ownerLabel(r[f.key], i.names) : show(f, r[f.key])) || "-"}`).join("  ·  ").replace(/·/g, "-")}`, { size: 9.5, x: M + 10 }));
       y -= 3;
     }
   }

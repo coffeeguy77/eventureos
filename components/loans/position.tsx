@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, HelpCircle, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ownerLabel } from "@/lib/loans/form";
 import { analyse, DEFAULT_ASSUMPTIONS, type Assumptions, type BusinessYear, type Metrics, type SavedAnalysis } from "@/lib/loans/analysis";
 
 const aud = (n: number | null | undefined) => (n == null ? "—" : `${n < 0 ? "-" : ""}$${Math.abs(Math.round(n)).toLocaleString("en-AU")}`);
@@ -89,6 +90,11 @@ export function FinancialPosition({ answers, applicants, names, business, saved:
         <Panel title="Rate stress test" note="Monthly surplus if rates move">
           <Stress m={m} />
         </Panel>
+        {applicants > 1 && (
+          <Panel title="Who owns what" note="Each person, and what's held jointly">
+            <OwnerBars m={m} names={names} />
+          </Panel>
+        )}
         <Panel title="Ratios">
           <div className="grid grid-cols-2 gap-2">
             <Gauge label="LVR" value={m.loan.lvr} max={100} fmt={(v) => `${v}%`} bands={[80, 90]} />
@@ -322,4 +328,24 @@ function ScoreRing({ score, rating }: { score: number | null; rating: string | n
 
 function Empty({ text = "Fills in as the client answers." }: { text?: string }) {
   return <p className="py-6 text-center text-[0.8125rem] text-ink-faint">{text}</p>;
+}
+
+function OwnerBars({ m, names }: { m: Metrics; names: string[] }) {
+  const list = m.byOwner.filter((o) => o.assets || o.debts);
+  if (!list.length) return <Empty text="Shows once assets and debts have an owner." />;
+  const max = Math.max(1, ...list.flatMap((o) => [o.assets, o.debts]));
+  return (
+    <div className="space-y-3">
+      {list.map((o) => (
+        <div key={o.owner}>
+          <div className="mb-1 flex flex-wrap justify-between gap-2 text-[0.8125rem]"><span className="font-medium text-ink">{o.owner === "Not assigned" ? "Not assigned to anyone" : ownerLabel(o.owner, names)}</span><span className={cn("tabular-nums", o.net >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>net {aud(o.net)}</span></div>
+          <svg viewBox="0 0 100 10" preserveAspectRatio="none" className="h-6 w-full overflow-hidden rounded-md bg-canvas" role="img" aria-label={`${o.owner}: assets ${aud(o.assets)}, debts ${aud(o.debts)}`}>
+            <rect x={0} y={0} width={(o.assets / max) * 100} height={4.5} className={C.c}><title>{`Assets ${aud(o.assets)}`}</title></rect>
+            <rect x={0} y={5.5} width={(o.debts / max) * 100} height={4.5} className={C.bad}><title>{`Debts ${aud(o.debts)}`}</title></rect>
+          </svg>
+          <p className="mt-0.5 text-[0.6875rem] text-ink-faint">Assets {aud(o.assets)} · debts {aud(o.debts)}</p>
+        </div>
+      ))}
+    </div>
+  );
 }

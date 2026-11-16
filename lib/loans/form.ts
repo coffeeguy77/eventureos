@@ -24,6 +24,8 @@ export interface Field {
   when?: { key: string; in: string[] };
   /** can be left blank without counting against progress */
   optional?: boolean;
+  /** whose it is: stored "Applicant 1" / "Joint", shown with the applicants' names */
+  owner?: boolean;
 }
 
 export interface ListDef {
@@ -47,7 +49,14 @@ export interface Step {
   special?: "documents" | "connect" | "review";
 }
 
-const OWNER = (n: number) => ["Applicant 1", ...(n > 1 ? ["Applicant 2", "Joint"] : [])];
+const OWNER = (n: number) => [...Array.from({ length: n }, (_, i) => `Applicant ${i + 1}`), ...(n > 1 ? ["Joint"] : [])];
+
+/** Owner values are stored as "Applicant 1" … so renaming someone never breaks them; shown with their name. */
+export function ownerLabel(v: string, names: string[]): string {
+  const m = /^Applicant (\d)$/.exec(v ?? "");
+  if (m) return names[+m[1] - 1] || v;
+  return v === "Joint" && names.length > 1 ? `Joint (${names.join(" & ")})` : v;
+}
 
 /** The consents every applicant gives before sending (the broker's Credit Guide is shown alongside). */
 export const CONSENTS: Field[] = [
@@ -57,6 +66,11 @@ export const CONSENTS: Field[] = [
   { key: "c_best_interests", label: "I understand my broker must act in my best interests", type: "check" },
   { key: "c_declaration", label: "I declare the information I've given is true and complete", type: "check", hint: "To the best of my knowledge. False information can affect the application." },
 ];
+
+/** Loan purposes that decide which questions are asked (a client can pick several). */
+export const BUYING = ["Buy a home", "Buy an investment", "Construction / building"];
+export const SECURED = ["Refinance", "Equity release", "Debt consolidation"];
+export const HOME_LOAN = [...BUYING, ...SECURED];
 
 export const EMPLOYMENT = ["Employee (PAYG)", "Company director", "Self-employed / sole trader", "Contractor", "Retired", "Not working"];
 
@@ -83,18 +97,32 @@ export function steps(applicants: number): Step[] {
     {
       key: "loan", title: "Your loan", intro: "What you're looking to do — skip anything you're unsure of, we can talk it through.",
       fields: [
-        { key: "purpose", label: "What's the loan for?", type: "multi", options: ["Buy a home", "Buy an investment", "Refinance", "Construction / building", "Equity release", "Debt consolidation", "Business", "Car or equipment"] },
-        { key: "property_type", label: "What type of property?", type: "choice", options: ["House", "Apartment / unit", "Townhouse", "Vacant land", "Rural", "Commercial"], when: { key: "purpose", in: ["Buy a home", "Buy an investment", "Construction / building"] } },
-        { key: "first_home", label: "Have you (or anyone applying) bought property before?", type: "choice", options: ["Yes", "No", "Not sure"], when: { key: "purpose", in: ["Buy a home", "Buy an investment", "Construction / building"] } },
+        { key: "purpose", label: "What's the loan for?", type: "multi", options: ["Buy a home", "Buy an investment", "Refinance", "Construction / building", "Equity release", "Debt consolidation", "Business", "Car or equipment"], hint: "Pick all that apply" },
         { key: "amount", label: "How much would you like to borrow?", type: "money", half: true, hint: "Leave blank if you're not sure" },
-        { key: "property_value", label: "Purchase price or property value", type: "money", half: true },
-        { key: "deposit", label: "Deposit or equity you have", type: "money", half: true, hint: "Savings plus any usable equity in another property" },
-        { key: "deposit_source", label: "Where is the deposit coming from?", type: "select", options: ["Savings", "Equity in a property", "Gift from family", "Sale of a property", "First home grant", "Super (FHSS)", "Other"], half: true },
-        { key: "rate_type", label: "Interest rate", type: "choice", options: ["Variable", "Fixed", "Split", "Not sure — need advice"] },
-        { key: "repay_type", label: "Repayments", type: "choice", options: ["Principal & interest", "Interest only", "Not sure — need advice"] },
+        // buying or building
+        { key: "property_type", label: "What type of property?", type: "choice", options: ["House", "Apartment / unit", "Townhouse", "Vacant land", "Rural", "Commercial"], when: { key: "purpose", in: BUYING } },
+        { key: "first_home", label: "Have you (or anyone applying) bought property before?", type: "choice", options: ["Yes", "No", "Not sure"], when: { key: "purpose", in: BUYING } },
+        { key: "property_value", label: "Purchase price (or build cost)", type: "money", half: true, when: { key: "purpose", in: BUYING } },
+        { key: "deposit", label: "Deposit you have", type: "money", half: true, hint: "Savings plus any usable equity in another property", when: { key: "purpose", in: BUYING } },
+        { key: "deposit_source", label: "Where is the deposit coming from?", type: "multi", options: ["Savings", "Equity in a property", "Gift from family", "Sale of a property", "First home grant", "Super (FHSS)", "Other"], when: { key: "purpose", in: BUYING } },
+        // borrowing against a property they own
+        { key: "security_address", label: "Which property will the loan be secured against?", type: "text", when: { key: "purpose", in: SECURED } },
+        { key: "security_value", label: "Estimated value of that property", type: "money", half: true, when: { key: "purpose", in: SECURED } },
+        { key: "refi_balance", label: "Current loan balance to refinance", type: "money", half: true, when: { key: "purpose", in: ["Refinance"] } },
+        { key: "refi_why", label: "Why refinance?", type: "multi", options: ["Lower rate", "Lower repayments", "Better features", "Cash out", "Fixed rate ending", "Change of lender service"], when: { key: "purpose", in: ["Refinance"] } },
+        { key: "consolidate_amount", label: "Total of the debts to roll in", type: "money", half: true, hint: "List them under Other debts", when: { key: "purpose", in: ["Debt consolidation"] } },
+        { key: "equity_for", label: "What will the equity be used for?", type: "text", when: { key: "purpose", in: ["Equity release"] } },
+        // not property
+        { key: "asset_what", label: "What are you buying?", type: "text", half: true, hint: "Make, model and year, or the equipment", when: { key: "purpose", in: ["Car or equipment"] } },
+        { key: "asset_price", label: "Price", type: "money", half: true, when: { key: "purpose", in: ["Car or equipment"] } },
+        { key: "asset_trade", label: "Deposit or trade-in", type: "money", half: true, optional: true, when: { key: "purpose", in: ["Car or equipment"] } },
+        { key: "business_for", label: "What is the business loan for?", type: "textarea", when: { key: "purpose", in: ["Business"] } },
+        // how they'd like the home loan set up
+        { key: "rate_type", label: "Interest rate", type: "choice", options: ["Variable", "Fixed", "Split", "Not sure — need advice"], when: { key: "purpose", in: HOME_LOAN } },
+        { key: "repay_type", label: "Repayments", type: "choice", options: ["Principal & interest", "Interest only", "Not sure — need advice"], when: { key: "purpose", in: HOME_LOAN } },
         { key: "io_years", label: "Interest-only period", type: "choice", options: ["1 year", "2 years", "3 years", "4 years", "5 years"], when: { key: "repay_type", in: ["Interest only"] } },
         { key: "frequency", label: "How often would you like to repay?", type: "choice", options: ["Weekly", "Fortnightly", "Monthly", "Not sure"] },
-        { key: "features", label: "Any of these of interest?", type: "multi", options: ["Offset account", "Redraw", "Extra repayments"], optional: true, hint: "Optional — your broker can explain them" },
+        { key: "features", label: "Any of these of interest?", type: "multi", options: ["Offset account", "Redraw", "Extra repayments"], optional: true, hint: "Optional — your broker can explain them", when: { key: "purpose", in: HOME_LOAN } },
         { key: "timeframe", label: "When do you need it?", type: "choice", options: ["As soon as possible", "Within a month", "1–3 months", "Just exploring"] },
         { key: "loan_notes", label: "Anything else we should know?", type: "textarea", optional: true },
       ],
@@ -119,7 +147,7 @@ export function steps(applicants: number): Step[] {
         key: "properties", label: "Properties", item: "property",
         fields: [
           { key: "address", label: "Address", type: "text" },
-          { key: "owner", label: "Owner", type: "select", options: owner, half: true },
+          { key: "owner", label: "Owner", type: "select", owner: true, options: owner, half: true },
           { key: "use", label: "Used as", type: "select", options: ["Home", "Investment", "Holiday", "Vacant land", "Commercial"], half: true },
           { key: "value", label: "Estimated value", type: "money", half: true },
           { key: "lender", label: "Loan with", type: "text", half: true, hint: "Leave blank if no loan" },
@@ -133,23 +161,23 @@ export function steps(applicants: number): Step[] {
       key: "assets", title: "Assets", intro: "Your best estimate is fine.",
       lists: [
         { key: "vehicles", label: "Motor vehicles", item: "vehicle", fields: [
-          { key: "owner", label: "Owner", type: "select", options: owner, half: true },
+          { key: "owner", label: "Owner", type: "select", owner: true, options: owner, half: true },
           { key: "make", label: "Make, model and year", type: "text", half: true },
           { key: "value", label: "Estimated value", type: "money", half: true },
         ] },
         { key: "savings", label: "Savings and bank accounts", item: "account", fields: [
-          { key: "owner", label: "Account holder", type: "select", options: owner, half: true },
+          { key: "owner", label: "Account holder", type: "select", owner: true, options: owner, half: true },
           { key: "bank", label: "Financial institution", type: "text", half: true },
           { key: "amount", label: "Balance", type: "money", half: true },
         ] },
         { key: "super", label: "Superannuation", item: "super fund", fields: [
-          { key: "owner", label: "Whose", type: "select", options: owner.filter((o) => o !== "Joint"), half: true },
+          { key: "owner", label: "Whose", type: "select", owner: true, options: owner.filter((o) => o !== "Joint"), half: true },
           { key: "fund", label: "Fund name", type: "text", half: true },
           { key: "amount", label: "Balance", type: "money", half: true },
         ] },
         { key: "other_assets", label: "Other assets", item: "asset", hint: "Shares, business equity, boats, collections …", fields: [
           { key: "what", label: "What it is", type: "text", half: true },
-          { key: "owner", label: "Owner", type: "select", options: owner, half: true },
+          { key: "owner", label: "Owner", type: "select", owner: true, options: owner, half: true },
           { key: "value", label: "Estimated value", type: "money", half: true },
         ] },
       ],
@@ -159,13 +187,13 @@ export function steps(applicants: number): Step[] {
       key: "debts", title: "Other debts", intro: "Home loans go under Properties. Everything else here.",
       lists: [
         { key: "cards", label: "Credit cards", item: "card", fields: [
-          { key: "owner", label: "Whose", type: "select", options: owner, half: true },
+          { key: "owner", label: "Whose", type: "select", owner: true, options: owner, half: true },
           { key: "lender", label: "Bank", type: "text", half: true },
           { key: "limit", label: "Limit", type: "money", half: true },
           { key: "balance", label: "Owing now", type: "money", half: true },
         ] },
         { key: "loans", label: "Car, personal and other loans", item: "loan", fields: [
-          { key: "owner", label: "Whose", type: "select", options: owner, half: true },
+          { key: "owner", label: "Whose", type: "select", owner: true, options: owner, half: true },
           { key: "type", label: "Type", type: "select", options: ["Car loan", "Personal loan", "Lease", "Business loan", "Buy now pay later", "Tax debt", "Other"], half: true },
           { key: "lender", label: "Lender", type: "text", half: true },
           { key: "balance", label: "Owing now", type: "money", half: true },
