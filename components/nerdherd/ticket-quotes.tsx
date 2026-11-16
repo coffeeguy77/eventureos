@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Check, Eye, EyeOff, Loader2, Mail, Pencil, Plus, Send, Sparkles, Trash2, UserPlus, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, Bot, Check, Eye, EyeOff, Loader2, Mail, Pencil, Plus, Send, Sparkles, Trash2, UserPlus, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { FormError, Input, Label, Textarea } from "@/components/ui/form";
+import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import { money } from "@/lib/format";
-import { priceFor, quoteLight, sumHours, type Light, type QuoteStatus } from "@/lib/nerdherd/quotes";
+import { fmtStep, priceFor, quoteLight, sumHours, type Light, type QuoteStatus } from "@/lib/nerdherd/quotes";
 import {
-  addTicketPerson, cancelTicketQuote, draftQuoteWithAI, emailTicketReply, notifyQuoteDone, quoteSendDraft, removeTicketPerson, saveTicketQuote, sendTicketQuote, tickQuoteTask, ticketPeople,
+  addTicketPerson, cancelTicketQuote, draftQuoteWithAI, emailTicketReply, notifyQuoteDone, quoteSendDraft, removeTicketPerson, saveQuickTask, saveTicketQuote, sendTicketQuote, tickQuoteTask, ticketPeople,
   type Person, type Recipient,
 } from "@/app/(app)/nerd-herd/quote-actions";
 
@@ -30,7 +30,8 @@ const label = (q: { kind: string; seq: number }) => (q.kind === "variation" ? `V
 const StaffOnly = () => <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.6562rem] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300"><EyeOff className="h-3 w-3" />Staff only</span>;
 
 /** Quotes & variations on a ticket: write (Claude drafts), send / nudge, see who opened it, red until paid, then tick off the work. */
-export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, currency, tz, quotes, views, needsMigration, aiSite = null }: {
+export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, currency, tz, quotes, views, needsMigration, aiSite = null, minHours = 0, quickTasks = [] }: {
+  minHours?: number; quickTasks?: { label: string; hours: number }[];
   ticketId: string; ticketNumber: number; hasClient: boolean; defaultRate: number; currency: string; tz: string; quotes: QuoteView[]; views: ViewRow[]; needsMigration: boolean;
   /** the ticket's website, when it's connected to the Web Culture Connector (AI maintenance can do the work) */
   aiSite?: { domain: string } | null;
@@ -77,7 +78,7 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
                   </div>
                   <div className="text-right">
                     <p className="text-[1.0625rem] font-bold tabular text-ink">{money(q.amount, currency, { cents: true })}</p>
-                    <p className="flex items-center justify-end gap-1.5 text-[0.7188rem] text-ink-muted"><StaffOnly />{q.hours} h × {money(q.rate, currency)}</p>
+                    <p className="flex items-center justify-end gap-1.5 text-[0.7188rem] text-ink-muted"><StaffOnly />{fmtStep(Number(q.hours))} × {money(q.rate, currency)}</p>
                   </div>
                 </div>
 
@@ -103,7 +104,7 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
                               if (r.data.allDone && e.target.checked) setSending({ mode: "done", quote: q });
                             })} />
                             <span className="min-w-0 flex-1"><span className={cn("block text-[0.875rem] text-ink", t.done_at && "text-ink-muted line-through")}>{t.label}</span>{t.done_at && <span className="block text-[0.6875rem] text-ink-faint">{t.done_by} · {when(t.done_at, tz)}</span>}</span>
-                            <span className="shrink-0 text-[0.75rem] tabular text-ink-faint">{t.hours} h</span>
+                            <span className="shrink-0 text-[0.75rem] tabular text-ink-faint">{fmtStep(Number(t.hours))}</span>
                           </label>
                         </li>
                       ))}
@@ -111,7 +112,7 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
                   </div>
                 )}
 
-                {q.ai_notes && ["draft", "sent"].includes(q.status) && <p className="border-t border-line bg-amber-500/5 px-4 py-2 text-[0.75rem] text-ink-muted"><StaffOnly /> <span className="ml-1">Claude suggested {q.ai_hours} h. {q.ai_notes}</span></p>}
+                {q.ai_notes && ["draft", "sent"].includes(q.status) && <p className="border-t border-line bg-amber-500/5 px-4 py-2 text-[0.75rem] text-ink-muted"><StaffOnly /> <span className="ml-1">Claude suggested {fmtStep(Number(q.ai_hours ?? 0))}. {q.ai_notes}</span></p>}
 
                 <div className="flex flex-wrap gap-2 border-t border-line px-4 py-2.5">
                   {["draft", "sent"].includes(q.status) && <Button size="sm" onClick={() => setEditing(q)}><Pencil className="h-3.5 w-3.5" />Edit</Button>}
@@ -127,7 +128,7 @@ export function TicketQuotes({ ticketId, ticketNumber, hasClient, defaultRate, c
         </ul>
       )}
 
-      {editing && <QuoteEditor ticketId={ticketId} quote={editing === "new" ? null : editing} variation={editing === "new" ? live.length > 0 : editing.kind === "variation"} defaultRate={defaultRate} currency={currency} aiSite={aiSite}
+      {editing && <QuoteEditor ticketId={ticketId} quote={editing === "new" ? null : editing} variation={editing === "new" ? live.length > 0 : editing.kind === "variation"} defaultRate={defaultRate} currency={currency} aiSite={aiSite} minHours={minHours} quickTasks={quickTasks}
         onClose={() => setEditing(null)} onSaved={(id, send) => { setEditing(null); router.refresh(); if (send) setSending({ mode: "quote", quote: { id } as QuoteView }); }} />}
       {sending && <SendDialog ticketId={ticketId} ticketNumber={ticketNumber} mode={sending.mode} quote={sending.quote ?? null} onClose={() => setSending(null)} onDone={(text) => { setSending(null); setMsg({ ok: true, text }); router.refresh(); }} />}
     </div>
@@ -150,7 +151,14 @@ function Modal({ title, onClose, children, footer, wide }: { title: React.ReactN
   );
 }
 
-function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClose, onSaved, aiSite }: {
+/** Times for a step: 15 minutes to 12 hours in quarter hours (plus the step's current time if it's something else). */
+function durations(current: number) {
+  const list = Array.from({ length: 48 }, (_, i) => (i + 1) / 4);
+  return current > 0 && !list.includes(current) ? [...list, current].sort((a, b) => a - b) : list;
+}
+
+function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClose, onSaved, aiSite, minHours, quickTasks }: {
+  minHours: number; quickTasks: { label: string; hours: number }[];
   ticketId: string; quote: QuoteView | null; variation: boolean; defaultRate: number; currency: string; onClose: () => void; onSaved: (id: string, send: boolean) => void; aiSite: { domain: string } | null;
 }) {
   const [aiJob, setAiJob] = useState(!!quote?.ai_job);
@@ -166,7 +174,16 @@ function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClos
   const [thinking, startAi] = useTransition();
   const [pending, start] = useTransition();
   const hours = sumHours(tasks);
-  const p = priceFor(hours, rate);
+  const p = priceFor(hours, rate, minHours);
+  const [quick, setQuick] = useState(quickTasks);
+  const [saved, setSaved] = useState<string | null>(null);
+  const inQuick = (label: string) => quick.some((x) => x.label.toLowerCase() === label.trim().toLowerCase());
+  const keep = (t: { label: string; hours: number }) => startAi(async () => {
+    setError(null);
+    const r = await saveQuickTask(t.label, t.hours);
+    if (!r.ok) { setError(r.error); return; }
+    setQuick(r.data); setSaved(t.label.trim()); setTimeout(() => setSaved(null), 2000);
+  });
   const price = Number(fixed) > 0 ? Number(fixed) : p.incGst;
   const askClaude = () => startAi(async () => {
     setError(null);
@@ -196,7 +213,7 @@ function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClos
         </div>
         {ai && (
           <div className="rounded-xl bg-amber-500/10 p-3 ring-1 ring-amber-500/30">
-            <p className="flex flex-wrap items-center gap-2 text-[0.8125rem] font-semibold text-ink"><StaffOnly />Claude recommends {ai.hours} h ({money(priceFor(ai.hours, rate).incGst, currency)} inc GST)</p>
+            <p className="flex flex-wrap items-center gap-2 text-[0.8125rem] font-semibold text-ink"><StaffOnly />Claude recommends {fmtStep(ai.hours)} ({money(priceFor(ai.hours, rate, minHours).incGst, currency)} inc GST)</p>
             {ai.notes && <p className="mt-1 whitespace-pre-line text-[0.75rem] text-ink-muted">{ai.notes}</p>}
           </div>
         )}
@@ -208,15 +225,31 @@ function QuoteEditor({ ticketId, quote, variation, defaultRate, currency, onClos
             {tasks.map((t, i) => (
               <li key={i} className="flex items-center gap-2">
                 <Input value={t.label} onChange={(e) => setTasks(tasks.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} placeholder="Step" />
-                <div className="relative w-24 shrink-0"><Input inputMode="decimal" value={String(t.hours)} onChange={(e) => setTasks(tasks.map((x, j) => (j === i ? { ...x, hours: Number(e.target.value.replace(/[^0-9.]/g, "")) || 0 } : x)))} className="pr-7 text-right" /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[0.75rem] text-ink-faint">h</span></div>
+                <Select aria-label="Time for this step" value={String(t.hours)} onChange={(e) => setTasks(tasks.map((x, j) => (j === i ? { ...x, hours: Number(e.target.value) } : x)))} className="w-28 shrink-0">
+                  {durations(t.hours).map((h) => <option key={h} value={String(h)}>{fmtStep(h)}</option>)}
+                </Select>
+                {t.label.trim() && (inQuick(t.label)
+                  ? <span title="In Quick add" className="p-2 text-emerald-600"><BookmarkCheck className="h-4 w-4" /></span>
+                  : <button type="button" title="Save this step to Quick add" aria-label="Save this step to Quick add" onClick={() => keep(t)} className="rounded-md p-2 text-ink-faint hover:text-brand-600"><Bookmark className="h-4 w-4" /></button>)}
                 <button type="button" aria-label="Remove step" onClick={() => setTasks(tasks.filter((_, j) => j !== i))} className="rounded-md p-2 text-ink-faint hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
               </li>
             ))}
           </ul>
-          <button type="button" onClick={() => setTasks([...tasks, { label: "", hours: 0.5 }])} className="mt-2 inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-600"><Plus className="h-4 w-4" />Add a step</button>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => setTasks([...tasks, { label: "", hours: 0.25 }])} className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-600"><Plus className="h-4 w-4" />Add a step</button>
+            {quick.length > 0 && (
+              <Select aria-label="Quick add a step" value="" className="h-9 max-w-full flex-1 sm:max-w-xs"
+                onChange={(e) => { const q = quick[Number(e.target.value)]; if (q) setTasks([...tasks, { label: q.label, hours: q.hours }]); }}>
+                <option value="">⚡ Quick add a step…</option>
+                {quick.map((q, n) => <option key={q.label} value={n}>{q.label} · {fmtStep(q.hours)}</option>)}
+              </Select>
+            )}
+            {saved && <span className="text-[0.75rem] text-emerald-700 dark:text-emerald-300">Saved “{saved}” to Quick add</span>}
+          </div>
+          <p className="mt-1.5 flex items-center gap-1 text-[0.7188rem] text-ink-faint"><Zap className="h-3 w-3" />Steps can be 15 minutes. Tap the bookmark on a step to keep it in Quick add for next time{minHours > 0 ? ` · quotes are charged at least ${fmtStep(minHours)}` : ""}.</p>
         </div>
         <div className="grid gap-3 rounded-xl bg-canvas p-3 ring-1 ring-line sm:grid-cols-3">
-          <div><Label hint="staff only">Total hours</Label><p className="flex h-10 items-center text-[1rem] font-semibold text-ink">{hours} h{p.hours !== hours ? <span className="ml-1 text-[0.75rem] font-normal text-ink-muted">(charged {p.hours} h)</span> : null}</p></div>
+          <div><Label hint="staff only">Total hours</Label><p className="flex h-10 items-center text-[1rem] font-semibold text-ink">{fmtStep(hours)}{p.hours !== hours ? <span className="ml-1 text-[0.75rem] font-normal text-ink-muted">(charged {fmtStep(p.hours)}{p.minimum ? " — the minimum" : ""})</span> : null}</p></div>
           <div><Label hint="ex GST">Hourly rate</Label><Input inputMode="decimal" value={String(rate)} onChange={(e) => setRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} /></div>
           <div><Label hint="optional, inc GST">Fixed price</Label><Input inputMode="decimal" value={fixed} onChange={(e) => setFixed(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={p.incGst.toFixed(2)} /></div>
         </div>

@@ -5,13 +5,21 @@
 export type QuoteStatus = "draft" | "sent" | "accepted" | "paid" | "completed" | "declined" | "cancelled";
 export const QUOTE_STATUSES: QuoteStatus[] = ["draft", "sent", "accepted", "paid", "completed", "declined", "cancelled"];
 
-/** Price inc GST for hours × hourly rate (ex GST), rounded to the cent. Hours round up to the quarter hour. */
-export function priceFor(hours: number, rateExGst: number): { hours: number; exGst: number; gst: number; incGst: number } {
-  const h = Math.max(0, Math.ceil((Number(hours) || 0) * 4 - 1e-9) / 4);
+/**
+ * Price inc GST for hours × hourly rate (ex GST), rounded to the cent. Hours round up to the quarter hour, and any work
+ * at all is charged at least `minHours` (e.g. a 30-minute job is billed as the 1-hour minimum).
+ */
+export function priceFor(hours: number, rateExGst: number, minHours = 0): { hours: number; exGst: number; gst: number; incGst: number; minimum: boolean } {
+  const worked = Math.max(0, Math.ceil((Number(hours) || 0) * 4 - 1e-9) / 4);
+  const min = Math.max(0, Number(minHours) || 0);
+  const h = worked > 0 && worked < min ? min : worked;
   const ex = Math.round(h * Math.max(0, Number(rateExGst) || 0) * 100) / 100;
   const inc = Math.round(ex * 1.1 * 100) / 100;
-  return { hours: h, exGst: ex, gst: Math.round((inc - ex) * 100) / 100, incGst: inc };
+  return { hours: h, exGst: ex, gst: Math.round((inc - ex) * 100) / 100, incGst: inc, minimum: h > worked };
 }
+
+/** How a step's time reads to the staff: "15 min", "30 min", "1 h", "1.5 h". */
+export const fmtStep = (h: number) => (h > 0 && h < 1 ? `${Math.round(h * 60)} min` : `${Math.round(h * 100) / 100} h`);
 
 /** GST split of an inc-GST amount (for the invoice). */
 export function splitInc(inc: number) {

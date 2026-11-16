@@ -4,6 +4,7 @@ import { canManage, requireOrg } from "@/lib/context";
 import { readNerd } from "@/lib/nerdherd/core";
 import { describeScope, readScope } from "@/lib/integrations/xero-scope";
 import { Card, CardHeader } from "@/components/ui/card";
+import { QuickTasksForm } from "@/components/nerdherd/quick-tasks-form";
 import { NerdSettingsForm } from "@/components/nerdherd/settings-form";
 import { AiSettingsForm } from "@/components/nerdherd/ai-settings-form";
 import { readAiSettings } from "@/lib/nerdherd/ai-runner";
@@ -25,12 +26,18 @@ export default async function NerdSettingsPage() {
   const scope = describeScope(readScope(xero?.settings));
   return (
     <div className="grid max-w-5xl gap-5 lg:grid-cols-2">
+      <div className="space-y-5">
       <Card>
         <CardHeader title="Billing time and tickets" />
         <div className="border-t border-line px-5 py-4">
-          <NerdSettingsForm initial={{ hourly_rate: s.hourlyRate, account_code: s.accountCode, email_tickets: s.emailTickets, support_email: s.supportEmail ?? "", staff_alerts: s.staffAlerts, default_assignee: s.defaultAssignee, quiet_users: s.quietUsers }} team={team} />
+          <NerdSettingsForm initial={{ min_hours: s.minHours, hourly_rate: s.hourlyRate, account_code: s.accountCode, email_tickets: s.emailTickets, support_email: s.supportEmail ?? "", staff_alerts: s.staffAlerts, default_assignee: s.defaultAssignee, quiet_users: s.quietUsers }} team={team} />
         </div>
       </Card>
+      <Card>
+        <CardHeader title="Quick add steps" subtitle="Standard steps for ticket quotes" />
+        <div className="border-t border-line px-5 py-4"><QuickTasksForm initial={s.quickTasks} /></div>
+      </Card>
+      </div>
       <div className="space-y-5">
         <Card>
           <CardHeader title="AI maintenance" subtitle="Claude making changes on connected WordPress sites" />

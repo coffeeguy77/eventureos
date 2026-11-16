@@ -31,9 +31,15 @@ export async function draftTicketQuote(db: SupabaseClient, org: { id: string; na
   const examples = ((past ?? []) as unknown as { title: string; hours: number; support_ticket_quote_tasks: { label: string; hours: number }[] }[])
     .map((p) => `• ${p.title}: ${Number(p.hours)} h (${p.support_ticket_quote_tasks.map((x) => `${x.label} ${Number(x.hours)}h`).join("; ")})`).join("\n");
 
+  // the business's Quick add steps and minimum charge (Nerd Herd settings)
+  const { data: os } = await db.from("organisations").select("settings").eq("id", org.id).maybeSingle();
+  const { readNerd } = await import("@/lib/nerdherd/core");
+  const ns = readNerd(os?.settings);
+  const quick = ns.quickTasks.slice(0, 60);
+  const minHours = ns.minHours;
   const system = `You help ${org.name}, an Australian web design, hosting and IT support agency, quote repair and change work on a support ticket.
 Write for the CLIENT in the description: plain Australian English, friendly and clear, what we'll do and the outcome they get. No hours, no hourly rate, no prices, no internal jargon, no promises about things outside the work.
-Break the work into practical steps (tasks) a technician will tick off. Give each task an honest hour estimate (quarter hours), including testing and any backup. Be realistic, not padded — but don't under-quote risky work.
+Break the work into practical steps (tasks) a technician will tick off. Give each task an honest hour estimate in quarter hours (0.25 = 15 minutes is fine for small steps such as signing in), including testing and any backup.${quick.length ? ` When a step matches one of our standard steps, use its exact wording and usual time: ${quick.map((q) => `"${q.label}" (${q.hours} h)`).join("; ")}.` : ""}${minHours > 0 ? ` We charge a minimum of ${minHours} h per quote, so don't pad small jobs to reach it — the minimum is applied automatically.` : ""} Be realistic, not padded — but don't under-quote risky work.
 ${o.variation ? "This is a VARIATION: only the additional work the client has asked for that wasn't in the earlier quote(s). Don't repeat work already quoted." : ""}
 Reply with ONLY a JSON object:
 {"title":"short name for the work (max 80 chars)","description":"what the client reads — 2 to 6 short paragraphs or a short intro plus bullet lines starting with •","tasks":[{"label":"step the client may see ticked off (no hours in the text)","hours":number}],"notes":"for the staff only: assumptions, risks, what to check before sending, anything that could blow out the time"}`;

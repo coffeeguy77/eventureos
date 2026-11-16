@@ -116,7 +116,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
         <div className="space-y-5">
           <Card>
             <CardHeader title="Quote & payment" subtitle="Quote the fix, send it, and start once it's paid — red until paid, green when it's ready to do." />
-            <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} aiSite={aiSite} /></div>
+            <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} aiSite={aiSite} minHours={s.minHours} quickTasks={s.quickTasks} /></div>
           </Card>
           {tk.kind === "maintenance" && (
             <Card>

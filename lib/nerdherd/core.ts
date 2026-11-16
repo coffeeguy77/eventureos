@@ -160,6 +160,24 @@ export interface NerdSettings {
   defaultAssignee: string | null;
   /** team members who never get ticket emails */
   quietUsers: string[];
+  /** the least a quote charges, in hours (a 30-minute job is still billed as this) */
+  minHours: number;
+  /** "Quick add" steps for ticket quotes: common jobs with their usual time (staff only) */
+  quickTasks: QuickTask[];
+}
+export interface QuickTask { label: string; hours: number }
+
+/** Clean a quick-add list (labels unique, time in quarter hours, 15 minutes to 40 hours). */
+export function cleanQuickTasks(list: unknown): QuickTask[] {
+  const seen = new Set<string>();
+  return (Array.isArray(list) ? list : []).flatMap((x) => {
+    const r = (x ?? {}) as { label?: unknown; hours?: unknown };
+    const label = typeof r.label === "string" ? r.label.trim().replace(/\s+/g, " ").slice(0, 200) : "";
+    const hours = Math.min(40, Math.max(0.25, Math.round((Number(r.hours) || 0) * 4) / 4));
+    if (!label || seen.has(label.toLowerCase())) return [];
+    seen.add(label.toLowerCase());
+    return [{ label, hours }];
+  }).slice(0, 200);
 }
 export function readNerd(settings: unknown): NerdSettings {
   const n = ((settings && typeof settings === "object" ? (settings as Record<string, unknown>).nerdherd : null) ?? {}) as Record<string, unknown>;
@@ -172,5 +190,7 @@ export function readNerd(settings: unknown): NerdSettings {
     staffAlerts: n.staff_alerts !== false,
     defaultAssignee: typeof n.default_assignee === "string" && /^[0-9a-f-]{36}$/i.test(n.default_assignee) ? n.default_assignee : null,
     quietUsers: (Array.isArray(n.quiet_users) ? n.quiet_users : []).filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50),
+    minHours: n.min_hours === undefined || n.min_hours === null ? 1 : Math.min(8, Math.max(0, Math.round((Number(n.min_hours) || 0) * 4) / 4)),
+    quickTasks: cleanQuickTasks(n.quick_tasks),
   };
 }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select } from "@/components/ui/form";
 import { saveNerdSettings } from "@/app/(app)/nerd-herd/actions";
 
-export function NerdSettingsForm({ initial, team = [] }: { initial: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts: boolean; default_assignee: string | null; quiet_users: string[] }; team?: { id: string; name: string }[] }) {
+export function NerdSettingsForm({ initial, team = [] }: { initial: { min_hours: number; hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts: boolean; default_assignee: string | null; quiet_users: string[] }; team?: { id: string; name: string }[] }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +19,12 @@ export function NerdSettingsForm({ initial, team = [] }: { initial: { hourly_rat
       <div className="grid gap-3 sm:grid-cols-2">
         <div><Label htmlFor="ns-rate" hint="ex GST">Hourly rate</Label><Input id="ns-rate" inputMode="decimal" value={String(f.hourly_rate)} onChange={(e) => set({ hourly_rate: Number(e.target.value.replace(/[^0-9.]/g, "")) || 0 })} /></div>
         <div><Label htmlFor="ns-acc" hint="for billed time">Xero account code</Label><Input id="ns-acc" value={f.account_code} onChange={(e) => set({ account_code: e.target.value })} /></div>
+        <div className="sm:col-span-2"><Label htmlFor="ns-min" hint="per quote">Minimum charge</Label>
+          <Select id="ns-min" value={String(f.min_hours)} onChange={(e) => set({ min_hours: Number(e.target.value) })}>
+            <option value="0">No minimum</option>
+            {[0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4].map((h) => <option key={h} value={String(h)}>{h < 1 ? `${h * 60} minutes` : `${h} hour${h === 1 ? "" : "s"}`}</option>)}
+          </Select>
+          <p className="mt-1 text-[0.7188rem] text-ink-muted">Steps can be as short as 15 minutes, but a quote whose steps add up to less than this is charged this. The client never sees the time — only the steps and the price.</p></div>
       </div>
       <div><Label htmlFor="ns-email" hint="the address clients write to">Support email</Label><Input id="ns-email" type="email" value={f.support_email} onChange={(e) => set({ support_email: e.target.value })} placeholder="hello@yourdomain.com.au" /></div>
       <label className="flex items-start gap-2 text-[0.8125rem]"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.email_tickets} onChange={(e) => set({ email_tickets: e.target.checked })} /><span><span className="font-medium text-ink">Turn client emails into tickets</span><span className="block text-[0.7188rem] text-ink-muted">A new email from a client (not spam, not a supplier) opens a ticket; their replies land on the same ticket.</span></span></label>

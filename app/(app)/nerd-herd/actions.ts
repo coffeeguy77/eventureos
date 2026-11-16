@@ -285,7 +285,7 @@ export async function setPlanOptions(id: string, o: { creates_ticket?: boolean; 
   } catch (e) { return fail(e); }
 }
 
-export async function saveNerdSettings(i: { hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts?: boolean; default_assignee?: string | null; quiet_users?: string[] }): Promise<R> {
+export async function saveNerdSettings(i: { min_hours?: number; hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts?: boolean; default_assignee?: string | null; quiet_users?: string[] }): Promise<R> {
   try {
     const { supabase, org, role, user, profile } = await desk();
     if (!canManage(role)) throw new Error("Only owners, admins and managers can change settings.");
@@ -295,7 +295,8 @@ export async function saveNerdSettings(i: { hourly_rate: number; account_code: s
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error("That support email address doesn't look right.");
     const nerdherd = { hourly_rate: rate, account_code: t(i.account_code, 10) ?? "6664", email_tickets: !!i.email_tickets, support_email: email || null, staff_alerts: i.staff_alerts !== false,
       default_assignee: i.default_assignee && UUID.test(i.default_assignee) ? i.default_assignee : null,
-      quiet_users: (Array.isArray(i.quiet_users) ? i.quiet_users : []).filter((x) => UUID.test(x)).slice(0, 50) };
+      quiet_users: (Array.isArray(i.quiet_users) ? i.quiet_users : []).filter((x) => UUID.test(x)).slice(0, 50),
+      ...(i.min_hours !== undefined ? { min_hours: Math.min(8, Math.max(0, Math.round((Number(i.min_hours) || 0) * 4) / 4)) } : {}) };
     // managers may change these (checked above); the organisations table only lets owners/admins write, so save with the service role
     const { createServiceClient } = await import("@/lib/integrations/runtime");
     const db = createServiceClient();

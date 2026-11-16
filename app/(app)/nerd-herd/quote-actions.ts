@@ -149,7 +149,7 @@ export async function saveTicketQuote(ticketId: string, quoteId: string | null, 
     const rate = Math.round((Number(i.rate) || readNerd(org.settings).hourlyRate) * 100) / 100;
     if (!(rate > 0 && rate < 10000)) throw new Error("Enter the hourly rate (ex GST).");
     const hours = sumHours(tasks);
-    const price = i.priceOverride != null && Number(i.priceOverride) > 0 ? Math.round(Number(i.priceOverride) * 100) / 100 : priceFor(hours, rate).incGst;
+    const price = i.priceOverride != null && Number(i.priceOverride) > 0 ? Math.round(Number(i.priceOverride) * 100) / 100 : priceFor(hours, rate, readNerd(org.settings).minHours).incGst;
     if (!(price > 0)) throw new Error("The price is $0 — add hours to the steps.");
     const now = new Date().toISOString();
     const base: Record<string, unknown> = { title, description, hours, rate, amount: price, updated_at: now };
@@ -334,5 +334,41 @@ export async function notifyQuoteDone(quoteId: string, i: { recipients: Recipien
     }
     refresh(quote.ticket_id);
     return { ok: true, data: { sent } };
+  } catch (e) { return fail(e); }
+}
+
+/** Save a step to the Nerd Herd "Quick add" list (or update its usual time). */
+export async function saveQuickTask(label: string, hours: number): Promise<R<{ label: string; hours: number }[]>> {
+  try {
+    const { org } = await desk();
+    const { cleanQuickTasks } = await import("@/lib/nerdherd/core");
+    const item = cleanQuickTasks([{ label, hours }])[0];
+    if (!item) throw new Error("Give the step a name first.");
+    const db = createServiceClient(); // techs can keep Quick add up to date; the organisations table only lets owners/admins write
+    const { data: o } = await db.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = ((o?.settings ?? {}) as Record<string, unknown>);
+    const nh = ((settings.nerdherd ?? {}) as Record<string, unknown>);
+    const list = cleanQuickTasks([item, ...readNerd(settings).quickTasks.filter((t) => t.label.toLowerCase() !== item.label.toLowerCase())]);
+    const { error } = await db.from("organisations").update({ settings: { ...settings, nerdherd: { ...nh, quick_tasks: list } } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/nerd-herd", "layout");
+    return { ok: true, data: list };
+  } catch (e) { return fail(e); }
+}
+
+/** Replace the whole Quick add list (Nerd Herd settings). */
+export async function saveQuickTasks(list: { label: string; hours: number }[]): Promise<R<{ label: string; hours: number }[]>> {
+  try {
+    const { org } = await desk();
+    const { cleanQuickTasks } = await import("@/lib/nerdherd/core");
+    const clean = cleanQuickTasks(list);
+    const db = createServiceClient();
+    const { data: o } = await db.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = ((o?.settings ?? {}) as Record<string, unknown>);
+    const nh = ((settings.nerdherd ?? {}) as Record<string, unknown>);
+    const { error } = await db.from("organisations").update({ settings: { ...settings, nerdherd: { ...nh, quick_tasks: clean } } }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/nerd-herd", "layout");
+    return { ok: true, data: clean };
   } catch (e) { return fail(e); }
 }
