@@ -170,6 +170,12 @@ export async function handleReceived(db: SupabaseClient, emailId: string, hinted
   const domain = inboundDomain();
   const candidates = [...new Set([...(e.received_for ?? []), ...(e.to ?? []), ...(e.cc ?? []), ...hinted].map(bare))].filter((a) => a.endsWith(`@${domain}`));
   if (!candidates.length) return { outcome: "unrouted", detail: "not addressed to a forwarding address" };
+  // a loan file's own address: the attachments go straight onto the client's file
+  const { data: loan } = await db.from("loan_files").select("id, organisation_id, inbound_address").in("inbound_address", candidates).limit(1).then((r) => r, () => ({ data: null }));
+  if (loan?.length) {
+    const { receiveLoanEmail } = await import("@/lib/loans/inbound");
+    return receiveLoanEmail(db, loan[0] as { id: string; organisation_id: string }, e);
+  }
   const { data } = await db.from("integrations").select(INTEGRATION_COLUMNS).eq("provider", PROVIDER).in("account_label", candidates).limit(1);
   const integ = ((data ?? []) as IntegrationRow[])[0];
   if (!integ) return { outcome: "unrouted", detail: `no business uses ${candidates.join(", ")}` };

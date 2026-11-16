@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "loans"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame" | "landmark";
 
 export interface AppInfo {
   key: AppKey;
@@ -146,6 +146,21 @@ export const APPS: AppInfo[] = [
     for: "Web designers, agencies and IT support businesses",
   },
   {
+    key: "loans", name: "Loan files", paths: ["/loans"], icon: "landmark",
+    tagline: "Loan applications your clients fill in while you watch.",
+    description: "Send a client a private link: they fill in their application and send their documents — upload, forward by email, pick from Gmail or pull straight from Xero — and you see every answer as they type it, so you can start work and help when they're stuck.",
+    features: [
+      "One link per client, saves as they type — stop and come back any time",
+      "Watch live: what they're on now, every answer as it changes",
+      "Message each other on the form when they get stuck",
+      "Document checklist per applicant, with re-request and 'doesn't apply'",
+      "Xero: profit and loss and balance sheet pulled for the last two years",
+      "Gmail: finds tax notices, statements and rates notices — they choose what to share",
+      "Your Credit Guide and privacy consent ticked before they send",
+    ],
+    for: "Mortgage and finance brokers",
+  },
+  {
     key: "machines", name: "Coffee machines", paths: ["/machines"], icon: "wrench",
     tagline: "Sell coffee machines and run your service callouts.",
     description: "Machines for sale with a chooser that matches customers to the right one, a repairs page with an enquiry form, service jobs priced by callout and hourly rate, and quick invoices from your price list.",
@@ -201,7 +216,7 @@ export const appInfo = (k: AppKey) => APPS.find((a) => a.key === k)!;
  */
 export type AppAccess = Set<AppKey> | null;
 /** Apps a business only gets when EventureOS gives them (never by default, even with no app list). */
-export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd"];
+export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "loans"];
 export function readAppAccess(raw: unknown): AppAccess {
   if (!Array.isArray(raw)) return null;
   return new Set(raw.filter(isAppKey));

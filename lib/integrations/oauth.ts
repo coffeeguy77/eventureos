@@ -115,6 +115,7 @@ export interface OAuthState {
   u: string;         // user id who started the flow
   n: string;         // nonce (also stored in an httpOnly cookie)
   t: number;         // issued at (ms)
+  l?: string;        // a loan file id: the broker's client connecting their own account (no EventureOS sign-in)
 }
 
 export const STATE_MAX_AGE_MS = 15 * 60 * 1000;
@@ -164,14 +165,14 @@ export function clientCredentials(provider: LiveProviderId) {
   return { id, secret };
 }
 
-export function buildAuthorizeUrl(provider: LiveProviderId, opts: { redirectUri: string; state: string; codeVerifier?: string; loginHint?: string; extraScopes?: string[] }) {
+export function buildAuthorizeUrl(provider: LiveProviderId, opts: { redirectUri: string; state: string; codeVerifier?: string; loginHint?: string; extraScopes?: string[]; scopes?: string[] }) {
   const cfg = OAUTH[provider];
   const { id } = clientCredentials(provider);
   const u = new URL(cfg.authorizeUrl);
   u.searchParams.set("response_type", "code");
   u.searchParams.set("client_id", id);
   u.searchParams.set("redirect_uri", opts.redirectUri);
-  u.searchParams.set("scope", [...new Set([...scopesFor(provider), ...(opts.extraScopes ?? [])])].join(" "));
+  u.searchParams.set("scope", [...new Set([...(opts.scopes ?? scopesFor(provider)), ...(opts.extraScopes ?? [])])].join(" "));
   u.searchParams.set("state", opts.state);
   for (const [k, v] of Object.entries(cfg.extraAuthParams ?? {})) u.searchParams.set(k, v);
   if (opts.loginHint && provider !== "xero") u.searchParams.set("login_hint", opts.loginHint);

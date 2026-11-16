@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { unstable_rethrow } from "next/navigation";
 import { canManage, getContext } from "@/lib/context";
 import { calendarListWithToken } from "@/lib/integrations/google-calendar";
 import { gmailProfileWithToken } from "@/lib/integrations/gmail";
@@ -20,6 +21,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let provider = path;
   try { const peek = JSON.parse(Buffer.from((sp.get("state") ?? "").split(".")[0] ?? "", "base64url").toString("utf8")) as { p?: string }; if (path === "gmail" && peek.p === "gmail2") provider = "gmail2"; } catch { /* checked properly below */ }
   const cookieName = oauthCookieName(provider);
+  // a loan broker's client connecting their own Xero / Gmail from their application link (no EventureOS sign-in)
+  try {
+    const peek = JSON.parse(Buffer.from((sp.get("state") ?? "").split(".")[0] ?? "", "base64url").toString("utf8")) as { l?: string };
+    if (peek.l && (provider === "xero" || provider === "gmail2")) {
+      const { loanOAuthCallback } = await import("@/lib/loans/oauth-callback");
+      return await loanOAuthCallback(request, provider, cookieName);
+    }
+  } catch { /* not a loan connection */ }
   const finish = (path: string) => {
     const res = NextResponse.redirect(new URL(path, request.url));
     res.cookies.set(cookieName, "", { path: "/api/integrations", maxAge: 0 });
@@ -67,6 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (error) throw new Error(`Couldn't save the connection: ${error.message}`);
     return finish(`/settings/integrations/${provider}?connected=1`);
   } catch (e) {
+    unstable_rethrow(e); // signed out part-way: getContext() sends them to sign in
     return fail(e instanceof Error ? e.message : `Couldn't connect ${name}.`);
   }
 }

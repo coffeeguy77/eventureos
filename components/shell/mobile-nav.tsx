@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3, Briefcase, CalendarCheck2, CalendarDays, Check, CreditCard, Ticket, Wallet, FileText, Globe, Inbox, LayoutDashboard, LogOut,
-  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Award, Wrench, CalendarClock, Flame, CalendarHeart, PlugZap } from "lucide-react";
+  ListTodo, MoreHorizontal, PenLine, Plus, Receipt, Settings, ShieldCheck, Users, Workflow, X, Coffee, BadgePercent, ChefHat, MonitorSmartphone, Truck, GraduationCap, Handshake, Tent, Tag, Banknote, Printer, Server, Headset, Landmark, Award, Wrench, CalendarClock, Flame, CalendarHeart, PlugZap } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Avatar } from "@/components/ui/avatar";
 import { signOut, switchOrganisation } from "@/app/(app)/shell-actions";
@@ -35,6 +35,7 @@ const MORE = [
   { href: "/machines", label: "Coffee machines", icon: Wrench },
   { href: "/roastery", label: "Roastery", icon: Flame },
   { href: "/nerd-herd", label: "Nerd Herd", icon: Headset },
+  { href: "/loans", label: "Loan files", icon: Landmark },
   { href: "/hosting", label: "Hosting", icon: Server },
   { href: "/rentals", label: "Hire", icon: Tent, flag: "hire" as const },
   { href: "/franchise", label: "Franchise", icon: Handshake, flag: "franchise" as const },
