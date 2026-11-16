@@ -2,8 +2,8 @@
 
 import { cleanAnswers } from "@/lib/loans/form";
 import {
-  DOC_COLS, fileByToken, LOAN_BUCKET, MSG_COLS, REQ_COLS, safeName, scanGmail, serviceDb, shareFromGmail, storagePath,
-  type DocRequest, type LoanDoc, type LoanMsg,
+  DOC_COLS, mayAnswer, openLink, LOAN_BUCKET, MSG_COLS, REQ_COLS, safeName, scanGmail, serviceDb, shareFromGmail, storagePath,
+  newLoanToken, type DocRequest, type LoanDoc, type LoanMsg,
 } from "@/lib/loans/server";
 
 type R<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -14,9 +14,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function open(token: string) {
   const db = serviceDb();
-  const f = await fileByToken(db, token);
-  if (!f) throw new Error("This link isn't active any more — contact your broker.");
-  return { db, f };
+  const o = await openLink(db, token);
+  if (!o) throw new Error("This link isn't active any more — contact your broker.");
+  return { db, f: o.file, me: o.me, myName: String(o.file.answers[`a${o.me}.first_name`] ?? (o.me === 1 ? o.file.contact_name : null) ?? `Applicant ${o.me}`).slice(0, 160) };
+}
+/** Applicant 2+ links can only work on their own documents (and the shared ones). */
+async function ownRequest(db: ReturnType<typeof serviceDb>, fileId: string, me: number, requestId: string | null) {
+  if (!requestId || me === 1) return;
+  const { data: r } = await db.from("loan_doc_requests").select("applicant").eq("id", requestId).eq("file_id", fileId).maybeSingle();
+  if (r?.applicant && r.applicant !== me) throw new Error("That document is for another applicant — they add it from their own link.");
 }
 const locked = (status: string) => !["invited", "in_progress"].includes(status);
 
@@ -24,16 +30,19 @@ const locked = (status: string) => !["invited", "in_progress"].includes(status);
  * Autosave: the changed answers (merged into what's saved) and what they're looking at right now, so the broker can
  * watch and help. Returns broker messages since `since` so the page can show them without a reload.
  */
-export async function saveAnswers(token: string, patch: Record<string, unknown>, focus: { step: string; field?: string; label?: string } | null, since: string | null): Promise<R<{ messages: LoanMsg[]; requests: DocRequest[]; status: string }>> {
+export async function saveAnswers(token: string, patch: Record<string, unknown>, focus: { step: string; field?: string; label?: string } | null, since: string | null): Promise<R<{ messages: LoanMsg[]; requests: DocRequest[]; status: string; answers: Record<string, unknown> }>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me, myName } = await open(token);
     const now = new Date().toISOString();
     const update: Record<string, unknown> = { client_seen_at: now };
-    if (focus) update.client_focus = { step: String(focus.step).slice(0, 40), field: focus.field ? String(focus.field).slice(0, 80) : null, label: focus.label ? String(focus.label).slice(0, 160) : null, at: now };
+    const who = f.applicants > 1 ? `${myName}: ` : "";
+    if (focus) update.client_focus = { step: String(focus.step).slice(0, 40), field: focus.field ? String(focus.field).slice(0, 80) : null, label: focus.label ? `${who}${String(focus.label)}`.slice(0, 160) : who ? myName : null, at: now, by: me };
     if (patch && Object.keys(patch).length && !locked(f.status)) {
-      const clean = cleanAnswers(patch, f.applicants);
+      const clean = Object.fromEntries(Object.entries(cleanAnswers(patch, f.applicants)).filter(([k]) => mayAnswer(me, k)));
       if (Object.keys(clean).length) {
-        update.answers = { ...f.answers, ...clean };
+        // merged in the database in one step, so two applicants typing at once don't overwrite each other
+        const { error: mErr } = await db.rpc("loan_merge_answers", { p_file: f.id, p_patch: clean });
+        if (mErr) update.answers = { ...f.answers, ...clean };
         update.updated_at = now;
         if (f.status === "invited") update.status = "in_progress";
       }
@@ -45,16 +54,18 @@ export async function saveAnswers(token: string, patch: Record<string, unknown>,
     // broker messages they've now seen
     const unread = (msgs ?? []).filter((m) => m.from_side === "broker" && !m.read_at).map((m) => m.id);
     if (unread.length) await db.from("loan_messages").update({ read_at: now }).in("id", unread);
-    return { messages: (msgs ?? []) as LoanMsg[], requests: (reqs ?? []) as DocRequest[], status: (update.status as string) ?? f.status };
+    // the other applicant's latest answers, so each sees what the other has filled in
+    const { data: fresh } = await db.from("loan_files").select("answers").eq("id", f.id).single();
+    return { messages: (msgs ?? []) as LoanMsg[], requests: (reqs ?? []) as DocRequest[], status: (update.status as string) ?? f.status, answers: (fresh?.answers ?? {}) as Record<string, unknown> };
   });
 }
 
 export async function sendClientMessage(token: string, body: string, about: string | null): Promise<R<LoanMsg>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, myName } = await open(token);
     const text = String(body ?? "").trim().slice(0, 4000);
     if (!text) throw new Error("Type a message first.");
-    const author = String(f.answers["a1.first_name"] ?? f.contact_name ?? "Client").slice(0, 160);
+    const author = myName;
     const { data, error } = await db.from("loan_messages").insert({ organisation_id: f.organisation_id, file_id: f.id, from_side: "client", author, body: text, about: about ? String(about).slice(0, 200) : null }).select(MSG_COLS).single();
     if (error) throw new Error(`Couldn't send: ${error.message}`);
     return data as LoanMsg;
@@ -64,7 +75,8 @@ export async function sendClientMessage(token: string, body: string, about: stri
 /** A one-time upload link straight to private storage (big files don't go through our server). */
 export async function startUpload(token: string, requestId: string | null, name: string, size: number): Promise<R<{ path: string; signedUrl: string; token: string }>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
+    await ownRequest(db, f.id, me, requestId && UUID.test(requestId) ? requestId : null);
     if (locked(f.status)) throw new Error("Your application has been sent — email any extra documents to your broker.");
     if (requestId && !UUID.test(requestId)) throw new Error("That document isn't on your list.");
     if (!(size > 0) || size > 25 * 1024 * 1024) throw new Error("Files can be up to 25 MB — try a smaller scan or photo.");
@@ -77,7 +89,8 @@ export async function startUpload(token: string, requestId: string | null, name:
 
 export async function finishUpload(token: string, path: string, requestId: string | null, name: string, mime: string | null): Promise<R<LoanDoc>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me, myName } = await open(token);
+    await ownRequest(db, f.id, me, requestId && UUID.test(requestId) ? requestId : null);
     if (!path.startsWith(`${f.organisation_id}/${f.id}/`) || path.includes("..")) throw new Error("That upload isn't for this application.");
     const dir = path.slice(0, path.lastIndexOf("/")), base = path.slice(path.lastIndexOf("/") + 1);
     const { data: list } = await db.storage.from(LOAN_BUCKET).list(dir, { search: base, limit: 1 });
@@ -96,7 +109,7 @@ export async function finishUpload(token: string, path: string, requestId: strin
     const now = new Date().toISOString();
     if (req) await db.from("loan_doc_requests").update({ status: "received", updated_at: now }).eq("id", req).in("status", ["needed", "redo"]);
     const { logAccess } = await import("@/lib/loans/log");
-    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: String(f.answers["a1.first_name"] ?? f.contact_name ?? "Client"), action: "uploaded", detail: safeName(name) });
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: myName, action: "uploaded", detail: safeName(name) });
     await db.from("loan_files").update({ updated_at: now, client_seen_at: now, ...(f.status === "invited" ? { status: "in_progress" } : {}) }).eq("id", f.id);
     return data as LoanDoc;
   });
@@ -105,11 +118,12 @@ export async function finishUpload(token: string, path: string, requestId: strin
 /** Take back a file they uploaded (before they send the application). */
 export async function removeUpload(token: string, docId: string): Promise<R<null>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
     if (locked(f.status)) throw new Error("Your application has been sent — ask your broker to remove it.");
     if (!UUID.test(docId)) throw new Error("Not found.");
     const { data: d } = await db.from("loan_documents").select("id, storage_path, request_id, source").eq("id", docId).eq("file_id", f.id).maybeSingle();
-    if (!d || d.source === "xero") throw new Error("That file can't be removed here.");
+    if (!d || d.source === "xero" || d.source === "signed") throw new Error("That file can't be removed here.");
+    await ownRequest(db, f.id, me, d.request_id as string | null);
     await db.storage.from(LOAN_BUCKET).remove([d.storage_path]);
     await db.from("loan_documents").delete().eq("id", d.id);
     if (d.request_id) {
@@ -123,8 +137,9 @@ export async function removeUpload(token: string, docId: string): Promise<R<null
 /** "This doesn't apply to me" (or undo). */
 export async function markNotApplicable(token: string, requestId: string, na: boolean): Promise<R<null>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
     if (!UUID.test(requestId)) throw new Error("Not found.");
+    await ownRequest(db, f.id, me, requestId);
     const { data: r } = await db.from("loan_doc_requests").select("id, status").eq("id", requestId).eq("file_id", f.id).maybeSingle();
     if (!r) throw new Error("Not found.");
     if (na && !["needed", "redo"].includes(r.status)) return null;
@@ -136,14 +151,14 @@ export async function markNotApplicable(token: string, requestId: string, na: bo
 /** Their uploaded files, to view (short-lived link). */
 export async function viewMyDoc(token: string, docId: string): Promise<R<string>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, myName } = await open(token);
     if (!UUID.test(docId)) throw new Error("Not found.");
     const { data: d } = await db.from("loan_documents").select("storage_path, name").eq("id", docId).eq("file_id", f.id).maybeSingle();
     if (!d) throw new Error("Not found.");
     const { data } = await db.storage.from(LOAN_BUCKET).createSignedUrl(d.storage_path, 120);
     if (!data) throw new Error("Couldn't open it.");
     const { logAccess } = await import("@/lib/loans/log");
-    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: String(f.answers["a1.first_name"] ?? f.contact_name ?? "Client"), action: "opened_document", detail: d.name as string });
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: myName, action: "opened_document", detail: d.name as string });
     return data.signedUrl;
   });
 }
@@ -184,15 +199,13 @@ export async function disconnectGmail(token: string, connId: string): Promise<R<
 /** Send the application to the broker (they can still message; answers lock). */
 export async function submitApplication(token: string, consentName: string): Promise<R<null>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
     if (locked(f.status)) return null;
+    if (me !== 1) throw new Error("The first applicant sends the application once everyone has signed.");
     const name = String(consentName ?? "").trim().slice(0, 160);
     if (name.length < 2) throw new Error("Type your full name to confirm.");
     const { CONSENTS } = await import("@/lib/loans/form");
-    const { data: org } = await db.from("organisations").select("settings").eq("id", f.organisation_id).single();
-    const hasGuide = !!((org?.settings ?? {}) as { loans?: { credit_guide?: { path?: string } } }).loans?.credit_guide?.path;
     for (let a = 1; a <= f.applicants; a++) for (const c of CONSENTS) {
-      if (c.key === "c_credit_guide" && !hasGuide) continue;
       if (f.answers[`a${a}.${c.key}`] !== "yes") throw new Error(`Please tick "${c.label}"${f.applicants > 1 ? ` for applicant ${a}` : ""}.`);
     }
     // every applicant signs
@@ -229,10 +242,11 @@ export async function submitApplication(token: string, consentName: string): Pro
 /** Sign: their drawn signature (PNG) and typed name, with the time, IP and browser — one per applicant. */
 export async function saveSignature(token: string, applicant: number, name: string, image: string): Promise<R<{ signed_at: string }>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
     if (locked(f.status)) throw new Error("Your application has already been sent.");
     const a = Math.round(Number(applicant));
     if (!(a >= 1 && a <= f.applicants)) throw new Error("Not found.");
+    if (a !== me) throw new Error("Each person signs for themselves, from their own link.");
     const n = String(name ?? "").trim().slice(0, 160);
     if (n.length < 2) throw new Error("Type your full name next to your signature.");
     if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image) || image.length > 380_000) throw new Error("Please sign again — that signature didn't come through.");
@@ -250,9 +264,47 @@ export async function saveSignature(token: string, applicant: number, name: stri
 
 export async function clearSignature(token: string, applicant: number): Promise<R<null>> {
   return run(async () => {
-    const { db, f } = await open(token);
+    const { db, f, me } = await open(token);
     if (locked(f.status)) throw new Error("Your application has already been sent.");
+    if (Math.round(Number(applicant)) !== me) throw new Error("Each person signs for themselves.");
     await db.from("loan_signatures").delete().eq("file_id", f.id).eq("applicant", Math.round(Number(applicant)));
     return null;
+  });
+}
+
+/**
+ * Applicant 1 sends another applicant their own link — to fill in their own details, tick their own consents and sign.
+ * Email is optional: the link is returned so it can be copied and texted instead.
+ */
+export async function sendApplicantLink(token: string, applicant: number, emailRaw: string, send: boolean): Promise<R<{ link: string; sent: string | null }>> {
+  return run(async () => {
+    const { db, f, me, myName } = await open(token);
+    if (me !== 1) throw new Error("Only the first applicant can send links.");
+    const a = Math.round(Number(applicant));
+    if (!(a >= 2 && a <= f.applicants)) throw new Error("Not found.");
+    const email = String(emailRaw ?? "").trim().toLowerCase().slice(0, 254);
+    if (send && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter their email address.");
+    const { data: existing, error: eErr } = await db.from("loan_applicant_links").select("token").eq("file_id", f.id).eq("applicant", a).maybeSingle();
+    if (eErr) throw new Error(/loan_applicant_links/.test(eErr.message) ? "Separate links aren't switched on yet — ask your broker." : eErr.message);
+    const t = (existing?.token as string | undefined) ?? newLoanToken();
+    const { error } = await db.from("loan_applicant_links").upsert({ organisation_id: f.organisation_id, file_id: f.id, applicant: a, token: t, email: email || null, ...(send ? { sent_at: new Date().toISOString() } : {}) }, { onConflict: "file_id,applicant" });
+    if (error) throw new Error(error.message);
+    const base = (process.env.APP_URL?.trim() || "https://www.eventureos.com.au").replace(/\/+$/, "");
+    const link = `${base}/apply/${t}`;
+    if (!send) return { link, sent: null };
+    const { data: org } = await db.from("organisations").select("name").eq("id", f.organisation_id).single();
+    const them = String(f.answers[`a${a}.first_name`] ?? "").trim() || "there";
+    const from = org?.name ?? "Your broker";
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const { sendEmail } = await import("@/lib/email/send");
+    await sendEmail({
+      to: email, fromName: from, orgId: f.organisation_id,
+      subject: `${myName} has added you to a loan application with ${from}`,
+      text: `Hi ${them},\n\n${myName} has added you to your loan application with ${from}. Use your own private link to check your details, add your documents, and sign:\n${link}\n\nIt saves as you go. Only you can sign for yourself.\n\n${from}`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2430"><p>Hi ${esc(them)},</p><p>${esc(myName)} has added you to your loan application with ${esc(from)}. Use your own private link to check your details, add your documents, and sign.</p><p><a href="${link}" style="display:inline-block;padding:12px 22px;background:#1f2a44;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Open my application</a></p><p style="color:#5b6475;font-size:13px">It saves as you go. Only you can sign for yourself — please don't forward this link.</p><p>${esc(from)}</p></div>`,
+    });
+    const { logAccess } = await import("@/lib/loans/log");
+    await logAccess({ orgId: f.organisation_id, fileId: f.id, kind: "client", name: myName, action: "link_sent", detail: `${myName} sent applicant ${a} (${them}) their own link at ${email}` });
+    return { link, sent: email };
   });
 }

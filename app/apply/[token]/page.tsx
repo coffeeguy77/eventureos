@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { brandVars } from "@/app/p/[slug]/portal-data";
 import { todayISO } from "@/lib/format";
 import { defaultPrivacy, lastTwoFYs } from "@/lib/loans/docs";
-import { fileByToken, fileParts, serviceDb } from "@/lib/loans/server";
+import { fileParts, openLink, serviceDb } from "@/lib/loans/server";
 import type { FoundEmail } from "@/lib/loans/server";
 import { ApplyClient } from "./client";
 
@@ -15,15 +15,18 @@ export default async function ApplyPage({ params, searchParams }: { params: Prom
   const { token } = await params;
   const sp = await searchParams;
   const db = serviceDb();
-  const file = await fileByToken(db, token);
-  if (!file) notFound();
+  const link = await openLink(db, token);
+  if (!link) notFound();
+  const { file, me } = link;
   const [{ data: org }, parts, sigRes] = await Promise.all([
     db.from("organisations").select("name, logo_url, brand_colour, contact_email, contact_phone, timezone, settings").eq("id", file.organisation_id).single(),
     fileParts(db, file.id),
     db.from("loan_signatures").select("applicant, signed_name, image, signed_at").eq("file_id", file.id).then((r) => r, () => ({ data: null })),
   ]);
   const { logOnce } = await import("@/lib/loans/log");
-  await logOnce(30 * 60e3, { orgId: file.organisation_id, fileId: file.id, kind: "client", name: String(file.answers["a1.first_name"] ?? file.contact_name ?? "Client"), action: "opened_link" });
+  const myName = String(file.answers[`a${me}.first_name`] ?? (me === 1 ? file.contact_name : null) ?? `Applicant ${me}`);
+  await logOnce(30 * 60e3, { orgId: file.organisation_id, fileId: file.id, kind: "client", name: myName, email: `applicant-${me}`, action: "opened_link" });
+  const { data: links } = me === 1 ? await db.from("loan_applicant_links").select("applicant, email, sent_at, last_seen_at").eq("file_id", file.id).then((r) => r, () => ({ data: null })) : { data: null };
   if (!org) notFound();
   const today = todayISO(org.timezone ?? "Australia/Sydney");
   // what the client may see about their own connections: Gmail finds (theirs), Xero just names and years
@@ -48,6 +51,8 @@ export default async function ApplyPage({ params, searchParams }: { params: Prom
         connections={connections}
         fys={lastTwoFYs(today).map((f) => f.label)}
         legal={{ privacy, creditGuide: guide }}
+        me={me}
+        links={(links ?? []) as { applicant: number; email: string | null; sent_at: string | null; last_seen_at: string | null }[]}
         signatures={((sigRes.data ?? []) as { applicant: number; signed_name: string; image: string; signed_at: string }[])}
         flash={{ step: sp.step ?? null, error: sp.error ?? null, connected: sp.connected ?? null, found: sp.found ? Number(sp.found) : null }}
       />

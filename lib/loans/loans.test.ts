@@ -89,3 +89,15 @@ test("owners shown by name", async () => {
   assert.equal(ownerLabel("Applicant 2", ["Shaun", "Cara"]), "Cara");
   assert.equal(ownerLabel("Joint", ["Shaun", "Cara"]), "Joint (Shaun & Cara)");
 });
+
+import { mayAnswer } from "./permissions";
+test("who can answer what", () => {
+  assert.equal(mayAnswer(1, "a2.salary"), true);          // applicant 1 may fill in applicant 2's details
+  assert.equal(mayAnswer(1, "a2.c_declaration"), false);  // but never tick their consents
+  assert.equal(mayAnswer(1, "a1.c_declaration"), true);
+  assert.equal(mayAnswer(1, "properties"), true);
+  assert.equal(mayAnswer(2, "a2.salary"), true);
+  assert.equal(mayAnswer(2, "a1.salary"), false);
+  assert.equal(mayAnswer(2, "properties"), false);        // shared parts are applicant 1's
+  assert.equal(mayAnswer(2, "a2.c_privacy"), true);
+});

@@ -28,13 +28,27 @@ export const DOC_COLS = "id, request_id, name, mime, size_bytes, source, source_
 export const MSG_COLS = "id, from_side, author, body, about, read_at, created_at";
 export const CONN_COLS = "id, provider, account_label, status, data, error, connected_at, last_pulled_at";
 
-/** A client's link → their file (service client: the link is the key). */
-export async function fileByToken(db: SupabaseClient, token: string): Promise<LoanFileRow | null> {
+/**
+ * A client's link → their file and which applicant they are (service client: the link is the key).
+ * The main link is applicant 1's; applicants 2–4 can have their own (loan_applicant_links).
+ */
+export async function openLink(db: SupabaseClient, token: string): Promise<{ file: LoanFileRow; me: number } | null> {
   if (!/^[A-Za-z0-9_-]{20,80}$/.test(token)) return null;
   const { data } = await db.from("loan_files").select(FILE_COLS).eq("token", token).maybeSingle();
-  if (!data || data.status === "closed") return null;
-  return data as LoanFileRow;
+  if (data) return data.status === "closed" ? null : { file: data as LoanFileRow, me: 1 };
+  const { data: link } = await db.from("loan_applicant_links").select("id, file_id, applicant").eq("token", token).maybeSingle().then((r) => r, () => ({ data: null }));
+  if (!link) return null;
+  const { data: f } = await db.from("loan_files").select(FILE_COLS).eq("id", link.file_id).maybeSingle();
+  if (!f || f.status === "closed" || (link.applicant as number) > (f.applicants as number)) return null;
+  await db.from("loan_applicant_links").update({ last_seen_at: new Date().toISOString() }).eq("id", link.id);
+  return { file: f as LoanFileRow, me: link.applicant as number };
 }
+export async function fileByToken(db: SupabaseClient, token: string): Promise<LoanFileRow | null> {
+  return (await openLink(db, token))?.file ?? null;
+}
+
+export { mayAnswer } from "./permissions";
+
 
 export async function fileParts(db: SupabaseClient, fileId: string) {
   const [r, d, m, c] = await Promise.all([

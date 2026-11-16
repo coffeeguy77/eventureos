@@ -9,11 +9,12 @@ import {
 import { cn } from "@/lib/cn";
 import { createClient } from "@/lib/supabase/client";
 import { SmartDateInput } from "@/components/ui/smart-date";
+import { mayAnswer } from "@/lib/loans/permissions";
 import { fieldShown, ownerLabel, stepProgress, steps as allSteps, type Field, type ListDef } from "@/lib/loans/form";
 import type { DocRequest, LoanMsg } from "@/lib/loans/server";
 import { SignaturePad } from "@/components/loans/signature-pad";
 import {
-  clearSignature, saveSignature,
+  clearSignature, saveSignature, sendApplicantLink,
   disconnectGmail, finishUpload, markNotApplicable, removeUpload, rescanGmail, saveAnswers, sendClientMessage, shareGmailFiles,
   startUpload, submitApplication, viewMyDoc,
 } from "./actions";
@@ -34,8 +35,12 @@ const lab = "mb-1 block text-[0.8125rem] font-medium text-ink";
 const brandBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--portal-brand)] px-5 text-[0.9375rem] font-semibold text-white disabled:opacity-50";
 const plainBtn = "inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-[0.9375rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-canvas disabled:opacity-50";
 
-export function ApplyClient({ token, org, file, requests: initialReqs, documents: initialDocs, messages: initialMsgs, connections, fys, flash, legal, signatures: initialSigs }: {
+export function ApplyClient({ token, org, file, requests: initialReqs, documents: initialDocs, messages: initialMsgs, connections, fys, flash, legal, signatures: initialSigs, me, links }: {
   signatures: { applicant: number; signed_name: string; image: string; signed_at: string }[];
+  /** which applicant this link belongs to (1 = the main link) */
+  me: number;
+  /** links sent to other applicants (main link only) */
+  links: { applicant: number; email: string | null; sent_at: string | null; last_seen_at: string | null }[];
   legal: { privacy: string | null; creditGuide: string | null };
   token: string;
   org: { name: string; logo: string | null; email: string | null; phone: string | null };
@@ -70,6 +75,8 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
     if (Object.keys(patch).length) setSaving("saved");
     setStatus(r.data.status);
     setRequests(r.data.requests);
+    // what the other applicant has filled in, without touching anything still being typed here
+    setAnswers((cur) => ({ ...r.data.answers, ...Object.fromEntries(Object.keys(pending.current).map((k) => [k, cur[k]])) }));
     if (r.data.messages.length) {
       lastMsg.current = r.data.messages.at(-1)!.created_at;
       setMsgs((m) => [...m, ...r.data.messages.filter((x) => !m.some((y) => y.id === x.id))]);
@@ -81,8 +88,9 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
   useEffect(() => { focus.current = { step: step.key }; schedule(300); }, [step.key, schedule]);
   useEffect(() => { const f = () => { if (Object.keys(pending.current).length) flush(); }; window.addEventListener("pagehide", f); return () => window.removeEventListener("pagehide", f); }, [flush]);
 
+  const mine = (key: string) => mayAnswer(me, key);
   const set = (key: string, value: unknown) => {
-    if (locked) return;
+    if (locked || !mine(key)) return;
     setAnswers((a) => ({ ...a, [key]: value }));
     pending.current[key] = value;
     if (key.includes("__none")) pending.current[key] = value;
@@ -134,36 +142,48 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
         <h2 className="text-[1.1875rem] font-semibold">{step.title}</h2>
         {step.intro && <p className="mt-0.5 text-[0.875rem] text-ink-muted">{step.intro}</p>}
         <div className="mt-4 space-y-6">
-          {step.perApplicant && !step.special && names.map((n, i) => (
-            <fieldset key={i} className="space-y-3">
-              {file.applicants > 1 && <legend className="mb-2 text-[0.9375rem] font-semibold text-ink">{n}</legend>}
+          {me > 1 && !step.special && (step.fields || step.lists) && (
+            <p className="rounded-lg bg-canvas px-3 py-2 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line">{names[0]} fills in the shared parts — you can see them here as they&apos;re added. Message us if something needs changing.</p>
+          )}
+          {step.perApplicant && !step.special && names.map((n, i) => (me === 1 || me === i + 1) && (
+            <fieldset key={i} className={cn("space-y-3", file.applicants > 1 && "rounded-xl p-3 ring-1 ring-inset ring-line sm:p-4")}>
+              {file.applicants > 1 && <legend className="px-1 text-[0.9375rem] font-semibold text-ink">{n}{i + 1 === me ? " (you)" : ""}</legend>}
               <FieldGrid fields={step.perApplicant!} prefix={`a${i + 1}.`} answers={answers} set={set} onFocus={onFocus} disabled={locked} who={file.applicants > 1 ? n : ""} />
+              {me === 1 && i > 0 && step.key === "about" && <InviteApplicant token={token} applicant={i + 1} name={n} email={String(answers[`a${i + 1}.email`] ?? "")} link={links.find((l) => l.applicant === i + 1) ?? null} locked={locked} />}
             </fieldset>
           ))}
-          {step.fields && <FieldGrid fields={step.fields} prefix="" answers={answers} set={set} onFocus={onFocus} disabled={locked} who="" />}
-          {step.lists?.map((l) => <ListEditor key={l.key} def={l} answers={answers} set={set} onFocus={onFocus} disabled={locked} names={names} />)}
+          {step.fields && <FieldGrid fields={step.fields} prefix="" answers={answers} set={set} onFocus={onFocus} disabled={locked || me > 1} who="" />}
+          {step.lists?.map((l) => <ListEditor key={l.key} def={l} answers={answers} set={set} onFocus={onFocus} disabled={locked || me > 1} names={names} />)}
           {step.special === "documents" && (
-            <Documents token={token} names={names} requests={requests} setRequests={setRequests} docs={docs} setDocs={setDocs} inbound={file.inbound} locked={locked} orgName={org.name}
+            <Documents token={token} me={me} names={names} requests={requests} setRequests={setRequests} docs={docs} setDocs={setDocs} inbound={file.inbound} locked={locked} orgName={org.name}
               onFocus={(label) => { focus.current = { step: "documents", label }; schedule(200); }} />
           )}
-          {step.special === "connect" && <Connect token={token} connections={connections} fys={fys} flash={flash} locked={locked} />}
+          {step.special === "connect" && (me === 1 ? <Connect token={token} connections={connections} fys={fys} flash={flash} locked={locked} />
+            : <p className="rounded-lg bg-canvas px-3 py-2.5 text-[0.875rem] text-ink-muted ring-1 ring-inset ring-line">{names[0]} connects Xero and Gmail from their link. Upload your own documents on the Documents step.</p>)}
           {step.special === "review" && (
             <Review token={token} steps={formSteps} applicants={file.applicants} answers={answers} needed={requests.filter((r) => r.status === "needed" || r.status === "redo")} names={names}
               locked={locked} orgName={org.name} onGo={(k) => go(steps.findIndex((s) => s.key === k))} onSent={() => setStatus("submitted")} flushFirst={flush}
               consents={<>
                 {legal.privacy && <div className="max-h-48 overflow-y-auto rounded-xl bg-canvas px-3 py-2.5 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line"><p className="mb-1 font-medium text-ink">Privacy statement</p><p className="whitespace-pre-wrap">{legal.privacy}</p></div>}
-                {legal.creditGuide && <a href={legal.creditGuide} target="_blank" rel="noopener" onClick={() => onFocus("credit_guide", "Opened the Credit Guide")} className={cn(plainBtn, "w-full justify-start sm:w-auto")}><FileText className="h-4 w-4" />Read the Credit Guide (PDF)</a>}
-                {names.map((n, i) => (
+                {legal.creditGuide
+                  ? <a href={legal.creditGuide} target="_blank" rel="noopener" onClick={() => onFocus("credit_guide", "Opened the Credit Guide")} className={cn(plainBtn, "w-full justify-start sm:w-auto")}><FileText className="h-4 w-4" />Read the Credit Guide (PDF)</a>
+                  : <p className="rounded-lg bg-canvas px-3 py-2 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line">{org.name} gives you their Credit Guide — ask them for a copy if you haven&apos;t had it.</p>}
+                {names.map((n, i) => i + 1 !== me ? (
+                  <OtherSigner key={i} name={n} signed={sigs.find((x) => x.applicant === i + 1) ?? null}
+                    ticked={step.perApplicant!.every((f) => answers[`a${i + 1}.${f.key}`] === "yes")}
+                    invite={me === 1 ? <InviteApplicant token={token} applicant={i + 1} name={n} email={String(answers[`a${i + 1}.email`] ?? "")} link={links.find((l) => l.applicant === i + 1) ?? null} locked={locked} /> : null} />
+                ) : (
                   <fieldset key={i} className="space-y-3 rounded-xl p-3 ring-1 ring-inset ring-line">
-                    <legend className="px-1 text-[0.9375rem] font-semibold">{file.applicants > 1 ? n : "Your consent"}</legend>
-                    <FieldGrid fields={step.perApplicant!.filter((f) => f.key !== "c_credit_guide" || legal.creditGuide)} prefix={`a${i + 1}.`} answers={answers} set={set} onFocus={onFocus} disabled={locked} who={file.applicants > 1 ? n : ""} />
+                    <legend className="px-1 text-[0.9375rem] font-semibold">{file.applicants > 1 ? `${n} (you)` : "Your consent"}</legend>
+                    <FieldGrid fields={step.perApplicant!} prefix={`a${i + 1}.`} answers={answers} set={set} onFocus={onFocus} disabled={locked} who={file.applicants > 1 ? n : ""} />
                     <SignBlock token={token} applicant={i + 1} who={file.applicants > 1 ? n : ""} locked={locked} suggested={[answers[`a${i + 1}.first_name`], answers[`a${i + 1}.last_name`]].filter(Boolean).join(" ")}
                       sig={sigs.find((x) => x.applicant === i + 1) ?? null} onSigned={(x) => setSigs((all) => [...all.filter((y) => y.applicant !== i + 1), ...(x ? [x] : [])])}
                       onFocus={() => onFocus(`a${i + 1}.signature`, `${file.applicants > 1 ? `${n} · ` : ""}Signing`)} />
                   </fieldset>
                 ))}
               </>}
-              consentsDone={names.every((_, i) => sigs.some((x) => x.applicant === i + 1) && step.perApplicant!.filter((f) => f.key !== "c_credit_guide" || legal.creditGuide).every((f) => answers[`a${i + 1}.${f.key}`] === "yes"))} />
+              me={me}
+              consentsDone={names.every((_, i) => sigs.some((x) => x.applicant === i + 1) && step.perApplicant!.every((f) => answers[`a${i + 1}.${f.key}`] === "yes"))} />
           )}
         </div>
       </section>
@@ -289,13 +309,15 @@ function ListEditor({ def, answers, set, onFocus, disabled, names }: { def: List
 
 // ------------------------------------------------------------------------------------------------
 
-function Documents({ token, names, requests, setRequests, docs, setDocs, inbound, locked, orgName, onFocus }: {
+function Documents({ token, me, names, requests, setRequests, docs, setDocs, inbound, locked, orgName, onFocus }: {
+  me: number;
   token: string; names: string[]; requests: DocRequest[]; setRequests: (f: (r: DocRequest[]) => DocRequest[]) => void; docs: Doc[]; setDocs: (f: (d: Doc[]) => Doc[]) => void;
   inbound: string | null; locked: boolean; orgName: string; onFocus: (label: string) => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const groups = [...names.map((n, i) => ({ title: n, list: requests.filter((r) => r.applicant === i + 1) })), { title: names.length > 1 ? "For the application" : "Other documents", list: requests.filter((r) => !r.applicant) }].filter((g) => g.list.length);
+  // another applicant's own link shows only their documents and the shared ones
+  const groups = [...names.map((n, i) => ({ title: n, list: me === 1 || me === i + 1 ? requests.filter((r) => r.applicant === i + 1) : [] })), { title: names.length > 1 ? "For the application" : "Other documents", list: requests.filter((r) => !r.applicant) }].filter((g) => g.list.length);
   const upload = async (r: DocRequest, files: FileList | null) => {
     if (!files?.length) return;
     setErr(null); setBusy(r.id); onFocus(`Uploading: ${r.label}`);
@@ -463,8 +485,8 @@ function Connect({ token, connections, fys, flash, locked }: { token: string; co
   );
 }
 
-function Review({ token, steps, applicants, answers, needed, names, locked, orgName, onGo, onSent, flushFirst, consents, consentsDone }: {
-  consents: React.ReactNode; consentsDone: boolean;
+function Review({ token, steps, applicants, answers, needed, names, locked, orgName, onGo, onSent, flushFirst, consents, consentsDone, me }: {
+  consents: React.ReactNode; consentsDone: boolean; me: number;
   token: string; steps: ReturnType<typeof allSteps>; applicants: number; answers: Answers; needed: DocRequest[]; names: string[]; locked: boolean; orgName: string;
   onGo: (k: string) => void; onSent: () => void; flushFirst: () => Promise<void>;
 }) {
@@ -503,14 +525,18 @@ function Review({ token, steps, applicants, answers, needed, names, locked, orgN
       ) : (
         <div className="space-y-3">
           {consents}
+          {me > 1 ? (
+            <p className="rounded-xl bg-canvas px-4 py-3 text-[0.875rem] text-ink-muted ring-1 ring-inset ring-line">Once you&apos;ve ticked and signed, you&apos;re done — {names[0]} sends the application when everyone has signed.</p>
+          ) : (
           <div className="rounded-xl p-4 ring-1 ring-inset ring-line">
           <p className="text-[0.875rem] text-ink-muted">By sending, you consent to {orgName} using this information and the documents you&apos;ve shared to assess and arrange your loan, including sharing them with lenders.</p>
-          <label htmlFor="consent" className={cn(lab, "mt-3")}>Type your full name to confirm{applicants > 1 ? " (for all applicants)" : ""}</label>
+          <label htmlFor="consent" className={cn(lab, "mt-3")}>Type your full name to send</label>
           <input id="consent" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" className={box} />
           {err && <p className="mt-2 text-[0.8125rem] text-rose-700">{err}</p>}
-          {!consentsDone && <p className="mt-2 text-[0.8125rem] text-ink-muted">Tick every box and sign above{applicants > 1 ? " for each person" : ""} to send.</p>}
+          {!consentsDone && <p className="mt-2 text-[0.8125rem] text-ink-muted">{applicants > 1 ? "Everyone ticks their boxes and signs (each from their own link) before it can be sent." : "Tick every box and sign above to send."}</p>}
           <button type="button" disabled={pending || name.trim().length < 2 || !consentsDone} onClick={send} className={cn(brandBtn, "mt-3 w-full sm:w-auto")}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Send my application</button>
           </div>
+          )}
         </div>
       )}
     </div>
@@ -600,6 +626,48 @@ function SignBlock({ token, applicant, who, locked, suggested, sig, onSigned, on
           })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save signature</button>
       </div>
       {err && <p className="text-[0.8125rem] text-rose-700">{err}</p>}
+    </div>
+  );
+}
+
+function OtherSigner({ name, signed, ticked, invite }: { name: string; signed: { signed_name: string; signed_at: string } | null; ticked: boolean; invite: React.ReactNode }) {
+  return (
+    <div className="space-y-2 rounded-xl p-3 ring-1 ring-inset ring-line">
+      <p className="text-[0.9375rem] font-semibold">{name}</p>
+      {signed ? <p className="text-[0.875rem] text-emerald-700 dark:text-emerald-400"><Check className="mr-1 inline h-4 w-4" />Signed by {signed.signed_name} · {new Date(signed.signed_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}</p>
+        : <p className="text-[0.875rem] text-ink-muted">{ticked ? "Consents ticked — " : ""}{name} signs for themselves from their own link. Nobody can sign on their behalf.</p>}
+      {!signed && invite}
+    </div>
+  );
+}
+
+function InviteApplicant({ token, applicant, name, email: initialEmail, link, locked }: {
+  token: string; applicant: number; name: string; email: string; locked: boolean;
+  link: { email: string | null; sent_at: string | null; last_seen_at: string | null } | null;
+}) {
+  const [email, setEmail] = useState(link?.email ?? initialEmail);
+  const [msg, setMsg] = useState<string | null>(link?.sent_at ? `Link sent to ${link.email}${link.last_seen_at ? ` · ${name} opened it ${new Date(link.last_seen_at).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}` : " · not opened yet"}` : null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (locked) return null;
+  const go = (send: boolean) => start(async () => {
+    setErr(null);
+    const r = await sendApplicantLink(token, applicant, email, send);
+    if (!r.ok) { setErr(r.error); return; }
+    if (send) setMsg(`Link sent to ${r.data.sent}. ${name} can fill in their own details and sign.`);
+    else { await navigator.clipboard.writeText(r.data.link).catch(() => null); setMsg(`${name}'s link is copied — paste it into a text to them. It's theirs only: don't use it yourself to sign.`); }
+  });
+  return (
+    <div className="rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
+      <p className="text-[0.875rem] font-medium text-ink">Send {name} their own link</p>
+      <p className="text-[0.75rem] text-ink-muted">You can fill in {name}&apos;s details here, or send them a link to do it themselves. Either way, {name} ticks their own consents and signs from their link.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`${name}'s email`} aria-label={`${name}'s email`} className={cn(box, "h-10 min-w-0 flex-1 basis-56")} />
+        <button type="button" disabled={pending} onClick={() => go(true)} className={cn(brandBtn, "h-10 text-[0.875rem]")}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}{link?.sent_at ? "Send again" : "Email link"}</button>
+        <button type="button" disabled={pending} onClick={() => go(false)} className={cn(plainBtn, "h-10 text-[0.875rem]")}>Copy link</button>
+      </div>
+      {msg && <p className="mt-2 text-[0.75rem] text-ink-muted">{msg}</p>}
+      {err && <p className="mt-2 text-[0.75rem] text-rose-700">{err}</p>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildAuthorizeUrl, newCodeVerifier, newNonce, oauthCookieName, OAUTH, signState, STATE_MAX_AGE_MS } from "@/lib/integrations/oauth";
 import { missingEnv, redirectUri } from "@/lib/integrations/registry";
-import { fileByToken, LOAN_SCOPES, serviceDb } from "@/lib/loans/server";
+import { LOAN_SCOPES, openLink, serviceDb } from "@/lib/loans/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const back = (msg: string) => NextResponse.redirect(new URL(`/apply/${encodeURIComponent(token)}?step=connect&error=${encodeURIComponent(msg)}`, request.url));
   if (which !== "xero" && which !== "gmail") return back("That connection isn't available.");
   const provider = which === "xero" ? "xero" : "gmail2";
-  const file = await fileByToken(serviceDb(), token);
-  if (!file) return NextResponse.redirect(new URL(`/apply/${encodeURIComponent(token)}`, request.url));
+  const link = await openLink(serviceDb(), token);
+  if (!link) return NextResponse.redirect(new URL(`/apply/${encodeURIComponent(token)}`, request.url));
+  // the return from Xero/Google lands on the main application link, so only the first applicant connects accounts
+  if (link.me !== 1) return back("Xero and Gmail are connected from the first applicant's link — upload your documents here instead.");
+  const file = link.file;
   const missing = missingEnv(provider);
   if (missing.length) return back(`${which === "xero" ? "Xero" : "Gmail"} connecting isn't set up yet — upload the documents instead.`);
   try {
