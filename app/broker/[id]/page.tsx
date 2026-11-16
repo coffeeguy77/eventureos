@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowRight, CheckCircle2, CircleDashed, Download, Eye, FileText, LogOut, X } from "lucide-react";
 import { LoanOverview } from "@/components/loans/overview";
+import { SchemeToggle } from "@/components/portal/scheme-toggle";
 import { LoanTabs, PrintButton } from "@/components/loans/tabs";
 import { cn } from "@/lib/cn";
 import { brokerAccess } from "@/lib/loans/broker-auth";
@@ -97,6 +98,7 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
             <span className="mx-2 text-ink-faint">/</span><span className="text-ink">{fullNames.join(" & ") || file.title}</span>
           </nav>
           {live && <span className="hidden items-center gap-1.5 text-[0.75rem] font-medium text-emerald-700 sm:inline-flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Client filling in now{file.client_focus?.label ? ` — ${file.client_focus.label}` : ""}</span>}
+          <SchemeToggle />
           {acc.kind === "broker" && <form action={brokerSignOutAction} className="print:hidden"><button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button></form>}
         </div>
       </header>

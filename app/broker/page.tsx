@@ -6,6 +6,7 @@ import { STATUS_LABEL } from "@/components/loans/status";
 import { aud } from "@/lib/loans/summary";
 import { brokerSignOutAction } from "./actions";
 import { BrokerSignIn } from "./ui";
+import { SchemeToggle } from "@/components/portal/scheme-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ export default async function BrokerHome({ searchParams }: { searchParams: Promi
   const broker = await currentBroker().catch(() => null);
   if (!broker) {
     return (
-      <main className="grid min-h-dvh place-items-center px-4">
+      <main className="relative grid min-h-dvh place-items-center px-4">
+        <SchemeToggle className="absolute right-4 top-4" />
         <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm">
           <p className="text-[0.75rem] font-semibold uppercase tracking-[0.12em] text-ink-faint">Broker portal</p>
           <h1 className="mt-1 text-[1.375rem] font-bold">Sign in</h1>
@@ -35,6 +37,7 @@ export default async function BrokerHome({ searchParams }: { searchParams: Promi
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <div className="min-w-0 flex-1"><p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-ink-faint">Broker portal · {org?.name}</p><p className="font-semibold">{broker.name}{broker.company ? ` · ${broker.company}` : ""}</p></div>
+          <SchemeToggle />
           <form action={brokerSignOutAction}><button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink"><LogOut className="h-4 w-4" />Sign out</button></form>
         </div>
       </header>

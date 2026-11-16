@@ -43,7 +43,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Public pages (the website, booking, shop, café, events, jobs, academy, quote and ordering links) always look the same
   // for everyone: light, standard contrast and the standard text size — your own app display settings never change them,
   // so menus and text are the same size on every page.
-  if (isPublicPath(path)) prefs = { ...prefs, scheme: "light", contrast: "normal", text: DEFAULT_PREFS.text };
+  if (isPublicPath(path)) {
+    // the broker portal and the client's loan form have their own light / dark / auto switch
+    const own = /^\/(broker|apply)(\/|$)/.test(path) ? (await cookies()).get("eos-portal-scheme")?.value : undefined;
+    const scheme = own === "dark" || own === "system" ? own : "light";
+    prefs = { ...prefs, scheme, contrast: "normal", text: DEFAULT_PREFS.text };
+  }
   return (
     <html lang="en-AU" className={`${GeistSans.variable} ${GeistMono.variable}`} {...htmlAttrs(prefs)} suppressHydrationWarning>
       <body className="min-h-screen font-sans">{children}</body>

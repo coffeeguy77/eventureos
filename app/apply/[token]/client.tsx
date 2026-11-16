@@ -13,6 +13,7 @@ import { mayAnswer } from "@/lib/loans/permissions";
 import { fieldShown, ownerLabel, stepProgress, steps as allSteps, type Field, type ListDef } from "@/lib/loans/form";
 import type { DocRequest, LoanMsg } from "@/lib/loans/server";
 import { SignaturePad } from "@/components/loans/signature-pad";
+import { SchemeToggle } from "@/components/portal/scheme-toggle";
 import {
   clearSignature, saveSignature, sendApplicantLink,
   disconnectGmail, finishUpload, markNotApplicable, removeUpload, rescanGmail, saveAnswers, sendClientMessage, shareGmailFiles,
@@ -108,7 +109,8 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
     <div className="mx-auto max-w-3xl px-4 pb-28 pt-5 sm:px-6">
       <header className="flex flex-wrap items-center gap-3">
         {org.logo ? <Image src={org.logo} alt={org.name} width={120} height={40} className="h-10 w-auto max-w-[140px] object-contain" unoptimized /> : <span className="text-[1.0625rem] font-bold">{org.name}</span>}
-        <div className="ml-auto text-right text-[0.75rem] text-ink-muted">
+        <SchemeToggle className="ml-auto" />
+        <div className="text-right text-[0.75rem] text-ink-muted">
           {saving === "saving" ? <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Saving…</span>
             : saving === "error" ? <span className="text-rose-600">Not saved — check your connection</span>
             : saving === "saved" ? <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" />Saved</span> : "Saves as you type"}
