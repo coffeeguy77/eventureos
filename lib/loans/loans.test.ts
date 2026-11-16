@@ -58,7 +58,7 @@ test("repayments", () => {
   assert.equal(repayment(0, 6, 30), 0);
 });
 test("analysis: cash flow and stress test", () => {
-  const m = analyse({ "a1.salary": "150000", amount: "500000", property_value: "800000", cards: [{ limit: "10000", balance: "0" }], exp_groceries: "2000" }, 1, ["Shaun"], []);
+  const m = analyse({ "a1.salary": "150000", purpose: "Buy a home", amount: "500000", property_value: "800000", cards: [{ limit: "10000", balance: "0" }], exp_groceries: "2000" }, 1, ["Shaun"], []);
   assert.equal(m.monthly.cardCommitment, 300);
   assert.equal(m.monthly.netIncome, Math.round((150000 - taxOn(150000)) / 12));
   assert.equal(m.monthly.surplus, m.monthly.netIncome - 2000 - 300 - m.monthly.newLoan);
@@ -100,4 +100,12 @@ test("who can answer what", () => {
   assert.equal(mayAnswer(2, "a1.salary"), false);
   assert.equal(mayAnswer(2, "properties"), false);        // shared parts are applicant 1's
   assert.equal(mayAnswer(2, "a2.c_privacy"), true);
+});
+
+test("home contents are household (joint), hidden loan answers ignored", () => {
+  const m = analyse({ contents: "400000", vehicles: [{ owner: "Applicant 1", value: "10000" }], purpose: "Debt consolidation", deposit: "50000", property_value: "900000", security_value: "1200000", amount: "200000" }, 2, ["Shaun", "Cara"], []);
+  assert.ok(!m.byOwner.some((o) => o.owner === "Not assigned"));
+  assert.equal(m.byOwner.find((o) => o.owner === "Joint")!.assets, 400000);
+  assert.equal(m.loan.deposit, null);
+  assert.equal(m.loan.value, 1200000);
 });

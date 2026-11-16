@@ -66,6 +66,7 @@ export interface LiveFile {
   brokers: { id: string; name: string; email: string; company: string | null; last_seen_at: string | null }[];
   allBrokers: { id: string; name: string; email: string; company: string | null }[];
   business: import("@/lib/loans/analysis").BusinessYear[];
+  signedApplicants: number[];
   analysis: import("@/lib/loans/analysis").SavedAnalysis | null;
   log: { id: string; actor_kind: string; actor_name: string | null; actor_email: string | null; action: string; detail: string | null; ip: string | null; at: string }[];
 }
@@ -89,6 +90,7 @@ export async function liveFile(fileId: string): Promise<R<LiveFile>> {
     ]);
     const { businessYear } = await import("@/lib/loans/analysis");
     const business = conns.filter((x) => x.provider === "xero").flatMap((x) => (((x.data ?? {}) as { reports?: { tenant: string; fy: string; pl: import("@/lib/loans/server").FlatReport; bs: import("@/lib/loans/server").FlatReport }[] }).reports ?? []).map((r) => businessYear(r.tenant, r.fy, r.pl, r.bs)));
+    const { data: sg } = await supabase.from("loan_signatures").select("applicant").eq("file_id", file.id).then((r) => r, () => ({ data: null }));
     const { data: an } = await supabase.from("loan_files").select("analysis").eq("id", file.id).maybeSingle().then((r) => r, () => ({ data: null }));
     const onFile = new Set(((fb.data ?? []) as { broker_id: string }[]).map((x) => x.broker_id));
     const all = ((ab.data ?? []) as { id: string; name: string; email: string; company: string | null; last_seen_at: string | null; active: boolean }[]).filter((x) => x.active);
@@ -100,7 +102,7 @@ export async function liveFile(fileId: string): Promise<R<LiveFile>> {
       file, requests: (r.data ?? []) as DocRequest[], documents: (d.data ?? []) as LoanDoc[], messages: (m.data ?? []) as LoanMsg[],
       connections: conns.map(({ id, provider, account_label, status, last_pulled_at, error }) => ({ id, provider, account_label, status, last_pulled_at, error })),
       xeroReports: conns.filter((x) => x.provider === "xero").flatMap((x) => (((x.data ?? {}) as { reports?: { tenant: string; fy: string }[] }).reports ?? []).map((y) => ({ tenant: y.tenant, fy: y.fy }))),
-      business, analysis: ((an as { analysis?: unknown } | null)?.analysis ?? null) as LiveFile["analysis"],
+      business, signedApplicants: ((sg ?? []) as { applicant: number }[]).map((x) => x.applicant), analysis: ((an as { analysis?: unknown } | null)?.analysis ?? null) as LiveFile["analysis"],
       brokers: all.filter((x) => onFile.has(x.id)).map(({ id, name, email, company, last_seen_at }) => ({ id, name, email, company, last_seen_at })),
       allBrokers: all.map(({ id, name, email, company }) => ({ id, name, email, company })),
       // sign-ins are logged without a file: show those of this file's brokers

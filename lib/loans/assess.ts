@@ -5,7 +5,7 @@ import { replyModel } from "@/lib/ai/reply";
 import { orgAiKey } from "@/lib/ai/key";
 import { analyse, businessYear, DEFAULT_ASSUMPTIONS, type Assessment, type Assumptions, type BusinessYear, type SavedAnalysis } from "./analysis";
 import { applicantNames, type FlatReport, type LoanFileRow } from "./server";
-import { ownerLabel } from "./form";
+import { fieldShown, ownerLabel, steps } from "./form";
 
 /** The Xero years pulled for a file, as headline figures. */
 export async function businessYears(db: SupabaseClient, fileId: string): Promise<BusinessYear[]> {
@@ -30,9 +30,11 @@ export async function runAssessment(db: SupabaseClient, file: LoanFileRow, by: s
   const a = file.answers;
   const facts = {
     applicants: m.applicants.map((p, i) => ({ name: p.name, employment: a[`a${i + 1}.employment`] ?? null, occupation: a[`a${i + 1}.occupation`] ?? null, employed_since: a[`a${i + 1}.employed_since`] ?? null, dependants: a[`a${i + 1}.dependants`] ?? null, residential: a[`a${i + 1}.residential`] ?? null, gross_yearly: p.gross, est_tax: p.tax })),
-    loan_answers: Object.fromEntries(["purpose", "property_type", "first_home", "property_value", "deposit", "deposit_source", "security_address", "security_value", "refi_balance", "refi_why", "consolidate_amount", "equity_for", "asset_what", "asset_price", "asset_trade", "business_for"].filter((k) => a[k]).map((k) => [k, a[k]])),
+    // only the loan questions asked for this purpose (answers to hidden questions are left out)
+    loan_answers: Object.fromEntries((steps(file.applicants).find((s) => s.key === "loan")?.fields ?? []).filter((f) => fieldShown(f, a) && a[f.key] != null && a[f.key] !== "").map((f) => [f.label, a[f.key]])),
+    home_contents_note: "Home contents are household property, counted as jointly owned.",
     ownership: m.byOwner.map((o) => ({ ...o, owner: ownerLabel(o.owner, names) })),
-    loan: { purpose: a.purpose ?? null, amount: m.loan.amount, value: m.loan.value, deposit: m.loan.deposit, deposit_source: a.deposit_source ?? null, lvr_pct: m.loan.lvr, rate_type: a.rate_type ?? null, repayments: a.repay_type ?? null, first_home: a.first_home ?? null, timeframe: a.timeframe ?? null },
+    loan: { purpose: a.purpose ?? null, amount: m.loan.amount, value: m.loan.value, deposit: m.loan.deposit, deposit_source: m.loan.deposit ? a.deposit_source ?? null : null, lvr_pct: m.loan.lvr, rate_type: a.rate_type ?? null, repayments: a.repay_type ?? null, first_home: a.first_home ?? null, timeframe: a.timeframe ?? null },
     looking_ahead: { changes: a.changes ?? null, what: a.changes_what ?? null, how: a.changes_how ?? null },
     income: { gross_yearly_incl_rent: m.incomeGross, rent_gross: m.rentGross, rent_counted: m.rentCounted, net_monthly_est: m.incomeNetMonthly },
     assets: m.assets, debts: m.debts, net_worth: m.netWorth,
@@ -56,7 +58,11 @@ Record your assessment with the record_assessment tool.`;
     headline: String(o.headline ?? "").slice(0, 200), summary: String(o.summary ?? "").slice(0, 1600),
     strengths: strs(o.strengths, 6), risks: strs(o.risks, 6), mitigants: strs(o.mitigants, 6), questions: strs(o.questions, 8),
   };
-  const saved: SavedAnalysis = { at: new Date().toISOString(), by, assessment, metrics: m, assumptions };
+  // keep a short history of the headline figures, for "vs last review" and the trend lines
+  const point = (x: { at: string; metrics: { assets: { total: number }; debts: { total: number }; monthly: { surplus: number }; dti: number | null; netWorth: number } }) =>
+    ({ at: x.at, assets: x.metrics.assets.total, debts: x.metrics.debts.total, surplus: x.metrics.monthly.surplus, dti: x.metrics.dti, net: x.metrics.netWorth });
+  const history = [...(prev?.history ?? []), ...(prev?.metrics ? [point(prev as never)] : [])].slice(-12);
+  const saved: SavedAnalysis = { at: new Date().toISOString(), by, assessment, metrics: m, assumptions, history };
   const { error } = await db.from("loan_files").update({ analysis: saved }).eq("id", file.id);
   if (error) throw new Error(/analysis/.test(error.message) ? "Run the database update 0107_loan_brokers.sql first." : error.message);
   return saved;

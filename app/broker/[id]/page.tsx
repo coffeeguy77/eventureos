@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CheckCircle2, CircleDashed, Download, Eye, FileText, LogOut, X } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDashed, Download, Eye, FileText, LogOut, X } from "lucide-react";
+import { LoanOverview } from "@/components/loans/overview";
+import { LoanTabs, PrintButton } from "@/components/loans/tabs";
 import { cn } from "@/lib/cn";
 import { brokerAccess } from "@/lib/loans/broker-auth";
 import { CONSENTS, fieldShown, ownerLabel, steps as allSteps, type Field } from "@/lib/loans/form";
@@ -77,37 +79,51 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
   const groups = [...fullNames.map((n, i) => ({ t: n, list: parts.requests.filter((r) => r.applicant === i + 1) })), { t: "Application", list: parts.requests.filter((r) => !r.applicant) }].filter((g) => g.list.length);
   const list = (k: string) => (Array.isArray(a[k]) ? (a[k] as Record<string, string>[]) : []);
 
+  const purposeLabel = String(a.purpose ?? "").split("|").filter(Boolean).join(", ") || file.loan_type || "Loan application";
+  const signedNums = signed.map((x) => x.applicant);
+  const overviewLinks = { assessment: "#financials", documents: "#documents", applicants: "#applicants", properties: "#properties" };
   return (
-    <div>
+    <div className="print:bg-white">
       <AutoRefresh seconds={10} />
       {acc.kind === "preview" && (
         <div className="bg-amber-100 px-4 py-2 text-center text-[0.8125rem] font-medium text-amber-950 print:hidden">
           Preview — this is exactly what your brokers see. Only you (signed in to {org?.name}) can open it this way. <Link href={`/loans/${file.id}`} className="underline">Back to the loan file</Link>
         </div>
       )}
-      <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur print:static">
+      <header className="border-b border-line bg-surface print:border-0">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          {acc.kind === "broker" && <Link href="/broker" className="grid h-9 w-9 place-items-center rounded-lg text-ink-muted ring-1 ring-inset ring-line hover:text-ink print:hidden" aria-label="All applications"><ArrowLeft className="h-4 w-4" /></Link>}
-          <div className="min-w-0 flex-1">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-ink-faint">Loan application · {org?.name}</p>
-            <h1 className="truncate text-[1.1875rem] font-bold">{fullNames.join(" & ") || file.title}</h1>
-          </div>
-          <span className="rounded-full bg-canvas px-2.5 py-1 text-[0.75rem] font-medium ring-1 ring-inset ring-line">{STATUS_LABEL[file.status] ?? file.status}</span>
+          <nav className="min-w-0 flex-1 truncate text-[0.8125rem]">
+            {acc.kind === "broker" ? <Link href="/broker" className="font-medium text-emerald-700 hover:underline">Clients</Link> : <span className="font-medium text-emerald-700">{org?.name}</span>}
+            <span className="mx-2 text-ink-faint">/</span><span className="text-ink">{fullNames.join(" & ") || file.title}</span>
+          </nav>
+          {live && <span className="hidden items-center gap-1.5 text-[0.75rem] font-medium text-emerald-700 sm:inline-flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Client filling in now{file.client_focus?.label ? ` — ${file.client_focus.label}` : ""}</span>}
           {acc.kind === "broker" && <form action={brokerSignOutAction} className="print:hidden"><button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink"><LogOut className="h-4 w-4" /><span className="hidden sm:inline">Sign out</span></button></form>}
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-4 overflow-x-auto px-4 pb-2 text-[0.8125rem] text-ink-muted sm:px-6 print:hidden">
-          {[["position", "Financial position"], ["applicants", "Applicants"], ["loan", "Loan"], ["position", "Assets & debts"], ["costs", "Living costs"], ["documents", "Documents"], ["signed", "Consent & signatures"], ["messages", "Messages"]].map(([k, l]) => <a key={k} href={`#${k}`} className="shrink-0 hover:text-ink">{l}</a>)}
-        </nav>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6">
-        <p className="text-[0.8125rem] text-ink-muted">
-          {live ? <span className="font-medium text-emerald-700 dark:text-emerald-400">● The client is filling this in right now{file.client_focus?.label ? ` — ${file.client_focus.label}` : ""}</span> : file.submitted_at ? `Signed and sent ${when(file.submitted_at, tz)}` : `Client last active ${when(file.client_seen_at, tz)} · not sent yet`}
-          {" · "}{needed ? `${needed} document${needed === 1 ? "" : "s"} outstanding` : "all documents in"}
-        </p>
+      <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6">
+        <div className="mb-5 flex flex-wrap items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="font-serif text-[1.75rem] font-semibold leading-tight text-ink sm:text-[2.125rem]">{fullNames.join(" & ") || file.title}</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[0.8125rem] font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200"><span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />{STATUS_LABEL[file.status] ?? file.status}</span>
+            </div>
+            <p className="mt-1 text-[0.9375rem] text-ink-muted">{purposeLabel} · {file.applicants > 1 ? "Joint application" : "Single applicant"}{file.submitted_at ? ` · signed and sent ${when(file.submitted_at, tz)}` : file.client_seen_at ? ` · client last active ${when(file.client_seen_at, tz)}` : ""}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <PrintButton className="inline-flex h-11 items-center gap-2 rounded-xl bg-surface px-4 text-[0.9375rem] font-semibold text-ink ring-1 ring-inset ring-line hover:bg-canvas"><Download className="h-4 w-4" />Export report</PrintButton>
+            <a href="#applicants" className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-800 px-4 text-[0.9375rem] font-semibold text-white hover:bg-emerald-900">Review application<ArrowRight className="h-4 w-4" /></a>
+          </div>
+        </div>
 
-        <div id="position" className="scroll-mt-24"><BrokerPosition fileId={file.id} answers={a} applicants={file.applicants} names={names} business={business} saved={analysis} /></div>
-
+        <LoanTabs
+          tabs={[
+            { key: "overview", label: "Overview" }, { key: "applicants", label: "Applicants" }, { key: "financials", label: "Financials" },
+            { key: "properties", label: "Properties" }, { key: "documents", label: "Documents", badge: needed || undefined }, { key: "activity", label: "Activity" },
+          ]}
+          panels={{
+            overview: <LoanOverview answers={a} applicants={file.applicants} names={names} fullNames={fullNames} requests={parts.requests} signedApplicants={signedNums} business={business} saved={analysis} links={overviewLinks} />,
+            applicants: <div className="space-y-5">
         <Section title="Applicants" id="applicants">
           <div className={cn("grid gap-6", file.applicants > 1 && "lg:grid-cols-2")}>
             {fullNames.map((n, i) => (
@@ -127,7 +143,35 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
           <Pairs fields={step("ahead").fields!} prefix="" answers={a} />
         </Section>
 
-        <Section title="Assets & debts" id="position">
+        <Section title="Consent & signatures" id="signed">
+          <div className={cn("grid gap-6", file.applicants > 1 && "lg:grid-cols-2")}>
+            {fullNames.map((n, i) => {
+              const sig = signed.find((x) => x.applicant === i + 1);
+              return (
+                <div key={i}>
+                  <p className="mb-2 text-[0.9375rem] font-semibold">{n}</p>
+                  <ul className="space-y-1 text-[0.8125rem]">{CONSENTS.map((c) => { const ok = a[`a${i + 1}.${c.key}`] === "yes"; return <li key={c.key} className={ok ? "text-ink" : "text-ink-faint"}>{ok ? "✓" : "○"} {c.label}</li>; })}</ul>
+                  {sig ? (
+                    <div className="mt-3 rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={sig.image} alt={`Signature of ${sig.signed_name}`} className="h-16 w-auto dark:invert" />
+                      <p className="mt-1 text-[0.875rem] font-medium">{sig.signed_name}</p>
+                      <p className="text-[0.75rem] text-ink-faint">Signed {when(sig.signed_at, tz)}{sig.ip ? ` · IP ${sig.ip}` : ""}</p>
+                    </div>
+                  ) : <p className="mt-3 text-[0.8125rem] text-ink-faint">Not signed yet.</p>}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+            </div>,
+            financials: <div className="space-y-5"><BrokerPosition fileId={file.id} answers={a} applicants={file.applicants} names={names} business={business} saved={analysis} />
+        <Section title="Living costs (monthly)" id="costs"><Pairs fields={step("spending").fields!} prefix="" answers={a} /></Section>
+
+            </div>,
+            properties: <div className="space-y-5">
+        <Section title="Assets & debts" id="assets-debts">
           {[...(step("property").lists ?? []), ...(step("assets").lists ?? []), ...(step("debts").lists ?? [])].map((l) => {
             const rows = list(l.key);
             return (
@@ -147,8 +191,8 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
           <Pairs fields={step("assets").fields!} prefix="" answers={a} />
         </Section>
 
-        <Section title="Living costs (monthly)" id="costs"><Pairs fields={step("spending").fields!} prefix="" answers={a} /></Section>
-
+            </div>,
+            documents: <div className="space-y-5">
         <Section title={`Documents — ${parts.requests.length - needed} of ${parts.requests.length} in`} id="documents">
           <div className="space-y-5">
             {groups.map((g) => (
@@ -194,31 +238,24 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
           </div>
         </Section>
 
-        <Section title="Consent & signatures" id="signed">
-          <div className={cn("grid gap-6", file.applicants > 1 && "lg:grid-cols-2")}>
-            {fullNames.map((n, i) => {
-              const sig = signed.find((x) => x.applicant === i + 1);
-              return (
-                <div key={i}>
-                  <p className="mb-2 text-[0.9375rem] font-semibold">{n}</p>
-                  <ul className="space-y-1 text-[0.8125rem]">{CONSENTS.map((c) => { const ok = a[`a${i + 1}.${c.key}`] === "yes"; return <li key={c.key} className={ok ? "text-ink" : "text-ink-faint"}>{ok ? "✓" : "○"} {c.label}</li>; })}</ul>
-                  {sig ? (
-                    <div className="mt-3 rounded-xl bg-canvas p-3 ring-1 ring-inset ring-line">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={sig.image} alt={`Signature of ${sig.signed_name}`} className="h-16 w-auto dark:invert" />
-                      <p className="mt-1 text-[0.875rem] font-medium">{sig.signed_name}</p>
-                      <p className="text-[0.75rem] text-ink-faint">Signed {when(sig.signed_at, tz)}{sig.ip ? ` · IP ${sig.ip}` : ""}</p>
-                    </div>
-                  ) : <p className="mt-3 text-[0.8125rem] text-ink-faint">Not signed yet.</p>}
-                </div>
-              );
-            })}
-          </div>
-        </Section>
-
+            </div>,
+            activity: <div className="space-y-5">
         <Section title="Messages with the client" id="messages">
           <BrokerMessages fileId={file.id} msgs={parts.messages} preview={acc.kind === "preview"} clientName={names[0]} />
         </Section>
+              <Section title="Timeline">
+                <ol className="space-y-2.5">
+                  {[...parts.documents.map((d) => ({ at: d.created_at, text: `${d.source === "signed" ? "Signed application" : d.name} — ${d.source === "xero" ? "from Xero" : d.source === "gmail" ? "from Gmail" : d.source === "email" ? "emailed in" : d.source === "signed" ? "signed and sent" : "uploaded"}` })),
+                    ...signed.map((x) => ({ at: x.signed_at, text: `${x.signed_name} signed` })),
+                    ...parts.messages.filter((x) => x.from_side === "system").map((x) => ({ at: x.created_at, text: x.body }))]
+                    .sort((p, q) => q.at.localeCompare(p.at)).slice(0, 40).map((e, n) => (
+                      <li key={n} className="flex gap-3 text-[0.8125rem]"><span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" /><span className="min-w-0 flex-1 text-ink">{e.text}<span className="block text-[0.6875rem] text-ink-faint">{when(e.at, tz)}</span></span></li>
+                    ))}
+                </ol>
+              </Section>
+            </div>,
+          }}
+        />
         <p className="pb-6 text-center text-[0.75rem] text-ink-faint">Private — shared with you by {org?.name}. Every view and download is recorded.</p>
       </main>
     </div>

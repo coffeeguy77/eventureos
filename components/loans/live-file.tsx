@@ -16,6 +16,7 @@ import {
 } from "@/app/(app)/loans/actions";
 import { STATUS_LABEL, STATUS_ORDER } from "./status";
 import { FinancialPosition } from "./position";
+import { LoanOverview } from "./overview";
 
 const ago = (iso: string | null) => {
   if (!iso) return "never";
@@ -82,11 +83,16 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
       </Card>
       {err && <p className="rounded-lg bg-rose-50 px-3 py-2 text-[0.875rem] text-rose-800 ring-1 ring-inset ring-rose-200">{err}</p>}
 
+      <LoanOverview answers={f.answers} applicants={f.applicants} names={names} fullNames={names.map((n, i) => [f.answers[`a${i + 1}.first_name`], f.answers[`a${i + 1}.last_name`]].filter(Boolean).join(" ") || n)}
+        requests={d.requests} signedApplicants={d.signedApplicants} business={d.business} saved={d.analysis}
+        links={{ assessment: "#position", documents: "#file-documents", applicants: "#file-answers", properties: "#file-answers" }} />
+
+      <div id="position" className="scroll-mt-24" />
       <FinancialPosition answers={f.answers} applicants={f.applicants} names={names} business={d.business} saved={d.analysis} run={(as) => analyseLoanFile(f.id, as)} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         {/* answers */}
-        <div className="space-y-4">
+        <div id="file-answers" className="scroll-mt-24 space-y-4">
           {steps.filter((s) => !s.special || s.key === "review").map((s) => {
             const p = s.special ? null : Math.round(stepProgress(s, f.applicants, f.answers) * 100);
             const onIt = live && f.client_focus?.step === s.key;
@@ -131,6 +137,7 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
         {/* documents, messages, connections, notes */}
         <div className="space-y-4">
           <Messages fileId={f.id} msgs={d.messages} focusLabel={live ? f.client_focus?.label ?? null : null} onSent={refresh} />
+          <div id="file-documents" className="scroll-mt-24" />
           <Docs fileId={f.id} names={names} requests={d.requests} docs={d.documents} onChange={refresh} />
           <Card className="p-4">
             <h3 className="mb-2 text-[0.9375rem] font-semibold text-ink">Connected by the client</h3>

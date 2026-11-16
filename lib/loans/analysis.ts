@@ -9,6 +9,7 @@
  *  - credit cards: 3% of the limit per month; new loan: principal & interest over 30 years at the assessment rate
  */
 import type { FlatReport } from "./server";
+import { BUYING, SECURED } from "./form";
 
 export interface Assumptions { assessmentRate: number; termYears: number; rentShading: number; cardRate: number }
 export const DEFAULT_ASSUMPTIONS: Assumptions = { assessmentRate: 9, termYears: 30, rentShading: 0.8, cardRate: 0.03 };
@@ -87,12 +88,19 @@ export function analyse(a: Record<string, unknown>, applicants: number, names: s
   assets.total = assets.property + assets.super + assets.savings + assets.vehicles + assets.other + assets.contents;
   const debts = { mortgages: sum(props, "balance"), cards: sum(cards, "balance"), loans: sum(loans, "balance"), total: 0, cardLimits: sum(cards, "limit") };
   debts.total = debts.mortgages + debts.cards + debts.loans;
-  const amount = num(a.amount) || null, value = num(a.property_value) || num(a.security_value) || null, deposit = num(a.deposit) || null;
+  // only answers to questions that are asked for this loan purpose count (an old answer to a hidden question is ignored)
+  const purposes = String(a.purpose ?? "").split("|");
+  const buying = purposes.some((p) => BUYING.includes(p)), secured = purposes.some((p) => SECURED.includes(p));
+  const amount = num(a.amount) || null;
+  const value = (buying ? num(a.property_value) : 0) || (secured ? num(a.security_value) : 0) || null;
+  const deposit = buying ? num(a.deposit) || null : null;
   // who owns what: each applicant on their own, and jointly held
   const owners = [...Array.from({ length: applicants }, (_, i) => `Applicant ${i + 1}`), ...(applicants > 1 ? ["Joint"] : [])];
   const byOwner = owners.map((o) => {
     const mine = (k: string) => rows(a, k).filter((r) => (r.owner || (applicants === 1 ? "Applicant 1" : "")) === o);
-    const as_ = sum(mine("properties"), "value") + sum(mine("vehicles"), "value") + sum(mine("savings"), "amount") + sum(mine("super"), "amount") + sum(mine("other_assets"), "value");
+    // home contents belong to the household: jointly held when there's more than one applicant
+    const household = o === (applicants > 1 ? "Joint" : "Applicant 1") ? assets.contents : 0;
+    const as_ = sum(mine("properties"), "value") + sum(mine("vehicles"), "value") + sum(mine("savings"), "amount") + sum(mine("super"), "amount") + sum(mine("other_assets"), "value") + household;
     const ds = sum(mine("properties"), "balance") + sum(mine("cards"), "balance") + sum(mine("loans"), "balance");
     return { owner: o, assets: as_, debts: ds, net: as_ - ds };
   });
@@ -123,4 +131,5 @@ export interface Assessment {
   rating: "Strong" | "Sound" | "Stretched" | "Weak"; score: number; headline: string; summary: string;
   strengths: string[]; risks: string[]; mitigants: string[]; questions: string[];
 }
-export interface SavedAnalysis { at: string; by: string; assessment: Assessment; metrics: Metrics; assumptions: Assumptions }
+export interface ReviewPoint { at: string; assets: number; debts: number; surplus: number; dti: number | null; net: number }
+export interface SavedAnalysis { at: string; by: string; assessment: Assessment; metrics: Metrics; assumptions: Assumptions; history?: ReviewPoint[] }
