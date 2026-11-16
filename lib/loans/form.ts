@@ -150,6 +150,8 @@ export function steps(applicants: number): Step[] {
           { key: "result", label: "Result", type: "choice", options: ["Profit", "Loss"], half: true },
           { key: "net_profit", label: "Net profit or loss before tax", type: "money", half: true },
           { key: "addbacks", label: "Add-backs", type: "money", half: true, optional: true, hint: "Optional — e.g. depreciation, interest, one-off costs" },
+          { key: "exclude", label: "Leave out of income (e.g. a trust loss nobody pays)", type: "check", optional: true },
+          { key: "note", label: "Notes", type: "text", optional: true },
         ],
       }],
     },

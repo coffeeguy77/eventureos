@@ -130,6 +130,7 @@ test("business income: profit and loss, add-backs, split by owner", () => {
   assert.equal(m.incomeGross, 89741 - 3352 + 15000);
 });
 test("rent from your own business is counted in full", () => {
+  assert.deepEqual(businessShares({ businesses: [{ owner: "Applicant 1", result: "Loss", net_profit: "57,408", exclude: "yes" }] }, 1), [0]);
   const props: Record<string, string>[] = [{ rent: "8900", rent_period: "Per month", own_business: "yes" }, { rent: "450", rent_period: "Per week" }];
   assert.equal(countedRent(props, 0.8), Math.round(8900 * 12 + 450 * 52 * 0.8));
 });

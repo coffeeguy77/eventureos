@@ -53,6 +53,7 @@ export function businessShares(a: Record<string, unknown>, applicants: number): 
   const out = Array.from({ length: applicants }, () => 0);
   if (!applicants) return out;
   for (const r of rows(a, "businesses")) {
+    if (r.exclude === "yes") continue;
     const v = (r.result === "Loss" ? -Math.abs(num(r.net_profit)) : Math.abs(num(r.net_profit))) + Math.abs(num(r.addbacks));
     const m = /^Applicant (\d)$/.exec(r.owner ?? "");
     if (m && +m[1] >= 1 && +m[1] <= applicants) out[+m[1] - 1] += v;
