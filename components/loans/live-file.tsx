@@ -49,10 +49,7 @@ export function LiveLoanFile({ initial, link }: { initial: LiveFile; link: strin
     if (Object.keys(ch).length) setChanged((c) => ({ ...Object.fromEntries(Object.entries(c).filter(([, t]) => now - t < 8000)), ...ch }));
     setD(r.data);
   }, [initial.file.id]);
-  useEffect(() => {
-    const t = setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 3000);
-    return () => clearInterval(t);
-  }, [refresh]);
+  // no automatic refreshing: it read the whole file every few seconds for as long as a tab was open (Supabase egress)
 
   const f = d.file;
   const live = !!f.client_seen_at && Date.now() - new Date(f.client_seen_at).getTime() < 20_000;

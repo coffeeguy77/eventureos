@@ -12,7 +12,7 @@ import { applicantNames, FILE_COLS, fileParts, serviceDb, type LoanFileRow } fro
 import { aud } from "@/lib/loans/summary";
 import { STATUS_LABEL } from "@/components/loans/status";
 import { brokerSignOutAction } from "../actions";
-import { AutoRefresh, BrokerMessages, BrokerPosition } from "../ui";
+import { BrokerMessages, BrokerPosition } from "../ui";
 import { businessYears } from "@/lib/loans/assess";
 import type { SavedAnalysis } from "@/lib/loans/analysis";
 
@@ -86,7 +86,6 @@ export default async function BrokerFilePage({ params }: { params: Promise<{ id:
   const overviewLinks = { assessment: "#financials", documents: "#documents", applicants: "#applicants", properties: "#properties" };
   return (
     <div className="print:bg-white">
-      <AutoRefresh seconds={10} />
       {acc.kind === "preview" && (
         <div className="bg-amber-100 px-4 py-2 text-center text-[0.8125rem] font-medium text-amber-950 print:hidden">
           Preview — this is exactly what your brokers see. Only you (signed in to {org?.name}) can open it this way. <Link href={`/loans/${file.id}`} className="underline">Back to the loan file</Link>

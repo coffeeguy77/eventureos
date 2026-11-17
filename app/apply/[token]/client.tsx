@@ -90,7 +90,6 @@ export function ApplyClient({ token, org, file, requests: initialReqs, documents
     }
   }, [token]);
   const schedule = useCallback((ms: number) => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(flush, ms); }, [flush]);
-  useEffect(() => { const t = setInterval(() => { if (!timer.current || !Object.keys(pending.current).length) flush(); }, 6000); return () => clearInterval(t); }, [flush]);
   useEffect(() => { focus.current = { step: step.key }; schedule(300); }, [step.key, schedule]);
   useEffect(() => { const f = () => { if (Object.keys(pending.current).length) flush(); }; window.addEventListener("pagehide", f); return () => window.removeEventListener("pagehide", f); }, [flush]);
 
