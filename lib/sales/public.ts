@@ -5,7 +5,7 @@ import { FIGURES, readPage, type FigureKey } from "./page-settings";
 import { categoryTotal, fullMonths, suggestCoffeeCategories, type YearStats } from "./stats";
 import { loadStatRows, sydneyToday } from "./stats-server";
 import { saleStats } from "./stats";
-import { unitPnl, yearlyCost, type ExpenseLine, type StaffLine } from "./pnl";
+import { unitPnl, yearlyCost, type ExpenseLine, type PayrollRow, type StaffLine } from "./pnl";
 
 /**
  * What the public listing page (/for-sale/<slug>) shows. Read with the service role: anonymous visitors have no
@@ -90,6 +90,14 @@ export async function loadSale(slug: string, token: string | null, preview = fal
   };
 }
 
+function payrollYear(rows: PayrollRow[], s: StaffLine, today: string): number {
+  const ms = fullMonths(today, 12);
+  const to = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
+  let t = 0;
+  for (const r of rows) if (r.employee_id === s.xero_employee_id && r.period_end >= ms[0] && r.period_end <= to) t += Number(r.wages) + Number(r.super);
+  return t * (Number(s.share_pct ?? 100) / 100);
+}
+
 const fmtMoney = (n: number) => `$${Math.round(n).toLocaleString("en-AU")}`;
 
 async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: string; organisation_id: string; unit_id: string; details: unknown }, unlocked: boolean): Promise<PublicDash | null> {
@@ -110,15 +118,21 @@ async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: st
     return f;
   };
   // buyers who've signed: charts and a P&L per year (wages from the standard crew — roles only, never names)
-  let staff: StaffLine[] = [], expenses: ExpenseLine[] = [], spend: { contact_id: string; month: string; amount: number }[] = [];
+  let staff: StaffLine[] = [], expenses: ExpenseLine[] = [], spend: { contact_id: string; month: string; amount: number }[] = [], payroll: PayrollRow[] = [];
   if (unlocked) {
     const from = fullMonths(today, page.years * 12)[0];
     const [s, e, sp] = await Promise.all([
-      db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct").eq("unit_id", l.unit_id),
+      db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct, source, xero_employee_id, share_pct").eq("unit_id", l.unit_id)
+        .then((r) => (r.error ? db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct").eq("unit_id", l.unit_id) : r)),
       db.from("sale_expenses").select("kind, source, xero_contact_id, name, share_pct, annual").eq("unit_id", l.unit_id),
       db.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", l.organisation_id).gte("month", from).limit(20000),
     ]);
-    staff = ((s.data ?? []) as Record<string, unknown>[]).map((x) => ({ role: String(x.role), headcount: Number(x.headcount), pay_type: x.pay_type as "annual" | "hourly", annual: x.annual == null ? null : Number(x.annual), hourly: x.hourly == null ? null : Number(x.hourly), hours_per_shift: x.hours_per_shift == null ? null : Number(x.hours_per_shift), shifts_per_week: x.shifts_per_week == null ? null : Number(x.shifts_per_week), weeks_per_year: x.weeks_per_year == null ? null : Number(x.weeks_per_year), super_pct: x.super_pct == null ? null : Number(x.super_pct) }));
+    staff = ((s.data ?? []) as Record<string, unknown>[]).map((x) => ({ role: String(x.role), headcount: Number(x.headcount), pay_type: x.pay_type as "annual" | "hourly", annual: x.annual == null ? null : Number(x.annual), hourly: x.hourly == null ? null : Number(x.hourly), hours_per_shift: x.hours_per_shift == null ? null : Number(x.hours_per_shift), shifts_per_week: x.shifts_per_week == null ? null : Number(x.shifts_per_week), weeks_per_year: x.weeks_per_year == null ? null : Number(x.weeks_per_year), super_pct: x.super_pct == null ? null : Number(x.super_pct), source: x.source === "xero" ? "xero" as const : "manual" as const, xero_employee_id: (x.xero_employee_id as string | null) ?? null, share_pct: Number(x.share_pct ?? 100) }));
+    const ids = staff.filter((x) => x.source === "xero" && x.xero_employee_id).map((x) => x.xero_employee_id!);
+    if (ids.length) {
+      const { data: pr } = await db.from("sale_payroll").select("employee_id, period_start, period_end, wages, super").eq("organisation_id", l.organisation_id).in("employee_id", ids).gte("period_end", from).limit(20000);
+      payroll = ((pr ?? []) as PayrollRow[]).map((r) => ({ ...r, wages: Number(r.wages), super: Number(r.super) }));
+    }
     expenses = ((e.data ?? []) as Record<string, unknown>[]).map((x) => ({ kind: x.kind as "cogs" | "overhead", source: x.source as "xero" | "manual", xero_contact_id: (x.xero_contact_id as string | null) ?? null, name: String(x.name), share_pct: Number(x.share_pct), annual: x.annual == null ? null : Number(x.annual) }));
     const used = new Set(expenses.filter((x) => x.source === "xero").map((x) => x.xero_contact_id));
     spend = ((sp.data ?? []) as { contact_id: string; month: string; amount: number }[]).filter((x) => used.has(x.contact_id)).map((x) => ({ ...x, amount: Number(x.amount) }));
@@ -130,7 +144,7 @@ async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: st
       out.charts = { categories: y.categories.slice(0, 10), bestSellers: y.bestSellers, weekdays: y.weekdays, months: st.months.filter((m) => m.month >= y.from && m.month <= y.to) };
       const ms: string[] = []; for (let m = y.from; m <= y.to; m = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1)).toISOString().slice(0, 10)) ms.push(m);
       const from = st.firstMonth && st.firstMonth > y.from ? days.filter((d) => d.category === "" && Number(d.orders) > 0).reduce((a, d) => (d.day < a ? d.day : a), y.to) : y.from;
-      const p = unitPnl({ months: ms, today, from, to: y.to, daily: days.map((d) => ({ location_id: "", day: d.day, category: d.category, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct, expenses, spend });
+      const p = unitPnl({ months: ms, today, from, to: y.to, daily: days.map((d) => ({ location_id: "", day: d.day, category: d.category, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct, expenses, spend, payroll });
       out.pnl = { sales: p.totals.sales, cogs: p.totals.cogs, wages: p.totals.wages, overheads: p.totals.overheads, profit: p.totals.profit, margin: p.totals.margin };
     }
     return out;
@@ -149,7 +163,15 @@ async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: st
   }
   return {
     headline: page.headline, years, figureLabels: FIGURES,
-    crew: unlocked ? staff.map((s) => ({ role: s.role, headcount: s.headcount, yearly: yearlyCost(s, superPct) })) : undefined,
+    // roles only — never names; real people's pay is their last 12 months from Xero Payroll
+    crew: unlocked ? [...staff.reduce((m, s) => {
+      const role = (s.role || "Team member").trim(), k = role.toLowerCase();
+      const c = m.get(k) ?? { role, headcount: 0, yearly: 0 };
+      c.headcount += s.source === "xero" ? Number(s.share_pct ?? 100) / 100 : s.headcount;
+      c.yearly += s.source === "xero" ? payrollYear(payroll, s, today) : yearlyCost(s, superPct);
+      m.set(k, c);
+      return m;
+    }, new Map<string, { role: string; headcount: number; yearly: number }>()).values()].map((c) => ({ ...c, headcount: Math.round(c.headcount * 10) / 10, yearly: Math.round(c.yearly) })) : undefined,
     valuation,
     terms: page.terms.map((t) => {
       const c = t.categories.length ? categoryTotal(items, t.categories, today) : null;

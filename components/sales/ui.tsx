@@ -6,7 +6,7 @@ import { Check, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { createUnit, deleteUnit, saveExpenses, saveStaff, syncSquare, syncSupplierSpend, updateUnit, type ExpenseInput, type StaffInput } from "@/app/(app)/business-sale/actions";
+import { createUnit, deleteUnit, saveExpenses, saveStaff, syncPayroll, syncSquare, syncSupplierSpend, updateUnit, type ExpenseInput, type StaffInput } from "@/app/(app)/business-sale/actions";
 import { yearlyCost } from "@/lib/sales/pnl";
 import { aud } from "./charts";
 
@@ -94,18 +94,34 @@ const PRESETS: StaffInput[] = [
 const nz = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
 
 /** The standard crew it takes to run the unit. */
-export function CrewEditor({ unitId, initial, superPct }: { unitId: string; initial: StaffInput[]; superPct: number }) {
+export interface PayrollPerson { id: string; name: string; last12: number; lastPaid: string | null }
+
+export function CrewEditor({ unitId, initial, superPct, people = [], payrollReady = false }: { unitId: string; initial: StaffInput[]; superPct: number; people?: PayrollPerson[]; payrollReady?: boolean }) {
   const router = useRouter();
   const [rows, setRows] = useState<StaffInput[]>(initial);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
   const set = (i: number, p: Partial<StaffInput>) => { setRows((r) => r.map((x, j) => (j === i ? { ...x, ...p } : x))); setSaved(false); };
-  const cost = (s: StaffInput) => yearlyCost({ role: s.role, headcount: Number(s.headcount) || 0, pay_type: s.pay_type, annual: nz(s.annual), hourly: nz(s.hourly), hours_per_shift: nz(s.hours_per_shift), shifts_per_week: nz(s.shifts_per_week), weeks_per_year: nz(s.weeks_per_year), super_pct: nz(s.super_pct) }, superPct);
+  const byId = new Map(people.map((p) => [p.id, p]));
+  const realCost = (s: StaffInput) => (byId.get(s.xero_employee_id ?? "")?.last12 ?? 0) * (Number(s.share_pct ?? 100) / 100);
+  const cost = (s: StaffInput) => s.source === "xero" ? realCost(s) : yearlyCost({ role: s.role, headcount: Number(s.headcount) || 0, pay_type: s.pay_type, annual: nz(s.annual), hourly: nz(s.hourly), hours_per_shift: nz(s.hours_per_shift), shifts_per_week: nz(s.shifts_per_week), weeks_per_year: nz(s.weeks_per_year), super_pct: nz(s.super_pct) }, superPct);
   const total = rows.reduce((t, s) => t + cost(s), 0);
   return (
     <div className="space-y-3">
-      {rows.map((s, i) => (
+      {rows.map((s, i) => s.source === "xero" ? (
+        <div key={i} className="rounded-2xl bg-surface p-3.5 ring-1 ring-line">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1.6fr)_6rem]">
+            <div><Label hint="shown to buyers">Role</Label><Input value={s.role} onChange={(e) => set(i, { role: e.target.value })} placeholder="e.g. Barista" /></div>
+            <div><Label hint="never shown to buyers">Person (Xero Payroll)</Label><p className="flex h-10 items-center truncate text-[0.875rem] font-medium text-ink">{byId.get(s.xero_employee_id ?? "")?.name ?? "Not in the pay history"}</p></div>
+            <div className="col-span-2 sm:col-span-1"><Label hint="of their pay">Share %</Label><Input inputMode="decimal" value={String(s.share_pct ?? 100)} onChange={(e) => set(i, { share_pct: e.target.value })} /></div>
+          </div>
+          <div className="mt-2.5 flex items-center justify-between gap-2 text-[0.8125rem]">
+            <span className="text-ink-muted">Actual pay + super, last 12 months: <b className="tabular-nums text-ink">{aud(realCost(s))}</b>. On Sales &amp; profit it follows the period you choose.</span>
+            <button type="button" onClick={() => { setRows((r) => r.filter((_, j) => j !== i)); setSaved(false); }} className="inline-flex h-9 items-center gap-1 rounded-lg px-2 text-ink-muted hover:text-rose-600" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        </div>
+      ) : (
         <div key={i} className="rounded-2xl bg-surface p-3.5 ring-1 ring-line">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,2fr)_5rem_minmax(0,1.3fr)]">
             <div className="col-span-2 sm:col-span-1"><Label>Role</Label><Input value={s.role} onChange={(e) => set(i, { role: e.target.value })} placeholder="e.g. Barista" /></div>
@@ -135,8 +151,24 @@ export function CrewEditor({ unitId, initial, superPct }: { unitId: string; init
           <button key={p.role} type="button" onClick={() => { setRows((r) => [...r, { ...p }]); setSaved(false); }} className="h-9 rounded-full px-3 text-[0.8125rem] text-ink-muted ring-1 ring-inset ring-line hover:text-ink">+ {p.role}</button>
         ))}
       </div>
+      <div className="space-y-2 rounded-2xl bg-canvas p-3.5 ring-1 ring-line">
+        <p className="text-[0.8125rem] font-semibold text-ink">People who actually worked here (Xero Payroll)</p>
+        <p className="text-[0.75rem] text-ink-muted">Pick the people who did this job — e.g. the baristas. Their real pay is used, so the wages change with the period you look at. Buyers only ever see the role.</p>
+        <PayrollSync ready={payrollReady} />
+        {people.length > 0 && (
+          <ul className="divide-y divide-line">
+            {people.filter((p) => !rows.some((r) => r.source === "xero" && r.xero_employee_id === p.id)).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-2 text-[0.8125rem]">
+                <span className="min-w-0 truncate text-ink">{p.name} <span className="text-ink-faint">{p.lastPaid ? `last paid ${new Date(`${p.lastPaid}T12:00:00Z`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}` : ""}</span></span>
+                <span className="flex shrink-0 items-center gap-2"><span className="tabular-nums text-ink-muted">{aud(p.last12)} / 12 mo</span>
+                  <button type="button" onClick={() => { setRows((r) => [...r, { role: "", headcount: 1, pay_type: "hourly", source: "xero", xero_employee_id: p.id, share_pct: 100 }]); setSaved(false); }} className="h-8 rounded-lg px-2.5 font-medium text-brand-700 ring-1 ring-inset ring-line">Add</button></span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-canvas p-3.5 ring-1 ring-line">
-        <p className="text-[0.875rem] text-ink">Standard crew: <b className="tabular-nums">{aud(total)}</b> a year · <span className="tabular-nums">{aud(total / 12)}</span> a month</p>
+        <p className="text-[0.875rem] text-ink">Crew: <b className="tabular-nums">{aud(total)}</b> a year · <span className="tabular-nums">{aud(total / 12)}</span> a month</p>
         <div className="flex items-center gap-3">
           {saved && <span className="text-[0.8125rem] font-medium text-emerald-700">Saved.</span>}
           <Button variant="primary" disabled={pending} onClick={() => start(async () => { setErr(null); const r = await saveStaff(unitId, rows); if (!r.ok) { setErr(r.error); return; } setSaved(true); router.refresh(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save crew</Button>
@@ -272,6 +304,26 @@ export function UnitSetup({ unit, locations, categories }: {
           ? <span className="flex items-center gap-2 text-[0.8125rem]"><span className="text-ink-muted">Delete {unit.name} and its crew and expenses?</span><Button variant="danger" disabled={pending} onClick={() => start(async () => { const r = await deleteUnit(unit.id); if (r.ok) router.push("/business-sale"); else setErr(r.error); })}>Delete</Button><Button onClick={() => setConfirm(false)}>Keep</Button></span>
           : <button type="button" onClick={() => setConfirm(true)} className="text-[0.8125rem] text-ink-muted hover:text-rose-600">Delete…</button>}
       </div>
+    </div>
+  );
+}
+
+/** Bring in what Xero Payroll paid each person (carries on automatically until every pay run is in). */
+export function PayrollSync({ ready }: { ready: boolean }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  if (!ready) return <p className="text-[0.75rem] text-ink-muted">Run the database update 0113_sale_payroll_requests.sql in Supabase to bring in pay history from Xero Payroll.</p>;
+  return (
+    <div className="space-y-1.5">
+      <Button disabled={busy} onClick={async () => {
+        setBusy(true); setErr(null);
+        for (let i = 0; i < 60; i++) { const r = await syncPayroll(); if (!r.ok) { setErr(r.error); break; } setMsg(r.data.message); if (!r.data.partial) break; }
+        setBusy(false); router.refresh();
+      }}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Bring in pay history from Xero Payroll</Button>
+      {msg && <p className="text-[0.75rem] text-ink-muted">{msg}</p>}
+      <FormError message={err} />
     </div>
   );
 }

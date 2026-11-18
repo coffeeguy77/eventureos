@@ -72,7 +72,7 @@ export async function deleteUnit(id: string): Promise<R<undefined>> {
   });
 }
 
-export interface StaffInput { role: string; headcount: number | string; pay_type: "annual" | "hourly"; annual?: number | string | null; hourly?: number | string | null; hours_per_shift?: number | string | null; shifts_per_week?: number | string | null; weeks_per_year?: number | string | null; super_pct?: number | string | null; notes?: string | null }
+export interface StaffInput { role: string; headcount: number | string; pay_type: "annual" | "hourly"; annual?: number | string | null; hourly?: number | string | null; hours_per_shift?: number | string | null; shifts_per_week?: number | string | null; weeks_per_year?: number | string | null; super_pct?: number | string | null; notes?: string | null; source?: "manual" | "xero"; xero_employee_id?: string | null; share_pct?: number | string | null }
 
 /** Replace the unit's standard crew with this list. */
 export async function saveStaff(unitId: string, list: StaffInput[]): Promise<R<undefined>> {
@@ -88,8 +88,15 @@ export async function saveStaff(unitId: string, list: StaffInput[]): Promise<R<u
         annual: hourly ? null : numOrNull(s.annual, 10_000_000), hourly: hourly ? numOrNull(s.hourly, 1000) : null,
         hours_per_shift: hourly ? numOrNull(s.hours_per_shift, 24) : null, shifts_per_week: hourly ? numOrNull(s.shifts_per_week, 21) : null,
         weeks_per_year: hourly ? (numOrNull(s.weeks_per_year, 53) ?? 52) : 52, super_pct: numOrNull(s.super_pct, 50), notes: txt(s.notes, 300) || null,
+        ...(s.source === "xero" && txt(s.xero_employee_id, 64) ? { source: "xero", xero_employee_id: txt(s.xero_employee_id, 64), share_pct: s.share_pct === undefined || s.share_pct === null || s.share_pct === "" ? 100 : num(s.share_pct, 100) } : {}),
       };
     });
+    // people from Xero Payroll need database update 0113 — check before replacing anything
+    if (rows.some((r) => "source" in r)) {
+      const { error: colErr } = await supabase.from("sale_staff").select("source, xero_employee_id, share_pct").limit(1);
+      if (colErr) throw new Error("Run the database update 0113_sale_payroll_requests.sql first to add people from Xero Payroll.");
+      for (const r of rows) if (!("source" in r)) Object.assign(r, { source: "manual", xero_employee_id: null, share_pct: 100 });
+    }
     const { error: dErr } = await supabase.from("sale_staff").delete().eq("unit_id", unitId).eq("organisation_id", org.id);
     if (dErr) throw new Error(dErr.message);
     if (rows.length) { const { error } = await supabase.from("sale_staff").insert(rows); if (error) throw new Error(error.message); }
@@ -368,5 +375,18 @@ export async function savePageContent(listingId: string, page: unknown): Promise
     if (error) throw new Error(error.message);
     if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
     return undefined;
+  });
+}
+
+/** Bring in what Xero Payroll paid each person (call again while `partial`). */
+export async function syncPayroll(): Promise<R<{ message: string; partial: boolean; done: number; total: number }>> {
+  return run(async () => {
+    const { supabase, org, user } = await managers();
+    const { buildContext } = await import("@/lib/integrations/sync-runner");
+    const ctx = await buildContext(supabase, "user", org.id, "xero", user.id);
+    const { syncPayrollHistory } = await import("@/lib/sales/payroll-sync");
+    const r = await syncPayrollHistory(ctx);
+    revalidatePath("/business-sale", "layout");
+    return r;
   });
 }

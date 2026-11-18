@@ -63,3 +63,17 @@ test("rolling period: first and last months pro-rated, current month spend not",
   assert.equal(p.months[1].cogs, 100);        // current month: spend so far
   assert.equal(p.months[0].partial, true);
 });
+
+test("real crew from Xero Payroll: pay spread over each pay period's days, times the share", async () => {
+  const { payrollBetween } = await import("./pnl");
+  // a fortnight 25 Oct – 7 Nov: 7 days in October, 7 in November
+  const rows = [{ employee_id: "E1", period_start: "2026-10-25", period_end: "2026-11-07", wages: 1300, super: 100 }];
+  assert.equal(Math.round(payrollBetween(rows, "E1", "2026-10-01", "2026-10-31")), 700);
+  const p = unitPnl({
+    months: ["2026-10-01"], today: "2026-11-19", daily: [], exclude: [], superPct: 12, expenses: [], spend: [],
+    staff: [{ role: "Barista", headcount: 1, pay_type: "hourly", annual: null, hourly: null, hours_per_shift: null, shifts_per_week: null, weeks_per_year: null, super_pct: null, source: "xero", xero_employee_id: "E1", share_pct: 50 }],
+    payroll: rows,
+  });
+  assert.equal(p.months[0].wages, 350);
+  assert.equal(p.crew[0].yearly, 350);
+});

@@ -63,7 +63,8 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   const exclude = (unit.exclude_categories as string[]) ?? [];
 
   const [{ data: staffRows }, { data: expRows }, { data: locRows }] = await Promise.all([
-    supabase.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct, notes").eq("unit_id", id).eq("organisation_id", org.id).order("position"),
+    supabase.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct, notes, source, xero_employee_id, share_pct").eq("unit_id", id).eq("organisation_id", org.id).order("position")
+      .then((r) => (r.error ? supabase.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct, notes").eq("unit_id", id).eq("organisation_id", org.id).order("position") : r)),
     supabase.from("sale_expenses").select("kind, source, xero_contact_id, name, share_pct, annual, notes").eq("unit_id", id).eq("organisation_id", org.id).order("position"),
     supabase.from("sale_square_locations").select("location_id, name").eq("organisation_id", org.id).order("name"),
   ]);
@@ -93,14 +94,28 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
       supabase.from("sale_xero_spend").select("contact_id, contact_name, month, amount").eq("organisation_id", org.id).gte("month", months[0]).order("contact_id").order("month").range(a, b)),
   ]);
 
-  const staff: StaffLine[] = (staffRows ?? []).map((s) => ({ role: s.role as string, headcount: Number(s.headcount), pay_type: s.pay_type as "annual" | "hourly", annual: s.annual == null ? null : Number(s.annual), hourly: s.hourly == null ? null : Number(s.hourly), hours_per_shift: s.hours_per_shift == null ? null : Number(s.hours_per_shift), shifts_per_week: s.shifts_per_week == null ? null : Number(s.shifts_per_week), weeks_per_year: s.weeks_per_year == null ? null : Number(s.weeks_per_year), super_pct: s.super_pct == null ? null : Number(s.super_pct) }));
+  const staff: StaffLine[] = (staffRows ?? []).map((s) => ({ role: s.role as string, headcount: Number(s.headcount), pay_type: s.pay_type as "annual" | "hourly", annual: s.annual == null ? null : Number(s.annual), hourly: s.hourly == null ? null : Number(s.hourly), hours_per_shift: s.hours_per_shift == null ? null : Number(s.hours_per_shift), shifts_per_week: s.shifts_per_week == null ? null : Number(s.shifts_per_week), weeks_per_year: s.weeks_per_year == null ? null : Number(s.weeks_per_year), super_pct: s.super_pct == null ? null : Number(s.super_pct), source: (s as { source?: string }).source === "xero" ? "xero" : "manual", xero_employee_id: (s as { xero_employee_id?: string | null }).xero_employee_id ?? null, share_pct: Number((s as { share_pct?: number }).share_pct ?? 100) }));
+  // Xero Payroll pay runs (database update 0113): for crew chosen from payroll, and the people to pick from
+  const payRes = await all<{ employee_id: string; employee_name: string; period_start: string | null; period_end: string; wages: number; super: number }>((a, b) =>
+    supabase.from("sale_payroll").select("employee_id, employee_name, period_start, period_end, wages, super").eq("organisation_id", org.id).gte("period_end", addMonths(today, -38)).order("period_end").order("employee_id").range(a, b)).catch(() => null);
+  const payrollReady = payRes !== null;
+  const payroll = (payRes ?? []).map((r) => ({ ...r, wages: Number(r.wages), super: Number(r.super) }));
+  const yearAgo = addMonths(today, -12);
+  const peopleMap = new Map<string, { id: string; name: string; last12: number; lastPaid: string | null }>();
+  for (const r of payroll) {
+    const p = peopleMap.get(r.employee_id) ?? { id: r.employee_id, name: r.employee_name, last12: 0, lastPaid: null };
+    if (r.period_end > yearAgo) p.last12 += r.wages + r.super;
+    if (!p.lastPaid || r.period_end > p.lastPaid) { p.lastPaid = r.period_end; p.name = r.employee_name; }
+    peopleMap.set(r.employee_id, p);
+  }
+  const people = [...peopleMap.values()].map((p) => ({ ...p, last12: Math.round(p.last12) })).sort((a, b) => (b.lastPaid ?? "").localeCompare(a.lastPaid ?? "") || a.name.localeCompare(b.name));
   const expenses: ExpenseLine[] = (expRows ?? []).map((e) => ({ kind: e.kind as "cogs" | "overhead", source: e.source as "xero" | "manual", xero_contact_id: (e.xero_contact_id as string | null) ?? null, name: e.name as string, share_pct: Number(e.share_pct), annual: e.annual == null ? null : Number(e.annual) }));
   const spend: SpendRow[] = spendAll.map((s) => ({ contact_id: s.contact_id, month: s.month, amount: Number(s.amount) }));
   // the RPC has already taken excluded categories off, so nothing more to exclude here
   // before the first Square sale nothing is counted (no wages or costs against months with no sales brought in)
   const firstSale = daily.reduce<string | null>((m, d) => (d.category === "" && Number(d.orders) > 0 && (!m || d.day < m) ? d.day : m), null);
   const countFrom = firstSale && firstSale > from ? firstSale : from;
-  const p = unitPnl({ months, today, from: countFrom, to: today, daily: daily.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend });
+  const p = unitPnl({ months, today, from: countFrom, to: today, daily: daily.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend, payroll });
 
   // the sales page: its settings, the big numbers from Square, and profit over the last 12 months for the valuation
   const page = listing ? readPage(listing.details) : null;
@@ -114,7 +129,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
     const d12 = n > 12 ? daily : locIds.length ? await all<DailyRow>((a, b) => supabase.rpc("sale_unit_data", { p_org: org.id, p_locs: locIds, p_from: months12[0], p_to: today, p_exclude: exclude }).range(a, b)) : [];
     const s12 = n > 12 ? spend : (await all<{ contact_id: string; month: string; amount: number }>((a, b) => supabase.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", org.id).gte("month", months12[0]).order("contact_id").order("month").range(a, b))).map((x) => ({ ...x, amount: Number(x.amount) }));
     const first12 = d12.reduce<string | null>((m, d) => (d.category === "" && Number(d.orders) > 0 && (!m || d.day < m) ? d.day : m), null);
-    profit12 = unitPnl({ months: months12, today, from: first12 && first12 > from12 ? first12 : from12, to: today, daily: d12.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend: s12 }).totals.profit;
+    profit12 = unitPnl({ months: months12, today, from: first12 && first12 > from12 ? first12 : from12, to: today, daily: d12.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend: s12, payroll }).totals.profit;
   }
 
   // supplier picker: what each supplier was paid over the period (whole months from the period's first month)
@@ -125,7 +140,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   const t = p.totals;
   const hasSales = daily.length > 0;
 
-  const staffInit: StaffInput[] = (staffRows ?? []).map((s) => ({ role: s.role as string, headcount: Number(s.headcount), pay_type: s.pay_type as "annual" | "hourly", annual: s.annual as number | null, hourly: s.hourly as number | null, hours_per_shift: s.hours_per_shift as number | null, shifts_per_week: s.shifts_per_week as number | null, weeks_per_year: s.weeks_per_year as number | null, super_pct: s.super_pct as number | null, notes: s.notes as string | null }));
+  const staffInit: StaffInput[] = (staffRows ?? []).map((s) => ({ role: s.role as string, headcount: Number(s.headcount), pay_type: s.pay_type as "annual" | "hourly", annual: s.annual as number | null, hourly: s.hourly as number | null, hours_per_shift: s.hours_per_shift as number | null, shifts_per_week: s.shifts_per_week as number | null, weeks_per_year: s.weeks_per_year as number | null, super_pct: s.super_pct as number | null, notes: s.notes as string | null, source: (s as { source?: string }).source === "xero" ? "xero" : "manual", xero_employee_id: (s as { xero_employee_id?: string | null }).xero_employee_id ?? null, share_pct: Number((s as { share_pct?: number }).share_pct ?? 100) }));
   const expInit: ExpenseInput[] = (expRows ?? []).map((e) => ({ kind: e.kind as "cogs" | "overhead", source: e.source as "xero" | "manual", xero_contact_id: e.xero_contact_id as string | null, name: e.name as string, share_pct: Number(e.share_pct), annual: e.annual as number | null, notes: e.notes as string | null }));
 
   const tiles: [string, string, string?, boolean?][] = [
@@ -206,7 +221,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
           { key: "report", label: "Report", count: (secRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to use the report.</p> : <ReportEditor listingId={listing.id as string} sections={((secRes?.data ?? []) as SectionRow[]).map((x) => ({ ...x, bullets: Array.isArray(x.bullets) ? x.bullets.map(String) : [], table_data: Array.isArray(x.table_data) ? x.table_data : null }))} />}</div> },
           { key: "buyers", label: "Buyers", count: (buyRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to give buyers access.</p> : <BuyersPanel listing={{ id: listing.id as string, title: listing.title as string, slug: (pageRes?.data?.slug as string | null) ?? null, is_public: !!pageRes?.data?.is_public, nda_required: pageRes?.data?.nda_required !== false, nda_text: (pageRes?.data?.nda_text as string | null) ?? null, defaultNda: DEFAULT_NDA }} buyers={(buyRes?.data ?? []) as BuyerRow[]} />}</div> },
         ] : [{ key: "page", label: "Buyer page", content: <div className="px-4 sm:px-0"><StartListing unitId={id} /></div> }]),
-        { key: "crew", label: "Crew", count: staffInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">The standard crew it takes to run {unit.name as string} — what a buyer would pay. Wages count evenly through the year.</p><CrewEditor unitId={id} initial={staffInit} superPct={Number(unit.super_pct)} /></div> },
+        { key: "crew", label: "Crew", count: staffInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">The standard crew it takes to run {unit.name as string} — what a buyer would pay. Wages count evenly through the year.</p><CrewEditor unitId={id} initial={staffInit} superPct={Number(unit.super_pct)} people={people} payrollReady={payrollReady} /></div> },
         { key: "expenses", label: "Expenses", count: expInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">This business&apos;s actual suppliers from Xero (all of it, or its share), plus anything typed in such as rent.</p><ExpenseEditor unitId={id} initial={expInit} suppliers={suppliers} months={months.length} /></div> },
         { key: "setup", label: "Setup", content: <div className="px-4 sm:px-0"><UnitSetup unit={{ id, name: unit.name as string, kind: unit.kind as "business" | "division", square_location_ids: locIds, exclude_categories: exclude, super_pct: Number(unit.super_pct), months: Number(unit.months), notes: (unit.notes as string | null) ?? null }} locations={(locRows ?? []).map((l) => ({ id: l.location_id as string, name: l.name as string }))} categories={((cats ?? []) as { category: string; sales: number }[]).map((c) => ({ category: c.category, sales: Number(c.sales) }))} /></div> },
       ]} />

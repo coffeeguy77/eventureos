@@ -7,6 +7,27 @@ export interface StaffLine {
   role: string; headcount: number; pay_type: "annual" | "hourly";
   annual: number | null; hourly: number | null; hours_per_shift: number | null; shifts_per_week: number | null; weeks_per_year: number | null;
   super_pct: number | null;
+  /** 'xero' = a real person from Xero Payroll: their actual pay (× share) for the period, not the typed-in rate */
+  source?: "manual" | "xero"; xero_employee_id?: string | null; share_pct?: number;
+}
+/** One person in one posted pay run (from Xero Payroll). */
+export interface PayrollRow { employee_id: string; period_start: string | null; period_end: string; wages: number; super: number }
+
+const DAY = 86400_000;
+const dms = (d: string) => Date.parse(`${d}T00:00:00Z`);
+/** Pay (wages + super) for one person that falls inside from..to (inclusive), spread evenly over each pay period's days. */
+export function payrollBetween(rows: PayrollRow[], employeeId: string, from: string, to: string): number {
+  let t = 0;
+  const a = dms(from), b = dms(to);
+  for (const r of rows) {
+    if (r.employee_id !== employeeId) continue;
+    const ps = dms(r.period_start ?? r.period_end), pe = dms(r.period_end);
+    const len = Math.round((pe - ps) / DAY) + 1;
+    const lo = Math.max(ps, a), hi = Math.min(pe, b);
+    if (hi < lo) continue;
+    t += (Number(r.wages) + Number(r.super)) * ((Math.round((hi - lo) / DAY) + 1) / len);
+  }
+  return t;
 }
 export interface ExpenseLine { kind: "cogs" | "overhead"; source: "xero" | "manual"; xero_contact_id: string | null; name: string; share_pct: number; annual: number | null }
 export interface DailyRow { location_id: string; day: string; category: string; sales: number; orders: number }
@@ -68,6 +89,8 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
  */
 export function unitPnl(o: {
   months: string[]; today: string; daily: DailyRow[]; exclude: string[]; staff: StaffLine[]; superPct: number; expenses: ExpenseLine[]; spend: SpendRow[];
+  /** Xero Payroll pay runs, for crew lines chosen from Xero */
+  payroll?: PayrollRow[];
   /** a rolling period (e.g. this day last year → today): sales outside it are left out and the first and last months are pro-rated */
   from?: string; to?: string;
 }): UnitPnl {
@@ -95,7 +118,9 @@ export function unitPnl(o: {
       perDay.set(r.day, (perDay.get(r.day) ?? 0) - Number(r.sales));
     } else cat.set(r.category, (cat.get(r.category) ?? 0) + Number(r.sales));
   }
-  const crewYear = o.staff.reduce((t, s) => t + yearlyCost(s, o.superPct), 0);
+  const manual = o.staff.filter((s) => s.source !== "xero"), real = o.staff.filter((s) => s.source === "xero" && s.xero_employee_id);
+  const crewYear = manual.reduce((t, s) => t + yearlyCost(s, o.superPct), 0);
+  const realCrew = new Map<string, number>(); // xero_employee_id → pay counted over the whole period
   const spend = new Map<string, number>();
   for (const s of o.spend) spend.set(`${s.contact_id}|${s.month}`, (spend.get(`${s.contact_id}|${s.month}`) ?? 0) + Number(s.amount));
   const expTotals = o.expenses.map((e) => ({ name: e.name, kind: e.kind, source: e.source, total: 0 }));
@@ -110,7 +135,18 @@ export function unitPnl(o: {
       expTotals[i].total += v;
       if (e.kind === "cogs") cogs += v; else overheads += v;
     });
-    const s = sales.get(m) ?? 0, wages = (crewYear / 12) * f;
+    // real people: what Xero Payroll paid them for the days of this month inside the period
+    let realWages = 0;
+    if (real.length && o.payroll?.length && f > 0) {
+      const mEnd = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).toISOString().slice(0, 10);
+      const a = o.from && o.from > m ? o.from : m, b0 = (o.to ?? o.today) < mEnd ? (o.to ?? o.today) : mEnd;
+      for (const r of real) {
+        const v = payrollBetween(o.payroll, r.xero_employee_id!, a, b0) * (Math.max(0, Number(r.share_pct ?? 100)) / 100);
+        realWages += v;
+        realCrew.set(r.xero_employee_id!, (realCrew.get(r.xero_employee_id!) ?? 0) + v);
+      }
+    }
+    const s = sales.get(m) ?? 0, wages = (crewYear / 12) * f + realWages;
     const gross = s - cogs;
     return { month: m, sales: r2(s), orders: orders.get(m) ?? 0, cogs: r2(cogs), wages: r2(wages), overheads: r2(overheads), gross: r2(gross), profit: r2(gross - wages - overheads), partial: m === curMonth || f < 1, nodata: f === 0 };
   });
@@ -126,6 +162,6 @@ export function unitPnl(o: {
     byCategory: [...cat.entries()].map(([category, v]) => ({ category, sales: r2(v) })).sort((a, b) => b.sales - a.sales),
     byWeekday: wd.map((w) => ({ day: w.day, label: w.label, avg: w.days ? r2(w.total / w.days) : 0, days: w.days })),
     expenseLines: expTotals.map((e) => ({ ...e, total: r2(e.total) })),
-    crew: o.staff.map((s) => ({ role: s.role, yearly: yearlyCost(s, o.superPct) })),
+    crew: o.staff.map((s) => ({ role: s.role, yearly: s.source === "xero" && s.xero_employee_id ? r2(realCrew.get(s.xero_employee_id) ?? 0) : yearlyCost(s, o.superPct) })),
   };
 }
