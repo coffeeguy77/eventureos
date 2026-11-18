@@ -4,7 +4,8 @@ import { Instrument_Sans, Newsreader } from "next/font/google";
 import { loadSale, noteBuyerView, DEFAULT_NDA, type PublicSection } from "@/lib/sales/public";
 import { createClient } from "@/lib/supabase/server";
 import { thumb } from "@/lib/sales/format";
-import { SaleTour, NdaForm } from "./client";
+import { SaleTour, NdaForm, RequestForm } from "./client";
+import { SaleDashboard } from "./dash";
 import s from "./sale.module.css";
 
 const serif = Newsreader({ subsets: ["latin"], variable: "--fs-serif", display: "swap", style: ["normal", "italic"] });
@@ -45,7 +46,7 @@ export default async function ForSalePage({ params, searchParams }: Params) {
   const sale = await loadSale(slug, k ?? null, preview);
   if (!sale) notFound();
   if (sale.buyer) await noteBuyerView(sale.buyer.id).catch(() => undefined);
-  const { listing, org, tour, sections, locked, equipment, buyer, unlocked, history } = sale;
+  const { listing, org, tour, sections, locked, equipment, buyer, unlocked, history, dash } = sale;
   const d = listing.details;
   const lo = money(d.askingPriceMin), hi = money(d.askingPriceMax), one = money(d.askingPrice);
   const price = lo && hi ? `${lo} – ${hi}` : one ?? lo ?? hi;
@@ -89,6 +90,9 @@ export default async function ForSalePage({ params, searchParams }: Params) {
             <p className={s.tourHint}>Drag to look around. Tap the arrows to walk through {tour.length} rooms; the green markers play the owner&apos;s commentary.</p>
           </section>
         )}
+      </div>
+      {dash && <SaleDashboard dash={dash} unlocked={unlocked} />}
+      <div className={s.wrap}>
 
         {figs.length > 0 && (
           <dl className={s.figs}>
@@ -105,6 +109,12 @@ export default async function ForSalePage({ params, searchParams }: Params) {
 
         <div className={s.secs}>
           {pub.map((x) => <Section key={x.key} x={x} />)}
+          {dash && dash.terms.length > 0 && (
+            <section className={s.sec}>
+              <div><h2 className={s.secTitle}>Terms of sale</h2><p className={s.secSub}>Conditions that come with this sale.</p></div>
+              <div className={s.terms}>{dash.terms.map((t, i) => <div key={i} className={s.term}>{t.title && <p className={s.termTitle}>{t.title}</p>}{t.text && <p className={s.termText}>{t.text}</p>}{t.figure && <p className={s.termFig}>{t.figure}</p>}</div>)}</div>
+            </section>
+          )}
           {equipment.length > 0 && (
             <section className={s.sec}>
               <div><h2 className={s.secTitle}>Plant and equipment</h2><p className={s.secSub}>Everything listed here is included in the sale.</p></div>
@@ -116,29 +126,29 @@ export default async function ForSalePage({ params, searchParams }: Params) {
                     <tr><td><b>Total</b></td><td className={s.num}><b>{equipment.reduce((t, e) => t + e.items, 0)}</b></td><td className={s.num}><b>{money(eqTotal)}</b></td><td className={s.num}><b>{money(eqNew)}</b></td></tr>
                   </tbody>
                 </table>
+                {dash && dash.excludedEquipment.length > 0 && <><p className={s.secSub} style={{ marginTop: "1.5rem" }}>Not included — kept by the seller:</p><ul className={s.excluded}>{dash.excludedEquipment.map((e, i) => <li key={i}>{e.name}{e.division ? ` (${e.division})` : ""}</li>)}</ul></>}
               </div>
             </section>
           )}
         </div>
 
-        {!unlocked && (locked.length > 0 || buyer) && (
+        {!unlocked && (
           <section className={s.gate} aria-label="Buyer information">
             <div>
               <h2 className={s.gateTitle}>{buyer ? "Sign to see the full information" : "The full information is for buyers"}</h2>
               <p className={s.gateText}>{buyer
-                ? `Once you agree to keep it confidential, this page opens the financials, valuation and everything below${history ? "" : ""}.`
-                : `The seller shares the financials, valuation, lease and staffing with serious buyers who sign a confidentiality agreement.${contact ? " Ask for a private buyer link." : ""}`}</p>
+                ? "Once you agree to keep it confidential, this page opens the month-by-month sales, profit and loss, wages, valuation and everything listed here."
+                : "The month-by-month sales, profit and loss, wages, best sellers and valuation are shared with serious buyers who sign a confidentiality agreement. Ask for access and the seller will send you a private link."}</p>
               {locked.length > 0 && <ul className={s.lockedList}>{locked.map((x) => <li key={x.key}>{x.title}</li>)}</ul>}
-              {!buyer && contact && <a className={s.btn} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }} href={`mailto:${contact}?subject=${encodeURIComponent(`Buyer link: ${listing.title}`)}`}>Ask for a buyer link</a>}
             </div>
-            {buyer && <NdaForm slug={listing.slug} token={k ?? ""} text={listing.nda_text?.trim() || DEFAULT_NDA} />}
+            {buyer ? <NdaForm slug={listing.slug} token={k ?? ""} text={listing.nda_text?.trim() || DEFAULT_NDA} /> : <RequestForm slug={listing.slug} contact={contact} />}
           </section>
         )}
 
         {unlocked && (
           <div className={s.secs} style={{ marginTop: 0 }}>
             {buyer?.nda_signed_at && <p className={s.signed}>You signed the confidentiality agreement on {new Date(buyer.nda_signed_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}. Please keep what follows to yourself and your advisers.</p>}
-            {history && <section className={s.sec}><div><h2 className={s.secTitle}>Sales, month by month</h2><p className={s.secSub}>From the point-of-sale system, ex GST, for the last 12 full months.</p></div><SalesChart rows={history} /></section>}
+            {!dash && history && <section className={s.sec}><div><h2 className={s.secTitle}>Sales, month by month</h2><p className={s.secSub}>From the point-of-sale system, ex GST, for the last 12 full months.</p></div><SalesChart rows={history} /></section>}
             {priv.map((x) => <Section key={x.key} x={x} />)}
           </div>
         )}

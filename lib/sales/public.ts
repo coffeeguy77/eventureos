@@ -1,6 +1,11 @@
 import "server-only";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import type { TourSpace } from "@/components/sales/tour";
+import { FIGURES, readPage, type FigureKey } from "./page-settings";
+import { categoryTotal, fullMonths, suggestCoffeeCategories, type YearStats } from "./stats";
+import { loadStatRows, sydneyToday } from "./stats-server";
+import { saleStats } from "./stats";
+import { unitPnl, yearlyCost, type ExpenseLine, type StaffLine } from "./pnl";
 
 /**
  * What the public listing page (/for-sale/<slug>) shows. Read with the service role: anonymous visitors have no
@@ -9,7 +14,21 @@ import type { TourSpace } from "@/components/sales/tour";
  *  · a buyer who has signed the NDA (or one approved, when no NDA is required): buyer report sections and the sales history
  *  · revoked buyers and hidden sections: never
  */
-export interface PublicBuyer { id: string; name: string; status: "invited" | "nda_signed" | "approved" | "revoked"; nda_signed_at: string | null }
+export interface PublicBuyer { id: string; name: string; status: "requested" | "invited" | "nda_signed" | "approved" | "revoked"; nda_signed_at: string | null }
+/** One rolling year on the page. Figures the visitor may not see are left out entirely (never sent to the browser). */
+export interface PublicYear {
+  label: string; from: string; to: string; complete: boolean;
+  figures: Partial<Record<FigureKey, number | string>>;
+  charts?: { categories: { category: string; sales: number }[]; bestSellers: { item: string; qty: number; sales: number }[]; weekdays: { label: string; avg: number }[]; months: { month: string; sales: number; coffees: number }[] };
+  pnl?: { sales: number; cogs: number; wages: number; overheads: number; profit: number; margin: number | null };
+}
+export interface PublicDash {
+  headline: string; years: PublicYear[]; figureLabels: Record<string, string>;
+  crew?: { role: string; headcount: number; yearly: number }[];
+  valuation?: { profit: number; addbacks: { label: string; amount: number }[]; adjusted: number; multiple: number; equipment: number; value: number };
+  terms: { title: string; text: string; figure: string | null }[];
+  excludedEquipment: { name: string; division: string | null }[];
+}
 export interface PublicSection { key: string; title: string; subtitle: string | null; body: string | null; bullets: string[]; table_data: Record<string, unknown>[] | null; visibility: "public" | "buyers" }
 export interface PublicSale {
   listing: { id: string; organisation_id: string; unit_id: string | null; slug: string; title: string; details: Record<string, unknown>; photos: string[]; report_images: { url: string; role?: string; name?: string; caption?: string | null; primary?: boolean }[]; nda_required: boolean; nda_text: string | null; is_public: boolean };
@@ -22,6 +41,7 @@ export interface PublicSale {
   unlocked: boolean;
   /** signed buyers only: Square sales (ex GST) for the last 12 full months */
   history: { month: string; sales: number; orders: number }[] | null;
+  dash: PublicDash | null;
 }
 
 export const DEFAULT_NDA = "I agree to keep everything I see about this business confidential: its finances, staff, suppliers, customers, lease and the fact that it is for sale. I'll use it only to decide whether to buy the business, won't share it except with my own advisers (who will keep it confidential too), won't approach its staff, suppliers or customers without the owner's written permission, and will return or delete it if asked.";
@@ -37,7 +57,8 @@ export async function loadSale(slug: string, token: string | null, preview = fal
   let buyer: PublicBuyer | null = null;
   if (token && TOKEN.test(token)) {
     const { data: b } = await db.from("sale_buyers").select("id, name, status, nda_signed_at").eq("listing_id", l.id).eq("token", token).maybeSingle();
-    if (b && b.status !== "revoked") buyer = b as PublicBuyer;
+    // a request isn't access: only links the seller has given (and not turned off) count
+    if (b && b.status !== "revoked" && b.status !== "requested") buyer = b as PublicBuyer;
   }
   if (!l.is_public && !buyer && !preview) return null;
   // a buyer link opens the buyer-only part once the NDA is signed (or straight away when no NDA is required)
@@ -65,6 +86,76 @@ export async function loadSale(slug: string, token: string | null, preview = fal
     org: { name: (org?.name as string) ?? "", contact_email: (org?.contact_email as string | null) ?? null },
     tour, sections, locked, equipment: [...div.values()].sort((a, b) => b.secondhand - a.secondhand), buyer, unlocked,
     history: unlocked && l.unit_id ? await salesHistory(db, l.organisation_id as string, l.unit_id as string) : null,
+    dash: l.unit_id ? await buildDash(db, l as { id: string; organisation_id: string; unit_id: string; details: unknown }, unlocked).catch((e) => { console.error("[for-sale] numbers", e); return null; }) : null,
+  };
+}
+
+const fmtMoney = (n: number) => `$${Math.round(n).toLocaleString("en-AU")}`;
+
+async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: string; organisation_id: string; unit_id: string; details: unknown }, unlocked: boolean): Promise<PublicDash | null> {
+  const page = readPage(l.details);
+  const { data: u } = await db.from("sale_units").select("square_location_ids, exclude_categories, super_pct").eq("id", l.unit_id).maybeSingle();
+  if (!u) return null;
+  const locs = (u.square_location_ids as string[]) ?? [], exclude = (u.exclude_categories as string[]) ?? [];
+  const today = sydneyToday();
+  const { days, items } = await loadStatRows(db, l.organisation_id, locs, exclude, page.years, today);
+  const coffeeCats = page.coffee_categories ?? suggestCoffeeCategories([...new Set(items.map((i) => i.category))]);
+  const st = saleStats({ today, years: page.years, days, items, coffeeCategories: coffeeCats });
+  const allowed = new Set<FigureKey>(unlocked ? (Object.keys(FIGURES) as FigureKey[]) : page.public_figures);
+  const fig = (y: YearStats): PublicYear["figures"] => {
+    const f: PublicYear["figures"] = {};
+    const put = (k: FigureKey, v: number | string | null) => { if (allowed.has(k) && v !== null && v !== "") f[k] = v; };
+    put("coffees", y.coffees || null); put("coffee_sales", y.coffeeSales || null); put("sales", y.sales || null); put("orders", y.orders || null);
+    put("avg_sale", y.avgSale); put("per_day", y.perDay); put("best_day", y.bestDay?.label ?? null); put("coffees_per_day", y.coffeesPerDay || null);
+    return f;
+  };
+  // buyers who've signed: charts and a P&L per year (wages from the standard crew — roles only, never names)
+  let staff: StaffLine[] = [], expenses: ExpenseLine[] = [], spend: { contact_id: string; month: string; amount: number }[] = [];
+  if (unlocked) {
+    const from = fullMonths(today, page.years * 12)[0];
+    const [s, e, sp] = await Promise.all([
+      db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct").eq("unit_id", l.unit_id),
+      db.from("sale_expenses").select("kind, source, xero_contact_id, name, share_pct, annual").eq("unit_id", l.unit_id),
+      db.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", l.organisation_id).gte("month", from).limit(20000),
+    ]);
+    staff = ((s.data ?? []) as Record<string, unknown>[]).map((x) => ({ role: String(x.role), headcount: Number(x.headcount), pay_type: x.pay_type as "annual" | "hourly", annual: x.annual == null ? null : Number(x.annual), hourly: x.hourly == null ? null : Number(x.hourly), hours_per_shift: x.hours_per_shift == null ? null : Number(x.hours_per_shift), shifts_per_week: x.shifts_per_week == null ? null : Number(x.shifts_per_week), weeks_per_year: x.weeks_per_year == null ? null : Number(x.weeks_per_year), super_pct: x.super_pct == null ? null : Number(x.super_pct) }));
+    expenses = ((e.data ?? []) as Record<string, unknown>[]).map((x) => ({ kind: x.kind as "cogs" | "overhead", source: x.source as "xero" | "manual", xero_contact_id: (x.xero_contact_id as string | null) ?? null, name: String(x.name), share_pct: Number(x.share_pct), annual: x.annual == null ? null : Number(x.annual) }));
+    const used = new Set(expenses.filter((x) => x.source === "xero").map((x) => x.xero_contact_id));
+    spend = ((sp.data ?? []) as { contact_id: string; month: string; amount: number }[]).filter((x) => used.has(x.contact_id)).map((x) => ({ ...x, amount: Number(x.amount) }));
+  }
+  const superPct = Number(u.super_pct) || 0;
+  const years: PublicYear[] = st.years.map((y) => {
+    const out: PublicYear = { label: y.label, from: y.from, to: y.to, complete: y.complete, figures: fig(y) };
+    if (unlocked) {
+      out.charts = { categories: y.categories.slice(0, 10), bestSellers: y.bestSellers, weekdays: y.weekdays, months: st.months.filter((m) => m.month >= y.from && m.month <= y.to) };
+      const ms: string[] = []; for (let m = y.from; m <= y.to; m = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1)).toISOString().slice(0, 10)) ms.push(m);
+      const from = st.firstMonth && st.firstMonth > y.from ? days.filter((d) => d.category === "" && Number(d.orders) > 0).reduce((a, d) => (d.day < a ? d.day : a), y.to) : y.from;
+      const p = unitPnl({ months: ms, today, from, to: y.to, daily: days.map((d) => ({ location_id: "", day: d.day, category: d.category, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct, expenses, spend });
+      out.pnl = { sales: p.totals.sales, cogs: p.totals.cogs, wages: p.totals.wages, overheads: p.totals.overheads, profit: p.totals.profit, margin: p.totals.margin };
+    }
+    return out;
+  });
+  const { data: eq } = await db.from("sale_equipment").select("name, division, included, secondhand_value").eq("listing_id", l.id);
+  const eqValue = ((eq ?? []) as { included: boolean; secondhand_value: number }[]).filter((x) => x.included).reduce((t, x) => t + Number(x.secondhand_value), 0);
+  const showVal = page.valuation.show === "public" || (page.valuation.show === "buyers" && unlocked);
+  const p0 = years[0]?.pnl;
+  let valuation: PublicDash["valuation"];
+  if (showVal && (p0 || page.valuation.show === "public")) {
+    // public valuation needs the profit even when the P&L isn't shown
+    const profit = p0?.profit ?? 0;
+    const add = page.valuation.addbacks.reduce((t, a) => t + a.amount, 0);
+    valuation = { profit, addbacks: page.valuation.addbacks, adjusted: profit + add, multiple: page.valuation.multiple, equipment: eqValue, value: Math.max(0, profit + add) * page.valuation.multiple + eqValue };
+    if (!p0) valuation = undefined; // without signed-buyer figures there's no honest profit to show
+  }
+  return {
+    headline: page.headline, years, figureLabels: FIGURES,
+    crew: unlocked ? staff.map((s) => ({ role: s.role, headcount: s.headcount, yearly: yearlyCost(s, superPct) })) : undefined,
+    valuation,
+    terms: page.terms.map((t) => {
+      const c = t.categories.length ? categoryTotal(items, t.categories, today) : null;
+      return { title: t.title, text: t.text, figure: c && (c.sales > 0 || c.qty > 0) ? `${fmtMoney(c.sales)} of ${t.categories.join(", ")} sales (${c.qty.toLocaleString("en-AU")} items) in the last 12 months` : null };
+    }),
+    excludedEquipment: ((eq ?? []) as { name: string; division: string | null; included: boolean }[]).filter((x) => !x.included).map((x) => ({ name: x.name, division: x.division })),
   };
 }
 

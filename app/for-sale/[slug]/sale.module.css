@@ -113,3 +113,44 @@
 
 .foot { border-top: 1px solid var(--rule); padding: 2rem 0 3rem; font-size: 0.875rem; color: var(--ink-3); }
 .foot a { color: var(--ink-2); }
+
+/* The numbers: one full-bleed band, the memorable thing on the page */
+.band { background: var(--ink); color: var(--paper); margin: 3rem 0 0; padding: 3.25rem 0 3.5rem; }
+@media (prefers-color-scheme: dark) { .band { background: #0d120f; color: var(--ink); } }
+.bandHead { font-family: var(--fs-serif), Georgia, serif; font-size: clamp(1.5rem, 3.2vw, 2.4rem); line-height: 1.15; margin: 0 0 1.75rem; max-width: 26ch; }
+.years { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+.year, .yearOn { height: 2.4rem; padding: 0 1rem; border-radius: 999px; font: inherit; font-size: 0.875rem; cursor: pointer; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); background: transparent; color: inherit; }
+.yearOn { background: var(--bean); border-color: var(--bean); color: #14201a; font-weight: 600; }
+.year:focus-visible, .yearOn:focus-visible { outline: 2px solid var(--bean); outline-offset: 2px; }
+.bandSpan { margin: 0; font-size: 0.875rem; opacity: 0.7; }
+.lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1.25rem; margin-top: 0.5rem; }
+.leadNum { font-family: var(--fs-serif), Georgia, serif; font-weight: 400; font-size: clamp(4.2rem, 15vw, 11rem); line-height: 0.95; letter-spacing: -0.035em; font-variant-numeric: lining-nums; color: var(--bean); }
+.leadLab { font-family: var(--fs-serif), Georgia, serif; font-style: italic; font-size: clamp(1.4rem, 3vw, 2.2rem); }
+.bandFigs { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1.5rem 2rem; margin: 2.5rem 0 0; padding-top: 1.75rem; border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+.bandFigs dd { margin: 0; }
+.bandNum { font-family: var(--fs-serif), Georgia, serif; font-size: clamp(2rem, 4.2vw, 3.1rem); line-height: 1.05; font-variant-numeric: lining-nums tabular-nums; }
+.bandLab { margin-top: 0.3rem; font-size: 0.9375rem; opacity: 0.75; }
+
+.line { stroke: var(--roast); stroke-width: 2.5; stroke-linejoin: round; }
+.legend { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--ink-3); }
+.keyBar { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px; background: var(--bean); }
+.keyLine { display: inline-block; width: 1rem; height: 2.5px; background: var(--roast); margin-left: 0.75rem; }
+.twoCol { display: grid; gap: 2rem; }
+@media (min-width: 760px) { .twoCol { grid-template-columns: 1fr 1fr; } }
+.hbars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.65rem; max-width: 40em; font-size: 0.9375rem; }
+.hbarRow { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.25rem; }
+.hbarTrack { height: 0.5rem; border-radius: 999px; background: var(--paper-2); }
+.hbarFill { height: 100%; border-radius: 999px; background: var(--bean); }
+.top { margin: 0; padding: 0 0 0 1.4rem; font-size: 0.9375rem; }
+.top li { padding: 0.35rem 0; border-bottom: 1px solid var(--rule); }
+.top li > span:first-child { display: inline-block; max-width: 75%; }
+.topNum { float: right; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.valFig { font-family: var(--fs-serif), Georgia, serif; font-size: clamp(2.6rem, 6vw, 4.2rem); line-height: 1; color: var(--roast); margin-bottom: 0.5rem; }
+
+.terms { display: grid; gap: 1.25rem; }
+.term { border-left: 3px solid var(--bean); padding: 0.1rem 0 0.1rem 1.1rem; max-width: 44em; }
+.termTitle { font-weight: 600; margin: 0; }
+.termText { margin: 0.35rem 0 0; color: var(--ink-2); white-space: pre-line; }
+.termFig { margin: 0.5rem 0 0; font-family: var(--fs-serif), Georgia, serif; font-size: 1.1rem; color: var(--roast); }
+.excluded { margin: 1rem 0 0; padding: 0; list-style: none; columns: 2 14rem; font-size: 0.9375rem; color: var(--ink-2); }
+.excluded li { break-inside: avoid; padding: 0.2rem 0; }

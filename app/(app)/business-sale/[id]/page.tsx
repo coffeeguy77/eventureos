@@ -75,7 +75,8 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   // report, page settings and buyers — need database update 0112 (until then these tabs say so)
   const [secRes, buyRes, pageRes] = listing ? await Promise.all([
     supabase.from("sale_report_sections").select("id, key, title, subtitle, body, bullets, table_data, visibility, source").eq("listing_id", listing.id).order("position"),
-    supabase.from("sale_buyers").select("id, name, email, phone, company, token, status, nda_signed_at, nda_signed_name, last_seen_at, views, created_at").eq("listing_id", listing.id).order("created_at"),
+    supabase.from("sale_buyers").select("id, name, email, phone, company, token, status, nda_signed_at, nda_signed_name, last_seen_at, views, created_at, message").eq("listing_id", listing.id).order("created_at")
+      .then((r) => (r.error && /message/.test(r.error.message) ? supabase.from("sale_buyers").select("id, name, email, phone, company, token, status, nda_signed_at, nda_signed_name, last_seen_at, views, created_at").eq("listing_id", listing.id).order("created_at") : r)),
     supabase.from("sale_listings").select("slug, is_public, nda_required, nda_text").eq("id", listing.id).single(),
   ]) : [null, null, null];
   const needs0112 = !!(secRes?.error || buyRes?.error || pageRes?.error);

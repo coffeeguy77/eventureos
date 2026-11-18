@@ -78,9 +78,9 @@ function SectionForm({ listingId, s, onDone }: { listingId: string; s?: SectionR
   );
 }
 
-export interface BuyerRow { id: string; name: string; email: string | null; phone: string | null; company: string | null; token: string; status: "invited" | "nda_signed" | "approved" | "revoked"; nda_signed_at: string | null; nda_signed_name: string | null; last_seen_at: string | null; views: number; created_at: string }
+export interface BuyerRow { id: string; name: string; email: string | null; phone: string | null; company: string | null; token: string; status: "requested" | "invited" | "nda_signed" | "approved" | "revoked"; nda_signed_at: string | null; nda_signed_name: string | null; last_seen_at: string | null; views: number; created_at: string; message?: string | null }
 const STATUS: Record<BuyerRow["status"], { label: string; tone: "neutral" | "amber" | "green" | "red" }> = {
-  invited: { label: "Not signed yet", tone: "neutral" }, nda_signed: { label: "NDA signed", tone: "amber" }, approved: { label: "Approved", tone: "green" }, revoked: { label: "Link turned off", tone: "red" },
+  requested: { label: "Asked for access", tone: "amber" }, invited: { label: "Not signed yet", tone: "neutral" }, nda_signed: { label: "NDA signed", tone: "amber" }, approved: { label: "Approved", tone: "green" }, revoked: { label: "Link turned off", tone: "red" },
 };
 const when = (d: string | null) => (d ? new Date(d).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : null);
 
@@ -128,12 +128,14 @@ export function BuyersPanel({ listing, buyers }: { listing: { id: string; title:
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-2 text-[0.875rem] font-medium text-ink">{b.name}<Badge tone={STATUS[b.status].tone}>{STATUS[b.status].label}</Badge></p>
                 <p className="mt-0.5 text-[0.75rem] text-ink-muted">{[b.company, b.email, b.phone].filter(Boolean).join(", ") || "No contact details"}</p>
-                <p className="mt-0.5 text-[0.75rem] text-ink-faint">{b.views ? `Opened ${b.views} time${b.views === 1 ? "" : "s"}, last ${when(b.last_seen_at)}` : "Hasn't opened the link yet"}{b.nda_signed_at ? `. Signed as “${b.nda_signed_name}” ${when(b.nda_signed_at)}` : ""}</p>
+                {b.message && <p className="mt-1 whitespace-pre-line text-[0.8125rem] text-ink">“{b.message}”</p>}
+                <p className="mt-0.5 text-[0.75rem] text-ink-faint">{b.status === "requested" ? `Asked ${when(b.created_at)} from the listing page` : b.views ? `Opened ${b.views} time${b.views === 1 ? "" : "s"}, last ${when(b.last_seen_at)}` : "Hasn't opened the link yet"}{b.nda_signed_at ? `. Signed as “${b.nda_signed_name}” ${when(b.nda_signed_at)}` : ""}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {page && b.status !== "revoked" && <Button size="sm" onClick={() => copy(link(b), b.id)}>{copied === b.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied === b.id ? "Copied" : "Copy link"}</Button>}
+                {b.status === "requested" && <><Button size="sm" variant="primary" disabled={pending} onClick={() => start(async () => { await setBuyerStatus(listing.id, b.id, "invite"); router.refresh(); })}>Approve and make link</Button><Button size="sm" variant="ghost" disabled={pending} onClick={() => start(async () => { await setBuyerStatus(listing.id, b.id, "revoked"); router.refresh(); })}>Decline</Button></>}
+                {page && b.status !== "revoked" && b.status !== "requested" && <Button size="sm" onClick={() => copy(link(b), b.id)}>{copied === b.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied === b.id ? "Copied" : "Copy link"}</Button>}
                 {b.status === "nda_signed" && <Button size="sm" variant="primary" disabled={pending} onClick={() => start(async () => { await setBuyerStatus(listing.id, b.id, "approved"); router.refresh(); })}>Approve</Button>}
-                {b.status !== "revoked"
+                {b.status === "requested" ? null : b.status !== "revoked"
                   ? <Button size="sm" variant="ghost" disabled={pending} onClick={() => start(async () => { await setBuyerStatus(listing.id, b.id, "revoked"); router.refresh(); })}>Turn off link</Button>
                   : <Button size="sm" disabled={pending} onClick={() => start(async () => { await setBuyerStatus(listing.id, b.id, "restore"); router.refresh(); })}>Turn link back on</Button>}
               </div>

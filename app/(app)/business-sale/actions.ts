@@ -321,13 +321,13 @@ export async function addBuyer(listingId: string, i: { name: string; email?: str
 }
 
 /** Approve, turn off (revoke) or turn back on a buyer's link. */
-export async function setBuyerStatus(listingId: string, buyerId: string, status: "approved" | "revoked" | "restore"): Promise<R<undefined>> {
+export async function setBuyerStatus(listingId: string, buyerId: string, status: "approved" | "revoked" | "restore" | "invite"): Promise<R<undefined>> {
   return run(async () => {
     const { supabase, org, listing } = await ownListing(listingId);
     if (!UUID.test(buyerId)) throw new Error("That buyer isn't valid.");
     const { data: b } = await supabase.from("sale_buyers").select("nda_signed_at").eq("id", buyerId).eq("listing_id", listingId).maybeSingle();
     if (!b) throw new Error("That buyer doesn't exist.");
-    const next = status === "restore" ? (b.nda_signed_at ? "nda_signed" : "invited") : status;
+    const next = status === "restore" || status === "invite" ? (b.nda_signed_at ? "nda_signed" : "invited") : status;
     const { error } = await supabase.from("sale_buyers").update({ status: next }).eq("id", buyerId).eq("listing_id", listingId).eq("organisation_id", org.id);
     if (error) throw new Error(error.message);
     if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
