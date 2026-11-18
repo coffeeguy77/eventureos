@@ -95,6 +95,10 @@ export async function syncSquareSales(ctx: SyncContext, opts: { full?: boolean }
   const cats = await categoryMap(ctx);
   const categoryOf = (id: string | undefined) => (id && cats.get(id)) || "Uncategorised";
   let done = 0;
+  // the dates each location's sales now cover (shown on the Business Sales page)
+  const { data: had } = await ctx.db.from("sale_square_locations").select("location_id, synced_from, synced_to").eq("organisation_id", ctx.org.id);
+  const covered = new Map(((had ?? []) as { location_id: string; synced_from: string | null; synced_to: string | null }[]).map((r) => [r.location_id, { from: r.synced_from, to: r.synced_to, touched: false }]));
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: ctx.org.timezone || "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   while (plan.queue.length && Date.now() < deadline) {
     const c = plan.queue[0];
     const orders = await ordersFor(ctx, c.loc, c.month, deadline);
@@ -118,6 +122,16 @@ export async function syncSquareSales(ctx: SyncContext, opts: { full?: boolean }
     }
     plan.queue.shift();
     done++;
+    const last = new Date(Date.parse(`${to}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    const cv = covered.get(c.loc) ?? { from: null, to: null, touched: false };
+    cv.from = !cv.from || c.month < cv.from ? c.month : cv.from;
+    const end = last > today ? today : last;
+    cv.to = !cv.to || end > cv.to ? end : cv.to;
+    cv.touched = true;
+    covered.set(c.loc, cv);
+  }
+  for (const [loc, cv] of covered) {
+    if (cv.touched) await ctx.db.from("sale_square_locations").update({ synced_from: cv.from, synced_to: cv.to }).eq("organisation_id", ctx.org.id).eq("location_id", loc);
   }
   const finished = plan.queue.length === 0;
   await saveIntegrationSettings(ctx, { sales_plan: finished ? null : plan, sales_first_done: st.sales_first_done || finished, sales_synced_at: finished ? now : (ctx.integration.settings as { sales_synced_at?: string }).sales_synced_at ?? null });

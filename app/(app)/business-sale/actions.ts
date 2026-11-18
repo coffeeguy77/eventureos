@@ -149,3 +149,40 @@ export async function syncSupplierSpend(): Promise<R<{ message: string }>> {
     return { message: `Supplier spend updated: ${r.suppliers} suppliers over the last ${r.months} months.` };
   });
 }
+
+async function ownListing(id: string) {
+  const ctx = await managers();
+  if (!UUID.test(id)) throw new Error("That link isn't valid.");
+  const { data, error } = await ctx.supabase.from("sale_listings").select("id, unit_id, tour").eq("id", id).eq("organisation_id", ctx.org.id).maybeSingle();
+  if (error) throw new Error(/sale_listings/.test(error.message) ? "Run the database update 0111_sale_listing_tour.sql first." : error.message);
+  if (!data) throw new Error("That listing doesn't exist, or you can't see it.");
+  return { ...ctx, listing: data as { id: string; unit_id: string | null; tour: { id: string; enabled?: boolean }[] } };
+}
+
+/** Show or hide rooms of the 360° walkthrough (hidden rooms stay, buyers just don't see them). */
+export async function saveTourScenesShown(listingId: string, shown: Record<string, boolean>): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const tour = (Array.isArray(listing.tour) ? listing.tour : []).map((s) => (s.id in shown ? { ...s, enabled: !!shown[s.id] } : s));
+    const { error } = await supabase.from("sale_listings").update({ tour, updated_at: new Date().toISOString() }).eq("id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+/** Which equipment is included in the sale. */
+export async function saveEquipmentIncluded(listingId: string, included: Record<string, boolean>): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const ids = Object.keys(included).filter((k) => UUID.test(k)).slice(0, 2000);
+    const on = ids.filter((k) => included[k]), off = ids.filter((k) => !included[k]);
+    for (const [list, v] of [[on, true], [off, false]] as const) {
+      if (!list.length) continue;
+      const { error } = await supabase.from("sale_equipment").update({ included: v }).eq("listing_id", listingId).eq("organisation_id", org.id).in("id", list);
+      if (error) throw new Error(error.message);
+    }
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}

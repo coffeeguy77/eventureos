@@ -10,6 +10,8 @@ import { monthList, unitPnl, type DailyRow, type ExpenseLine, type SpendRow, typ
 import { BarList, MonthlyChart, aud } from "@/components/sales/charts";
 import { CrewEditor, ExpenseEditor, UnitSetup, type SupplierOption } from "@/components/sales/ui";
 import type { ExpenseInput, StaffInput } from "../actions";
+import { EquipmentPanel, ListingDetails, TourPanel, type EquipmentRow } from "@/components/sales/listing";
+import type { TourSpace } from "@/components/sales/tour";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,6 +60,11 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
     supabase.from("sale_expenses").select("kind, source, xero_contact_id, name, share_pct, annual, notes").eq("unit_id", id).eq("organisation_id", org.id).order("position"),
     supabase.from("sale_square_locations").select("location_id, name").eq("organisation_id", org.id).order("name"),
   ]);
+  // the listing (and its 360° walkthrough and equipment) — needs database update 0111
+  const { data: listing } = await supabase.from("sale_listings").select("id, title, source, details, photos, tour").eq("unit_id", id).eq("organisation_id", org.id).order("created_at").limit(1).maybeSingle();
+  const { data: equipRows } = listing
+    ? await supabase.from("sale_equipment").select("id, name, category, division, brand, condition, secondhand_value, replacement_cost, included").eq("listing_id", listing.id).order("position")
+    : { data: [] };
   const catLocs = locIds.length ? locIds : (locRows ?? []).map((l) => l.location_id as string);
   const [daily, { data: items }, { data: cats }, spendAll] = await Promise.all([
     locIds.length
@@ -156,6 +163,11 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
       </div>
       <ClientTabs className="-mx-4 sm:mx-0 [&>div:first-child]:sm:px-0" initial={sp.tab} tabs={[
         { key: "overview", label: "Sales & profit", content: overview },
+        ...(listing ? [
+          { key: "tour", label: "360° tour", count: (listing.tour as TourSpace[]).length, content: <div className="px-4 sm:px-0"><TourPanel listingId={listing.id as string} spaces={listing.tour as TourSpace[]} /></div> },
+          { key: "listing", label: "Listing", content: <div className="px-4 sm:px-0"><ListingDetails title={listing.title as string} details={listing.details as Record<string, unknown>} photos={(listing.photos as string[]) ?? []} source={listing.source as string} /></div> },
+          { key: "equipment", label: "Equipment", count: (equipRows ?? []).length, content: <div className="px-4 sm:px-0"><EquipmentPanel listingId={listing.id as string} items={(equipRows ?? []).map((e) => ({ ...e, secondhand_value: Number(e.secondhand_value), replacement_cost: Number(e.replacement_cost) })) as EquipmentRow[]} /></div> },
+        ] : []),
         { key: "crew", label: "Crew", count: staffInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">The standard crew it takes to run {unit.name as string} — what a buyer would pay. Wages count evenly through the year.</p><CrewEditor unitId={id} initial={staffInit} superPct={Number(unit.super_pct)} /></div> },
         { key: "expenses", label: "Expenses", count: expInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">This business&apos;s actual suppliers from Xero (all of it, or its share), plus anything typed in such as rent.</p><ExpenseEditor unitId={id} initial={expInit} suppliers={suppliers} months={months.length} /></div> },
         { key: "setup", label: "Setup", content: <div className="px-4 sm:px-0"><UnitSetup unit={{ id, name: unit.name as string, kind: unit.kind as "business" | "division", square_location_ids: locIds, exclude_categories: exclude, super_pct: Number(unit.super_pct), months: Number(unit.months), notes: (unit.notes as string | null) ?? null }} locations={(locRows ?? []).map((l) => ({ id: l.location_id as string, name: l.name as string }))} categories={((cats ?? []) as { category: string; sales: number }[]).map((c) => ({ category: c.category, sales: Number(c.sales) }))} /></div> },
