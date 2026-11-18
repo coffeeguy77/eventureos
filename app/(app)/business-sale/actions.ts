@@ -390,3 +390,81 @@ export async function syncPayroll(): Promise<R<{ message: string; partial: boole
     return r;
   });
 }
+
+/**
+ * Build a division's buyer page from the main one: copy the tour rooms it should show (arrows to rooms left out
+ * are dropped), the equipment of the chosen divisions, and (optionally) the report sections. Copies, so each
+ * listing can then be changed on its own.
+ */
+export async function copyFromListing(targetId: string, sourceId: string, pick: { rooms: string[]; divisions: string[]; sections: boolean }): Promise<R<{ rooms: number; equipment: number; sections: number }>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(targetId);
+    if (!UUID.test(sourceId) || sourceId === targetId) throw new Error("Choose the listing to copy from.");
+    const { data: src } = await supabase.from("sale_listings").select("id, tour, tour_settings, photos").eq("id", sourceId).eq("organisation_id", org.id).maybeSingle();
+    if (!src) throw new Error("That listing doesn't exist.");
+    const want = new Set((pick.rooms ?? []).map(String));
+    type Room = { id: string; isStartScene?: boolean; pins?: { targetSpaceId?: string; type?: string }[] };
+    const rooms = ((src.tour ?? []) as Room[]).filter((s) => want.has(s.id))
+      .map((s) => ({ ...s, pins: (s.pins ?? []).filter((p) => p.type !== "navigation" || !p.targetSpaceId || want.has(p.targetSpaceId)) }));
+    if (rooms.length && !rooms.some((r) => r.isStartScene)) rooms[0].isStartScene = true;
+    let start = false;
+    for (const r of rooms) { if (r.isStartScene && !start) start = true; else r.isStartScene = false; }
+    const { error } = await supabase.from("sale_listings").update({ tour: rooms, tour_settings: src.tour_settings ?? {}, updated_at: new Date().toISOString() }).eq("id", targetId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    let equipment = 0;
+    const divs = (pick.divisions ?? []).map((d) => String(d));
+    if (divs.length) {
+      const { data: eq } = await supabase.from("sale_equipment").select("name, category, division, brand, condition, secondhand_value, replacement_cost, included, position").eq("listing_id", sourceId);
+      const rows = ((eq ?? []) as Record<string, unknown>[]).filter((e) => divs.includes(String(e.division ?? "General")))
+        .map((e) => ({ ...e, organisation_id: org.id, listing_id: targetId }));
+      await supabase.from("sale_equipment").delete().eq("listing_id", targetId).eq("organisation_id", org.id);
+      if (rows.length) { const { error: e2 } = await supabase.from("sale_equipment").insert(rows); if (e2) throw new Error(e2.message); }
+      equipment = rows.length;
+    }
+    let sections = 0;
+    if (pick.sections) {
+      const { data: secs } = await supabase.from("sale_report_sections").select("key, title, subtitle, body, bullets, table_data, visibility, position, source").eq("listing_id", sourceId);
+      const rows = ((secs ?? []) as Record<string, unknown>[]).map((x) => ({ ...x, organisation_id: org.id, listing_id: targetId }));
+      if (rows.length) {
+        const { error: e3 } = await supabase.from("sale_report_sections").upsert(rows, { onConflict: "listing_id,key", ignoreDuplicates: true });
+        if (e3) throw new Error(e3.message);
+      }
+      sections = rows.length;
+    }
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return { rooms: rooms.length, equipment, sections };
+  });
+}
+
+export interface EquipmentInput { id?: string; name: string; category?: string | null; division?: string | null; brand?: string | null; condition?: string | null; secondhand_value: number | string; replacement_cost: number | string; included: boolean }
+
+/** Add or change one equipment item (new when it has no id). */
+export async function saveEquipmentItem(listingId: string, e: EquipmentInput): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const name = txt(e.name, 200);
+    if (!name) throw new Error("Give the item a name.");
+    const row = { name, category: txt(e.category, 80) || null, division: txt(e.division, 80) || null, brand: txt(e.brand, 80) || null, condition: txt(e.condition, 40) || null, secondhand_value: num(e.secondhand_value, 1e8), replacement_cost: num(e.replacement_cost, 1e8), included: !!e.included };
+    if (e.id && UUID.test(e.id)) {
+      const { error } = await supabase.from("sale_equipment").update(row).eq("id", e.id).eq("listing_id", listingId).eq("organisation_id", org.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: last } = await supabase.from("sale_equipment").select("position").eq("listing_id", listingId).order("position", { ascending: false }).limit(1).maybeSingle();
+      const { error } = await supabase.from("sale_equipment").insert({ ...row, organisation_id: org.id, listing_id: listingId, position: (Number(last?.position) || 0) + 1 });
+      if (error) throw new Error(error.message);
+    }
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+export async function deleteEquipmentItem(listingId: string, id: string): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    if (!UUID.test(id)) throw new Error("That item isn't valid.");
+    const { error } = await supabase.from("sale_equipment").delete().eq("id", id).eq("listing_id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}

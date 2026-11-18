@@ -11,7 +11,7 @@ import { BarList, MonthlyChart } from "@/components/sales/charts";
 import { aud } from "@/lib/sales/format";
 import { CrewEditor, ExpenseEditor, UnitSetup, type SupplierOption } from "@/components/sales/ui";
 import type { ExpenseInput, StaffInput } from "../actions";
-import { EquipmentPanel, ListingDetails, StartListing, TourPanel, type EquipmentRow } from "@/components/sales/listing";
+import { CopyFrom, EquipmentPanel, ListingDetails, StartListing, TourPanel, type CopySource, type EquipmentRow } from "@/components/sales/listing";
 import type { TourSpace } from "@/components/sales/tour";
 import { BuyersPanel, ReportEditor, type BuyerRow, type SectionRow } from "@/components/sales/report";
 import { DEFAULT_NDA } from "@/lib/sales/public";
@@ -81,6 +81,21 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
     supabase.from("sale_listings").select("slug, is_public, nda_required, nda_text").eq("id", listing.id).single(),
   ]) : [null, null, null];
   const needs0112 = !!(secRes?.error || buyRes?.error || pageRes?.error);
+  // other listings to copy rooms / equipment / report from (e.g. a division built from the whole business)
+  let sources: CopySource[] = [];
+  if (listing) {
+    const { data: others } = await supabase.from("sale_listings").select("id, title, tour").eq("organisation_id", org.id).neq("id", listing.id);
+    const ids = (others ?? []).map((o) => o.id as string);
+    const [{ data: oEq }, { data: oSec }] = ids.length ? await Promise.all([
+      supabase.from("sale_equipment").select("listing_id, division").in("listing_id", ids),
+      supabase.from("sale_report_sections").select("listing_id").in("listing_id", ids),
+    ]) : [{ data: [] }, { data: [] }];
+    sources = (others ?? []).map((o) => {
+      const div = new Map<string, number>();
+      for (const e of (oEq ?? []) as { listing_id: string; division: string | null }[]) if (e.listing_id === o.id) div.set(e.division ?? "General", (div.get(e.division ?? "General") ?? 0) + 1);
+      return { id: o.id as string, title: o.title as string, rooms: ((o.tour ?? []) as TourSpace[]).map((r) => ({ id: r.id, name: r.name, panoramaUrl: r.panoramaUrl })), divisions: [...div.entries()].map(([name, items]) => ({ name, items })), sections: ((oSec ?? []) as { listing_id: string }[]).filter((x) => x.listing_id === o.id).length };
+    }).filter((x) => x.rooms.length || x.divisions.length || x.sections);
+  }
   const catLocs = locIds.length ? locIds : (locRows ?? []).map((l) => l.location_id as string);
   const [daily, { data: items }, { data: cats }, spendAll] = await Promise.all([
     locIds.length
@@ -212,7 +227,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
       <ClientTabs className="-mx-4 sm:mx-0 [&>div:first-child]:sm:px-0" initial={sp.tab} tabs={[
         { key: "overview", label: "Sales & profit", content: overview },
         ...(listing ? [
-          { key: "tour", label: "360° tour", count: (listing.tour as TourSpace[]).length, content: <div className="px-4 sm:px-0"><TourPanel orgId={org.id} listingId={listing.id as string} spaces={listing.tour as TourSpace[]} /></div> },
+          { key: "tour", label: "360° tour", count: (listing.tour as TourSpace[]).length, content: <div className="space-y-4 px-4 sm:px-0"><CopyFrom listingId={listing.id as string} sources={sources} /><TourPanel orgId={org.id} listingId={listing.id as string} spaces={listing.tour as TourSpace[]} /></div> },
           { key: "listing", label: "Listing", content: <div className="px-4 sm:px-0"><ListingDetails title={listing.title as string} details={listing.details as Record<string, unknown>} photos={(listing.photos as string[]) ?? []} source={listing.source as string} /></div> },
           { key: "equipment", label: "Equipment", count: (equipRows ?? []).length, content: <div className="px-4 sm:px-0"><EquipmentPanel listingId={listing.id as string} items={(equipRows ?? []).map((e) => ({ ...e, secondhand_value: Number(e.secondhand_value), replacement_cost: Number(e.replacement_cost) })) as EquipmentRow[]} /></div> },
         ] : []),

@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Pencil } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { TourEditor } from "./tour-editor";
 import { Button } from "@/components/ui/button";
-import { FormError } from "@/components/ui/form";
+import { FormError, Input, Label } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { createListing, saveEquipmentIncluded, saveTourScenesShown } from "@/app/(app)/business-sale/actions";
+import { copyFromListing, createListing, deleteEquipmentItem, saveEquipmentIncluded, saveEquipmentItem, saveTourScenesShown, type EquipmentInput } from "@/app/(app)/business-sale/actions";
 import { InteractiveTour, thumb, type TourSpace } from "./tour";
 import { aud } from "./charts";
 
@@ -63,6 +63,7 @@ export function TourPanel({ orgId, listingId, spaces }: { orgId: string; listing
 /** Equipment register, by division, with what's included in the sale. */
 export function EquipmentPanel({ listingId, items }: { listingId: string; items: EquipmentRow[] }) {
   const router = useRouter();
+  const [edit, setEdit] = useState<string | null>(null);
   const [inc, setInc] = useState<Record<string, boolean>>(() => Object.fromEntries(items.map((i) => [i.id, i.included])));
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -71,11 +72,15 @@ export function EquipmentPanel({ listingId, items }: { listingId: string; items:
     for (const i of items) { const k = i.division || "General"; m.set(k, [...(m.get(k) ?? []), i]); }
     return [...m.entries()];
   }, [items]);
-  if (!items.length) return <p className="text-[0.8125rem] text-ink-muted">No equipment on this listing yet.</p>;
+  if (!items.length) return edit === "new" ? <EquipmentForm listingId={listingId} divisions={[]} onDone={() => setEdit(null)} /> : <div className="space-y-3"><p className="text-[0.8125rem] text-ink-muted">No equipment on this listing yet.</p><Button onClick={() => setEdit("new")}><Plus className="h-4 w-4" />Add an item</Button></div>;
   const sum = (rows: EquipmentRow[], k: "secondhand_value" | "replacement_cost") => rows.filter((r) => inc[r.id]).reduce((t, r) => t + Number(r[k]), 0);
   const changed = items.some((i) => i.included !== inc[i.id]);
+  const editing = items.find((i) => i.id === edit);
   return (
     <div className="space-y-4">
+      <p className="text-[0.8125rem] text-ink-muted">Untick anything the seller keeps — it shows on the buyer page as not included. Tap the pencil to change an item.</p>
+      {(edit === "new" || editing) && <EquipmentForm listingId={listingId} item={editing} divisions={groups.map(([d]) => d)} onDone={() => setEdit(null)} />}
+      {edit !== "new" && <Button onClick={() => setEdit("new")}><Plus className="h-4 w-4" />Add an item</Button>}
       <div className="grid grid-cols-1 gap-2.5 min-[360px]:grid-cols-2">
         <div className="rounded-2xl bg-surface p-3.5 ring-1 ring-line"><p className="text-[0.75rem] text-ink-muted">Included, second-hand value</p><p className="mt-1 text-[1.125rem] font-semibold tabular-nums text-ink">{aud(sum(items, "secondhand_value"))}</p><p className="text-[0.75rem] text-ink-faint">what the sale is priced on</p></div>
         <div className="rounded-2xl bg-surface p-3.5 ring-1 ring-line"><p className="text-[0.75rem] text-ink-muted">Cost to buy it all new</p><p className="mt-1 text-[1.125rem] font-semibold tabular-nums text-ink">{aud(sum(items, "replacement_cost"))}</p><p className="text-[0.75rem] text-ink-faint">{items.filter((i) => inc[i.id]).length} of {items.length} items included</p></div>
@@ -99,6 +104,7 @@ export function EquipmentPanel({ listingId, items }: { listingId: string; items:
                   <span className="block text-ink">{aud(Number(r.secondhand_value))}</span>
                   <span className="block text-[0.75rem] text-ink-faint">new {aud(Number(r.replacement_cost))}</span>
                 </span>
+                <button type="button" aria-label={`Edit ${r.name}`} onClick={() => setEdit(edit === r.id ? null : r.id)} className="grid h-9 w-8 shrink-0 place-items-center text-ink-faint hover:text-ink"><Pencil className="h-4 w-4" /></button>
               </li>
             ))}
           </ul>
@@ -150,6 +156,81 @@ export function StartListing({ unitId }: { unitId: string }) {
       <p className="text-[0.8125rem] text-ink-muted">Make a buyer page for this sale: a 360° walkthrough, the information memorandum, the equipment list and private links for buyers.</p>
       <Button variant="primary" disabled={pending} onClick={() => start(async () => { setErr(null); const r = await createListing(unitId); if (!r.ok) setErr(r.error); else router.refresh(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Make the buyer page</Button>
       <FormError message={err} />
+    </div>
+  );
+}
+
+function EquipmentForm({ listingId, item, divisions, onDone }: { listingId: string; item?: EquipmentRow; divisions: string[]; onDone: () => void }) {
+  const router = useRouter();
+  const [f, setF] = useState<EquipmentInput>({ id: item?.id, name: item?.name ?? "", division: item?.division ?? divisions[0] ?? "", category: item?.category ?? "", brand: item?.brand ?? "", condition: item?.condition ?? "", secondhand_value: item?.secondhand_value ?? "", replacement_cost: item?.replacement_cost ?? "", included: item?.included ?? true });
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="space-y-3 rounded-2xl bg-surface p-4 ring-1 ring-line">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2"><Label>Item</Label><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="e.g. La Marzocco Linea PB 3 group" /></div>
+        <div><Label hint="e.g. Espresso Bar">Division</Label><Input list="eq-divisions" value={f.division ?? ""} onChange={(e) => setF({ ...f, division: e.target.value })} /><datalist id="eq-divisions">{divisions.map((d) => <option key={d} value={d} />)}</datalist></div>
+        <div><Label hint="optional">Brand</Label><Input value={f.brand ?? ""} onChange={(e) => setF({ ...f, brand: e.target.value })} /></div>
+        <div><Label>Second-hand value</Label><Input inputMode="decimal" value={String(f.secondhand_value ?? "")} onChange={(e) => setF({ ...f, secondhand_value: e.target.value })} /></div>
+        <div><Label>Cost to buy new</Label><Input inputMode="decimal" value={String(f.replacement_cost ?? "")} onChange={(e) => setF({ ...f, replacement_cost: e.target.value })} /></div>
+      </div>
+      <label className="flex items-center gap-2.5 text-[0.8125rem] text-ink"><input type="checkbox" className="h-4 w-4" checked={f.included} onChange={(e) => setF({ ...f, included: e.target.checked })} />Included in the sale</label>
+      <FormError message={err} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-2">
+          <Button variant="primary" disabled={pending} onClick={() => start(async () => { setErr(null); const r = await saveEquipmentItem(listingId, f); if (!r.ok) { setErr(r.error); return; } router.refresh(); onDone(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Save item</Button>
+          <Button onClick={onDone}>Cancel</Button>
+        </div>
+        {item && <button type="button" onClick={() => start(async () => { const r = await deleteEquipmentItem(listingId, item.id); if (!r.ok) setErr(r.error); else { router.refresh(); onDone(); } })} className="inline-flex items-center gap-1 text-[0.8125rem] text-ink-muted hover:text-rose-600"><Trash2 className="h-4 w-4" />Delete item</button>}
+      </div>
+    </div>
+  );
+}
+
+export interface CopySource { id: string; title: string; rooms: { id: string; name: string; panoramaUrl: string }[]; divisions: { name: string; items: number }[]; sections: number }
+
+/** Build this listing from another one: the tour rooms this buyer should walk through, equipment by division, the report. */
+export function CopyFrom({ listingId, sources }: { listingId: string; sources: CopySource[] }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [src, setSrc] = useState(sources[0]?.id ?? "");
+  const [rooms, setRooms] = useState<string[]>([]);
+  const [divs, setDivs] = useState<string[]>([]);
+  const [secs, setSecs] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const s = sources.find((x) => x.id === src);
+  if (!sources.length) return null;
+  if (!open) return <Button onClick={() => setOpen(true)}><Copy className="h-4 w-4" />Copy rooms, equipment or report from another listing</Button>;
+  const tog = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  return (
+    <div className="space-y-3 rounded-2xl bg-surface p-4 ring-1 ring-line">
+      <p className="text-[0.875rem] font-semibold text-ink">Copy from another listing</p>
+      <p className="text-[0.75rem] text-ink-muted">For a division: choose only the rooms its buyer should walk through (e.g. the café, not the roastery out the back). Arrows to rooms you leave out are removed. This replaces this listing&apos;s tour{divs.length ? " and equipment" : ""}.</p>
+      {sources.length > 1 && <select className="h-10 w-full rounded-xl bg-surface px-3 text-[0.875rem] text-ink ring-1 ring-line" value={src} onChange={(e) => { setSrc(e.target.value); setRooms([]); setDivs([]); }}>{sources.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select>}
+      {s && (<>
+        <div className="flex items-center justify-between"><p className="text-[0.8125rem] font-medium text-ink">Rooms ({rooms.length} of {s.rooms.length})</p><button type="button" className="text-[0.75rem] text-brand-700" onClick={() => setRooms(rooms.length === s.rooms.length ? [] : s.rooms.map((r) => r.id))}>{rooms.length === s.rooms.length ? "None" : "All"}</button></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {s.rooms.map((r) => (
+            <button key={r.id} type="button" onClick={() => setRooms(tog(rooms, r.id))} className={cn("flex items-center gap-2 rounded-xl p-1.5 text-left ring-1 ring-inset", rooms.includes(r.id) ? "bg-brand-50 ring-brand-200 dark:bg-brand-500/15" : "ring-line")}>
+              {r.panoramaUrl ? <img src={thumb(r.panoramaUrl, 96, 60)} alt="" loading="lazy" className="h-9 w-14 shrink-0 rounded-md object-cover" /> : <span className="h-9 w-14 shrink-0 rounded-md bg-canvas" />}
+              <span className="min-w-0 truncate text-[0.8125rem] text-ink">{rooms.includes(r.id) ? "✓ " : ""}{r.name}</span>
+            </button>
+          ))}
+        </div>
+        {s.divisions.length > 0 && (<>
+          <p className="text-[0.8125rem] font-medium text-ink">Equipment of these divisions</p>
+          <div className="flex flex-wrap gap-2">{s.divisions.map((d) => <button key={d.name} type="button" onClick={() => setDivs(tog(divs, d.name))} className={cn("min-h-9 rounded-full px-3 text-[0.8125rem] ring-1 ring-inset", divs.includes(d.name) ? "bg-brand-50 font-medium text-brand-800 ring-brand-200 dark:bg-brand-500/15 dark:text-brand-200" : "text-ink-muted ring-line")}>{divs.includes(d.name) ? "✓ " : ""}{d.name} ({d.items})</button>)}</div>
+        </>)}
+        {s.sections > 0 && <label className="flex items-center gap-2.5 text-[0.8125rem] text-ink"><input type="checkbox" className="h-4 w-4" checked={secs} onChange={(e) => setSecs(e.target.checked)} />Also copy the report sections ({s.sections}) to edit for this sale</label>}
+      </>)}
+      {msg && <p className="text-[0.8125rem] font-medium text-emerald-700">{msg}</p>}
+      <FormError message={err} />
+      <div className="flex gap-2">
+        <Button variant="primary" disabled={pending || !s || (!rooms.length && !divs.length && !secs)} onClick={() => start(async () => { setErr(null); const r = await copyFromListing(listingId, src, { rooms, divisions: divs, sections: secs }); if (!r.ok) { setErr(r.error); return; } setMsg(`Copied ${r.data.rooms} rooms, ${r.data.equipment} equipment items${secs ? ` and ${r.data.sections} report sections` : ""}.`); router.refresh(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}Copy</Button>
+        <Button onClick={() => setOpen(false)}>Close</Button>
+      </div>
     </div>
   );
 }

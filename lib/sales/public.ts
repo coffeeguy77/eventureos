@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/integrations/runtime";
 import type { TourSpace } from "@/components/sales/tour";
 import { FIGURES, readPage, type FigureKey } from "./page-settings";
 import { categoryTotal, fullMonths, suggestCoffeeCategories, type YearStats } from "./stats";
-import { loadStatRows, sydneyToday } from "./stats-server";
+import { all, loadStatRows, sydneyToday } from "./stats-server";
 import { saleStats } from "./stats";
 import { unitPnl, yearlyCost, type ExpenseLine, type PayrollRow, type StaffLine } from "./pnl";
 
@@ -121,21 +121,19 @@ async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: st
   let staff: StaffLine[] = [], expenses: ExpenseLine[] = [], spend: { contact_id: string; month: string; amount: number }[] = [], payroll: PayrollRow[] = [];
   if (unlocked) {
     const from = fullMonths(today, page.years * 12)[0];
-    const [s, e, sp] = await Promise.all([
+    const [s, e] = await Promise.all([
       db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct, source, xero_employee_id, share_pct").eq("unit_id", l.unit_id)
         .then((r) => (r.error ? db.from("sale_staff").select("role, headcount, pay_type, annual, hourly, hours_per_shift, shifts_per_week, weeks_per_year, super_pct").eq("unit_id", l.unit_id) : r)),
       db.from("sale_expenses").select("kind, source, xero_contact_id, name, share_pct, annual").eq("unit_id", l.unit_id),
-      db.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", l.organisation_id).gte("month", from).limit(20000),
     ]);
     staff = ((s.data ?? []) as Record<string, unknown>[]).map((x) => ({ role: String(x.role), headcount: Number(x.headcount), pay_type: x.pay_type as "annual" | "hourly", annual: x.annual == null ? null : Number(x.annual), hourly: x.hourly == null ? null : Number(x.hourly), hours_per_shift: x.hours_per_shift == null ? null : Number(x.hours_per_shift), shifts_per_week: x.shifts_per_week == null ? null : Number(x.shifts_per_week), weeks_per_year: x.weeks_per_year == null ? null : Number(x.weeks_per_year), super_pct: x.super_pct == null ? null : Number(x.super_pct), source: x.source === "xero" ? "xero" as const : "manual" as const, xero_employee_id: (x.xero_employee_id as string | null) ?? null, share_pct: Number(x.share_pct ?? 100) }));
     const ids = staff.filter((x) => x.source === "xero" && x.xero_employee_id).map((x) => x.xero_employee_id!);
     if (ids.length) {
-      const { data: pr } = await db.from("sale_payroll").select("employee_id, period_start, period_end, wages, super").eq("organisation_id", l.organisation_id).in("employee_id", ids).gte("period_end", from).limit(20000);
-      payroll = ((pr ?? []) as PayrollRow[]).map((r) => ({ ...r, wages: Number(r.wages), super: Number(r.super) }));
+      payroll = (await all<PayrollRow>((a, b) => db.from("sale_payroll").select("employee_id, period_start, period_end, wages, super").eq("organisation_id", l.organisation_id).in("employee_id", ids).gte("period_end", from).order("period_end").order("employee_id").range(a, b)).catch(() => [])).map((r) => ({ ...r, wages: Number(r.wages), super: Number(r.super) }));
     }
     expenses = ((e.data ?? []) as Record<string, unknown>[]).map((x) => ({ kind: x.kind as "cogs" | "overhead", source: x.source as "xero" | "manual", xero_contact_id: (x.xero_contact_id as string | null) ?? null, name: String(x.name), share_pct: Number(x.share_pct), annual: x.annual == null ? null : Number(x.annual) }));
-    const used = new Set(expenses.filter((x) => x.source === "xero").map((x) => x.xero_contact_id));
-    spend = ((sp.data ?? []) as { contact_id: string; month: string; amount: number }[]).filter((x) => used.has(x.contact_id)).map((x) => ({ ...x, amount: Number(x.amount) }));
+    const used = [...new Set(expenses.filter((x) => x.source === "xero" && x.xero_contact_id).map((x) => x.xero_contact_id!))];
+    spend = used.length ? (await all<{ contact_id: string; month: string; amount: number }>((a, b) => db.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", l.organisation_id).in("contact_id", used).gte("month", from).order("contact_id").order("month").range(a, b))).map((x) => ({ ...x, amount: Number(x.amount) })) : [];
   }
   const superPct = Number(u.super_pct) || 0;
   const years: PublicYear[] = st.years.map((y) => {

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullMonths, saleStats, type SaleStats, type StatDayRow, type StatItemRow } from "./stats";
 
 /** All rows of a query, 1000 at a time. */
-async function all<T>(page: (a: number, b: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+export async function all<T>(page: (a: number, b: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
   const out: T[] = [];
   for (let i = 0; i < 200; i++) {
     const { data, error } = await page(i * 1000, i * 1000 + 999);

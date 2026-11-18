@@ -1,6 +1,7 @@
 import "server-only";
 import { apiJSON, type SyncContext } from "@/lib/integrations/runtime";
 import { tenantId, xeroDate } from "@/lib/integrations/xero";
+import { all } from "./stats-server";
 
 /**
  * Business Sales: what Xero Payroll actually paid each person, per posted pay run, for the last 37 months.
@@ -24,8 +25,8 @@ export async function syncPayrollHistory(ctx: SyncContext): Promise<{ message: s
     if (list.length < 100) break;
   }
   const posted = runs.filter((r) => r.PayRunStatus === "POSTED" && (xeroDate(r.PayRunPeriodEndDate) ?? "") >= since);
-  const { data: have } = await ctx.db.from("sale_payroll").select("pay_run_id").eq("organisation_id", ctx.org.id).limit(20000);
-  const got = new Set(((have ?? []) as { pay_run_id: string }[]).map((r) => r.pay_run_id));
+  const have = await all<{ pay_run_id: string }>((a, b) => ctx.db.from("sale_payroll").select("pay_run_id").eq("organisation_id", ctx.org.id).order("pay_run_id").range(a, b));
+  const got = new Set(have.map((r) => r.pay_run_id));
   const todo = posted.filter((r) => !got.has(r.PayRunID)).sort((a, b) => (xeroDate(b.PaymentDate) ?? "").localeCompare(xeroDate(a.PaymentDate) ?? ""));
   let done = 0;
   for (const run of todo) {
