@@ -7,8 +7,8 @@ import { cn } from "@/lib/cn";
 export const CHART_VARS = "[--s1:#2a78d6] [--s2:#eb6834] [--s3:#1baf7a] [--s4:#eda100] [--s5:#e87ba4] [--s6:#6250d6] [--good:#0ca30c] [--bad:#d03b3b] " +
   "dark:[--s1:#3987e5] dark:[--s2:#d95926] dark:[--s3:#199e70] dark:[--s4:#c98500] dark:[--s5:#d55181] dark:[--s6:#9085e9] dark:[--good:#2fbf2f] dark:[--bad:#e05a5a]";
 
-export const aud = (n: number | null | undefined, cents = false) =>
-  n == null ? "—" : new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: cents ? 2 : 0, minimumFractionDigits: cents ? 2 : 0 }).format(n);
+import { aud } from "@/lib/sales/format";
+export { aud };
 const short = (n: number) => {
   const a = Math.abs(n), s = n < 0 ? "−" : "";
   return a >= 1_000_000 ? `${s}$${(a / 1_000_000).toFixed(1)}m` : a >= 1000 ? `${s}$${Math.round(a / 1000)}k` : `${s}$${Math.round(a)}`;

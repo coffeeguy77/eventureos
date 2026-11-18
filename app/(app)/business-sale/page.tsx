@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewUnit, SquareSync, XeroSpendSync } from "@/components/sales/ui";
-import { aud } from "@/components/sales/charts";
+import { aud } from "@/lib/sales/format";
 
 export const dynamic = "force-dynamic";
 
