@@ -38,7 +38,7 @@ export function monthList(today: string, count: number): string[] {
   return out;
 }
 
-export interface MonthPnl { month: string; sales: number; orders: number; cogs: number; wages: number; overheads: number; gross: number; profit: number; partial: boolean }
+export interface MonthPnl { month: string; sales: number; orders: number; cogs: number; wages: number; overheads: number; gross: number; profit: number; partial: boolean; /** before the period (or the first sale): nothing counted */ nodata?: boolean }
 export interface UnitPnl {
   months: MonthPnl[];
   totals: { sales: number; orders: number; cogs: number; wages: number; overheads: number; gross: number; profit: number; margin: number | null; avgOrder: number | null };
@@ -112,7 +112,7 @@ export function unitPnl(o: {
     });
     const s = sales.get(m) ?? 0, wages = (crewYear / 12) * f;
     const gross = s - cogs;
-    return { month: m, sales: r2(s), orders: orders.get(m) ?? 0, cogs: r2(cogs), wages: r2(wages), overheads: r2(overheads), gross: r2(gross), profit: r2(gross - wages - overheads), partial: m === curMonth || f < 1 };
+    return { month: m, sales: r2(s), orders: orders.get(m) ?? 0, cogs: r2(cogs), wages: r2(wages), overheads: r2(overheads), gross: r2(gross), profit: r2(gross - wages - overheads), partial: m === curMonth || f < 1, nodata: f === 0 };
   });
   const sum = (k: keyof MonthPnl) => r2(months.reduce((t, x) => t + (Number(x[k]) || 0), 0));
   const totals = { sales: sum("sales"), orders: sum("orders"), cogs: sum("cogs"), wages: sum("wages"), overheads: sum("overheads"), gross: sum("gross"), profit: sum("profit"), margin: null as number | null, avgOrder: null as number | null };

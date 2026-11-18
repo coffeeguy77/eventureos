@@ -83,7 +83,10 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   const expenses: ExpenseLine[] = (expRows ?? []).map((e) => ({ kind: e.kind as "cogs" | "overhead", source: e.source as "xero" | "manual", xero_contact_id: (e.xero_contact_id as string | null) ?? null, name: e.name as string, share_pct: Number(e.share_pct), annual: e.annual == null ? null : Number(e.annual) }));
   const spend: SpendRow[] = spendAll.map((s) => ({ contact_id: s.contact_id, month: s.month, amount: Number(s.amount) }));
   // the RPC has already taken excluded categories off, so nothing more to exclude here
-  const p = unitPnl({ months, today, from, to: today, daily: daily.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend });
+  // before the first Square sale nothing is counted (no wages or costs against months with no sales brought in)
+  const firstSale = daily.reduce<string | null>((m, d) => (d.category === "" && Number(d.orders) > 0 && (!m || d.day < m) ? d.day : m), null);
+  const countFrom = firstSale && firstSale > from ? firstSale : from;
+  const p = unitPnl({ months, today, from: countFrom, to: today, daily: daily.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend });
 
   // supplier picker: what each supplier was paid over the period (whole months from the period's first month)
   const sup = new Map<string, SupplierOption>();
@@ -121,11 +124,11 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
         ))}
       </div>
       <Card>
-        <CardHeader title="Month by month" subtitle={`${fmtDay(from)} – ${fmtDay(today)}. Part months (shaded) count wages and typed-in costs for the days covered.`} />
+        <CardHeader title="Month by month" subtitle={`${fmtDay(countFrom)} – ${fmtDay(today)}.${countFrom > from ? ` Square sales start ${fmtDay(countFrom)} — earlier months show no data.` : ""} Part months (shaded) count wages and typed-in costs for the days covered.`} />
         <div className="px-4 pb-4 sm:px-5"><MonthlyChart months={p.months} /></div>
       </Card>
       <Card>
-        <CardHeader title="Profit and loss" subtitle={`${fmtDay(from)} – ${fmtDay(today)}, ex GST`} />
+        <CardHeader title="Profit and loss" subtitle={`${fmtDay(countFrom)} – ${fmtDay(today)}, ex GST`} />
         <dl className="divide-y divide-line px-5 pb-4 text-[0.875rem]">
           {([["Sales", t.sales, false], ["Cost of goods", -t.cogs, false], ["Gross profit", t.gross, true], ["Wages + super", -t.wages, false], ["Overheads", -t.overheads, false], ["Profit", t.profit, true]] as [string, number, boolean][]).map(([l, v, strong]) => (
             <div key={l} className="flex items-baseline justify-between gap-3 py-2">

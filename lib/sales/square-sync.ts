@@ -5,13 +5,16 @@ import { aggregateOrders, SQUARE_API, squareHeaders, type SquareLocation, type S
 /**
  * Square → sale_square_* tables, one location-month at a time so a year of a busy café never times out:
  * the plan (which location-months are left) lives in the integration's settings and each run carries on
- * where the last one stopped. The first run fills the last 13 months; after that each run redoes the
+ * where the last one stopped. The first run fills the last 37 months (FULL_MONTHS); after that each run redoes the
  * current and previous month (late refunds and edits).
  */
 interface Chunk { loc: string; month: string }   // month = YYYY-MM-01
 interface Plan { queue: Chunk[]; total: number; started_at: string }
 
 const BUDGET_MS = 45_000;
+
+/** a full load: this month and the 36 before it (so 24- and 36-month views have data) */
+export const FULL_MONTHS = 37;
 
 function monthsBack(n: number, tz: string): string[] {
   const now = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit" }).format(new Date());
@@ -66,7 +69,7 @@ async function ordersFor(ctx: SyncContext, loc: string, month: string, deadline:
     if (Date.now() > deadline) return null; // out of time: redo this month next run
     const body: Record<string, unknown> = {
       location_ids: [loc], limit: 500,
-      query: { filter: { date_time_filter: { created_at: { start_at: start, end_at: end } }, state_filter: { states: ["COMPLETED"] } }, sort: { sort_field: "CREATED_AT", sort_order: "ASC" } },
+      query: { filter: { date_time_filter: { created_at: { start_at: start, end_at: end } }, state_filter: { states: ["COMPLETED", "OPEN"] } }, sort: { sort_field: "CREATED_AT", sort_order: "ASC" } },
     };
     if (cursor) body.cursor = cursor;
     const d = await apiJSON<{ orders?: SquareOrder[]; cursor?: string }>(ctx, `${SQUARE_API}/orders/search`, { method: "POST", headers: squareHeaders, body: JSON.stringify(body) }, "Square orders");
@@ -87,7 +90,7 @@ export async function syncSquareSales(ctx: SyncContext, opts: { full?: boolean }
   const st = ctx.integration.settings as { sales_plan?: Plan | null; sales_first_done?: boolean };
   let plan = st.sales_plan && st.sales_plan.queue?.length && !opts.full ? st.sales_plan : null;
   if (!plan) {
-    const months = monthsBack(st.sales_first_done && !opts.full ? 2 : 13, ctx.org.timezone || "Australia/Sydney");
+    const months = monthsBack(st.sales_first_done && !opts.full ? 2 : FULL_MONTHS, ctx.org.timezone || "Australia/Sydney");
     const queue = months.flatMap((m) => active.map((l) => ({ loc: l.id, month: m })));
     plan = { queue, total: queue.length, started_at: now };
   }

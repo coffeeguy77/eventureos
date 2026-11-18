@@ -36,6 +36,9 @@ export interface SquareOrder {
   total_money?: { amount?: number }; total_tax_money?: { amount?: number }; total_tip_money?: { amount?: number };
   net_amounts?: { total_money?: { amount?: number }; tax_money?: { amount?: number }; tip_money?: { amount?: number } };
   line_items?: SquareLineItem[];
+  /** payments on the order; an OPEN order that's paid (e.g. an app/online order never marked done) still counts */
+  tenders?: { id?: string }[];
+  net_amount_due_money?: { amount?: number };
 }
 
 export interface DayRow { day: string; category: string; sales: number; gst: number; orders: number; items: number }
@@ -45,6 +48,11 @@ export interface ItemRow { month: string; item: string; category: string; qty: n
  * Totals for one location's orders: per day (category '' = whole orders, ex GST, no tips, after refunds),
  * per day per category (line items ex GST) and per month per item.
  */
+/** Fully paid: has a payment and nothing left owing. */
+export function isPaid(o: SquareOrder): boolean {
+  return (o.tenders?.length ?? 0) > 0 && (o.net_amount_due_money?.amount ?? 0) <= 0;
+}
+
 export function aggregateOrders(orders: SquareOrder[], tz: string, categoryOf: (catalogId: string | undefined) => string): { days: DayRow[]; items: ItemRow[] } {
   const days = new Map<string, DayRow>(), items = new Map<string, ItemRow>();
   const day = (d: string, c: string) => {
@@ -54,7 +62,7 @@ export function aggregateOrders(orders: SquareOrder[], tz: string, categoryOf: (
     return r;
   };
   for (const o of orders) {
-    if (o.state && o.state !== "COMPLETED") continue;
+    if (o.state && o.state !== "COMPLETED" && !(o.state === "OPEN" && isPaid(o))) continue;
     const d = localDay(o.created_at, tz);
     const net = o.net_amounts ?? {};
     const total = net.total_money ? money(net.total_money) : money(o.total_money);

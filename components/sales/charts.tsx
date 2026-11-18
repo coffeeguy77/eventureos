@@ -23,7 +23,7 @@ function useWidth<T extends HTMLElement>() {
   return [ref, w] as const;
 }
 
-export interface ChartMonth { month: string; sales: number; cogs: number; wages: number; overheads: number; profit: number; partial: boolean }
+export interface ChartMonth { month: string; sales: number; cogs: number; wages: number; overheads: number; profit: number; partial: boolean; nodata?: boolean }
 
 /** Monthly sales (bars) with profit (line and points); tap or hover a month for the breakdown. */
 export function MonthlyChart({ months }: { months: ChartMonth[] }) {
@@ -37,7 +37,7 @@ export function MonthlyChart({ months }: { months: ChartMonth[] }) {
   const step = plotW / Math.max(1, months.length), bw = Math.max(4, Math.min(34, step * 0.56));
   const x = (i: number) => padL + step * i + step / 2;
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => min + (max - min) * t);
-  const pts = months.map((m, i) => `${x(i)},${y(m.profit)}`).join(" ");
+  const pts = months.map((m, i) => (m.nodata ? null : `${x(i)},${y(m.profit)}`)).filter(Boolean).join(" ");
   const show = sel ?? months.length - 1;
   const cur = months[show];
   const everyOther = w > 0 && step < 34;
@@ -63,7 +63,9 @@ export function MonthlyChart({ months }: { months: ChartMonth[] }) {
               </g>
             ))}
             <polyline points={pts} fill="none" stroke="var(--good)" strokeWidth={2} strokeLinejoin="round" />
-            {months.map((m, i) => (
+            {months.map((m, i) => m.nodata ? (
+              <line key={m.month} x1={x(i) - bw / 2} x2={x(i) + bw / 2} y1={y(0)} y2={y(0)} stroke="currentColor" strokeWidth={2} strokeDasharray="2 2" className="pointer-events-none text-ink-faint" />
+            ) : (
               <circle key={m.month} cx={x(i)} cy={y(m.profit)} r={show === i ? 5.5 : 4} fill={m.profit < 0 ? "var(--bad)" : "var(--good)"} stroke="rgb(var(--surface))" strokeWidth={2} className="pointer-events-none" />
             ))}
           </svg>
@@ -76,12 +78,13 @@ export function MonthlyChart({ months }: { months: ChartMonth[] }) {
       </div>
       {cur && (
         <div className="mt-3 rounded-xl bg-canvas p-3 ring-1 ring-line">
-          <p className="text-[0.8125rem] font-semibold text-ink">{monthLong(cur.month)}{cur.partial ? " (so far)" : ""}</p>
+          <p className="text-[0.8125rem] font-semibold text-ink">{monthLong(cur.month)}{cur.nodata ? "" : cur.partial ? " (so far)" : ""}</p>
+          {cur.nodata ? <p className="mt-1 text-[0.8125rem] text-ink-muted">No Square sales brought in for this month, so nothing is counted for it.</p> : (
           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[0.8125rem] sm:grid-cols-5">
             {([["Sales", cur.sales], ["Cost of goods", -cur.cogs], ["Wages", -cur.wages], ["Overheads", -cur.overheads], ["Profit", cur.profit]] as [string, number][]).map(([l, v]) => (
               <div key={l} className="min-w-0"><dt className="text-[0.6875rem] text-ink-faint">{l}</dt><dd className={cn("tabular-nums text-ink", l === "Profit" && "font-semibold", l === "Profit" && v < 0 && "text-rose-600")}>{aud(v)}</dd></div>
             ))}
-          </dl>
+          </dl>)}
         </div>
       )}
     </div>

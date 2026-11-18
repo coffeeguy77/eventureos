@@ -20,7 +20,7 @@ export function SquareSync({ connected, firstDone }: { connected: boolean; first
   if (!connected) return <a href="/settings/integrations/square" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-ink px-4 text-[0.875rem] font-semibold text-surface">Connect Square</a>;
   const go = async (full: boolean) => {
     setBusy(true); setErr(null); setMsg(null);
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 400; i++) {
       const r = await syncSquare(full && i === 0);
       if (!r.ok) { setErr(r.error); break; }
       setMsg(r.data.message);
@@ -33,8 +33,8 @@ export function SquareSync({ connected, firstDone }: { connected: boolean; first
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" disabled={busy} onClick={() => go(false)}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{firstDone ? "Update Square sales" : "Bring in 12 months of Square sales"}</Button>
-        {firstDone && <Button disabled={busy} onClick={() => go(true)}>Reload all 13 months</Button>}
+        <Button variant="primary" disabled={busy} onClick={() => go(false)}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{firstDone ? "Update Square sales" : "Bring in 3 years of Square sales"}</Button>
+        {firstDone && <Button disabled={busy} onClick={() => go(true)}>Reload 3 years</Button>}
       </div>
       {pct !== null && <div className="h-2 overflow-hidden rounded-full bg-canvas"><div className="h-full rounded-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} /></div>}
       {msg && <p className="text-[0.8125rem] text-ink-muted">{msg}</p>}
