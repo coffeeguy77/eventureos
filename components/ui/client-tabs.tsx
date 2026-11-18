@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 
-export function ClientTabs({ tabs, className, variant = "pills" }: {
+export function ClientTabs({ tabs, className, variant = "pills", initial }: {
   tabs: { key: string; label: string; count?: number; tone?: "alert"; content: React.ReactNode }[];
   className?: string;
   variant?: "pills" | "underline";
+  /** tab to open first (otherwise the first tab with items) */
+  initial?: string;
 }) {
-  const firstWithItems = tabs.find((t) => (t.count ?? 1) > 0) ?? tabs[0];
+  const firstWithItems = tabs.find((t) => t.key === initial) ?? tabs.find((t) => (t.count ?? 1) > 0) ?? tabs[0];
   const [active, setActive] = useState(firstWithItems?.key);
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
   return (

@@ -100,6 +100,11 @@ async function identify(provider: LiveProviderId, accessToken: string): Promise<
       settings: { calendars: cals.map((c) => ({ id: c.id, summary: c.summary, primary: !!c.primary, backgroundColor: c.backgroundColor })), calendars_fetched_at: new Date().toISOString() },
     };
   }
+  if (provider === "square") {
+    const { squareMerchant } = await import("@/lib/sales/square");
+    const m = await squareMerchant(accessToken);
+    return { label: m.name, externalId: m.id, settings: { merchant_id: m.id, merchant_name: m.name, sales_synced_to: null } };
+  }
   const conns = (await xeroConnectionsWithToken(accessToken)).filter((c) => c.tenantType === "ORGANISATION");
   if (!conns.length) throw new Error("No Xero organisation was authorised. Choose an organisation on the Xero consent screen.");
   const chosen = conns[0];

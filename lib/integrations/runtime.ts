@@ -121,8 +121,9 @@ export async function getAccessToken(ctx: SyncContext, force = false): Promise<s
   if (!force && cached && cached.exp > Date.now() + 60_000) return cached.token;
   const t = await readTokens(ctx);
   const exp = t.expires_at ? Date.parse(t.expires_at) : 0;
-  if (!force && t.access_token && exp > Date.now() + 60_000) {
-    tokenCache.set(ctx, { token: t.access_token, exp });
+  // no expiry stored = a token that doesn't expire (e.g. a pasted Square access token)
+  if (!force && t.access_token && (!t.expires_at || exp > Date.now() + 60_000)) {
+    tokenCache.set(ctx, { token: t.access_token, exp: t.expires_at ? exp : Date.now() + 3600_000 });
     return t.access_token;
   }
   if (!t.refresh_token) throw new ReconnectRequired("The connection has expired and has no refresh token — reconnect it.");

@@ -31,8 +31,8 @@ export interface OAuthProviderConfig {
   clientSecretEnv: string;
   scopes: string[];
   pkce: boolean;
-  /** How the client authenticates at the token endpoint. */
-  tokenAuth: "body" | "basic";
+  /** How the client authenticates at the token endpoint ("json": Square — client id and secret in a JSON body). */
+  tokenAuth: "body" | "basic" | "json";
   extraAuthParams?: Record<string, string>;
 }
 
@@ -88,7 +88,17 @@ export const OAUTH: Record<LiveProviderId, OAuthProviderConfig> = {
     scopes: ["offline_access", "accounting.contacts", "accounting.invoices", "accounting.payments", "accounting.banktransactions", "accounting.settings.read"],
     pkce: false, tokenAuth: "basic",
   },
+  // Square — https://developer.squareup.com/docs/oauth-api/overview (read only: locations, orders, catalog)
+  square: {
+    authorizeUrl: "https://connect.squareup.com/oauth2/authorize",
+    tokenUrl: "https://connect.squareup.com/oauth2/token",
+    clientIdEnv: "SQUARE_APPLICATION_ID", clientSecretEnv: "SQUARE_APPLICATION_SECRET",
+    scopes: ["MERCHANT_PROFILE_READ", "ORDERS_READ", "ITEMS_READ", "PAYMENTS_READ"],
+    pkce: false, tokenAuth: "json",
+    extraAuthParams: { session: "false" },
+  },
 };
+const PROVIDER_NAME: Record<string, string> = { xero: "Xero", square: "Square" };
 
 export function scopesFor(provider: LiveProviderId) {
   if (provider === "xero" && process.env.XERO_SCOPES?.trim()) return process.env.XERO_SCOPES.trim().split(/\s+/);
@@ -161,7 +171,7 @@ export function clientCredentials(provider: LiveProviderId) {
   const cfg = OAUTH[provider];
   const id = process.env[cfg.clientIdEnv]?.trim();
   const secret = process.env[cfg.clientSecretEnv]?.trim();
-  if (!id || !secret) throw new Error(`${provider === "xero" ? "Xero" : "Google"} isn't set up yet: add ${cfg.clientIdEnv} and ${cfg.clientSecretEnv} to the environment variables.`);
+  if (!id || !secret) throw new Error(`${PROVIDER_NAME[provider] ?? "Google"} isn't set up yet: add ${cfg.clientIdEnv} and ${cfg.clientSecretEnv} to the environment variables.`);
   return { id, secret };
 }
 
@@ -187,6 +197,9 @@ export interface TokenSet {
   access_token: string;
   refresh_token?: string;
   expires_in?: number;
+  /** Square gives an expiry date instead of seconds */
+  expires_at?: string;
+  merchant_id?: string;
   scope?: string;
   token_type?: string;
 }
@@ -194,18 +207,23 @@ export interface TokenSet {
 async function tokenRequest(provider: LiveProviderId, params: Record<string, string>): Promise<TokenSet> {
   const cfg = OAUTH[provider];
   const { id, secret } = clientCredentials(provider);
-  const body = new URLSearchParams(params);
+  let body: URLSearchParams | string = new URLSearchParams(params);
   const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded", accept: "application/json" };
-  if (cfg.tokenAuth === "basic") headers.authorization = `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`;
+  if (cfg.tokenAuth === "json") {
+    body = JSON.stringify({ ...params, client_id: id, client_secret: secret });
+    headers["content-type"] = "application/json";
+    headers["square-version"] = "2024-01-17";
+  } else if (cfg.tokenAuth === "basic") headers.authorization = `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}`;
   else { body.set("client_id", id); body.set("client_secret", secret); }
   const res = await fetch(cfg.tokenUrl, { method: "POST", headers, body, cache: "no-store" });
   const text = await res.text();
   let json: Record<string, unknown> = {};
   try { json = JSON.parse(text); } catch { /* keep text for the error */ }
   if (!res.ok || typeof json.access_token !== "string") {
-    const why = (json.error_description ?? json.error ?? text.slice(0, 200)) as string;
-    const err = new Error(`${provider === "xero" ? "Xero" : "Google"} token request failed (${res.status}): ${why}`);
-    (err as Error & { oauthError?: string }).oauthError = typeof json.error === "string" ? json.error : undefined;
+    const sqErr = Array.isArray(json.errors) ? (json.errors as { detail?: string; code?: string }[])[0] : undefined;
+    const why = (json.error_description ?? json.message ?? sqErr?.detail ?? json.error ?? text.slice(0, 200)) as string;
+    const err = new Error(`${PROVIDER_NAME[provider] ?? "Google"} token request failed (${res.status}): ${why}`);
+    (err as Error & { oauthError?: string }).oauthError = typeof json.error === "string" ? json.error : sqErr?.code === "UNAUTHORIZED" ? "invalid_grant" : undefined;
     throw err;
   }
   return json as unknown as TokenSet;
@@ -231,5 +249,6 @@ export async function revokeGoogleToken(token: string) {
 }
 
 export function expiresAt(t: TokenSet) {
+  if (t.expires_at && !Number.isNaN(Date.parse(t.expires_at))) return new Date(Date.parse(t.expires_at) - 60_000).toISOString();
   return new Date(Date.now() + Math.max(60, (t.expires_in ?? 1800) - 60) * 1000).toISOString();
 }

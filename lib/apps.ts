@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "loans"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "loans", "sales"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame" | "landmark";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame" | "landmark" | "store";
 
 export interface AppInfo {
   key: AppKey;
@@ -161,6 +161,19 @@ export const APPS: AppInfo[] = [
     for: "Mortgage and finance brokers",
   },
   {
+    key: "sales", name: "Business Sales", paths: ["/business-sale"], icon: "store",
+    tagline: "Get your business — or one part of it — ready to sell.",
+    description: "Show a buyer what the business really makes: a year of Square sales by location, day and item, the standard crew it takes to run, its actual suppliers from Xero, and a monthly profit and loss — for the whole business or just one division.",
+    features: [
+      "Square sales for the last 12 months (or any period), by location, category, weekday and best sellers",
+      "Sell the whole business or a division: choose its locations and leave out categories that aren't part of the sale",
+      "Standard crew: e.g. Chef $85K a year, 2 baristas at $35/hr × 7-hour shifts, with super",
+      "Expenses from your actual Xero suppliers (all or a share), plus anything typed in",
+      "Monthly P&L chart, margins and average sale",
+    ],
+    for: "Café, hospitality and retail owners selling a business",
+  },
+  {
     key: "machines", name: "Coffee machines", paths: ["/machines"], icon: "wrench",
     tagline: "Sell coffee machines and run your service callouts.",
     description: "Machines for sale with a chooser that matches customers to the right one, a repairs page with an enquiry form, service jobs priced by callout and hourly rate, and quick invoices from your price list.",
@@ -216,7 +229,7 @@ export const appInfo = (k: AppKey) => APPS.find((a) => a.key === k)!;
  */
 export type AppAccess = Set<AppKey> | null;
 /** Apps a business only gets when EventureOS gives them (never by default, even with no app list). */
-export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "loans"];
+export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "loans", "sales"];
 export function readAppAccess(raw: unknown): AppAccess {
   if (!Array.isArray(raw)) return null;
   return new Set(raw.filter(isAppKey));

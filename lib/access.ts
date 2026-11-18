@@ -26,6 +26,7 @@ export const SECTIONS: { key: string; label: string; group: string }[] = [
   { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
   { key: "/nerd-herd", label: "Nerd Herd (tickets & websites)", group: "Operations" },
   { key: "/loans", label: "Loan files", group: "Sales" },
+  { key: "/business-sale", label: "Business Sales", group: "Money" },
   { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/hosting", label: "Hosting", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },
   { key: "/store", label: "Shop", group: "Selling online" }, { key: "/wholesale", label: "Wholesale", group: "Selling online" }, { key: "/offers", label: "Offers", group: "Selling online" },
   { key: "/learn", label: "Learn", group: "Selling online" }, { key: "/website", label: "Website", group: "Selling online" }, { key: "/franchise", label: "Franchise", group: "Selling online" },

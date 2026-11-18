@@ -16,7 +16,7 @@ export default async function SquarePage() {
   return (
     <>
       <Link href="/settings/integrations" className="text-[0.75rem] text-ink-muted hover:underline">← Integrations</Link>
-      <PageHeader title="Square" subtitle="Read today's takings so the roster shows wages as a % of sales. EventureOS only reads payments — it never changes anything in Square." />
+      <PageHeader title="Square" subtitle="Read your takings so the roster shows wages as a % of sales, and Business Sales can bring in every location's sales. EventureOS only reads from Square — it never changes anything there." />
       <Card>
         <CardHeader title="Your Square account" subtitle={on ? t?.account_label ?? undefined : "Not connected"} action={<Badge tone={on ? "green" : "neutral"} dot>{on ? "Connected" : "Not connected"}</Badge>} />
         <div className="border-t border-line px-5 py-4">

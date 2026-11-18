@@ -85,7 +85,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       )}
 
       <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-        {LIVE_PROVIDERS.map((p) => (
+        {LIVE_PROVIDERS.filter((p) => p.id !== "square").map((p) => (
           <ProviderCard key={p.id} p={p} row={rows.get(p.id) ?? null} missing={missingEnv(p.id)} manager={manager} tz={org.timezone} />
         ))}
         <Card className="flex flex-col p-5">
