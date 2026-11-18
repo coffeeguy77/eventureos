@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Instrument_Sans, Newsreader } from "next/font/google";
 import { loadSale, noteBuyerView, DEFAULT_NDA, type PublicSection } from "@/lib/sales/public";
+import { createClient } from "@/lib/supabase/server";
 import { thumb } from "@/lib/sales/format";
 import { SaleTour, NdaForm } from "./client";
 import s from "./sale.module.css";
@@ -34,7 +35,14 @@ const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null
 
 export default async function ForSalePage({ params, searchParams }: Params) {
   const { slug } = await params; const { k } = await searchParams;
-  const sale = await loadSale(slug, k ?? null);
+  // the seller (signed in, a manager of the business) previews the whole page
+  let preview = false;
+  try {
+    const supabase = await createClient();
+    const { data: own } = await supabase.from("sale_listings").select("id").ilike("slug", slug).maybeSingle();
+    preview = !!own && !k;
+  } catch { /* not signed in */ }
+  const sale = await loadSale(slug, k ?? null, preview);
   if (!sale) notFound();
   if (sale.buyer) await noteBuyerView(sale.buyer.id).catch(() => undefined);
   const { listing, org, tour, sections, locked, equipment, buyer, unlocked, history } = sale;
@@ -63,7 +71,7 @@ export default async function ForSalePage({ params, searchParams }: Params) {
     <div className={`${s.page} ${serif.variable} ${sans.variable}`}>
       <div className={s.wrap}>
         <div className={s.top}>
-          <span>{buyer ? `Private link for ${buyer.name}` : "Business for sale"}</span>
+          <span>{preview ? `Preview: you're seeing everything a signed buyer sees${sale.listing.is_public ? "" : ". This page is private — only buyers you add can open it"}.` : buyer ? `Private link for ${buyer.name}` : "Business for sale"}</span>
           {contact && <a href={`mailto:${contact}?subject=${encodeURIComponent(listing.title)}`}>Contact the seller</a>}
         </div>
 

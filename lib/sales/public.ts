@@ -28,7 +28,8 @@ export const DEFAULT_NDA = "I agree to keep everything I see about this business
 
 const TOKEN = /^[A-Za-z0-9_-]{20,80}$/;
 
-export async function loadSale(slug: string, token: string | null): Promise<PublicSale | null> {
+/** @param preview the seller, signed in: sees the whole page as a signed buyer would, even while it's private */
+export async function loadSale(slug: string, token: string | null, preview = false): Promise<PublicSale | null> {
   if (!/^[a-z0-9-]{2,80}$/i.test(slug)) return null;
   const db = createServiceClient();
   const { data: l } = await db.from("sale_listings").select("id, organisation_id, unit_id, slug, title, details, photos, report_images, tour, nda_required, nda_text, is_public").ilike("slug", slug).maybeSingle();
@@ -38,9 +39,9 @@ export async function loadSale(slug: string, token: string | null): Promise<Publ
     const { data: b } = await db.from("sale_buyers").select("id, name, status, nda_signed_at").eq("listing_id", l.id).eq("token", token).maybeSingle();
     if (b && b.status !== "revoked") buyer = b as PublicBuyer;
   }
-  if (!l.is_public && !buyer) return null;
+  if (!l.is_public && !buyer && !preview) return null;
   // a buyer link opens the buyer-only part once the NDA is signed (or straight away when no NDA is required)
-  const unlocked = !!buyer && (buyer.status === "approved" || buyer.status === "nda_signed" || !l.nda_required);
+  const unlocked = preview || (!!buyer && (buyer.status === "approved" || buyer.status === "nda_signed" || !l.nda_required));
   const [{ data: org }, { data: secs }, { data: eq }] = await Promise.all([
     db.from("organisations").select("name, contact_email").eq("id", l.organisation_id).single(),
     db.from("sale_report_sections").select("key, title, subtitle, body, bullets, table_data, visibility, position").eq("listing_id", l.id).neq("visibility", "hidden").order("position"),
