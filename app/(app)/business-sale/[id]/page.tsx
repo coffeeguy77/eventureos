@@ -11,8 +11,10 @@ import { BarList, MonthlyChart } from "@/components/sales/charts";
 import { aud } from "@/lib/sales/format";
 import { CrewEditor, ExpenseEditor, UnitSetup, type SupplierOption } from "@/components/sales/ui";
 import type { ExpenseInput, StaffInput } from "../actions";
-import { EquipmentPanel, ListingDetails, TourPanel, type EquipmentRow } from "@/components/sales/listing";
+import { EquipmentPanel, ListingDetails, StartListing, TourPanel, type EquipmentRow } from "@/components/sales/listing";
 import type { TourSpace } from "@/components/sales/tour";
+import { BuyersPanel, ReportEditor, type BuyerRow, type SectionRow } from "@/components/sales/report";
+import { DEFAULT_NDA } from "@/lib/sales/public";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -66,6 +68,13 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   const { data: equipRows } = listing
     ? await supabase.from("sale_equipment").select("id, name, category, division, brand, condition, secondhand_value, replacement_cost, included").eq("listing_id", listing.id).order("position")
     : { data: [] };
+  // report, page settings and buyers — need database update 0112 (until then these tabs say so)
+  const [secRes, buyRes, pageRes] = listing ? await Promise.all([
+    supabase.from("sale_report_sections").select("id, key, title, subtitle, body, bullets, table_data, visibility, source").eq("listing_id", listing.id).order("position"),
+    supabase.from("sale_buyers").select("id, name, email, phone, company, token, status, nda_signed_at, nda_signed_name, last_seen_at, views, created_at").eq("listing_id", listing.id).order("created_at"),
+    supabase.from("sale_listings").select("slug, is_public, nda_required, nda_text").eq("id", listing.id).single(),
+  ]) : [null, null, null];
+  const needs0112 = !!(secRes?.error || buyRes?.error || pageRes?.error);
   const catLocs = locIds.length ? locIds : (locRows ?? []).map((l) => l.location_id as string);
   const [daily, { data: items }, { data: cats }, spendAll] = await Promise.all([
     locIds.length
@@ -172,6 +181,10 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
           { key: "listing", label: "Listing", content: <div className="px-4 sm:px-0"><ListingDetails title={listing.title as string} details={listing.details as Record<string, unknown>} photos={(listing.photos as string[]) ?? []} source={listing.source as string} /></div> },
           { key: "equipment", label: "Equipment", count: (equipRows ?? []).length, content: <div className="px-4 sm:px-0"><EquipmentPanel listingId={listing.id as string} items={(equipRows ?? []).map((e) => ({ ...e, secondhand_value: Number(e.secondhand_value), replacement_cost: Number(e.replacement_cost) })) as EquipmentRow[]} /></div> },
         ] : []),
+        ...(listing ? [
+          { key: "report", label: "Report", count: (secRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to use the report.</p> : <ReportEditor listingId={listing.id as string} sections={((secRes?.data ?? []) as SectionRow[]).map((x) => ({ ...x, bullets: Array.isArray(x.bullets) ? x.bullets.map(String) : [], table_data: Array.isArray(x.table_data) ? x.table_data : null }))} />}</div> },
+          { key: "buyers", label: "Buyers", count: (buyRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to give buyers access.</p> : <BuyersPanel listing={{ id: listing.id as string, title: listing.title as string, slug: (pageRes?.data?.slug as string | null) ?? null, is_public: !!pageRes?.data?.is_public, nda_required: pageRes?.data?.nda_required !== false, nda_text: (pageRes?.data?.nda_text as string | null) ?? null, defaultNda: DEFAULT_NDA }} buyers={(buyRes?.data ?? []) as BuyerRow[]} />}</div> },
+        ] : [{ key: "page", label: "Buyer page", content: <div className="px-4 sm:px-0"><StartListing unitId={id} /></div> }]),
         { key: "crew", label: "Crew", count: staffInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">The standard crew it takes to run {unit.name as string} — what a buyer would pay. Wages count evenly through the year.</p><CrewEditor unitId={id} initial={staffInit} superPct={Number(unit.super_pct)} /></div> },
         { key: "expenses", label: "Expenses", count: expInit.length, content: <div className="px-4 sm:px-0"><p className="mb-3 text-[0.8125rem] text-ink-muted">This business&apos;s actual suppliers from Xero (all of it, or its share), plus anything typed in such as rent.</p><ExpenseEditor unitId={id} initial={expInit} suppliers={suppliers} months={months.length} /></div> },
         { key: "setup", label: "Setup", content: <div className="px-4 sm:px-0"><UnitSetup unit={{ id, name: unit.name as string, kind: unit.kind as "business" | "division", square_location_ids: locIds, exclude_categories: exclude, super_pct: Number(unit.super_pct), months: Number(unit.months), notes: (unit.notes as string | null) ?? null }} locations={(locRows ?? []).map((l) => ({ id: l.location_id as string, name: l.name as string }))} categories={((cats ?? []) as { category: string; sales: number }[]).map((c) => ({ category: c.category, sales: Number(c.sales) }))} /></div> },

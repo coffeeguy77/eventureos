@@ -232,3 +232,119 @@ export async function saveTour(listingId: string, spaces: unknown): Promise<R<un
     return undefined;
   });
 }
+
+export interface SectionInput { id?: string; key?: string; title: string; subtitle?: string | null; body?: string | null; bullets?: string[]; visibility: "public" | "buyers" | "hidden" }
+
+/** Save one report section (new when it has no id). */
+export async function saveSection(listingId: string, s: SectionInput): Promise<R<{ id: string }>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const title = txt(s.title, 160);
+    if (!title) throw new Error("Give the section a title.");
+    const row = {
+      title, subtitle: txt(s.subtitle, 300) || null, body: txt(s.body, 20000) || null,
+      bullets: (Array.isArray(s.bullets) ? s.bullets : []).map((b) => txt(b, 500)).filter(Boolean).slice(0, 60),
+      visibility: s.visibility === "public" || s.visibility === "hidden" ? s.visibility : "buyers", updated_at: new Date().toISOString(),
+    };
+    let id = s.id && UUID.test(s.id) ? s.id : null;
+    if (id) {
+      const { error } = await supabase.from("sale_report_sections").update(row).eq("id", id).eq("listing_id", listingId).eq("organisation_id", org.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: last } = await supabase.from("sale_report_sections").select("position").eq("listing_id", listingId).order("position", { ascending: false }).limit(1).maybeSingle();
+      const key = (txt(s.key, 60) || title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "section") + "_" + Math.random().toString(36).slice(2, 6);
+      const { data, error } = await supabase.from("sale_report_sections").insert({ ...row, organisation_id: org.id, listing_id: listingId, key, position: (Number(last?.position) || 0) + 1 }).select("id").single();
+      if (error) throw new Error(/sale_report_sections/.test(error.message) ? "Run the database update 0112_sale_report_buyers.sql first." : error.message);
+      id = data.id as string;
+    }
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return { id: id! };
+  });
+}
+
+export async function deleteSection(listingId: string, id: string): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    if (!UUID.test(id)) throw new Error("That section isn't valid.");
+    const { error } = await supabase.from("sale_report_sections").delete().eq("id", id).eq("listing_id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+/** Move a section up or down. */
+export async function moveSection(listingId: string, id: string, dir: -1 | 1): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const { data } = await supabase.from("sale_report_sections").select("id, position").eq("listing_id", listingId).eq("organisation_id", org.id).order("position");
+    const rows = (data ?? []) as { id: string; position: number }[];
+    const i = rows.findIndex((r) => r.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= rows.length) return undefined;
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+    for (let k = 0; k < rows.length; k++) if (rows[k].position !== k + 1) await supabase.from("sale_report_sections").update({ position: k + 1 }).eq("id", rows[k].id);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+/** The listing's public page: its name, web address, public or private, NDA. */
+export async function savePageSettings(listingId: string, i: { title: string; slug: string; is_public: boolean; nda_required: boolean; nda_text: string | null }): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const title = txt(i.title, 160);
+    if (title.length < 2) throw new Error("Give the listing a name.");
+    const slug = txt(i.slug, 80).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (slug.length < 3) throw new Error("The web address needs at least 3 letters or numbers, e.g. bean-culture-roastery.");
+    const { error } = await supabase.from("sale_listings").update({ title, slug, is_public: !!i.is_public, nda_required: !!i.nda_required, nda_text: txt(i.nda_text, 8000) || null, updated_at: new Date().toISOString() }).eq("id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(/sale_listings_slug|duplicate/.test(error.message) ? "That web address is taken — try another." : /slug|is_public|nda_/.test(error.message) ? "Run the database update 0112_sale_report_buyers.sql first." : error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+/** Give a buyer access: they get their own private link. */
+export async function addBuyer(listingId: string, i: { name: string; email?: string; phone?: string; company?: string; notes?: string }): Promise<R<{ id: string }>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const name = txt(i.name, 120);
+    if (name.length < 2) throw new Error("Add the buyer's name.");
+    const email = txt(i.email, 200).toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("That email doesn't look right.");
+    const { randomBytes } = await import("node:crypto");
+    const token = randomBytes(24).toString("base64url");
+    const { data, error } = await supabase.from("sale_buyers").insert({ organisation_id: org.id, listing_id: listingId, name, email: email || null, phone: txt(i.phone, 40) || null, company: txt(i.company, 160) || null, notes: txt(i.notes, 1000) || null, token }).select("id").single();
+    if (error) throw new Error(/sale_buyers/.test(error.message) ? "Run the database update 0112_sale_report_buyers.sql first." : error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return { id: data.id as string };
+  });
+}
+
+/** Approve, turn off (revoke) or turn back on a buyer's link. */
+export async function setBuyerStatus(listingId: string, buyerId: string, status: "approved" | "revoked" | "restore"): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    if (!UUID.test(buyerId)) throw new Error("That buyer isn't valid.");
+    const { data: b } = await supabase.from("sale_buyers").select("nda_signed_at").eq("id", buyerId).eq("listing_id", listingId).maybeSingle();
+    if (!b) throw new Error("That buyer doesn't exist.");
+    const next = status === "restore" ? (b.nda_signed_at ? "nda_signed" : "invited") : status;
+    const { error } = await supabase.from("sale_buyers").update({ status: next }).eq("id", buyerId).eq("listing_id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
+
+/** Start a listing (buyer page, tour, report, buyers) for a business or division that doesn't have one. */
+export async function createListing(unitId: string): Promise<R<{ id: string }>> {
+  return run(async () => {
+    const { supabase, org } = await ownUnit(unitId);
+    const { data: u } = await supabase.from("sale_units").select("name").eq("id", unitId).single();
+    const title = (u?.name as string) || "Business for sale";
+    const base = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "for-sale";
+    const { data, error } = await supabase.from("sale_listings").insert({ organisation_id: org.id, unit_id: unitId, title, slug: `${base}-${Math.random().toString(36).slice(2, 6)}`, status: "draft" }).select("id").single();
+    if (error) throw new Error(/slug/.test(error.message) ? "Run the database update 0112_sale_report_buyers.sql first." : error.message);
+    revalidatePath(`/business-sale/${unitId}`);
+    return { id: data.id as string };
+  });
+}

@@ -7,7 +7,7 @@ import { TourEditor } from "./tour-editor";
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { saveEquipmentIncluded, saveTourScenesShown } from "@/app/(app)/business-sale/actions";
+import { createListing, saveEquipmentIncluded, saveTourScenesShown } from "@/app/(app)/business-sale/actions";
 import { InteractiveTour, thumb, type TourSpace } from "./tour";
 import { aud } from "./charts";
 
@@ -137,6 +137,19 @@ export function ListingDetails({ title, details, photos, source }: { title: stri
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+export function StartListing({ unitId }: { unitId: string }) {
+  const router = useRouter();
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <div className="space-y-3">
+      <p className="text-[0.8125rem] text-ink-muted">Make a buyer page for this sale: a 360° walkthrough, the information memorandum, the equipment list and private links for buyers.</p>
+      <Button variant="primary" disabled={pending} onClick={() => start(async () => { setErr(null); const r = await createListing(unitId); if (!r.ok) setErr(r.error); else router.refresh(); })}>{pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}Make the buyer page</Button>
+      <FormError message={err} />
     </div>
   );
 }

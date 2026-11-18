@@ -1,5 +1,7 @@
 "use client";
 
+import { thumb } from "@/lib/sales/format";
+export { thumb };
 /* Ported from exit360 (Biz360-Mobile artifacts/exit360-web/src/components/InteractiveTour.tsx). */
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Camera, Maximize2, Minimize2, LayoutGrid, EyeOff } from "lucide-react";
@@ -346,12 +348,7 @@ requestAnimationFrame(tick);
  * Self-contained interactive 360° tour: Pannellum panorama with clickable
  * nav-pin + audio hotspots, plus a thumbnail strip to jump between spaces.
  */
-/** A small Cloudinary rendition for thumbnails (the panoramas themselves are large). */
-export function thumb(url: string, w = 256, h = 160): string {
-  return /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(url) ? url.replace("/image/upload/", `/image/upload/w_${w},h_${h},c_fill,q_auto,f_auto/`) : url;
-}
-
-export function InteractiveTour({ spaces, autoPanAll = false }: { spaces: TourSpace[]; autoPanAll?: boolean }) {
+export function InteractiveTour({ spaces, autoPanAll = false, height = "clamp(360px, 58vw, 580px)", plain = false }: { spaces: TourSpace[]; autoPanAll?: boolean; height?: string; /** no legend, for the public page */ plain?: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(true);
@@ -379,7 +376,7 @@ export function InteractiveTour({ spaces, autoPanAll = false }: { spaces: TourSp
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative rounded-2xl overflow-hidden bg-black ring-1 ring-line" style={immersiveWrapStyle(isFs, "clamp(360px, 58vw, 580px)")}>
+      <div className="relative rounded-2xl overflow-hidden bg-black ring-1 ring-line" style={immersiveWrapStyle(isFs, height)}>
         <iframe
           ref={iframeRef}
           srcDoc={srcdoc}
@@ -451,10 +448,10 @@ export function InteractiveTour({ spaces, autoPanAll = false }: { spaces: TourSp
       </div>
       )}
 
-      <div className="flex items-center gap-4 text-xs text-ink-muted px-1 flex-wrap">
+      {!plain && <div className="flex items-center gap-4 text-xs text-ink-muted px-1 flex-wrap">
         <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-full bg-blue-500/80" />Navigate to space</span>
         <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-full bg-green-500/80" />Audio narration</span>
-      </div>
+      </div>}
     </div>
   );
 }
