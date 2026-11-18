@@ -384,7 +384,7 @@ export function InteractiveTour({ spaces, autoPanAll = false, height = "clamp(36
           title="360° Business Walkthrough"
           allow="fullscreen"
         />
-        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur text-white text-xs px-2.5 py-1.5 rounded-full flex items-center gap-1.5 z-10 pointer-events-none">
+        <div className="absolute top-4 left-14 bg-black/60 backdrop-blur text-white text-xs px-2.5 py-1.5 rounded-full flex items-center gap-1.5 z-10 pointer-events-none">
           <Camera size={11} className="text-blue-400" />
           {valid.length} spaces
         </div>

@@ -27,6 +27,7 @@ export function fullMonths(today: string, n: number): string[] {
   for (let i = 0; i < n; i++) { m -= 1; if (m === 0) { m = 12; y -= 1; } out.unshift(`${y}-${String(m).padStart(2, "0")}-01`); }
   return out;
 }
+const monYear = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-AU", { month: "short", year: "numeric", timeZone: "UTC" });
 const monthEnd = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
 export function isCoffee(category: string, chosen: string[]): boolean {
@@ -70,7 +71,7 @@ export function saleStats(o: { today: string; years: number; days: StatDayRow[];
       if (isCoffee(i.category, o.coffeeCategories)) { coffees += Number(i.qty); coffeeSales += Number(i.sales); }
     }
     years.push({
-      label: y === 0 ? "Last 12 months" : `${y * 12 + 12}–${y * 12} months ago`, from, to,
+      label: y === 0 ? "Last 12 months" : `${monYear(from)} – ${monYear(to)}`, from, to,
       complete: !firstMonth || firstMonth <= from,
       sales: r2(sales), orders, avgSale: orders ? r2(sales / orders) : null, perDay: tradingDays ? r2(sales / tradingDays) : null, tradingDays,
       coffees: Math.round(coffees), coffeeSales: r2(coffeeSales), coffeesPerDay: tradingDays ? Math.round(coffees / tradingDays) : null,

@@ -55,7 +55,7 @@ export default async function ForSalePage({ params, searchParams }: Params) {
   const figs = ([
     ["Weekly revenue", money(d.weeklyRevenue)],
     ["Adjusted profit a year", money(d.adjustedProfit)],
-    ["Rent", money(d.rent) && `${money(d.rent)} a month`],
+    ["Rent", money(d.rent)],
     ["Lease options", str(d.leaseOptions)],
     ["Staff", Number(d.staffCount) > 0 ? String(d.staffCount) : null],
     ["Owner's hours a week", Number(d.ownerHours) > 0 ? String(d.ownerHours) : null],
