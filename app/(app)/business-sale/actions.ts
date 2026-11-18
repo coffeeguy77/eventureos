@@ -348,3 +348,25 @@ export async function createListing(unitId: string): Promise<R<{ id: string }>> 
     return { id: data.id as string };
   });
 }
+
+/** Save how the sales page reads (coffee categories, public numbers, headline, terms of sale, valuation). */
+export async function savePageContent(listingId: string, page: unknown): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    const { readPage } = await import("@/lib/sales/page-settings");
+    const p = readPage({ page });
+    const clean = {
+      ...p,
+      coffee_categories: p.coffee_categories ? [...new Set(p.coffee_categories.map((c) => txt(c, 120)).filter(Boolean))].slice(0, 100) : null,
+      headline: txt(p.headline, 300),
+      terms: p.terms.slice(0, 30).map((t) => ({ ...t, id: txt(t.id, 40) || Math.random().toString(36).slice(2, 10), title: txt(t.title, 160), text: txt(t.text, 4000), categories: t.categories.map((c) => txt(c, 120)).filter(Boolean).slice(0, 30) })).filter((t) => t.title || t.text),
+      valuation: { ...p.valuation, multiple: Math.min(20, Math.max(0.1, p.valuation.multiple)), addbacks: p.valuation.addbacks.slice(0, 40).map((a) => ({ label: txt(a.label, 160), amount: Math.round(Math.max(-1e9, Math.min(1e9, a.amount))) })) },
+    };
+    const { data: cur } = await supabase.from("sale_listings").select("details").eq("id", listingId).single();
+    const details = { ...((cur?.details as Record<string, unknown>) ?? {}), page: clean };
+    const { error } = await supabase.from("sale_listings").update({ details, updated_at: new Date().toISOString() }).eq("id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}

@@ -15,6 +15,10 @@ import { EquipmentPanel, ListingDetails, StartListing, TourPanel, type Equipment
 import type { TourSpace } from "@/components/sales/tour";
 import { BuyersPanel, ReportEditor, type BuyerRow, type SectionRow } from "@/components/sales/report";
 import { DEFAULT_NDA } from "@/lib/sales/public";
+import { readPage } from "@/lib/sales/page-settings";
+import { suggestCoffeeCategories } from "@/lib/sales/stats";
+import { unitStats } from "@/lib/sales/stats-server";
+import { SalesPageEditor } from "@/components/sales/page-editor";
 
 export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -96,6 +100,21 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
   const firstSale = daily.reduce<string | null>((m, d) => (d.category === "" && Number(d.orders) > 0 && (!m || d.day < m) ? d.day : m), null);
   const countFrom = firstSale && firstSale > from ? firstSale : from;
   const p = unitPnl({ months, today, from: countFrom, to: today, daily: daily.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend });
+
+  // the sales page: its settings, the big numbers from Square, and profit over the last 12 months for the valuation
+  const page = listing ? readPage(listing.details) : null;
+  const catList = ((cats ?? []) as { category: string; sales: number }[]).filter((c) => !exclude.some((x) => x.toLowerCase() === c.category.toLowerCase())).map((c) => ({ category: c.category, sales: Number(c.sales) }));
+  const suggested = suggestCoffeeCategories(catList.map((c) => c.category));
+  const stats = listing && page && locIds.length ? await unitStats(supabase, org.id, { square_location_ids: locIds, exclude_categories: exclude }, page.coffee_categories ?? suggested, page.years).catch(() => null) : null;
+  let profit12 = p.totals.profit;
+  if (listing && n !== 12) {
+    const from12 = new Date(Date.parse(`${addMonths(today, -12)}T12:00:00Z`) + 86400_000).toISOString().slice(0, 10);
+    const months12 = monthList(today, 12 + (from12.endsWith("-01") ? 0 : 1));
+    const d12 = n > 12 ? daily : locIds.length ? await all<DailyRow>((a, b) => supabase.rpc("sale_unit_data", { p_org: org.id, p_locs: locIds, p_from: months12[0], p_to: today, p_exclude: exclude }).range(a, b)) : [];
+    const s12 = n > 12 ? spend : (await all<{ contact_id: string; month: string; amount: number }>((a, b) => supabase.from("sale_xero_spend").select("contact_id, month, amount").eq("organisation_id", org.id).gte("month", months12[0]).order("contact_id").order("month").range(a, b))).map((x) => ({ ...x, amount: Number(x.amount) }));
+    const first12 = d12.reduce<string | null>((m, d) => (d.category === "" && Number(d.orders) > 0 && (!m || d.day < m) ? d.day : m), null);
+    profit12 = unitPnl({ months: months12, today, from: first12 && first12 > from12 ? first12 : from12, to: today, daily: d12.map((d) => ({ ...d, sales: Number(d.sales), orders: Number(d.orders) })), exclude: [], staff, superPct: Number(unit.super_pct), expenses, spend: s12 }).totals.profit;
+  }
 
   // supplier picker: what each supplier was paid over the period (whole months from the period's first month)
   const sup = new Map<string, SupplierOption>();
@@ -182,6 +201,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
           { key: "equipment", label: "Equipment", count: (equipRows ?? []).length, content: <div className="px-4 sm:px-0"><EquipmentPanel listingId={listing.id as string} items={(equipRows ?? []).map((e) => ({ ...e, secondhand_value: Number(e.secondhand_value), replacement_cost: Number(e.replacement_cost) })) as EquipmentRow[]} /></div> },
         ] : []),
         ...(listing ? [
+          { key: "salespage", label: "Sales page", content: <div className="px-4 sm:px-0">{page && <SalesPageEditor listingId={listing.id as string} initial={page} suggested={suggested} categories={catList} years={stats?.years ?? []} profit12={profit12} equipmentValue={(equipRows ?? []).filter((e) => e.included).reduce((t, e) => t + Number(e.secondhand_value), 0)} />}</div> },
           { key: "report", label: "Report", count: (secRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to use the report.</p> : <ReportEditor listingId={listing.id as string} sections={((secRes?.data ?? []) as SectionRow[]).map((x) => ({ ...x, bullets: Array.isArray(x.bullets) ? x.bullets.map(String) : [], table_data: Array.isArray(x.table_data) ? x.table_data : null }))} />}</div> },
           { key: "buyers", label: "Buyers", count: (buyRes?.data ?? []).length, content: <div className="px-4 sm:px-0">{needs0112 ? <p className="text-[0.8125rem] text-ink-muted">Run the database update 0112_sale_report_buyers.sql in Supabase to give buyers access.</p> : <BuyersPanel listing={{ id: listing.id as string, title: listing.title as string, slug: (pageRes?.data?.slug as string | null) ?? null, is_public: !!pageRes?.data?.is_public, nda_required: pageRes?.data?.nda_required !== false, nda_text: (pageRes?.data?.nda_text as string | null) ?? null, defaultNda: DEFAULT_NDA }} buyers={(buyRes?.data ?? []) as BuyerRow[]} />}</div> },
         ] : [{ key: "page", label: "Buyer page", content: <div className="px-4 sm:px-0"><StartListing unitId={id} /></div> }]),
