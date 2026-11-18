@@ -45,3 +45,7 @@ export function RequestForm({ slug, contact }: { slug: string; contact: string |
     </form>
   );
 }
+
+export function PrintButton() {
+  return <button type="button" className={s.print} onClick={() => window.print()}>Save as PDF</button>;
+}

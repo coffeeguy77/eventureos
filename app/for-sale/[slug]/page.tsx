@@ -4,7 +4,7 @@ import { Instrument_Sans, Newsreader } from "next/font/google";
 import { loadSale, noteBuyerView, DEFAULT_NDA, type PublicSection } from "@/lib/sales/public";
 import { createClient } from "@/lib/supabase/server";
 import { thumb } from "@/lib/sales/format";
-import { SaleTour, NdaForm, RequestForm } from "./client";
+import { SaleTour, NdaForm, PrintButton, RequestForm } from "./client";
 import { SaleDashboard } from "./dash";
 import s from "./sale.module.css";
 
@@ -73,7 +73,7 @@ export default async function ForSalePage({ params, searchParams }: Params) {
       <div className={s.wrap}>
         <div className={s.top}>
           <span>{preview ? `Preview: you're seeing everything a signed buyer sees${sale.listing.is_public ? "" : ". This page is private — only buyers you add can open it"}.` : buyer ? `Private link for ${buyer.name}` : "Business for sale"}</span>
-          {contact && <a href={`mailto:${contact}?subject=${encodeURIComponent(listing.title)}`}>Contact the seller</a>}
+          <span style={{ display: "flex", gap: "1rem", alignItems: "center" }}>{unlocked && <PrintButton />}{contact && <a href={`mailto:${contact}?subject=${encodeURIComponent(listing.title)}`}>Contact the seller</a>}</span>
         </div>
 
         <header className={s.head}>

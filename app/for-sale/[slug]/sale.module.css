@@ -154,3 +154,11 @@
 .termFig { margin: 0.5rem 0 0; font-family: var(--fs-serif), Georgia, serif; font-size: 1.1rem; color: var(--roast); }
 .excluded { margin: 1rem 0 0; padding: 0; list-style: none; columns: 2 14rem; font-size: 0.9375rem; color: var(--ink-2); }
 .excluded li { break-inside: avoid; padding: 0.2rem 0; }
+
+.print { background: none; border: 1px solid var(--rule); color: var(--ink-2); border-radius: 999px; height: 2.2rem; padding: 0 0.9rem; font: inherit; font-size: 0.8125rem; cursor: pointer; }
+@media print {
+  .page { background: #fff; color: #1f2a24; }
+  .top, .tour, .gate, .print, .years, .photos { display: none !important; }
+  .band { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sec { break-inside: avoid; }
+}
