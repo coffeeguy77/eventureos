@@ -168,7 +168,7 @@ export default async function SaleUnitPage({ params, searchParams }: { params: P
       <ClientTabs className="-mx-4 sm:mx-0 [&>div:first-child]:sm:px-0" initial={sp.tab} tabs={[
         { key: "overview", label: "Sales & profit", content: overview },
         ...(listing ? [
-          { key: "tour", label: "360° tour", count: (listing.tour as TourSpace[]).length, content: <div className="px-4 sm:px-0"><TourPanel listingId={listing.id as string} spaces={listing.tour as TourSpace[]} /></div> },
+          { key: "tour", label: "360° tour", count: (listing.tour as TourSpace[]).length, content: <div className="px-4 sm:px-0"><TourPanel orgId={org.id} listingId={listing.id as string} spaces={listing.tour as TourSpace[]} /></div> },
           { key: "listing", label: "Listing", content: <div className="px-4 sm:px-0"><ListingDetails title={listing.title as string} details={listing.details as Record<string, unknown>} photos={(listing.photos as string[]) ?? []} source={listing.source as string} /></div> },
           { key: "equipment", label: "Equipment", count: (equipRows ?? []).length, content: <div className="px-4 sm:px-0"><EquipmentPanel listingId={listing.id as string} items={(equipRows ?? []).map((e) => ({ ...e, secondhand_value: Number(e.secondhand_value), replacement_cost: Number(e.replacement_cost) })) as EquipmentRow[]} /></div> },
         ] : []),

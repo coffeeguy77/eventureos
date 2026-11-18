@@ -186,3 +186,49 @@ export async function saveEquipmentIncluded(listingId: string, included: Record<
     return undefined;
   });
 }
+
+/** Save the whole 360° walkthrough (rooms, arrows, sound clips) from the tour builder. */
+export async function saveTour(listingId: string, spaces: unknown): Promise<R<undefined>> {
+  return run(async () => {
+    const { supabase, org, listing } = await ownListing(listingId);
+    if (!Array.isArray(spaces)) throw new Error("Nothing to save.");
+    const url = (v: unknown) => { const s = txt(v, 1000); return /^https:\/\//.test(s) ? s : undefined; };
+    const deg = (v: unknown) => (v === undefined || v === null || v === "" || !Number.isFinite(Number(v)) ? undefined : ((Math.round(Number(v)) % 360) + 360) % 360);
+    const unit = (v: unknown) => Math.min(1, Math.max(0, Number(v) || 0));
+    const list = (spaces as Record<string, unknown>[]).slice(0, 120);
+    const ids = new Set(list.map((s) => txt(s.id, 80)));
+    let start = false;
+    const tour = list.map((s) => {
+      const isStart = !start && !!s.isStartScene;
+      if (isStart) start = true;
+      const pins = (Array.isArray(s.pins) ? (s.pins as Record<string, unknown>[]) : []).slice(0, 80).map((p) => {
+        const pos = (p.position ?? {}) as { x?: unknown; y?: unknown };
+        const type = p.type === "audio" ? "audio" : "navigation";
+        const target = txt(p.targetSpaceId, 80);
+        return {
+          id: txt(p.id, 80) || `pin-${Math.random().toString(36).slice(2, 10)}`, type, title: txt(p.title, 120), description: txt(p.description, 1000),
+          position: { x: unit(pos.x), y: unit(pos.y) },
+          ...(type === "navigation" && target && ids.has(target) ? { targetSpaceId: target } : {}),
+          ...(type === "navigation" && deg(p.targetYaw) !== undefined ? { targetYaw: deg(p.targetYaw) } : {}),
+          ...(type === "audio" && url(p.audioUrl) ? { audioUrl: url(p.audioUrl), audioName: txt(p.audioName, 120) || txt(p.title, 120) } : {}),
+          ...(p.heightMetres !== undefined && Number.isFinite(Number(p.heightMetres)) ? { heightMetres: Number(p.heightMetres) } : {}),
+          requiresNDA: !!p.requiresNDA,
+        };
+      });
+      return {
+        id: txt(s.id, 80), name: txt(s.name, 120) || "Room", panoramaUrl: url(s.panoramaUrl) ?? "", isStartScene: isStart,
+        ...(deg(s.defaultYaw) !== undefined ? { defaultYaw: deg(s.defaultYaw) } : {}),
+        panoramaStartYaw: deg(s.panoramaStartYaw) ?? 0,
+        ...(s.groundPitch !== undefined && Number.isFinite(Number(s.groundPitch)) ? { groundPitch: Number(s.groundPitch) } : {}),
+        autoPan: !!s.autoPan, ...(s.enabled === false ? { enabled: false } : {}),
+        ...(url(s.audioUrl) ? { audioUrl: url(s.audioUrl), audioName: txt(s.audioName, 120) } : {}),
+        pins,
+      };
+    }).filter((s) => s.id);
+    if (!start && tour[0]) tour[0].isStartScene = true;
+    const { error } = await supabase.from("sale_listings").update({ tour, updated_at: new Date().toISOString() }).eq("id", listingId).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    if (listing.unit_id) revalidatePath(`/business-sale/${listing.unit_id}`);
+    return undefined;
+  });
+}
