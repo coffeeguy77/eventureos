@@ -164,7 +164,11 @@ export interface NerdSettings {
   minHours: number;
   /** "Quick add" steps for ticket quotes: common jobs with their usual time (staff only) */
   quickTasks: QuickTask[];
+  /** shown to the client on every quote and invoice, and ticked before they accept */
+  scopeNote: string;
 }
+/** The default scope note on quotes and invoices (the business can reword it in Nerd Herd settings). */
+export const DEFAULT_SCOPE_NOTE = "This quote covers only the exact tasks listed. Anything not listed isn't included and would be quoted separately. Please contact us if you're unsure what a task covers — we try to be as specific as possible.";
 export interface QuickTask { label: string; hours: number }
 
 /** Clean a quick-add list (labels unique, time in quarter hours, 15 minutes to 40 hours). */
@@ -192,5 +196,6 @@ export function readNerd(settings: unknown): NerdSettings {
     quietUsers: (Array.isArray(n.quiet_users) ? n.quiet_users : []).filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50),
     minHours: n.min_hours === undefined || n.min_hours === null ? 1 : Math.min(8, Math.max(0, Math.round((Number(n.min_hours) || 0) * 4) / 4)),
     quickTasks: cleanQuickTasks(n.quick_tasks),
+    scopeNote: typeof n.scope_note === "string" && n.scope_note.trim() ? n.scope_note.trim().slice(0, 1000) : DEFAULT_SCOPE_NOTE,
   };
 }

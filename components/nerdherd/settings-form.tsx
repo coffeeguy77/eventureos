@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormError, Input, Label, Select } from "@/components/ui/form";
 import { saveNerdSettings } from "@/app/(app)/nerd-herd/actions";
 
-export function NerdSettingsForm({ initial, team = [] }: { initial: { min_hours: number; hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts: boolean; default_assignee: string | null; quiet_users: string[] }; team?: { id: string; name: string }[] }) {
+export function NerdSettingsForm({ initial, team = [] }: { initial: { min_hours: number; hourly_rate: number; account_code: string; email_tickets: boolean; support_email: string; staff_alerts: boolean; default_assignee: string | null; quiet_users: string[]; scope_note: string }; team?: { id: string; name: string }[] }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +26,9 @@ export function NerdSettingsForm({ initial, team = [] }: { initial: { min_hours:
           </Select>
           <p className="mt-1 text-[0.7188rem] text-ink-muted">Steps can be as short as 15 minutes, but a quote whose steps add up to less than this is charged this. The client never sees the time — only the steps and the price.</p></div>
       </div>
+      <div><Label htmlFor="ns-scope" hint="on every quote and its invoice">What a quote covers</Label>
+        <textarea id="ns-scope" value={f.scope_note} maxLength={1000} onChange={(e) => set({ scope_note: e.target.value })} className="min-h-[96px] w-full rounded-xl border border-line-strong bg-surface px-3 py-2 text-[0.875rem] text-ink" />
+        <p className="mt-1 text-[0.7188rem] text-ink-muted">The client sees this on the quote and must tick that they agree before accepting. It&apos;s also printed on the invoice under the list of tasks.</p></div>
       <div><Label htmlFor="ns-email" hint="the address clients write to">Support email</Label><Input id="ns-email" type="email" value={f.support_email} onChange={(e) => set({ support_email: e.target.value })} placeholder="hello@yourdomain.com.au" /></div>
       <label className="flex items-start gap-2 text-[0.8125rem]"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.email_tickets} onChange={(e) => set({ email_tickets: e.target.checked })} /><span><span className="font-medium text-ink">Turn client emails into tickets</span><span className="block text-[0.7188rem] text-ink-muted">A new email from a client (not spam, not a supplier) opens a ticket; their replies land on the same ticket.</span></span></label>
       <label className="flex items-start gap-2 text-[0.8125rem]"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.staff_alerts} onChange={(e) => set({ staff_alerts: e.target.checked })} /><span><span className="font-medium text-ink">Email the team about ticket activity</span><span className="block text-[0.7188rem] text-ink-muted">When a ticket is assigned to someone, or a client replies, opens or accepts a quote — only the person on the ticket gets an email (never the person who did it).</span></span></label>

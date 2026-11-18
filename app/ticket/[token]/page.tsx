@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createServiceClient } from "@/lib/integrations/runtime";
-import { TICKET_STATUS, type TicketStatus } from "@/lib/nerdherd/core";
+import { TICKET_STATUS, readNerd, type TicketStatus } from "@/lib/nerdherd/core";
 import type { QuoteStatus } from "@/lib/nerdherd/quotes";
 import { ClientTicket, type ClientQuote, type ClientUpdate } from "./client";
 
@@ -20,7 +20,7 @@ export default async function TicketLinkPage({ params }: { params: Promise<{ tok
   const { data: l } = await db.from("support_ticket_links").select("token, organisation_id, ticket_id, email, name").eq("token", token).maybeSingle();
   if (!l) notFound();
   const [{ data: org }, { data: t }, { data: qs }, { data: ups }] = await Promise.all([
-    db.from("organisations").select("name, slug, brand_colour, logo_url, currency, timezone, contact_phone").eq("id", l.organisation_id).single(),
+    db.from("organisations").select("name, slug, brand_colour, logo_url, currency, timezone, contact_phone, settings").eq("id", l.organisation_id).single(),
     db.from("support_tickets").select("id, number, subject, status, created_at, websites(domain)").eq("id", l.ticket_id).single(),
     db.from("support_ticket_quotes").select("id, seq, kind, title, description, amount, status, accepted_at, paid_at, completed_at, invoices(pay_token, status), support_ticket_quote_tasks(id, label, done_at, position)").eq("ticket_id", l.ticket_id).in("status", ["sent", "accepted", "paid", "completed", "declined"]).order("seq"),
     db.from("support_ticket_updates").select("id, kind, body, author_name, author_id, created_at").eq("ticket_id", l.ticket_id).eq("public", true).in("kind", ["comment", "email_in", "email_out"]).order("created_at").limit(200),
@@ -58,6 +58,6 @@ export default async function TicketLinkPage({ params }: { params: Promise<{ tok
   return (
     <ClientTicket token={token} business={org.name} logo={org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null} accent={accent} currency={org.currency} tz={org.timezone}
       number={t.number as number} subject={t.subject as string} status={st.label} done={t.status === "resolved" || t.status === "closed"} domain={(t.websites as unknown as { domain: string } | null)?.domain ?? null}
-      name={l.name} quotes={quotes} updates={updates} portal={`/p/${org.slug}/login`} />
+      name={l.name} quotes={quotes} updates={updates} portal={`/p/${org.slug}/login`} scopeNote={readNerd(org.settings).scopeNote} />
   );
 }

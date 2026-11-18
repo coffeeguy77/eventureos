@@ -29,11 +29,12 @@ async function link(token: string) {
 }
 
 /** Accept a quote: raises the invoice (one line, the title — no hours) and goes straight to paying it. */
-export async function acceptQuote(token: string, quoteId: string, name: string): Promise<R<{ payUrl: string }>> {
+export async function acceptQuote(token: string, quoteId: string, name: string, scopeAgreed = false): Promise<R<{ payUrl: string }>> {
   try {
     limit(`a:${token}`);
     const who = name.trim().slice(0, 120);
     if (who.length < 2) throw new Error("Type your name to accept.");
+    if (!scopeAgreed) throw new Error("Please tick that you understand the quote covers only the tasks listed.");
     if (!UUID.test(quoteId)) throw new Error("That quote isn't valid.");
     const { db, l } = await link(token);
     const { data: q } = await db.from("support_ticket_quotes").select("id, seq, kind, title, amount, status, invoice_id, ticket_id").eq("id", quoteId).eq("ticket_id", l.ticket_id).maybeSingle();
@@ -50,7 +51,10 @@ export async function acceptQuote(token: string, quoteId: string, name: string):
     const nerd = readNerd(org?.settings);
     const amt = splitInc(Number(q.amount));
     const today = new Date().toISOString().slice(0, 10);
-    const desc = `Ticket #${t.number} — ${q.kind === "variation" ? `Variation ${q.seq}: ` : ""}${q.title}`.slice(0, 500);
+    // the invoice lists exactly what was quoted, then what the quote covers (the client ticked that they agree)
+    const { data: steps } = await db.from("support_ticket_quote_tasks").select("label, position").eq("quote_id", q.id).order("position");
+    const tasks = ((steps ?? []) as { label: string }[]).map((s) => `• ${s.label}`).join("\n");
+    const desc = [`Ticket #${t.number} — ${q.kind === "variation" ? `Variation ${q.seq}: ` : ""}${q.title}`, tasks ? `Tasks:\n${tasks}` : "", nerd.scopeNote ? `What this covers: ${nerd.scopeNote}` : ""].filter(Boolean).join("\n\n").slice(0, 3900);
     const { data: inv, error } = await db.from("invoices").insert({
       organisation_id: l.organisation_id, customer_id: t.customer_id, kind: "full", status: "awaiting_payment", issue_date: today, due_date: today,
       subtotal: amt.subtotal, tax_total: amt.tax, total: amt.total, currency: org?.currency ?? "AUD", reference: `Ticket #${t.number}${q.kind === "variation" ? ` V${q.seq}` : ""}`,
@@ -58,9 +62,9 @@ export async function acceptQuote(token: string, quoteId: string, name: string):
     }).select("id, number, pay_token").single();
     if (error) throw new Error(`Couldn't raise the invoice — please try again. (${error.message})`);
     const now = new Date().toISOString();
-    await db.from("support_ticket_quotes").update({ status: "accepted", accepted_at: now, accepted_by: `${who} (${l.email})`, invoice_id: inv.id, updated_at: now }).eq("id", q.id);
+    await db.from("support_ticket_quotes").update({ status: "accepted", accepted_at: now, accepted_by: `${who} (${l.email}) — agreed the quote covers only the listed tasks`, invoice_id: inv.id, updated_at: now }).eq("id", q.id);
     await db.from("support_tickets").update({ status: "awaiting_payment", last_activity_at: now, updated_at: now }).eq("id", t.id).in("status", ["new", "open", "waiting_customer", "awaiting_payment"]);
-    await db.from("support_ticket_updates").insert({ organisation_id: l.organisation_id, ticket_id: t.id, kind: "system", body: `${who} accepted ${q.kind === "variation" ? "variation" : "quote"} ${q.seq} — invoice ${inv.number ?? ""} raised, waiting for payment.`, author_id: null, author_name: who });
+    await db.from("support_ticket_updates").insert({ organisation_id: l.organisation_id, ticket_id: t.id, kind: "system", body: `${who} accepted ${q.kind === "variation" ? "variation" : "quote"} ${q.seq} and ticked that it covers only the listed tasks — invoice ${inv.number ?? ""} raised, waiting for payment.`, author_id: null, author_name: who });
     await db.from("notifications").insert({ organisation_id: l.organisation_id, type: "ticket.accepted", title: `Quote accepted on #${t.number} by ${who}`.slice(0, 200), body: `${q.title} — waiting for payment`, link: `/nerd-herd/tickets/${t.id}`, entity_type: "support_ticket", entity_id: t.id });
     const { alertStaff } = await import("@/lib/nerdherd/mail");
     await alertStaff(db, l.organisation_id, t.id as string, `${who} accepted the quote`, [`${q.title}`, `Invoice ${inv.number ?? ""} raised — the light turns green when it's paid.`]);

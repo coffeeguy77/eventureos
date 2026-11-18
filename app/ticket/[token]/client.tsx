@@ -13,9 +13,9 @@ export interface ClientUpdate { id: string; mine: boolean; who: string; body: st
 const fmt = (n: number, c: string) => new Intl.NumberFormat("en-AU", { style: "currency", currency: c }).format(n);
 
 /** What the client sees: the quote to accept and pay, the steps ticked off as we go (no hours), and the conversation. */
-export function ClientTicket({ token, business, logo, accent, currency, tz, number, subject, status, done, domain, name, quotes, updates, portal }: {
+export function ClientTicket({ token, business, logo, accent, currency, tz, number, subject, status, done, domain, name, quotes, updates, portal, scopeNote }: {
   token: string; business: string; logo: string | null; accent: string; currency: string; tz: string; number: number; subject: string; status: string; done: boolean; domain: string | null;
-  name: string | null; quotes: ClientQuote[]; updates: ClientUpdate[]; portal: string;
+  name: string | null; quotes: ClientQuote[]; updates: ClientUpdate[]; portal: string; scopeNote: string;
 }) {
   const router = useRouter();
   const [reply, setReply] = useState("");
@@ -39,7 +39,7 @@ export function ClientTicket({ token, business, logo, accent, currency, tz, numb
           {name && <p className="mt-1 text-[0.875rem] text-ink-muted">Hi {name.split(" ")[0]} 👋</p>}
         </div>
 
-        {quotes.map((q) => <QuoteCard key={q.id} q={q} token={token} accent={accent} currency={currency} onChanged={() => router.refresh()} />)}
+        {quotes.map((q) => <QuoteCard key={q.id} q={q} token={token} accent={accent} currency={currency} scopeNote={scopeNote} onChanged={() => router.refresh()} />)}
 
         <div className="rounded-3xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-7">
           <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-ink"><MessageSquare className="h-5 w-5" style={{ color: accent }} />Messages</h2>
@@ -69,10 +69,11 @@ export function ClientTicket({ token, business, logo, accent, currency, tz, numb
   );
 }
 
-function QuoteCard({ q, token, accent, currency, onChanged }: { q: ClientQuote; token: string; accent: string; currency: string; onChanged: () => void }) {
+function QuoteCard({ q, token, accent, currency, scopeNote, onChanged }: { q: ClientQuote; token: string; accent: string; currency: string; scopeNote: string; onChanged: () => void }) {
   const [step, setStep] = useState<"view" | "accept" | "decline">("view");
   const [who, setWho] = useState("");
   const [agree, setAgree] = useState(false);
+  const [scope, setScope] = useState(false);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -105,6 +106,12 @@ function QuoteCard({ q, token, accent, currency, onChanged }: { q: ClientQuote; 
             </ul>
           </div>
         )}
+        {scopeNote && (
+          <div className="mt-5 rounded-2xl bg-canvas p-4 ring-1 ring-line">
+            <p className="text-[0.8125rem] font-semibold text-ink">What this quote covers</p>
+            <p className="mt-1 whitespace-pre-line text-[0.8125rem] leading-relaxed text-ink-muted">{scopeNote}</p>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-line bg-canvas/60 p-5 sm:px-7">
@@ -118,13 +125,14 @@ function QuoteCard({ q, token, accent, currency, onChanged }: { q: ClientQuote; 
           </div>
         )}
         {q.status === "sent" && step === "accept" && (
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { setError(null); const r = await acceptQuote(token, q.id, who); if (r.ok) window.location.href = r.payUrl; else setError(r.error); }); }}>
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { setError(null); const r = await acceptQuote(token, q.id, who, scope); if (r.ok) window.location.href = r.payUrl; else setError(r.error); }); }}>
             <label className="block text-[0.875rem] font-medium text-ink">Your name<input value={who} onChange={(e) => setWho(e.target.value)} autoComplete="name" className="mt-1 h-12 w-full rounded-xl border border-line-strong bg-surface px-4 text-[1rem] text-ink" /></label>
             <label className="flex items-start gap-2.5 text-[0.875rem] text-ink"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-5 w-5" />I accept this quote and will pay {fmt(q.amount, currency)} inc GST now, before the work starts.</label>
+            <label className="flex items-start gap-2.5 text-[0.875rem] text-ink"><input type="checkbox" checked={scope} onChange={(e) => setScope(e.target.checked)} className="mt-0.5 h-5 w-5" />I understand this quote covers only the tasks listed above, and I&apos;ll contact you if I&apos;m unsure what a task includes.</label>
             {error && <p className="text-[0.875rem] font-medium text-rose-600">{error}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => setStep("view")} className="h-12 rounded-xl px-5 font-medium text-ink ring-1 ring-line">Back</button>
-              <button disabled={pending || !agree || who.trim().length < 2} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl font-semibold text-white disabled:opacity-50" style={{ background: accent }}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />}Accept and go to payment</button>
+              <button disabled={pending || !agree || !scope || who.trim().length < 2} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl font-semibold text-white disabled:opacity-50" style={{ background: accent }}>{pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CreditCard className="h-5 w-5" />}Accept and go to payment</button>
             </div>
           </form>
         )}
