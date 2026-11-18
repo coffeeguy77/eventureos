@@ -7,7 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * (Google Drive, WordPress) reads the data there and posts it here with a short-lived import key.
  * Only the key's hash is stored; keys expire on their own.
  */
-const ALLOWED = ["https://docs.google.com", "https://drive.google.com", "https://drive.usercontent.google.com", "https://www.beanculture.com.au", "https://beanculture.com.au"];
+const ALLOWED = ["https://docs.google.com", "https://drive.google.com", "https://drive.usercontent.google.com", "https://www.beanculture.com.au", "https://beanculture.com.au", "https://webculture.repairshopr.com"];
 
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";

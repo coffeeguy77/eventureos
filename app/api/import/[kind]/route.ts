@@ -72,6 +72,15 @@ export async function POST(req: Request, { params }: P) {
       }
       return json(req, { error: "Unknown type" }, 400);
     }
+    if (kind === "repairshopr-contacts") {
+      // RepairShopr customer list → Nerd Herd customers. Body: [{ name, email, phone, created }]. Adds only people Nerd Herd doesn't have.
+      const org = await importOrg(db, req, "nerdherd");
+      if (!org) return json(req, { error: "Not allowed" }, 401);
+      const rows = await req.json();
+      if (!Array.isArray(rows) || rows.length > 500) return json(req, { error: "Send a JSON array of up to 500" }, 400);
+      const { importRepairShoprContacts } = await import("@/lib/imports/repairshopr");
+      return json(req, await importRepairShoprContacts(db, org, rows));
+    }
     if (kind === "certificate-file") {
       const org = await importOrg(db, req, "certificates");
       if (!org) return json(req, { error: "Not allowed" }, 401);
