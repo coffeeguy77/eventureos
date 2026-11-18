@@ -51,8 +51,11 @@ export interface TimesheetDraft { employeeId: string; start: string; end: string
 /** Create the employee's timesheet for the period, or replace the lines of the one that's already there (unless it's been paid). */
 export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Promise<{ id: string; replaced: boolean }> {
   const where = encodeURIComponent(`EmployeeID==Guid("${t.employeeId}")&&StartDate==DateTime(${t.start.replace(/-/g, ",")})`);
-  const existing = await get<{ Timesheets?: { TimesheetID: string; Status: string }[] }>(ctx, `/Timesheets?where=${where}`).catch(() => ({ Timesheets: [] }));
-  const cur = existing.Timesheets?.[0];
+  const existing = await get<{ Timesheets?: { TimesheetID: string; Status: string; StartDate?: string; EndDate?: string; Hours?: number }[] }>(ctx, `/Timesheets?where=${where}`).catch(() => ({ Timesheets: [] }));
+  const found = existing.Timesheets ?? [];
+  // more than one can match (e.g. one left from an earlier send): prefer one that can still be changed
+  const cur = found.find((x) => x.Status === "DRAFT") ?? found.find((x) => x.Status === "PROCESSED") ?? found[0];
+  if (found.length) console.error("[xero-payroll] timesheets found for", t.start, JSON.stringify(found.map((x) => ({ id: x.TimesheetID, status: x.Status, start: x.StartDate, end: x.EndDate, hours: x.Hours }))));
   if (cur && cur.Status === "PROCESSED") throw new Error("this period's timesheet is already in a pay run in Xero, so it can't be changed from here. Add the hours on their payslip in the Xero pay run (or delete the draft pay run, send again, then create the pay run again).");
   const post = (b: unknown) => apiJSON<{ Timesheets?: { TimesheetID: string }[] }>(ctx, `${API}/Timesheets`, {
     method: "POST", headers: { "xero-tenant-id": tenantId(ctx), "content-type": "application/json" }, body: JSON.stringify(b),
@@ -79,7 +82,7 @@ export async function upsertTimesheet(ctx: SyncContext, t: TimesheetDraft): Prom
   } catch (e) {
     const why = xeroReason(e);
     console.error("[xero-payroll] timesheet", t.start, "→", why);
-    throw new Error(cur ? `${why} — Xero kept the timesheet it already has (${cur.Status.toLowerCase()}). In Xero → Payroll → Timesheets, open it and choose Revert to draft (or Delete), then send again.` : why);
+    throw new Error(cur ? `${why} — Xero kept the timesheet it already has (${cur.Status.toLowerCase()}${found.length > 1 ? `; Xero has ${found.length} timesheets for this period: ${found.map((x) => `${x.Status.toLowerCase()} ${x.Hours ?? "?"} h`).join(", ")}` : `, ${cur.Hours ?? "?"} h`}). In Xero → Payroll → Timesheets, open it and choose Revert to draft (or Delete), then send again.` : why);
   }
 }
 
