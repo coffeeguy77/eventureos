@@ -2,7 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import type { TourSpace } from "@/components/sales/tour";
 import { FIGURES, readPage, type FigureKey } from "./page-settings";
-import { categoryTotal, fullMonths, suggestCoffeeCategories, type YearStats } from "./stats";
+import { categoryTotal, fullMonths, type YearStats } from "./stats";
 import { all, loadStatRows, sydneyToday } from "./stats-server";
 import { saleStats } from "./stats";
 import { unitPnl, yearlyCost, type ExpenseLine, type PayrollRow, type StaffLine } from "./pnl";
@@ -107,7 +107,8 @@ async function buildDash(db: ReturnType<typeof createServiceClient>, l: { id: st
   const locs = (u.square_location_ids as string[]) ?? [], exclude = (u.exclude_categories as string[]) ?? [];
   const today = sydneyToday();
   const { days, items } = await loadStatRows(db, l.organisation_id, locs, exclude, page.years, today);
-  const coffeeCats = page.coffee_categories ?? suggestCoffeeCategories([...new Set(items.map((i) => i.category))]);
+  // coffee figures only once the seller has confirmed which categories are coffee (never from the suggestion)
+  const coffeeCats = page.coffee_categories ?? [];
   const st = saleStats({ today, years: page.years, days, items, coffeeCategories: coffeeCats });
   const allowed = new Set<FigureKey>(unlocked ? (Object.keys(FIGURES) as FigureKey[]) : page.public_figures);
   const fig = (y: YearStats): PublicYear["figures"] => {
