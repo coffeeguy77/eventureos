@@ -28,6 +28,7 @@ export class AdsNotReady extends Error {
 function adsHeaders(loginCustomerId?: string | null): Record<string, string> {
   const token = process.env.GOOGLE_ADS_DEVELOPER_TOKEN?.trim();
   if (!token) throw new AdsNotReady();
+  // null → the manager account from the environment; "" → no login-customer-id at all
   const login = (loginCustomerId ?? process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ?? "").replace(/\D/g, "");
   return { "developer-token": token, "content-type": "application/json", ...(login ? { "login-customer-id": login } : {}) };
 }
@@ -76,8 +77,29 @@ export async function listAdsCustomers(ctx: SyncContext): Promise<AdsCustomer[]>
   return [...out.values()].sort((a, b) => Number(a.manager) - Number(b.manager) || a.name.localeCompare(b.name));
 }
 
-/** GAQL search, every page. loginCustomerId: the manager account the client is reached through (env default). */
+/**
+ * Which account to send as login-customer-id for a client: the account itself when this login reaches it directly,
+ * otherwise the manager account (GOOGLE_ADS_LOGIN_CUSTOMER_ID). Worked out once per client and remembered.
+ */
+const routes = new Map<string, string | null>();
+async function loginFor(ctx: SyncContext, customerId: string): Promise<string | null> {
+  const key = `${ctx.integration.id}:${customerId}`;
+  if (routes.has(key)) return routes.get(key)!;
+  const tryLogin = async (login: string | null) => {
+    try {
+      await apiJSON(ctx, `${ADS()}/customers/${customerId}/googleAds:search`, { method: "POST", headers: adsHeaders(login ?? ""), body: JSON.stringify({ query: "SELECT customer.id FROM customer LIMIT 1" }) }, "Google Ads");
+      return true;
+    } catch (e) { if (e instanceof AdsNotReady) throw e; return false; }
+  };
+  const mcc = (process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ?? "").replace(/\D/g, "") || null;
+  const chosen = (await tryLogin(customerId)) ? customerId : mcc && (await tryLogin(mcc)) ? mcc : customerId;
+  routes.set(key, chosen);
+  return chosen;
+}
+
+/** GAQL search, every page. loginCustomerId: the account the client is reached through (worked out when not given). */
 export async function adsSearch<T>(ctx: SyncContext, customerId: string, query: string, loginCustomerId?: string | null): Promise<T[]> {
+  if (loginCustomerId === undefined) loginCustomerId = await loginFor(ctx, customerId);
   const out: T[] = [];
   let pageToken: string | undefined;
   for (let i = 0; i < 50; i++) {
@@ -94,7 +116,7 @@ export async function adsSearch<T>(ctx: SyncContext, customerId: string, query: 
 /** One mutate call. service e.g. "campaignBudgets", "adGroupCriteria", "campaignCriteria", "adGroups". */
 export async function adsMutate(ctx: SyncContext, customerId: string, service: string, operations: unknown[], validateOnly = false): Promise<{ results?: { resourceName?: string }[] }> {
   return apiJSON(ctx, `${ADS()}/customers/${customerId}/${service}:mutate`, {
-    method: "POST", headers: adsHeaders(null), body: JSON.stringify({ operations, ...(validateOnly ? { validateOnly: true } : {}) }),
+    method: "POST", headers: adsHeaders(await loginFor(ctx, customerId)), body: JSON.stringify({ operations, ...(validateOnly ? { validateOnly: true } : {}) }),
   }, "Google Ads");
 }
 
