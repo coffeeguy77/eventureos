@@ -80,6 +80,22 @@ export function ReportView({ d, commentary, agency }: { d: ReportData; commentar
             <Stat label="Clicks" value={n0(d.ads.now.clicks)} now={d.ads.now.clicks} prev={d.ads.prev.clicks} lastYear={d.ads.lastYear.clicks} />
           </div>
           {d.ads.now.conv_value > 0 && <p className="mt-2 text-[0.8125rem] text-ink-muted">Conversion value {money(d.ads.now.conv_value, cur, { cents: false })} — {(d.ads.now.conv_value / Math.max(d.ads.now.cost, 0.01)).toFixed(1)}× what was spent.</p>}
+          {d.start && (() => {
+            const s = d.start!, n = d.ads!.now, scale = 30 / Math.max(1, n.days);
+            const nowCpa = n.conversions ? n.cost / n.conversions : null;
+            const row = (label: string, before: string, after: string) => <li className="flex flex-wrap items-center gap-x-4 px-4 py-2 text-[0.8125rem]"><span className="min-w-0 flex-1 text-ink">{label}</span><span className="w-28 text-right tabular-nums text-ink-muted">{before}</span><span className="w-28 text-right tabular-nums font-medium text-ink">{after}</span></li>;
+            return (
+              <div className="mt-3 rounded-xl border border-line">
+                <p className="flex flex-wrap gap-x-4 border-b border-line px-4 py-2 text-[0.75rem] text-ink-muted"><span className="flex-1">Since we took over (audit {new Date(`${s.date}T12:00:00Z`).toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: "UTC" })}), per 30 days</span><span className="w-28 text-right">Before</span><span className="w-28 text-right">This month</span></p>
+                <ul className="divide-y divide-line">
+                  {row("Conversions", String(s.conversions), String(Math.round(n.conversions * scale * 10) / 10))}
+                  {row("Cost per conversion", s.cpa != null ? money(s.cpa, cur) : "—", nowCpa != null ? money(nowCpa, cur) : "—")}
+                  {row("Spend", money(s.cost, cur, { cents: false }), money(n.cost * scale, cur, { cents: false }))}
+                  {row("Click-through rate", s.ctr != null ? `${s.ctr}%` : "—", n.impressions ? `${Math.round((n.clicks / n.impressions) * 10000) / 100}%` : "—")}
+                </ul>
+              </div>
+            );
+          })()}
           <DailyChart daily={d.ads.daily} currency={cur} />
           {d.ads.campaigns.length > 0 && (
             <div className="mt-3 overflow-x-auto rounded-xl border border-line">

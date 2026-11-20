@@ -19,6 +19,8 @@ export interface ReportData {
   ga4: { now: Totals; prev: Totals; lastYear: Totals; channels: { name: string; sessions: number; conversions: number }[] } | null;
   gsc: { now: Totals; prev: Totals; lastYear: Totals; queries: { query: string; clicks: number; impressions: number; position: number }[] } | null;
   changes: { label: string; kind: string; reason: string; at: string; status: string }[];
+  /** the starting-point audit's 30-day figures, to show improvement since we took over */
+  start?: { date: string; score: number; cost: number; conversions: number; cpa: number | null; ctr: number | null; clicks: number } | null;
 }
 
 const zero = (): Totals => ({ impressions: 0, clicks: 0, cost: 0, conversions: 0, conv_value: 0, sessions: 0, users: 0, position: null, days: 0 });
@@ -80,7 +82,11 @@ export async function buildReportData(db: SupabaseClient, ctx: SyncContext | nul
   }
   const { data: ch } = await db.from("mk_changes").select("label, kind, reason, created_at, status").eq("account_id", a.id).in("status", ["applied", "undone"])
     .gte("created_at", `${start}T00:00:00Z`).lte("created_at", `${end}T23:59:59Z`).order("created_at");
+  const { data: aud } = await db.from("mk_reports").select("data").eq("account_id", a.id).eq("data->>kind", "audit").order("period_start").limit(1).maybeSingle();
+  const ab = (aud?.data as { date?: string; score?: number; baseline?: { cost: number; conversions: number; cpa: number | null; ctr: number | null; clicks: number } } | undefined);
+  const startFig = ab?.baseline && ab.date && ab.date <= end ? { date: ab.date, score: Number(ab.score ?? 0), cost: ab.baseline.cost, conversions: ab.baseline.conversions, cpa: ab.baseline.cpa, ctr: ab.baseline.ctr, clicks: ab.baseline.clicks } : null;
   return {
+    start: startFig,
     client: a.name, currency: a.ads_currency ?? "AUD", period: { start, end, label: monthName(start) },
     ads: has("ads") ? {
       now: total(now, "ads"), prev: total(before, "ads"), lastYear: total(lastYear, "ads"),

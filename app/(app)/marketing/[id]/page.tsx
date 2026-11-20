@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { AccountForm } from "@/components/marketing/account-form";
-import { ActButton, BuildReport } from "@/components/marketing/controls";
+import { ActButton, AuditButton, BuildReport } from "@/components/marketing/controls";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export default async function MarketingClientPage({ params }: { params: Promise<
     allPages<Day>((x, y) => supabase.from("mk_daily").select("source, day, dim, dim_name, impressions, clicks, cost, conversions, conv_value, sessions, position").eq("account_id", id).gte("day", from).order("day").order("source").order("dim").range(x, y)),
     supabase.from("mk_changes").select("id, kind, label, reason, status, error, created_at, before, after").eq("account_id", id).order("created_at", { ascending: false }).limit(80),
     supabase.from("mk_runs").select("started_at, status, summary, error, changes").eq("account_id", id).order("started_at", { ascending: false }).limit(5),
-    supabase.from("mk_reports").select("id, period_start, status, sent_at").eq("account_id", id).order("period_start", { ascending: false }).limit(24),
+    supabase.from("mk_reports").select("id, period_start, status, sent_at, kind:data->>kind, score:data->>score").eq("account_id", id).order("period_start", { ascending: false }).limit(36),
     allPages<{ id: string; name: string }>((x, y) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(x, y)),
   ]);
   const split = addDaysISO(today, -30);
@@ -45,6 +45,10 @@ export default async function MarketingClientPage({ params }: { params: Promise<
   const pct = (n: number, p: number) => (p ? `${n >= p ? "▲" : "▼"} ${Math.abs(((n - p) / p) * 100).toFixed(0)}% on the 30 days before` : "");
   const list = (changes ?? []) as Change[];
   const waiting = list.filter((c) => c.status === "proposed");
+  type Rep = { id: string; period_start: string; status: string; sent_at: string | null; kind: string | null; score: string | null };
+  const allReports = (reports ?? []) as Rep[];
+  const audits = allReports.filter((r) => r.kind === "audit");
+  const monthly = allReports.filter((r) => r.kind !== "audit");
   const lastRun = (runs ?? [])[0] as { started_at: string; status: string; summary: string | null; error: string | null; changes: number } | undefined;
   const months = Array.from({ length: 13 }, (_, i) => { const d = new Date(`${today.slice(0, 7)}-15T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - i - 1); const v = d.toISOString().slice(0, 7); return { value: v, label: d.toLocaleDateString("en-AU", { month: "long", year: "numeric", timeZone: "UTC" }) }; });
   const kpi = (label: string, value: string, sub: string) => (
@@ -55,7 +59,7 @@ export default async function MarketingClientPage({ params }: { params: Promise<
     <div>
       <PageHeader eyebrow={<Link href="/marketing" className="hover:text-ink">Marketing</Link>} title={a.name}
         subtitle={<>{a.mode === "auto" ? (a.monthly_cap ? `AI makes changes itself · cap ${money(a.monthly_cap, cur, { cents: false })} a month` : "AI automatic — set a monthly cap so it can make changes") : a.mode === "suggest" ? "AI suggests, you approve" : "Reports only"}{a.last_synced_at ? ` · figures ${relative(a.last_synced_at)}` : ""}</>}
-        actions={<><ActButton id={id} act="sync" label="Bring in figures" busy="Bringing in…" /><ActButton id={id} act="run" label="Run AI review now" busy="Reviewing… (up to 2 min)" variant="primary" /></>} />
+        actions={<><Link href={`/marketing/${id}/campaign`} className="inline-flex h-10 items-center justify-center rounded-lg border border-line px-3 text-[0.8125rem] font-medium text-ink hover:bg-zinc-50 sm:h-9">New campaign</Link><ActButton id={id} act="sync" label="Bring in figures" busy="Bringing in…" /><ActButton id={id} act="run" label="Run AI review now" busy="Reviewing… (up to 2 min)" variant="primary" /></>} />
       {a.last_error && <p className="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-[0.8125rem] text-rose-800 ring-1 ring-inset ring-rose-100">{a.last_error}</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -121,11 +125,26 @@ export default async function MarketingClientPage({ params }: { params: Promise<
           </Card>
 
           <Card>
+            <CardHeader title="Account audit" subtitle="Where the account stood when we took over — reports measure improvement against it" />
+            <div className="px-5 pb-3">{audits.length ? null : <p className="mb-2 text-[0.8125rem] text-ink-muted">No audit yet — one runs automatically the first morning, or run it now.</p>}<AuditButton id={id} label={audits.length ? "Run a fresh audit" : "Run the audit now"} /></div>
+            {audits.length > 0 && (
+              <ul className="divide-y divide-line border-t border-line">
+                {audits.map((r) => (
+                  <li key={r.id}><Link href={`/marketing/${id}/reports/${r.id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[0.8125rem] hover:bg-zinc-50/70">
+                    <span className="text-ink">Audit {new Date(`${r.period_start}T12:00:00Z`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}{r === audits[audits.length - 1] ? " (starting point)" : ""}</span>
+                    <Badge tone="brand">{r.score}/100</Badge>
+                  </Link></li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card>
             <CardHeader title="Monthly reports" subtitle="Drafted automatically early each month" />
             <div className="px-5 pb-3"><BuildReport id={id} months={months} /></div>
-            {(reports ?? []).length > 0 && (
+            {monthly.length > 0 && (
               <ul className="divide-y divide-line border-t border-line">
-                {((reports ?? []) as { id: string; period_start: string; status: string; sent_at: string | null }[]).map((r) => (
+                {monthly.map((r) => (
                   <li key={r.id}><Link href={`/marketing/${id}/reports/${r.id}`} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[0.8125rem] hover:bg-zinc-50/70">
                     <span className="text-ink">{new Date(`${r.period_start}T12:00:00Z`).toLocaleDateString("en-AU", { month: "long", year: "numeric", timeZone: "UTC" })}</span>
                     <Badge tone={r.status === "sent" ? "green" : "amber"}>{r.status === "sent" ? "Sent" : "Draft"}</Badge>

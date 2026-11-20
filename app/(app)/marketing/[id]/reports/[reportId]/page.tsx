@@ -6,6 +6,8 @@ import type { ReportData } from "@/lib/marketing/report";
 import { Card, CardHeader } from "@/components/ui/card";
 import { CommentaryEditor, ShareReport } from "@/components/marketing/controls";
 import { ReportView } from "@/components/marketing/report-view";
+import { AuditView } from "@/components/marketing/audit-view";
+import type { AuditData } from "@/lib/marketing/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,18 @@ export default async function MarketingReportStaff({ params }: { params: Promise
   const { supabase, org } = await requireOrg();
   const { data: r } = await supabase.from("mk_reports").select("id, data, commentary, status, token, account:mk_accounts(name, report_to)").eq("id", reportId).eq("account_id", id).eq("organisation_id", org.id).maybeSingle();
   if (!r) notFound();
+  const acct0 = r.account as unknown as { name: string; report_to: string[] } | null;
+  if ((r.data as { kind?: string }).kind === "audit") {
+    const ad = r.data as AuditData;
+    const link = `${appBaseUrl()}/marketing-report/${r.token}`;
+    return (
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="text-[0.75rem] text-ink-faint"><Link href="/marketing" className="hover:text-ink">Marketing</Link> / <Link href={`/marketing/${id}`} className="hover:text-ink">{acct0?.name ?? "Client"}</Link> / Audit</div>
+        <Card><CardHeader title="Share with the client" subtitle="Private link — no login." /><div className="px-5 pb-5"><ShareReport reportId={reportId} url={link} to={acct0?.report_to ?? []} subject={`${ad.client} — Google Ads audit`} sent={r.status === "sent"} /></div></Card>
+        <AuditView d={ad} agency={org.name} />
+      </div>
+    );
+  }
   const d = r.data as ReportData;
   const acct = r.account as unknown as { name: string; report_to: string[] } | null;
   const url = `${appBaseUrl()}/marketing-report/${r.token}`;

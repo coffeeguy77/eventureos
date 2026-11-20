@@ -201,3 +201,55 @@ export async function markSent(reportId: string): Promise<R> {
     return { ok: true, data: "Marked as sent." };
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** Keyword Planner ideas with Google's monthly searches and top-of-page bid ranges. */
+export async function keywordIdeasAction(id: string, seeds: string[], url: string | null): Promise<R<import("@/lib/marketing/campaign").Idea[]>> {
+  try {
+    const { org, user } = await office();
+    const a = await account(org.id, id);
+    if (!a.ads_customer_id) return { ok: false, error: "No Google Ads account is linked." };
+    const list = seeds.map((x) => x.trim()).filter(Boolean).slice(0, 20);
+    if (!list.length) return { ok: false, error: "Type a few words people would search." };
+    const { keywordIdeas } = await import("@/lib/marketing/campaign");
+    const { adsErrorText } = await import("@/lib/marketing/google");
+    try { return { ok: true, data: await keywordIdeas(await gctx(org.id, user.id), a.ads_customer_id, list, url && /^https:\/\//.test(url) ? url : undefined) }; }
+    catch (e) { return { ok: false, error: adsErrorText(e) }; }
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Make a search campaign in Google Ads, PAUSED — logged as a change (Undo removes it). */
+export async function createCampaignAction(id: string, spec: import("@/lib/marketing/campaign").CampaignSpec): Promise<R> {
+  try {
+    const { org, user } = await office();
+    const a = await account(org.id, id);
+    if (!a.ads_customer_id) return { ok: false, error: "No Google Ads account is linked." };
+    const { checkSpec, createSearchCampaign } = await import("@/lib/marketing/campaign");
+    const problem = checkSpec(spec);
+    if (problem) return { ok: false, error: problem };
+    if (a.monthly_cap && spec.dailyBudget * 30.4 > Number(a.monthly_cap) + 5) return { ok: false, error: `$${spec.dailyBudget}/day is about $${Math.round(spec.dailyBudget * 30.4)} a month — over this client's $${a.monthly_cap} cap.` };
+    const { adsErrorText } = await import("@/lib/marketing/google");
+    let made: { campaign: string; budget: string };
+    try { made = await createSearchCampaign(await gctx(org.id, user.id), a.ads_customer_id, spec); }
+    catch (e) { return { ok: false, error: adsErrorText(e) }; }
+    await createServiceClient().from("mk_changes").insert({
+      organisation_id: org.id, account_id: id, kind: "create_campaign", target: made.campaign || spec.name, label: `New campaign “${spec.name}” (paused)`,
+      before: {}, after: { resource: made.campaign, budget: made.budget, daily: spec.dailyBudget, keywords: spec.keywords.length, url: spec.finalUrl },
+      reason: `Created paused: $${spec.dailyBudget}/day, ${spec.keywords.length} keywords, ${spec.radiusKm} km around ${spec.centre.label}. Switch it on in Google Ads when you're happy with it.`,
+      status: "applied", by_ai: false, decided_by: user.id, applied_at: new Date().toISOString(),
+    });
+    revalidatePath(`/marketing/${id}`);
+    return { ok: true, data: `Created “${spec.name}” — paused. Open Google Ads to check it and switch it on.` };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** The starting-point audit (or a fresh one): Claude reviews the whole account; later reports compare with it. */
+export async function runAuditAction(id: string): Promise<R> {
+  try {
+    const { org, user } = await office();
+    const a = await account(org.id, id);
+    const { runAudit } = await import("@/lib/marketing/audit");
+    const { adsErrorText } = await import("@/lib/marketing/google");
+    try { const rid = await runAudit(await gctx(org.id, user.id), a); revalidatePath(`/marketing/${id}`); return { ok: true, data: rid }; }
+    catch (e) { return { ok: false, error: adsErrorText(e) }; }
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

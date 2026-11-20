@@ -113,6 +113,11 @@ export async function adsSearch<T>(ctx: SyncContext, customerId: string, query: 
   return out;
 }
 
+/** Headers for a raw Ads call to one client (developer token + the login route that reaches it). */
+export async function adsHeadersPublic(ctx: SyncContext, customerId: string): Promise<Record<string, string>> {
+  return adsHeaders(await loginFor(ctx, customerId));
+}
+
 /** One mutate call. service e.g. "campaignBudgets", "adGroupCriteria", "campaignCriteria", "adGroups". */
 export async function adsMutate(ctx: SyncContext, customerId: string, service: string, operations: unknown[], validateOnly = false): Promise<{ results?: { resourceName?: string }[] }> {
   return apiJSON(ctx, `${ADS()}/customers/${customerId}/${service}:mutate`, {

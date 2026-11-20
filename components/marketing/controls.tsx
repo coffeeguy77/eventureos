@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/form";
-import { approveChange, buildReport, markSent, rejectChange, runNow, saveCommentary, syncNow, undoChangeAction } from "@/app/(app)/marketing/actions";
+import { approveChange, buildReport, markSent, rejectChange, runAuditAction, runNow, saveCommentary, syncNow, undoChangeAction } from "@/app/(app)/marketing/actions";
 
 type Act = (id: string) => Promise<{ ok: true; data: string } | { ok: false; error: string }>;
 
@@ -44,6 +44,22 @@ export function BuildReport({ id, months }: { id: string; months: { value: strin
       })}>{pending ? "Building… (about a minute)" : "Build report"}</Button>
       {err && <span className="text-[0.75rem] text-rose-700">{err}</span>}
     </div>
+  );
+}
+
+export function AuditButton({ id, label }: { id: string; label: string }) {
+  const router = useRouter();
+  const [err, setErr] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <Button type="button" size="sm" className="h-10 sm:h-8" disabled={pending} onClick={() => start(async () => {
+        setErr(null);
+        const r = await runAuditAction(id);
+        if (!r.ok) setErr(r.error); else router.push(`/marketing/${id}/reports/${r.data}`);
+      })}>{pending ? "Auditing… (up to 3 min)" : label}</Button>
+      {err && <span className="text-[0.75rem] text-rose-700">{err}</span>}
+    </span>
   );
 }
 

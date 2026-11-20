@@ -43,6 +43,14 @@ async function handle(req: NextRequest) {
         const doneToday = a.last_run_at && todayISO(ctx.org.timezone, new Date(a.last_run_at)) === today;
         if (!doneToday) {
           log.push(await syncAccount(ctx, a));
+          // the starting-point audit, once, before the AI's first changes (so it records the account as we found it)
+          if (a.ads_customer_id) {
+            const { data: au } = await db.from("mk_reports").select("id").eq("account_id", a.id).eq("data->>kind", "audit").limit(1).maybeSingle();
+            if (!au) {
+              try { const { runAudit } = await import("@/lib/marketing/audit"); await runAudit(ctx, a); log.push(`${a.name}: starting-point audit written`); }
+              catch (e) { log.push(`${a.name}: audit failed — ${e instanceof Error ? e.message : String(e)}`); continue; } // no AI changes until there's a starting point
+            }
+          }
           log.push(await runAccount(ctx, { ...a, last_synced_at: new Date().toISOString() }));
           if (a.mode === "off" || !a.ads_customer_id) await db.from("mk_accounts").update({ last_run_at: new Date().toISOString() }).eq("id", a.id);
         }
