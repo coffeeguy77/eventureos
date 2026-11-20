@@ -329,6 +329,14 @@ export async function ingestMessage(ctx: SyncContext, pm: ParsedMessage, cache: 
   const outbound = pm.labelIds.includes("SENT") || own.includes(pm.from.email);
   const res = { enquiryCreated: false, review: false, threadId: "", filtered: false, filterReason: "" };
 
+  // Nerd Herd: an email forwarded by someone on the "forwarded emails become tickets" list (e.g. a staff member
+  // who's leaving) opens a ticket for the original sender — before the "your own team" filter would drop it
+  if (!outbound) {
+    const { ticketFromForward } = await import("@/lib/nerdherd/forward-ticket");
+    const done = await ticketFromForward(ctx, pm, (email) => matchSender(ctx, email, cache));
+    if (done) return { ...res, filtered: true, filterReason: done };
+  }
+
   // A quote accepted in Xero's online quote page: alert owners/admins now (it bypasses booking approval)
   if (!outbound) {
     const { parseXeroAcceptance, alertXeroAcceptance } = await import("@/lib/integrations/xero-quote-accept");
