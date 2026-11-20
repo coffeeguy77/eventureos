@@ -25,7 +25,7 @@ async function pageText(url: string): Promise<{ status: string; text: string }> 
     const html = await res.text();
     const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";
     const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ").replace(/\s+/g, " ").trim();
-    return { status: "ok", text: `TITLE: ${title}\n${text}`.slice(0, 5000) };
+    return { status: "ok", text: `TITLE: ${title}\n${text}`.slice(0, 14000) };
   } catch (e) { return { status: e instanceof Error ? e.message.slice(0, 80) : "unreachable", text: "" }; }
 }
 
@@ -42,6 +42,9 @@ export async function runAudit(ctx: SyncContext, a: MkAccount): Promise<string> 
   type ST = { campaign?: { name?: string; advertisingChannelType?: string; status?: string; biddingStrategyType?: string }; campaignBudget?: { amountMicros?: string } };
   const camps = await adsSearch<ST>(ctx, id, "SELECT campaign.name, campaign.advertising_channel_type, campaign.status, campaign.bidding_strategy_type, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'");
 
+  // every keyword, including those in paused campaigns (a new campaign starts paused)
+  type KW = { adGroupCriterion?: { keyword?: { text?: string; matchType?: string }; status?: string; negative?: boolean }; campaign?: { name?: string; status?: string }; adGroup?: { name?: string } };
+  const allKw = await adsSearch<KW>(ctx, id, "SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status, ad_group_criterion.negative, campaign.name, campaign.status, ad_group.name FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED' AND campaign.status != 'REMOVED'");
   const qMap = new Map(qs.map((q) => [q.adGroupCriterion?.resourceName, q.adGroupCriterion?.qualityInfo]));
   const qVals = qs.map((q) => q.adGroupCriterion?.qualityInfo?.qualityScore).filter((x): x is number => typeof x === "number");
   const wasted = review.terms.filter((t) => t.conversions === 0).reduce((s, t) => s + t.cost, 0);
@@ -70,12 +73,13 @@ export async function runAudit(ctx: SyncContext, a: MkAccount): Promise<string> 
     conversion_actions: convs.map((c) => ({ name: c.conversionAction?.name, status: c.conversionAction?.status, category: c.conversionAction?.category, primary: c.conversionAction?.primaryForGoal, type: c.conversionAction?.type })),
     keywords: review.snap.keywords.sort((x, y) => y.cost - x.cost).slice(0, 80).map((k) => ({ text: k.text, match: k.match, status: k.status, campaign: k.campaignName, cost: k.cost, clicks: k.clicks, conversions: k.conversions, cpc: k.cpc, quality: qMap.get(k.resource) ?? null })),
     search_terms: review.terms.slice(0, 80).map((s) => ({ term: s.term, campaign: s.campaignName, cost: s.cost, clicks: s.clicks, conversions: s.conversions })),
+    all_keywords_including_paused_campaigns: allKw.filter((k) => !k.adGroupCriterion?.negative).slice(0, 150).map((k) => ({ text: k.adGroupCriterion?.keyword?.text, match: k.adGroupCriterion?.keyword?.matchType, status: k.adGroupCriterion?.status, campaign: k.campaign?.name, campaign_status: k.campaign?.status, ad_group: k.adGroup?.name })),
     negatives: review.snap.negatives.length,
     ads: ads.slice(0, 30).map((x) => ({ campaign: x.campaign?.name, ad_group: x.adGroup?.name, status: x.adGroupAd?.status, strength: x.adGroupAd?.adStrength, type: x.adGroupAd?.ad?.type, headlines: (x.adGroupAd?.ad?.responsiveSearchAd?.headlines ?? []).map((h) => h.text), descriptions: (x.adGroupAd?.ad?.responsiveSearchAd?.descriptions ?? []).map((h) => h.text), urls: x.adGroupAd?.ad?.finalUrls })),
     landing_pages: pages.map((p) => ({ url: p.url, status: p.status, text: p.text })),
   };
   const system = `You are a senior Google Ads auditor for a small Australian agency. Audit this account as it stands today — this is the starting point the agency's AI manager will be measured against.
-Be specific and blunt, use the figures given, never invent numbers. Check: account and campaign structure; conversion tracking (are the right actions primary? any at all?); bidding vs data volume; budgets vs the monthly cap; keywords and match types; search terms wasting money; negatives; ads (strength, relevance, headline count); landing pages (relevance to the ads and keywords, anything wrong or off-topic on the page, calls to action); Quality Score; location/brand issues you can infer. Australian English.
+Be specific and blunt, use the figures given, never invent numbers. A paused campaign may be new and not yet switched on — judge it on its set-up (keywords, ads, page, tracking), not on its lack of spend. Read the WHOLE landing page text: flag anything that doesn't belong (e.g. text from another business or template). Check: account and campaign structure; conversion tracking (are the right actions primary? any at all?); bidding vs data volume; budgets vs the monthly cap; keywords and match types; search terms wasting money; negatives; ads (strength, relevance, headline count); landing pages (relevance to the ads and keywords, anything wrong or off-topic on the page, calls to action); Quality Score; location/brand issues you can infer. Australian English.
 Submit: a score out of 100, a one-sentence verdict, one short paragraph for the business owner, and 5–8 sections (each rated good / ok / poor, with findings and what happens next).`;
   const o = await askStructured<Record<string, unknown>>(a.organisation_id, system, input, {
     type: "object", required: ["score", "headline", "summary", "sections"],
