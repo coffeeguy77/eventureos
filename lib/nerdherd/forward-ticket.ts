@@ -3,6 +3,7 @@ import type { SyncContext } from "@/lib/integrations/runtime";
 import type { ParsedMessage } from "@/lib/integrations/gmail";
 import { parseForwarded } from "./forwarded";
 import { readNerd } from "./core";
+import { insertTicket } from "./ticket-insert";
 
 /**
  * Nerd Herd: an email forwarded to the support inbox by someone listed in Settings → "Forwarded emails become tickets"
@@ -49,11 +50,11 @@ export async function ticketFromForward(ctx: SyncContext, pm: ParsedMessage, get
     const text = `${subject} ${original}`.toLowerCase();
     websiteId = (list.length === 1 ? list[0] : list.find((s) => text.includes(s.domain)))?.id ?? null;
   }
-  const { data: t, error } = await db.from("support_tickets").insert({
+  const { data: t, error } = await insertTicket(db, org, {
     organisation_id: org, customer_id: customerId, website_id: websiteId, subject, description: body, status: "new", source: "email",
     last_activity_at: pm.sentAt, created_by: null, assigned_to: nerd.defaultAssignee,
-  }).select("id, number").single();
-  if (error) throw new Error(`Couldn't open a ticket from the forwarded email: ${error.message}`);
+  });
+  if (error || !t) throw new Error(`Couldn't open a ticket from the forwarded email: ${error?.message ?? "no ticket returned"}`);
   await db.from("support_ticket_updates").insert({
     organisation_id: org, ticket_id: t.id, kind: "email_in", body, public: true, author_id: null, author_name: fromName ?? fromEmail, gmail_id: pm.gmailId,
   });

@@ -2,6 +2,7 @@ import "server-only";
 import type { SyncContext } from "@/lib/integrations/runtime";
 import { readAppAccess, appAllowed } from "@/lib/apps";
 import { readNerd } from "./core";
+import { insertTicket } from "./ticket-insert";
 
 /**
  * Support inbox → tickets (Nerd Herd businesses only, when "Turn client emails into tickets" is on).
@@ -85,11 +86,11 @@ export async function ticketFromEmail(ctx: SyncContext, m: EmailForTicket): Prom
   const { data: o } = await db.from("organisations").select("settings").eq("id", org).maybeSingle();
   const { readNerd } = await import("./core");
   const defaultAssignee = readNerd(o?.settings).defaultAssignee;
-  const { data: t, error } = await db.from("support_tickets").insert({
+  const { data: t, error } = await insertTicket(db, org, {
     organisation_id: org, customer_id: m.customerId, website_id: websiteId, subject, description: body, status: "new", source: "email",
     email_thread_id: m.threadId, last_activity_at: m.sentAt, created_by: null, assigned_to: defaultAssignee,
-  }).select("id, number").single();
-  if (error) throw new Error(`Couldn't open a ticket from the email: ${error.message}`);
+  });
+  if (error || !t) throw new Error(`Couldn't open a ticket from the email: ${error?.message ?? "no ticket returned"}`);
   await db.from("support_ticket_updates").insert({
     organisation_id: org, ticket_id: t.id, kind: "email_in", body, public: true, author_id: null, author_name: m.fromName ?? m.fromEmail, email_message_id: msg?.id ?? null,
   });
