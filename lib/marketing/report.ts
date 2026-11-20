@@ -105,7 +105,7 @@ export async function writeCommentary(orgId: string, agency: string, a: MkAccoun
   const system = `You write the commentary for ${agency}'s monthly digital marketing report to a small-business client in Australia. Plain, warm, specific, Australian English. 3 short paragraphs, then up to 3 bullet points of what's next. Use the numbers given; compare with last month and the same month last year where there is data; never invent figures; say plainly if something got worse and what is being done. Mention the changes made to their Google Ads in a sentence (not a list). No headings, no sign-off.`;
   try {
     const res = await fetch(ANTHROPIC_URL, { method: "POST", headers: anthropicHeaders(key), signal: AbortSignal.timeout(90_000),
-      body: JSON.stringify({ model: marketingModel(), max_tokens: 1200, temperature: 0.3, system, messages: [{ role: "user", content: JSON.stringify({ goals: a.goals, report: { ...d, ads: d.ads ? { ...d.ads, daily: undefined } : null } }) }] }) });
+      body: JSON.stringify({ model: marketingModel(), max_tokens: 1200, system, messages: [{ role: "user", content: JSON.stringify({ goals: a.goals, report: { ...d, ads: d.ads ? { ...d.ads, daily: undefined } : null } }) }] }) });
     if (!res.ok) return null;
     const j = (await res.json()) as { content?: { type: string; text?: string }[] };
     return j.content?.find((c) => c.type === "text")?.text?.trim() ?? null;

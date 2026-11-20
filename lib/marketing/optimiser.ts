@@ -96,7 +96,7 @@ async function askAi(orgId: string, a: MkAccount, r: Review, recent: { kind: str
   };
   const res = await fetch(ANTHROPIC_URL, {
     method: "POST", headers: anthropicHeaders(key), signal: AbortSignal.timeout(120_000),
-    body: JSON.stringify({ model: marketingModel(), max_tokens: 4000, temperature: 0, system: SYSTEM, messages: [{ role: "user", content: JSON.stringify(input) }] }),
+    body: JSON.stringify({ model: marketingModel(), max_tokens: 4000, system: SYSTEM, messages: [{ role: "user", content: JSON.stringify(input) }] }),
   });
   if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const j = (await res.json()) as { content?: { type: string; text?: string }[] };
