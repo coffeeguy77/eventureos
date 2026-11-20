@@ -2,6 +2,7 @@ import { getMembers, requireOrg } from "@/lib/context";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { unlockedFor } from "@/lib/nerdherd/vault";
 import { VaultScreen, type VaultItemRow, type VaultLogRow } from "@/components/nerdherd/vault";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const metadata = { title: "Password vault" };
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
     const [it, lg, cl, st, cn] = await Promise.all([
       db.from("nerd_vault_items").select("id, label, kind, url, username, has_password, has_notes, customer_id, website_id, updated_at, password_changed_at, last_revealed_at, customers(name), websites(domain)").eq("organisation_id", org.id).order("label").limit(3000),
       db.from("nerd_vault_log").select("id, actor, action, detail, at").eq("organisation_id", org.id).order("at", { ascending: false }).limit(60),
-      db.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
+      allPages((a, b) => db.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
       db.from("websites").select("id, domain, customer_id").eq("organisation_id", org.id).neq("status", "archived").order("domain").limit(5000),
       db.from("website_connectors").select("website_id").eq("organisation_id", org.id),
     ]);

@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allPages } from "@/lib/supabase/all-pages";
 
 type Row = { name?: unknown; email?: unknown; phone?: unknown; created?: unknown };
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -21,7 +22,7 @@ function since(raw: string): string | null {
 
 /** Adds RepairShopr contacts Nerd Herd doesn't already have (matched on email, then name). Never changes existing customers. */
 export async function importRepairShoprContacts(db: SupabaseClient, orgId: string, rows: Row[]) {
-  const { data: have } = await db.from("customers").select("name, company, email").eq("organisation_id", orgId).limit(20000);
+  const { data: have } = await allPages((a, b) => db.from("customers").select("name, company, email").eq("organisation_id", orgId).order("id").range(a, b));
   const emails = new Set<string>(), names = new Set<string>();
   for (const c of have ?? []) {
     if (c.email) emails.add(String(c.email).toLowerCase());

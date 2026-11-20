@@ -1,6 +1,7 @@
 import { requireOrg } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { WebsiteForm } from "@/components/nerdherd/website-form";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function NewWebsitePage({ searchParams }: { searchParams: P
   const { supabase, org } = await requireOrg();
   const sp = await searchParams;
   const [{ data: clients }, { data: hosting }] = await Promise.all([
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(5000),
   ]);
   return (

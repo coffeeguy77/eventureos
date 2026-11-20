@@ -5,6 +5,7 @@ import { AutoCreate, EventPicker, ExistingQuotes, type PickerEvent } from "@/com
 import { todayISO } from "@/lib/format";
 import { QuoteForCustomer } from "@/components/quotes/quote-for-customer";
 import type { EventStatus, QuoteStatus } from "@/lib/types";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const metadata = { title: "New quote" };
 
@@ -33,7 +34,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Pro
 
   // Businesses that don't run events quote a customer directly
   if ((org.settings as { uses_events?: unknown } | null)?.uses_events === false) {
-    const { data: cs } = await supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000);
+    const { data: cs } = await allPages((a, b) => supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").order("id").range(a, b));
     return (
       <div className="mx-auto max-w-3xl">
         <PageHeader eyebrow="Quotes" title="New quote" subtitle="Choose the customer and say what it's for — then add the items." />

@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { addDaysISO, fmtDate, todayISO } from "@/lib/format";
 import { NewInvoiceForm, type QuoteOption } from "./form";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const metadata = { title: "New invoice" };
 
@@ -25,7 +26,7 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
 
   const usesEvents = (org.settings as { uses_events?: unknown } | null)?.uses_events !== false;
   const [custRes, evRes, quoteRes, invRes, xeroRes, svcRes] = await Promise.all([
-    supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").limit(10000),
+    allPages((a, b) => supabase.from("customers").select("id, name, company, email").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("events").select("id, number, name, event_date, customer_id, status").eq("organisation_id", org.id)
       .neq("status", "cancelled").order("event_date", { ascending: false, nullsFirst: false }).limit(1000),
     supabase.from("quotes").select("id, number, title, customer_id, event_id, version:quote_versions!quotes_current_version_id_organisation_id_fkey(total)")

@@ -1,6 +1,7 @@
 import { requireOrg, getMembers } from "@/lib/context";
 import { Card, CardHeader } from "@/components/ui/card";
 import { TicketForm } from "@/components/nerdherd/ticket-form";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function NewTicketPage({ searchParams }: { searchParams: Pr
   const { supabase, org } = await requireOrg();
   const sp = await searchParams;
   const [{ data: clients }, { data: sites }, members] = await Promise.all([
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("websites").select("id, domain, customer_id").eq("organisation_id", org.id).neq("status", "archived").order("domain").limit(5000),
     getMembers(org.id),
   ]);

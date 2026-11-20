@@ -16,6 +16,7 @@ import { LinkHosting } from "@/components/nerdherd/link-hosting";
 import { detectHost, HOST_LABEL } from "@/lib/nerdherd/host-detect";
 import { AiJobList, type AiJobRow } from "@/components/nerdherd/ai-maintenance";
 import { Bot } from "lucide-react";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 // Updates run through server actions on this page and can take a few minutes on a big site.
@@ -40,7 +41,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
   const [{ data: plans }, { data: tickets }, { data: clients }, { data: hosting }, { data: connector }, { data: runs }] = await Promise.all([
     supabase.from("recurring_invoices").select("id, name, category, creates_ticket, status, total, every, unit, next_date").eq("organisation_id", org.id).eq("website_id", id).order("next_date"),
     supabase.from("support_tickets").select("id, number, subject, status, kind, created_at, resolved_at").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(100),
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(5000),
     supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
     supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).neq("action", "check").order("created_at", { ascending: false }).limit(25).then((r) => r, () => ({ data: [] })),

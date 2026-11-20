@@ -1,13 +1,14 @@
 import { requireOrg } from "@/lib/context";
 import { todayISO } from "@/lib/format";
 import { RecurringEditor } from "@/components/hosting/recurring-editor";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewRecurringPage() {
   const { supabase, org } = await requireOrg();
   const [{ data: clients }, { data: hosting }] = await Promise.all([
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(3000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(3000).then((x) => x, () => ({ data: [] })),
   ]);
   const today = todayISO(org.timezone);

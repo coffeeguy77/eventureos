@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export type Duplicate = { id: string; name: string; reason: string };
 export type NewClientState = { error?: string; duplicates?: Duplicate[] } | undefined;
@@ -36,7 +37,7 @@ async function findDuplicates(
   if (phones.length) {
     // Phone numbers are stored in many formats, so compare digits only.
     const [cu, co] = await Promise.all([
-      supabase.from("customers").select("id, name, phone").eq("organisation_id", orgId).not("phone", "is", null).limit(5000),
+      allPages((a, b) => supabase.from("customers").select("id, name, phone").eq("organisation_id", orgId).not("phone", "is", null).order("id").range(a, b)),
       supabase.from("contacts").select("phone, customer:customers(id, name)").eq("organisation_id", orgId).not("phone", "is", null).limit(5000),
     ]);
     if (cu.error || co.error) throw new Error(`Couldn't check for duplicates: ${(cu.error ?? co.error)!.message}`);

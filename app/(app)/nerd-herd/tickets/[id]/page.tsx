@@ -12,6 +12,7 @@ import { TicketControls, Composer, Checklist, BillTime, DeleteTicket } from "@/c
 import { TicketTabs, type TabRow } from "@/components/nerdherd/ticket-tabs";
 import { TicketQuotes, type QuoteView, type ViewRow } from "@/components/nerdherd/ticket-quotes";
 import { cn } from "@/lib/cn";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
       return r.error ? supabase.from("support_ticket_updates").select(cols).eq("ticket_id", id).order("created_at") : r;
     })(),
     getMembers(org.id),
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(5000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("websites").select("id, domain, customer_id").eq("organisation_id", org.id).neq("status", "archived").order("domain").limit(5000),
     tk.customer_id ? supabase.from("support_tickets").select("id, number, subject, status, created_at").eq("organisation_id", org.id).eq("customer_id", tk.customer_id).neq("id", id).order("created_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] }),
   ]);

@@ -6,6 +6,7 @@ import type { Line } from "@/lib/recurring/core";
 import { Card, CardHeader } from "@/components/ui/card";
 import { RecurringEditor } from "@/components/hosting/recurring-editor";
 import type { RecurringInput } from "../../recurring-actions";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function RecurringItemPage({ params }: { params: Promise<{ 
   const { data: r } = await supabase.from("recurring_invoices").select("*, customers(id, name)").eq("id", id).eq("organisation_id", org.id).maybeSingle();
   if (!r) notFound();
   const [{ data: clients }, { data: hosting }, { data: invoices }] = await Promise.all([
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(3000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("hosting_accounts").select("id, domain").eq("organisation_id", org.id).order("domain").limit(3000).then((x) => x, () => ({ data: [] })),
     supabase.from("invoices").select("id, number, issue_date, total, status").eq("recurring_id", r.id).order("issue_date", { ascending: false }).limit(24),
   ]);

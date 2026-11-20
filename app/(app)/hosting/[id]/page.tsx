@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SiteDoctor } from "@/components/hosting/site-doctor";
 import { AccountDetails, DeleteWebsite, NoticeComposer, SuspendControls } from "@/components/hosting/account-tools";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function HostingAccountPage({ params }: { params: Promise<{
   const [{ data: inv }, { data: events }, { data: clients }] = await Promise.all([
     a.invoice_id ? supabase.from("invoices").select("id, number, reference, status, total, amount_paid, due_date, issue_date").eq("id", a.invoice_id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from("hosting_events").select("id, action, ok, dry_run, detail, created_at").eq("account_id", a.id).order("created_at", { ascending: false }).limit(40),
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(3000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
   ]);
   const s = readHosting(org.settings);
   const server = a.hosting_servers as { name: string; kind: string; host: string | null } | null;

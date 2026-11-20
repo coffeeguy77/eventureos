@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadItems } from "./server";
 import type { PickItem } from "@/components/rentals/booking-editor";
+import { allPages } from "@/lib/supabase/all-pages";
 
 /** What the booking screen needs: clients, open events and the items you hire out. */
 export async function editorData(db: SupabaseClient, orgId: string) {
   const [cust, evs, items] = await Promise.all([
-    db.from("customers").select("id, name").eq("organisation_id", orgId).order("name").limit(5000),
+    allPages((a, b) => db.from("customers").select("id, name").eq("organisation_id", orgId).order("name").order("id").range(a, b)),
     db.from("events").select("id, number, name, event_date, customer_id").eq("organisation_id", orgId).not("status", "in", "(cancelled,completed)").order("event_date", { ascending: true, nullsFirst: false }).limit(500),
     loadItems(db, orgId, { activeOnly: true }),
   ]);

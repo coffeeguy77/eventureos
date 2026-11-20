@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { todayISO } from "@/lib/format";
 import { QuickInvoice, type Invitee } from "@/components/invoices/quick-invoice";
 import { nameFromEmail, plainText, readNotes } from "@/lib/invoices/from-calendar";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Invoice a job" };
@@ -64,7 +65,7 @@ export default async function QuickInvoicePage({ searchParams }: { searchParams:
   } : null;
 
   const [custRes, svcRes, invRes] = await Promise.all([
-    supabase.from("customers").select("id, name, company, email, payment_terms_days").eq("organisation_id", org.id).order("name").limit(10000),
+    allPages((a, b) => supabase.from("customers").select("id, name, company, email, payment_terms_days").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("services").select("id, name, description, unit_price, tax_rate, unit, code, xero_account_code, category").eq("organisation_id", org.id).eq("active", true).order("category").order("position"),
     ev ? supabase.from("invoices").select("id, number, total").eq("organisation_id", org.id).eq("event_id", ev.id).neq("status", "void") : Promise.resolve({ data: [] }),
   ]);

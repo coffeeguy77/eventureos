@@ -12,6 +12,7 @@ import { getFollowUps } from "@/lib/ai/followups";
 import type { EmailClassification } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { CandidateActions, SuggestionForm } from "../controls";
+import { allPages } from "@/lib/supabase/all-pages";
 
 export const metadata = { title: "Import & match review" };
 
@@ -28,7 +29,7 @@ export default async function ReviewPage() {
   const [candRes, custRes, sugRes, reviewEnqRes, followUps] = await Promise.all([
     supabase.from("import_candidates").select("id, source, kind, external_id, payload, suggested_customer_id, score, reasons, created_at")
       .eq("organisation_id", org.id).eq("status", "pending").order("score", { ascending: false, nullsFirst: false }).limit(200),
-    supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").limit(1000),
+    allPages((a, b) => supabase.from("customers").select("id, name").eq("organisation_id", org.id).order("name").order("id").range(a, b)),
     supabase.from("email_threads").select("id, subject, classification, classification_confidence, classified_by, classification_reasons, extracted, last_inbound_at, participants, customer:customers(id, name)")
       .eq("organisation_id", org.id).in("classification", ["event_enquiry", "needs_review"]).is("enquiry_id", null).is("event_id", null)
       .neq("state", "closed").is("suggestion_dismissed_at", null).order("last_inbound_at", { ascending: false, nullsFirst: false }).limit(30),
