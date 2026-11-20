@@ -46,6 +46,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
     event: { id: string; number: number; name: string; status: EventStatus } | null;
   };
 
+  const usesEvents = (org.settings as { uses_events?: unknown } | null)?.uses_events !== false;
   const threadFilter = [`enquiry_id.eq.${e.id}`, e.event_id ? `event_id.eq.${e.event_id}` : null].filter(Boolean).join(",");
   const dayStart = e.event_date ? zonedMidnightUTC(e.event_date, tz) : null;
   const dayEnd = e.event_date ? zonedMidnightUTC(addDaysISO(e.event_date, 1), tz) : null;
@@ -120,7 +121,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
             <span className="min-w-0 break-all">{displayName}</span><span className="text-ink-faint">·</span>
             <span>{ENQUIRY_SOURCE[e.source]}</span><span className="text-ink-faint">·</span>
             <span title={fmtDateTime(e.received_at, tz)}>Received {relative(e.received_at)}</span>
-            {e.classification && (
+            {e.classification && usesEvents && (
               <><span className="text-ink-faint">·</span><Badge tone={CLASSIFICATION[e.classification].tone}>
                 {CLASSIFICATION[e.classification].label}{e.classification_confidence != null ? ` ${Math.round(e.classification_confidence * 100)}%` : ""}
               </Badge></>
@@ -169,7 +170,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           )}
           <Card>
             <CardHeader title="Email conversation" subtitle={threads.length ? `${threads.length} thread${threads.length > 1 ? "s" : ""}` : undefined} />
-            <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={gmailConnected} originalLabel="Original enquiry" />
+            <Conversation threads={threads} messages={(msgs ?? []) as EmailMessage[]} tz={tz} orgName={org.name} gmailConnected={gmailConnected} originalLabel="Original enquiry" usesEvents={usesEvents} />
           </Card>
           <Card>
             <CardHeader title="Notes" />
@@ -209,7 +210,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
               {e.customer && (
                 <p className="mt-3 text-[0.75rem] text-ink-faint">Customer since {fmtDate(e.customer.customer_since)}</p>
               )}
-              {history.length > 0 && (
+              {usesEvents && history.length > 0 && (
                 <div className="mt-4 border-t border-line pt-3">
                   <p className="mb-1.5 text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">Previous events</p>
                   <ul className="space-y-1">
@@ -225,11 +226,12 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           </Card>
 
           <Card>
-            <CardHeader title="Event details" />
+            <CardHeader title={usesEvents ? "Event details" : "Details"} />
             <DetailsEditor
               id={e.id}
+              events={usesEvents}
               values={{ title: e.title, event_type: e.event_type, event_date: e.event_date, guest_count: e.guest_count, budget: e.budget, venue: e.venue, next_action: e.next_action, next_action_due: e.next_action_due, contact_phone: e.contact_phone }}
-              view={
+              view={usesEvents ? (
                 <dl className="grid grid-cols-2 gap-4 px-5 pb-5">
                   <Field label="Event type">{e.event_type ?? "—"}</Field>
                   <Field label="Event date">{e.event_date ? <>{fmtDate(e.event_date)} <span className="text-ink-faint">· {relativeDay(e.event_date, today)}</span></> : "—"}</Field>
@@ -239,11 +241,18 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                   <Field label="Source">{ENQUIRY_SOURCE[e.source]}</Field>
                   <Field label="Last contact">{e.last_contact_at ? relative(e.last_contact_at) : "Not yet"}</Field>
                 </dl>
-              }
+              ) : (
+                <dl className="grid grid-cols-2 gap-4 px-5 pb-5">
+                  <Field label="Received">{fmtDateTime(e.received_at, tz)}</Field>
+                  <Field label="Source">{ENQUIRY_SOURCE[e.source]}</Field>
+                  <Field label="Last contact">{e.last_contact_at ? relative(e.last_contact_at) : "Not yet"}</Field>
+                  <Field label="Next action">{e.next_action ?? "—"}</Field>
+                </dl>
+              )}
             />
           </Card>
 
-          <Card>
+          {usesEvents && <><Card>
             <CardHeader title="Calendar availability" subtitle={e.event_date ? fmtDate(e.event_date, "long") : "Add an event date to check availability"} />
             {e.event_date && (
               <div className="px-5 pb-5">
@@ -293,7 +302,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
                 </p>
               )}
             </div>
-          </Card>
+          </Card></>}
 
         </div>
 

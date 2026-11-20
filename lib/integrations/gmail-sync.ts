@@ -588,7 +588,9 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
       enquiryId = dup[0].id;
       c.reasons.push("Attached to this person's open enquiry instead of creating a duplicate");
     } else {
-      const x = c.extracted;
+      // businesses that don't run events: no event type/date/guests/budget/venue, and the email's subject as the title
+      const events = ctx.org.settings?.uses_events !== false;
+      const x = events ? c.extracted : { ...c.extracted, event_type: null, event_date: null, guest_count: null, budget: null, venue: null };
       const who = x.name ?? contactEmail ?? pm.from.email;
       const formTitle = pm.subject?.match(/^(.{2,80}?)\s+message from\s+(.{2,80})$/i);
       const title = preliminary.website_form && formTitle

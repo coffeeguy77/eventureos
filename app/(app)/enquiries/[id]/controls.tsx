@@ -62,7 +62,8 @@ export interface DetailsValues {
   budget: number | null; venue: string | null; next_action: string | null; next_action_due: string | null; contact_phone: string | null;
 }
 
-export function DetailsEditor({ id, values, view }: { id: string; values: DetailsValues; view: React.ReactNode }) {
+/** events=false (businesses that don't run events): only title, phone and next action are shown; the event fields ride along unchanged. */
+export function DetailsEditor({ id, values, view, events = true }: { id: string; values: DetailsValues; view: React.ReactNode; events?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [state, action, pending] = useActionState(
     async (prev: { error?: string } | undefined, fd: FormData) => {
@@ -85,6 +86,7 @@ export function DetailsEditor({ id, values, view }: { id: string; values: Detail
   return (
     <form action={action} className="grid gap-3 px-5 pb-5 sm:grid-cols-2">
       <div className="sm:col-span-2"><Label htmlFor="title">Title</Label><Input id="title" name="title" defaultValue={values.title} required /></div>
+      {events ? <>
       <div>
         <Label htmlFor="event_type">Event type</Label>
         <Select id="event_type" name="event_type" defaultValue={values.event_type ?? ""}>
@@ -96,6 +98,13 @@ export function DetailsEditor({ id, values, view }: { id: string; values: Detail
       <div><Label htmlFor="guest_count">Guests</Label><Input id="guest_count" name="guest_count" inputMode="numeric" defaultValue={values.guest_count ?? ""} /></div>
       <div><Label htmlFor="budget">Budget</Label><Input id="budget" name="budget" inputMode="decimal" defaultValue={values.budget ?? ""} /></div>
       <div className="sm:col-span-2"><Label htmlFor="venue">Venue</Label><Input id="venue" name="venue" defaultValue={values.venue ?? ""} /></div>
+      </> : <>
+        <input type="hidden" name="event_type" value={values.event_type ?? ""} />
+        <input type="hidden" name="event_date" value={values.event_date ?? ""} />
+        <input type="hidden" name="guest_count" value={values.guest_count ?? ""} />
+        <input type="hidden" name="budget" value={values.budget ?? ""} />
+        <input type="hidden" name="venue" value={values.venue ?? ""} />
+      </>}
       <div><Label htmlFor="contact_phone">Phone</Label><Input id="contact_phone" name="contact_phone" type="tel" defaultValue={values.contact_phone ?? ""} /></div>
       <div className="hidden sm:block" />
       <div><Label htmlFor="next_action">Next action</Label><Input id="next_action" name="next_action" defaultValue={values.next_action ?? ""} /></div>

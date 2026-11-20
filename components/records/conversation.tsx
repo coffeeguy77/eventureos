@@ -20,7 +20,8 @@ import { QuoteDocument } from "@/components/quotes/quote-document";
 import type { QuoteSnapshotData } from "@/components/quotes/types";
 import { useRouter } from "next/navigation";
 
-export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email" }: {
+export function Conversation({ threads, messages, tz, orgName, gmailConnected, originalLabel = "First email", usesEvents = true }: {
+  usesEvents?: boolean; // false: "Event enquiry" reads "Enquiry"
   threads: EmailThread[]; messages: EmailMessage[]; tz: string; orgName: string; gmailConnected: boolean;
   /** Badge on the earliest email (e.g. "Original enquiry"). */
   originalLabel?: string;
@@ -59,7 +60,8 @@ export function Conversation({ threads, messages, tz, orgName, gmailConnected, o
       {ordered.map((t) => {
         // Newest at the top — scroll down to go back in time
         const msgs = messages.filter((m) => m.thread_id === t.id).sort((a, b) => b.sent_at.localeCompare(a.sent_at));
-        const c = CLASSIFICATION[t.classification];
+        const c0 = CLASSIFICATION[t.classification];
+        const c = !usesEvents && t.classification === "event_enquiry" ? { ...c0, label: "Enquiry" } : !usesEvents && t.classification === "existing_event" ? { ...c0, label: "Existing client" } : c0;
         return (
           <section key={t.id} className="rounded-xl border border-line">
             <header className="flex flex-wrap items-center gap-2 border-b border-line bg-zinc-50/60 px-4 py-2.5">

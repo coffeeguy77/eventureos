@@ -33,6 +33,7 @@ export default async function EnquiriesPage({ searchParams }: {
 }) {
   const sp = await searchParams;
   const { supabase, org, role } = await requireOrg();
+  const usesEvents = (org.settings as { uses_events?: unknown } | null)?.uses_events !== false; // false: no event columns, dates or budgets
   const folder = sp.folder === "spam" || sp.folder === "blocked" || sp.folder === "archived" ? sp.folder : "inbox";
   const [{ count: spamCount }, { count: blockedCount }, { count: archivedCount }, { data: gmail }] = await Promise.all([
     supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("organisation_id", org.id).eq("status", "spam"),
@@ -224,7 +225,7 @@ export default async function EnquiriesPage({ searchParams }: {
       {!archivedView && (
         <EnquiryTabBar active={statusKey} pinned={prefs.enqTabs} tabs={tabs.map((t) => ({ key: t.key, label: t.label, count: counts[t.key] ?? 0, href: qs(t.key) }))} />
       )}
-      {!archivedView && (statusKey === "open" || pastOnly) && pastCount > 0 && <TidyBanner count={pastCount} showing={pastOnly} />}
+      {usesEvents && !archivedView && (statusKey === "open" || pastOnly) && pastCount > 0 && <TidyBanner count={pastCount} showing={pastOnly} />}
       {allTags.length > 0 && (
         <div className="no-scrollbar mb-3 flex items-center gap-1.5 overflow-x-auto" aria-label="Tags">
           <span className="flex shrink-0 items-center gap-1 pr-1 text-[0.75rem] font-medium text-ink-faint"><TagIcon className="h-3.5 w-3.5" />Tags</span>
@@ -273,14 +274,14 @@ export default async function EnquiriesPage({ searchParams }: {
                       {(e.tags ?? []).length > 0 && <div className="mt-0.5 flex flex-wrap gap-1">{(e.tags ?? []).map((t) => <span key={t} className="rounded-full bg-brand-50 px-1.5 text-[0.6875rem] font-medium text-brand-800">{t}</span>)}</div>}
                       {e.star_note && <div className="truncate text-[0.75rem] text-amber-800">★ {e.star_note}</div>}
                       <div className="mt-0.5 truncate text-[0.75rem] text-ink-faint">
-                        {e.event_date ? fmtDate(e.event_date) : "No date"} · {relative(e.received_at)}
+                        {usesEvents ? <>{e.event_date ? fmtDate(e.event_date) : "No date"} · </> : null}{relative(e.received_at)}
                         {na.due && na.due < now ? <span className="font-medium text-rose-700"> · Overdue</span> : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <Badge tone={s.tone} dot>{s.label}</Badge>
                       {drafted.has(e.id) && <Badge tone="amber">Draft ready</Badge>}
-                      {e.budget ? <span className="tabular text-[0.7812rem] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
+                      {usesEvents && e.budget ? <span className="tabular text-[0.7812rem] text-ink">{money(e.budget, org.currency, { cents: false })}</span> : null}
                     </div>
                   </Link>
                 </li>
@@ -288,12 +289,12 @@ export default async function EnquiriesPage({ searchParams }: {
             })}
           </ul>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1180px] text-left text-[0.8125rem]">
+            <table className={cn("w-full text-left text-[0.8125rem]", usesEvents ? "min-w-[1180px]" : "min-w-[960px]")}>
               <thead>
                 <tr className="border-b border-line text-[0.7188rem] font-medium uppercase tracking-wide text-ink-faint">
                   <th className="w-10 px-4 py-2.5" aria-label="Select" />
                   <th className="w-8 py-2.5" aria-label="Star" />
-                  {["Customer", "Event", "Type", "Event date", "Received", "Source", "Budget", "Status", "Assigned", "Last contact", "Next action"].map((h) => (
+                  {(usesEvents ? ["Customer", "Event", "Type", "Event date", "Received", "Source", "Budget", "Status", "Assigned", "Last contact", "Next action"] : ["Customer", "Subject", "Received", "Source", "Status", "Assigned", "Last contact", "Next action"]).map((h) => (
                     <th key={h} className={cn("whitespace-nowrap px-4 py-2.5 font-medium", h === "Budget" && "text-right")}>{h}</th>
                   ))}
                 </tr>
@@ -319,15 +320,15 @@ export default async function EnquiriesPage({ searchParams }: {
                       </td>
                       <td className="max-w-[240px] px-4 py-3">
                         <span className="block truncate text-ink">{e.title}</span>
-                        <span className="text-[0.75rem] text-ink-faint">ENQ-{e.number}{e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
+                        <span className="text-[0.75rem] text-ink-faint">ENQ-{e.number}{usesEvents && e.guest_count ? ` · ${e.guest_count} guests` : ""}</span>
                         {(e.tags ?? []).length > 0 && <span className="mt-0.5 flex flex-wrap gap-1">{(e.tags ?? []).map((t) => <span key={t} className="rounded-full bg-brand-50 px-1.5 text-[0.6875rem] font-medium text-brand-800">{t}</span>)}</span>}
                         {e.star_note && <span className="block truncate text-[0.75rem] text-amber-800" title={e.star_note}>★ {e.star_note}</span>}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.event_type ?? "—"}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{fmtDate(e.event_date)}</td>
+                      {usesEvents && <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{e.event_type ?? "—"}</td>}
+                      {usesEvents && <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{fmtDate(e.event_date)}</td>}
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted" title={e.received_at}>{relative(e.received_at)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-muted">{ENQUIRY_SOURCE[e.source as EnquirySource]}</td>
-                      <td className="tabular whitespace-nowrap px-4 py-3 text-right text-ink">{e.budget ? money(e.budget, org.currency, { cents: false }) : "—"}</td>
+                      {usesEvents && <td className="tabular whitespace-nowrap px-4 py-3 text-right text-ink">{e.budget ? money(e.budget, org.currency, { cents: false }) : "—"}</td>}
                       <td className="px-4 py-3"><span className="flex flex-col items-start gap-1"><Badge tone={s.tone} dot>{s.label}</Badge>{drafted.has(e.id) && <Badge tone="amber">Draft ready</Badge>}</span></td>
                       <td className="px-4 py-3">
                         {e.assigned_to ? (
