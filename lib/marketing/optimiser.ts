@@ -1,8 +1,7 @@
 import "server-only";
 import { addDaysISO, todayISO } from "@/lib/format";
 import { errMessage, type SyncContext } from "@/lib/integrations/runtime";
-import { ANTHROPIC_URL, anthropicHeaders, parseJSONObject } from "@/lib/ai/claude";
-import { orgAiKey } from "@/lib/ai/key";
+import { askStructured, marketingModel } from "./ai";
 import { adsErrorText, adsMutate, adsReady, adsSearch } from "./google";
 import { applyAutomatically, decide, type ActionKind, type Decided, type Limits, type Proposal, type Snapshot } from "./guard";
 import type { MkAccount } from "./sync";
@@ -15,7 +14,7 @@ import type { MkAccount } from "./sync";
  *  4. auto mode (with a monthly cap): apply them in Google Ads; otherwise list them for a person to approve
  * Every change is written to mk_changes with what it was before, so it can be undone.
  */
-export const marketingModel = () => process.env.MARKETING_AI_MODEL?.trim() || "claude-sonnet-5";
+export { marketingModel };
 const micros = (v: unknown) => Math.round((Number(v ?? 0) / 1e6) * 100) / 100;
 const toMicros = (v: number) => String(Math.round(v * 100) * 10000); // whole cents, as Google requires
 
@@ -79,11 +78,9 @@ You may ONLY propose these changes (anything else is ignored):
 - set_keyword_bid: target = keyword resource; value = new max CPC. Only keywords with a cpc (manual bidding). At most ±25%.
 - set_budget: target = campaign budget resource; value = new DAILY budget. At most ±20%. Move money towards campaigns with the best cost per conversion; reduce budgets on campaigns that spend without converting. Total daily budgets × 30.4 must stay within the monthly cap.
 Be conservative: with little data (under ~30 clicks or no conversions anywhere) prefer negatives and pausing obvious waste over budget changes. Don't change the same thing back and forth: see recent changes. It's fine to propose nothing.
-Reply with ONLY a JSON object: {"summary": "2-4 plain sentences for the agency on how the account is going and what you did", "actions": [{"kind": "...", "target": "...", "value": 0, "text": "", "match": "", "reason": "one plain sentence a client could read"}]}`;
+Submit a summary (2-4 plain sentences for the agency on how the account is going and what you're changing) and the actions (each with a one-sentence reason a client could read).`;
 
 async function askAi(orgId: string, a: MkAccount, r: Review, recent: { kind: string; label: string; status: string; created_at: string }[]): Promise<{ summary: string; actions: Proposal[] }> {
-  const key = await orgAiKey(orgId);
-  if (!key) throw new Error("No Claude API key: set ANTHROPIC_API_KEY in Vercel or add one in Settings → Integrations → AI.");
   const stats = (r.snap as Snapshot & { campaignStats?: Record<string, { cost: number; conversions: number; value: number; clicks: number; impressions: number }> }).campaignStats ?? {};
   const input = {
     client: a.name, goals: a.goals ?? "(none given — aim for the most conversions at a sensible cost)", currency: a.ads_currency ?? "AUD",
@@ -94,13 +91,15 @@ async function askAi(orgId: string, a: MkAccount, r: Review, recent: { kind: str
     existing_negatives: r.snap.negatives.slice(0, 300).map((n) => `${n.text} [${n.match}]`),
     recent_changes: recent.slice(0, 40),
   };
-  const res = await fetch(ANTHROPIC_URL, {
-    method: "POST", headers: anthropicHeaders(key), signal: AbortSignal.timeout(120_000),
-    body: JSON.stringify({ model: marketingModel(), max_tokens: 4000, system: SYSTEM, messages: [{ role: "user", content: JSON.stringify(input) }] }),
-  });
-  if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const obj = parseJSONObject(j.content?.find((c) => c.type === "text")?.text ?? "");
+  const obj = await askStructured<{ summary?: string; actions?: unknown[] }>(orgId, SYSTEM, input, {
+    type: "object", required: ["summary", "actions"],
+    properties: {
+      summary: { type: "string" },
+      actions: { type: "array", items: { type: "object", required: ["kind", "target", "reason"], properties: {
+        kind: { type: "string", enum: ["pause_keyword", "add_negative", "set_keyword_bid", "set_budget"] }, target: { type: "string" },
+        value: { type: "number" }, text: { type: "string" }, match: { type: "string", enum: ["EXACT", "PHRASE", "BROAD"] }, reason: { type: "string" } } } },
+    },
+  }, { maxTokens: 4000, timeoutMs: 120_000 });
   const kinds: ActionKind[] = ["pause_keyword", "add_negative", "set_keyword_bid", "set_budget"];
   const actions = (Array.isArray(obj.actions) ? obj.actions : []).flatMap((x): Proposal[] => {
     const o = x as Record<string, unknown>;

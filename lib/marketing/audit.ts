@@ -1,10 +1,9 @@
 import "server-only";
 import { addDaysISO, todayISO } from "@/lib/format";
 import type { SyncContext } from "@/lib/integrations/runtime";
-import { ANTHROPIC_URL, anthropicHeaders, parseJSONObject } from "@/lib/ai/claude";
-import { orgAiKey } from "@/lib/ai/key";
+import { askStructured } from "./ai";
 import { adsReady, adsSearch } from "./google";
-import { marketingModel, readAccount } from "./optimiser";
+import { readAccount } from "./optimiser";
 import type { MkAccount } from "./sync";
 
 /**
@@ -77,14 +76,16 @@ export async function runAudit(ctx: SyncContext, a: MkAccount): Promise<string> 
   };
   const system = `You are a senior Google Ads auditor for a small Australian agency. Audit this account as it stands today — this is the starting point the agency's AI manager will be measured against.
 Be specific and blunt, use the figures given, never invent numbers. Check: account and campaign structure; conversion tracking (are the right actions primary? any at all?); bidding vs data volume; budgets vs the monthly cap; keywords and match types; search terms wasting money; negatives; ads (strength, relevance, headline count); landing pages (relevance to the ads and keywords, anything wrong or off-topic on the page, calls to action); Quality Score; location/brand issues you can infer. Australian English.
-Reply with ONLY JSON: {"score": 0-100, "headline": "one sentence verdict", "summary": "one short paragraph for the business owner", "sections": [{"title": "...", "rating": "good|ok|poor", "findings": ["..."], "actions": ["what we'll do or what they need to do"]}]}. 5–8 sections.`;
-  const key = await orgAiKey(a.organisation_id);
-  if (!key) throw new Error("No Claude API key.");
-  const res = await fetch(ANTHROPIC_URL, { method: "POST", headers: anthropicHeaders(key), signal: AbortSignal.timeout(180_000),
-    body: JSON.stringify({ model: marketingModel(), max_tokens: 5000, system, messages: [{ role: "user", content: JSON.stringify(input) }] }) });
-  if (!res.ok) throw new Error(`Claude ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const o = parseJSONObject(j.content?.find((c) => c.type === "text")?.text ?? "");
+Submit: a score out of 100, a one-sentence verdict, one short paragraph for the business owner, and 5–8 sections (each rated good / ok / poor, with findings and what happens next).`;
+  const o = await askStructured<Record<string, unknown>>(a.organisation_id, system, input, {
+    type: "object", required: ["score", "headline", "summary", "sections"],
+    properties: {
+      score: { type: "integer", minimum: 0, maximum: 100 }, headline: { type: "string" }, summary: { type: "string" },
+      sections: { type: "array", items: { type: "object", required: ["title", "rating", "findings", "actions"], properties: {
+        title: { type: "string" }, rating: { type: "string", enum: ["good", "ok", "poor"] },
+        findings: { type: "array", items: { type: "string" } }, actions: { type: "array", items: { type: "string" } } } } },
+    },
+  }, { maxTokens: 6000 });
   const sections = (Array.isArray(o.sections) ? o.sections : []).map((x) => { const s = x as Record<string, unknown>; return {
     title: String(s.title ?? ""), rating: (["good", "ok", "poor"].includes(String(s.rating)) ? s.rating : "ok") as AuditSection["rating"],
     findings: (Array.isArray(s.findings) ? s.findings : []).map(String).slice(0, 12), actions: (Array.isArray(s.actions) ? s.actions : []).map(String).slice(0, 8),
