@@ -10,7 +10,8 @@ import { advance, categoryFor, dueDate, linesFromXero, linesTotal, scheduleFromX
  * Imported ones start paused — Xero is still raising them until you remove them there.
  */
 
-export async function importRepeatingFromXero(ctx: SyncContext) {
+/** @param opts.ids only these Xero repeating invoices; opts.ignoreScope also ones outside this business's accounts/items (chosen by hand in the Xero check) */
+export async function importRepeatingFromXero(ctx: SyncContext, opts: { ids?: string[]; ignoreScope?: boolean } = {}) {
   const db = ctx.db, orgId = ctx.org.id;
   let r: { RepeatingInvoices?: XeroRepeating[] };
   try { r = await xeroGet<{ RepeatingInvoices?: XeroRepeating[] }>(ctx, "/RepeatingInvoices"); }
@@ -20,7 +21,9 @@ export async function importRepeatingFromXero(ctx: SyncContext) {
   }
   const { inScope, readScope } = await import("@/lib/integrations/xero-scope");
   const scope = readScope(ctx.integration.settings);
-  const list = (r.RepeatingInvoices ?? []).filter((x) => (x.Type ?? "ACCREC") === "ACCREC" && x.Status !== "DELETED" && x.Contact?.ContactID && inScope(x.LineItems, scope));
+  const only = opts.ids ? new Set(opts.ids) : null;
+  const list = (r.RepeatingInvoices ?? []).filter((x) => (x.Type ?? "ACCREC") === "ACCREC" && x.Status !== "DELETED" && x.Contact?.ContactID
+    && (!only || only.has(x.RepeatingInvoiceID)) && (opts.ignoreScope || inScope(x.LineItems, scope)));
   const contactIds = [...new Set(list.map((x) => x.Contact!.ContactID))];
   const cust = new Map<string, string>();
   for (let k = 0; k < contactIds.length; k += 100) {

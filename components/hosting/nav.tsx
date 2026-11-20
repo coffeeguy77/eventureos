@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/hosting/checks", label: "Site checks" },
   { href: "/hosting/billing", label: "Billing check" },
   { href: "/hosting/recurring", label: "Recurring invoices" },
+  { href: "/hosting/xero-check", label: "Xero check" },
   { href: "/hosting/servers", label: "Servers" },
   { href: "/hosting/settings", label: "Settings & notices" },
 ];

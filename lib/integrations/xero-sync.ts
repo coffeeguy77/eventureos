@@ -562,3 +562,13 @@ async function fillFromContacts(ctx: SyncContext, list: XeroContactFull[], linke
 }
 
 
+
+/**
+ * Bring these Xero contacts in as customers of this business (link by email, send close matches to review, or
+ * create) — the same rules the sync uses. Used by the Xero check to add customers that never had an in-scope invoice.
+ */
+export async function addXeroContacts(ctx: SyncContext, contactIds: string[]) {
+  const R = await loadResolver(ctx);
+  await resolveContacts(ctx, R, contactIds);
+  return { created: R.created, linkedByEmail: R.linkedByEmail, review: R.review, linked: contactIds.filter((id) => R.linked.has(id)).length };
+}
