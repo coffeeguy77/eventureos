@@ -4,9 +4,9 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "loans", "sales"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "loans", "sales", "marketing"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
-export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame" | "landmark" | "store";
+export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame" | "landmark" | "store" | "megaphone";
 
 export interface AppInfo {
   key: AppKey;
@@ -146,6 +146,18 @@ export const APPS: AppInfo[] = [
     for: "Web designers, agencies and IT support businesses",
   },
   {
+    key: "marketing", name: "Marketing", paths: ["/marketing"], icon: "megaphone",
+    tagline: "Your clients' Google Ads, run by AI — and the reports that prove it.",
+    description: "Connect your Google Ads manager account, GA4 and Search Console. Every day the AI reviews each client's campaigns and adjusts keywords, bids and budgets within the limits you set, logs why, and lets you undo any change. Monthly reports with plain-English commentary go to clients.",
+    features: [
+      "Google Ads, GA4 and Search Console figures for every client, daily",
+      "AI changes within hard limits: monthly cap, small steps, never creates or switches on anything",
+      "Every change logged with its reason, and one-click undo",
+      "Monthly white-labelled reports with commentary, shared by private link",
+    ],
+    for: "Web and digital marketing agencies",
+  },
+  {
     key: "loans", name: "Loan files", paths: ["/loans"], icon: "landmark",
     tagline: "Loan applications your clients fill in while you watch.",
     description: "Send a client a private link: they fill in their application and send their documents — upload, forward by email, pick from Gmail or pull straight from Xero — and you see every answer as they type it, so you can start work and help when they're stuck.",
@@ -229,7 +241,7 @@ export const appInfo = (k: AppKey) => APPS.find((a) => a.key === k)!;
  */
 export type AppAccess = Set<AppKey> | null;
 /** Apps a business only gets when EventureOS gives them (never by default, even with no app list). */
-export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "loans", "sales"];
+export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "loans", "sales", "marketing"];
 export function readAppAccess(raw: unknown): AppAccess {
   if (!Array.isArray(raw)) return null;
   return new Set(raw.filter(isAppKey));

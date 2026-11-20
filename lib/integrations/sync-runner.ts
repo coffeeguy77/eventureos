@@ -12,7 +12,7 @@ export interface SyncOutcome { provider: LiveProviderId; ok: boolean; message: s
 export async function buildContext(db: SupabaseClient, mode: "user" | "service", orgId: string, provider: LiveProviderId, actorId: string | null): Promise<SyncContext> {
   const integration = await loadIntegration(db, orgId, provider);
   if (!integration || !["connected", "syncing", "error"].includes(integration.status)) {
-    throw new Error(`${provider === "gmail" ? "Gmail" : provider === "xero" ? "Xero" : provider === "square" ? "Square" : "Google Calendar"} isn't connected.`);
+    throw new Error(`${provider === "gmail" ? "Gmail" : provider === "xero" ? "Xero" : provider === "square" ? "Square" : provider === "google_marketing" ? "Google (Marketing)" : "Google Calendar"} isn't connected.`);
   }
   return { db, mode, actorId, integration, org: await loadOrg(db, orgId) };
 }
@@ -25,7 +25,8 @@ export async function runProviderSync(ctx: SyncContext, opts: { full?: boolean }
     return { provider, ok: false, message: `Can't sync until ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} set.` };
   }
   try {
-    const r = provider === "square" ? await (await import("@/lib/sales/square-sync")).syncSquareSales(ctx)
+    const r = provider === "google_marketing" ? await (await import("@/lib/marketing/sync")).syncAllAccounts(ctx)
+      : provider === "square" ? await (await import("@/lib/sales/square-sync")).syncSquareSales(ctx)
       : provider === "gmail2" ? await (await import("@/lib/mail/rules")).runMailboxRules(ctx)
       : provider === "gmail" ? await syncGmail(ctx)
       : provider === "google_calendar" ? await syncGoogleCalendar(ctx)

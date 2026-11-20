@@ -4,7 +4,7 @@
  */
 
 export type ProviderId =
-  | "gmail" | "gmail2" | "google_calendar" | "xero"
+  | "gmail" | "gmail2" | "google_calendar" | "xero" | "google_marketing"
   | "outlook" | "microsoft_calendar" | "stripe" | "square" | "myob" | "quickbooks" | "mailchimp" | "twilio" | "zapier" | "make";
 
 export type ProviderCategory = "Email" | "Calendar" | "Accounting" | "Payments" | "Marketing" | "Messaging" | "Automation";
@@ -68,6 +68,15 @@ export const PROVIDERS: ProviderDef[] = [
     mark: { letter: "X", bg: "bg-cyan-50", fg: "text-cyan-700" },
     docsUrl: "https://developer.xero.com/documentation/api/accounting/overview",
   },
+  {
+    id: "google_marketing", name: "Google Ads, Analytics & Search Console", category: "Marketing", availability: "live", statusSource: "integrations_table",
+    description: "For the Marketing add-on: the Google login that can reach your clients' Google Ads (usually your manager account), GA4 properties and Search Console sites. Figures come in daily and the AI adjusts Ads within the limits you set.",
+    requiredEnv: ["GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET"],
+    optionalEnv: ["GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_LOGIN_CUSTOMER_ID", "ANTHROPIC_API_KEY"],
+    capabilities: ["Google Ads campaigns, keywords and search terms", "AI changes within your limits, with undo", "GA4 sessions and conversions", "Search Console clicks and rankings", "Monthly client reports"],
+    mark: { letter: "A", bg: "bg-emerald-50", fg: "text-emerald-700" },
+    docsUrl: "https://developers.google.com/google-ads/api/docs/start",
+  },
   { id: "outlook", name: "Outlook", category: "Email", availability: "coming_soon", statusSource: "none", requiredEnv: [], capabilities: ["Email sync"], description: "Microsoft 365 / Outlook mail, the same way Gmail works today.", mark: { letter: "O", bg: "bg-blue-50", fg: "text-blue-700" } },
   { id: "microsoft_calendar", name: "Microsoft Calendar", category: "Calendar", availability: "coming_soon", statusSource: "none", requiredEnv: [], capabilities: ["Calendar sync"], description: "Sync events to Outlook / Microsoft 365 calendars.", mark: { letter: "M", bg: "bg-blue-50", fg: "text-blue-700" } },
   { id: "stripe", name: "Stripe", category: "Payments", availability: "coming_soon", statusSource: "none", requiredEnv: [], capabilities: ["Card payments"], description: "Customers pay invoices by card from a payment link or their portal.", mark: { letter: "S", bg: "bg-indigo-50", fg: "text-indigo-700" } },
@@ -88,7 +97,7 @@ export const PROVIDERS: ProviderDef[] = [
 ];
 
 export const LIVE_PROVIDERS = PROVIDERS.filter((p) => p.availability === "live");
-export type LiveProviderId = "gmail" | "gmail2" | "google_calendar" | "xero" | "square";
+export type LiveProviderId = "gmail" | "gmail2" | "google_calendar" | "xero" | "square" | "google_marketing";
 
 export function getProvider(id: string): ProviderDef | undefined {
   return PROVIDERS.find((p) => p.id === id);

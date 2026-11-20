@@ -7,7 +7,7 @@ import type { OrgRole } from "@/lib/types";
  *  - sales: enquiries, clients, events, quotes, calendar — no invoices, payments, reports or settings
  *  - staff (field staff): only My jobs
  */
-const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/roster", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing", "/hosting"];
+const SALES_BLOCKED = ["/marketing", "/invoices", "/payments", "/reports", "/settings", "/wages", "/roster", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing", "/hosting"];
 const STAFF_ALLOWED = ["/my-jobs", "/my-signature", "/my-security"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
@@ -25,6 +25,7 @@ export const SECTIONS: { key: string; label: string; group: string }[] = [
   { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" }, { key: "/roster", label: "Café roster", group: "Operations" }, { key: "/printing", label: "Printing", group: "Operations" }, { key: "/machines", label: "Coffee machines", group: "Operations" }, { key: "/roastery", label: "Roastery", group: "Operations" },
   { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
   { key: "/nerd-herd", label: "Nerd Herd (tickets & websites)", group: "Operations" },
+  { key: "/marketing", label: "Marketing (Google Ads & reports)", group: "Operations" },
   { key: "/loans", label: "Loan files", group: "Sales" },
   { key: "/business-sale", label: "Business Sales", group: "Money" },
   { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/hosting", label: "Hosting", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },

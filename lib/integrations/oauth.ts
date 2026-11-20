@@ -88,6 +88,19 @@ export const OAUTH: Record<LiveProviderId, OAuthProviderConfig> = {
     scopes: ["offline_access", "accounting.contacts", "accounting.invoices", "accounting.payments", "accounting.banktransactions", "accounting.settings.read"],
     pkce: false, tokenAuth: "basic",
   },
+  // Marketing add-on: Google Ads (adwords — read and change campaigns; https://developers.google.com/google-ads/api/docs/oauth/overview),
+  // GA4 reports (analytics.readonly — Data API runReport + Admin API account summaries) and Search Console (webmasters.readonly),
+  // plus the account's email address to show which login is connected. Always asks which Google account.
+  // Uses the Google Ads OAuth app (GOOGLE_ADS_CLIENT_ID/SECRET — the same Google Cloud project as LeadPages' Ads connection),
+  // because a Cloud project can only ever be used with one Ads developer token.
+  google_marketing: {
+    authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+    tokenUrl: "https://oauth2.googleapis.com/token",
+    clientIdEnv: "GOOGLE_ADS_CLIENT_ID", clientSecretEnv: "GOOGLE_ADS_CLIENT_SECRET",
+    scopes: ["https://www.googleapis.com/auth/adwords", "https://www.googleapis.com/auth/analytics.readonly", "https://www.googleapis.com/auth/webmasters.readonly", "https://www.googleapis.com/auth/userinfo.email"],
+    pkce: true, tokenAuth: "body",
+    extraAuthParams: { access_type: "offline", prompt: "select_account consent" },
+  },
   // Square — https://developer.squareup.com/docs/oauth-api/overview (read only: locations, orders, catalog)
   square: {
     authorizeUrl: "https://connect.squareup.com/oauth2/authorize",

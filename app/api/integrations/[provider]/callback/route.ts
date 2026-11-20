@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       p_settings: identity.settings,
     });
     if (error) throw new Error(`Couldn't save the connection: ${error.message}`);
-    return finish(`/settings/integrations/${provider}?connected=1`);
+    return finish(provider === "google_marketing" ? "/marketing?connected=1" : `/settings/integrations/${provider}?connected=1`);
   } catch (e) {
     unstable_rethrow(e); // signed out part-way: getContext() sends them to sign in
     return fail(e instanceof Error ? e.message : `Couldn't connect ${name}.`);
@@ -99,6 +99,11 @@ async function identify(provider: LiveProviderId, accessToken: string): Promise<
       label: primary.id, externalId: primary.id,
       settings: { calendars: cals.map((c) => ({ id: c.id, summary: c.summary, primary: !!c.primary, backgroundColor: c.backgroundColor })), calendars_fetched_at: new Date().toISOString() },
     };
+  }
+  if (provider === "google_marketing") {
+    const { googleEmail } = await import("@/lib/marketing/google");
+    const email = await googleEmail(accessToken);
+    return { label: email, externalId: email.toLowerCase(), settings: {} };
   }
   if (provider === "square") {
     const { squareMerchant } = await import("@/lib/sales/square");
