@@ -7,7 +7,7 @@ import type { OrgRole } from "@/lib/types";
  *  - sales: enquiries, clients, events, quotes, calendar — no invoices, payments, reports or settings
  *  - staff (field staff): only My jobs
  */
-const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/roster", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing", "/hosting"];
+const SALES_BLOCKED = ["/invoices", "/payments", "/reports", "/settings", "/wages", "/roster", "/website", "/learn", "/franchise", "/pricing", "/accounts", "/printing", "/hosting", "/marketing"];
 const STAFF_ALLOWED = ["/my-jobs", "/my-signature"];
 
 const under = (path: string, base: string) => path === base || path.startsWith(base + "/");
@@ -25,6 +25,7 @@ export const SECTIONS: { key: string; label: string; group: string }[] = [
   { key: "/kitchen", label: "Kitchen", group: "Operations" }, { key: "/bookings", label: "Bookings", group: "Operations" }, { key: "/wages", label: "Wages", group: "Operations" }, { key: "/roster", label: "Café roster", group: "Operations" }, { key: "/printing", label: "Printing", group: "Operations" }, { key: "/machines", label: "Coffee machines", group: "Operations" }, { key: "/roastery", label: "Roastery", group: "Operations" },
   { key: "/accounts", label: "Accounts (money owing)", group: "Money" }, { key: "/invoices", label: "Invoices", group: "Money" }, { key: "/payments", label: "Payments", group: "Money" },
   { key: "/nerd-herd", label: "Nerd Herd (tickets & websites)", group: "Operations" },
+  { key: "/marketing", label: "Marketing (client reports)", group: "Operations" },
   { key: "/pricing", label: "Pricing", group: "Money" }, { key: "/hosting", label: "Hosting", group: "Money" }, { key: "/reports", label: "Reports", group: "Money" },
   { key: "/store", label: "Shop", group: "Selling online" }, { key: "/wholesale", label: "Wholesale", group: "Selling online" }, { key: "/offers", label: "Offers", group: "Selling online" },
   { key: "/learn", label: "Learn", group: "Selling online" }, { key: "/website", label: "Website", group: "Selling online" }, { key: "/franchise", label: "Franchise", group: "Selling online" },
@@ -35,7 +36,7 @@ export const ACCESS_PRESETS: { key: string; label: string; sections: string[] }[
   { key: "accounts", label: "Accounts", sections: ["/accounts", "/invoices", "/payments", "/clients"] },
   { key: "sales", label: "Sales", sections: ["/enquiries", "/crm", "/quotes", "/clients", "/calendar", "/tasks"] },
   { key: "operations", label: "Operations", sections: ["/events", "/calendar", "/rentals", "/kitchen", "/wages", "/roster", "/tasks"] },
-  { key: "web_designer", label: "Web designer", sections: ["/nerd-herd", "/quotes", "/invoices", "/clients", "/tasks", "/calendar"] },
+  { key: "web_designer", label: "Web designer", sections: ["/nerd-herd", "/marketing", "/quotes", "/invoices", "/clients", "/tasks", "/calendar"] },
 ];
 const ALWAYS = ["/dashboard", "/my-signature", "/my-bonuses", "/notifications", "/profile"];
 const SECTION_KEYS = new Set(SECTIONS.map((x) => x.key));

@@ -4,7 +4,7 @@
  * Settings → Apps screen and the public /apps page — so they never disagree.
  */
 
-export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd"] as const;
+export const APP_KEYS = ["rentals", "bookings", "learn", "store", "offers", "wholesale", "kitchen", "wages", "website", "franchise", "pricing", "printing", "machines", "roastery", "hosting", "nerdherd", "marketing"] as const;
 export type AppKey = (typeof APP_KEYS)[number];
 export type AppIcon = "tent" | "ticket" | "graduation" | "coffee" | "percent" | "truck" | "chef" | "wallet" | "monitor" | "handshake" | "tag" | "printer" | "server" | "headset" | "wrench" | "flame";
 
@@ -179,6 +179,19 @@ export const APPS: AppInfo[] = [
     features: ["Franchise landing page", "Application form you can edit", "Pipeline from enquiry to approval"],
     for: "Brands licensing their name",
   },
+  {
+    key: "marketing", name: "Marketing", paths: ["/marketing"], icon: "monitor",
+    tagline: "White-label Google Ads & GA4 reporting for your clients.",
+    description: "Pull each client's Google Analytics figures into one place — sales, revenue, conversion rate and which channels (including Google Ads) actually drive the business — with AI-written commentary.",
+    features: [
+      "Live GA4 figures per client, no spreadsheet exports",
+      "Revenue, orders and conversion rate with period-on-period change",
+      "Traffic by channel, with Google Ads pulled out",
+      "One read-only Google key covers every client you report on",
+      "Replaces per-seat reporting tools like ReportGarden",
+    ],
+    for: "Agencies running ads and websites for clients",
+  },
 ];
 
 /** What every business gets. */
@@ -201,7 +214,7 @@ export const appInfo = (k: AppKey) => APPS.find((a) => a.key === k)!;
  */
 export type AppAccess = Set<AppKey> | null;
 /** Apps a business only gets when EventureOS gives them (never by default, even with no app list). */
-export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd"];
+export const ON_REQUEST: AppKey[] = ["hosting", "nerdherd", "marketing"];
 export function readAppAccess(raw: unknown): AppAccess {
   if (!Array.isArray(raw)) return null;
   return new Set(raw.filter(isAppKey));
