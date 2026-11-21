@@ -9,6 +9,7 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { AccountForm } from "@/components/marketing/account-form";
 import { ActButton, AuditButton, BuildReport } from "@/components/marketing/controls";
+import { ConversionGoals } from "@/components/marketing/conversion-goals";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,13 @@ export default async function MarketingClientPage({ params }: { params: Promise<
               </ul>
             )}
           </Card>
+
+          {a.ads_customer_id && (
+            <Card>
+              <CardHeader title="Conversion goals" subtitle="Ticked = counts as a conversion (what the bidding aims for). Unticked are still recorded." />
+              <ConversionGoals id={id} />
+            </Card>
+          )}
 
           <Card>
             <CardHeader title="Account audit" subtitle="Where the account stood when we took over — reports measure improvement against it" />

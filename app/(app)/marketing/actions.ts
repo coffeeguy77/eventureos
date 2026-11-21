@@ -253,3 +253,42 @@ export async function runAuditAction(id: string): Promise<R> {
     catch (e) { return { ok: false, error: adsErrorText(e) }; }
   } catch (e) { return { ok: false, error: err(e) }; }
 }
+
+/** The client's Google Ads conversion actions and which count. */
+export async function conversionsAction(id: string): Promise<R<import("@/lib/marketing/conversions").ConversionRow[]>> {
+  try {
+    const { org, user } = await office();
+    const a = await account(org.id, id);
+    if (!a.ads_customer_id) return { ok: false, error: "No Google Ads account is linked." };
+    const { listConversions } = await import("@/lib/marketing/conversions");
+    const { adsErrorText } = await import("@/lib/marketing/google");
+    try { return { ok: true, data: await listConversions(await gctx(org.id, user.id), a.ads_customer_id) }; }
+    catch (e) { return { ok: false, error: adsErrorText(e) }; }
+  } catch (e) { return { ok: false, error: err(e) }; }
+}
+
+/** Save which conversion actions count (primary). Each change is logged and can be undone. */
+export async function saveConversionGoals(id: string, want: Record<string, boolean>): Promise<R> {
+  try {
+    const { org, user } = await office();
+    const a = await account(org.id, id);
+    if (!a.ads_customer_id) return { ok: false, error: "No Google Ads account is linked." };
+    const clean: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(want)) if (/^customers\/\d+\/conversionActions\/\d+$/.test(k)) clean[k] = !!v;
+    const { setConversionGoals } = await import("@/lib/marketing/conversions");
+    const { adsErrorText } = await import("@/lib/marketing/google");
+    let changed;
+    try { changed = await setConversionGoals(await gctx(org.id, user.id), a.ads_customer_id, clean); }
+    catch (e) { return { ok: false, error: adsErrorText(e) }; }
+    if (changed.length) {
+      await createServiceClient().from("mk_changes").insert(changed.map((c) => ({
+        organisation_id: org.id, account_id: id, kind: "set_conversion_goal", target: c.resource,
+        label: `Conversion “${c.name}” → ${c.after.primary ? "counts (primary)" : "observe only (secondary)"}`,
+        before: c.before, after: c.after, reason: c.after.primary ? "Set as a real result the bidding should aim for." : "Not a real result (or a duplicate) — still recorded, but no longer counted or optimised for.",
+        status: "applied", by_ai: false, decided_by: user.id, applied_at: new Date().toISOString(),
+      })));
+    }
+    revalidatePath(`/marketing/${id}`);
+    return { ok: true, data: changed.length ? `${changed.length} conversion action${changed.length === 1 ? "" : "s"} updated in Google Ads.` : "Nothing to change." };
+  } catch (e) { return { ok: false, error: err(e) }; }
+}

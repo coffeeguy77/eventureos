@@ -125,6 +125,13 @@ export async function undoChange(ctx: SyncContext, customerId: string, c: { kind
   if (c.kind === "set_keyword_bid") return adsMutate(ctx, customerId, "adGroupCriteria", [{ update: { resourceName: c.target, cpcBidMicros: toMicros(Number(c.before.cpc)) }, updateMask: "cpc_bid_micros" }]);
   if (c.kind === "pause_keyword") return adsMutate(ctx, customerId, "adGroupCriteria", [{ update: { resourceName: c.target, status: "ENABLED" }, updateMask: "status" }]);
   if (c.kind === "add_negative" && typeof c.after.resource === "string") return adsMutate(ctx, customerId, "campaignCriteria", [{ remove: c.after.resource }]);
+  if (c.kind === "set_conversion_goal") {
+    const b = c.before as { primary?: boolean; status?: string };
+    const update: Record<string, unknown> = { resourceName: c.target, primaryForGoal: !!b.primary };
+    const mask = ["primary_for_goal"];
+    if (b.status && b.status !== (c.after as { status?: string }).status) { update.status = b.status; mask.push("status"); }
+    return adsMutate(ctx, customerId, "conversionActions", [{ update, updateMask: mask.join(",") }]);
+  }
   // a campaign made here (created paused): undo removes it
   if (c.kind === "create_campaign" && typeof c.after.resource === "string") return adsMutate(ctx, customerId, "campaigns", [{ remove: c.after.resource }]);
   throw new Error("This change can't be undone automatically — change it back in Google Ads.");
