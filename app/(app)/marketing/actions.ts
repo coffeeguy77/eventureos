@@ -277,8 +277,8 @@ export async function saveConversionGoals(id: string, want: Record<string, boole
     for (const [k, v] of Object.entries(want)) if (/^customers\/\d+\/conversionActions\/\d+$/.test(k)) clean[k] = !!v;
     const { setConversionGoals } = await import("@/lib/marketing/conversions");
     const { adsErrorText } = await import("@/lib/marketing/google");
-    let changed;
-    try { changed = await setConversionGoals(await gctx(org.id, user.id), a.ads_customer_id, clean); }
+    let changed, refused;
+    try { ({ changed, refused } = await setConversionGoals(await gctx(org.id, user.id), a.ads_customer_id, clean)); }
     catch (e) { return { ok: false, error: adsErrorText(e) }; }
     if (changed.length) {
       await createServiceClient().from("mk_changes").insert(changed.map((c) => ({
@@ -289,6 +289,8 @@ export async function saveConversionGoals(id: string, want: Record<string, boole
       })));
     }
     revalidatePath(`/marketing/${id}`);
-    return { ok: true, data: changed.length ? `${changed.length} conversion action${changed.length === 1 ? "" : "s"} updated in Google Ads.` : "Nothing to change." };
+    const parts = [changed.length ? `${changed.length} conversion action${changed.length === 1 ? "" : "s"} updated in Google Ads.` : "Nothing changed."];
+    if (refused.length) parts.push(`Google won't let ${refused.length} be changed this way — change ${refused.length === 1 ? "it" : "them"} in Google Ads (Goals → Conversions): ${refused.map((r) => r.name).join("; ")}.`);
+    return { ok: true, data: parts.join(" ") };
   } catch (e) { return { ok: false, error: err(e) }; }
 }

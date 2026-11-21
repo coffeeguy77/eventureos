@@ -29,11 +29,18 @@ export async function listConversions(ctx: SyncContext, customerId: string): Pro
   }).sort((x, y) => Number(y.primary) - Number(x.primary) || y.all30 - x.all30 || x.name.localeCompare(y.name));
 }
 
-/** Set which actions count. Returns what changed (to log, and to undo). */
-export async function setConversionGoals(ctx: SyncContext, customerId: string, want: Record<string, boolean>): Promise<{ resource: string; name: string; before: { primary: boolean; status: string }; after: { primary: boolean; status: string } }[]> {
+type Changed = { resource: string; name: string; before: { primary: boolean; status: string }; after: { primary: boolean; status: string } };
+
+/**
+ * Set which actions count, one action at a time — Google won't let some kinds be changed through the API
+ * (e.g. Universal Analytics goals, system-defined app installs), and one refusal mustn't block the rest.
+ * Returns what changed (to log, and to undo) and what Google refused.
+ */
+export async function setConversionGoals(ctx: SyncContext, customerId: string, want: Record<string, boolean>): Promise<{ changed: Changed[]; refused: { name: string; reason: string }[] }> {
+  const { adsErrorText } = await import("./google");
   const rows = await listConversions(ctx, customerId);
-  const ops: unknown[] = [];
-  const changed: { resource: string; name: string; before: { primary: boolean; status: string }; after: { primary: boolean; status: string } }[] = [];
+  const changed: Changed[] = [];
+  const refused: { name: string; reason: string }[] = [];
   for (const r of rows) {
     if (!(r.resource in want)) continue;
     const primary = !!want[r.resource];
@@ -42,9 +49,10 @@ export async function setConversionGoals(ctx: SyncContext, customerId: string, w
     const update: Record<string, unknown> = { resourceName: r.resource, primaryForGoal: primary };
     const mask = ["primary_for_goal"];
     if (status !== r.status) { update.status = status; mask.push("status"); }
-    ops.push({ update, updateMask: mask.join(",") });
-    changed.push({ resource: r.resource, name: r.name, before: { primary: r.primary, status: r.status }, after: { primary, status } });
+    try {
+      await adsMutate(ctx, customerId, "conversionActions", [{ update, updateMask: mask.join(",") }]);
+      changed.push({ resource: r.resource, name: r.name, before: { primary: r.primary, status: r.status }, after: { primary, status } });
+    } catch (e) { refused.push({ name: r.name, reason: adsErrorText(e) }); }
   }
-  if (ops.length) await adsMutate(ctx, customerId, "conversionActions", ops);
-  return changed;
+  return { changed, refused };
 }
