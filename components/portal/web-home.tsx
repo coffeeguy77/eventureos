@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowRight, BarChart3, CheckCircle2, CircleDot, Clock, FileText, Globe, LifeBuoy, ListChecks, Megaphone, PackageCheck, Receipt,
+  AlertTriangle, ArrowRight, BarChart3, ChevronRight, CheckCircle2, CircleDot, Clock, FileText, Globe, LifeBuoy, ListChecks, Megaphone, PackageCheck, Receipt,
   RefreshCw, ShieldCheck, SlidersHorizontal, Sparkles, Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,8 @@ export interface WebHomeData {
   tickets: { id: string; number: number; subject: string; status: TicketStatus; kind: string; last_activity_at: string; resolved_at: string | null; checklist: unknown; website: string | null }[];
   invoices: { id: string; number: string | null; issue_date: string; due_date: string | null; total: number; balance: number; status: string; pay_token: string }[];
   customerId: string; customers: string[];
+  /** Ongoing projects (Nerd Herd → Projects) shown to this client */
+  projects?: { id: string; name: string; status: string; note: string | null; hours: number }[];
   care: {
     block: { leftMin: number; boughtMin: number; usedMin: number; pendingMin: number; unpaid: { hours: number; number: string | null; payToken: string }[]; recent: UsageRow[] } | null;
     packs: { hours: number; discountPct: number; exGst: number; incGst: number; saved: number }[];
@@ -125,6 +127,21 @@ export function WebHome({ d }: { d: WebHomeData }) {
                 <ArrowRight className="h-4 w-4 text-amber-700" /></Link></li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {!!d.projects?.length && (
+        <section>
+          <h2 className="mb-3 text-[1.25rem] font-semibold text-ink">Your projects</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {d.projects.map((p) => (
+              <Link key={p.id} href={`${base}/projects/${p.id}`} className="group rounded-[24px] bg-surface p-5 ring-1 ring-line transition hover:ring-[color:var(--portal-brand)]">
+                <p className="flex flex-wrap items-center gap-2 text-[1.0625rem] font-semibold text-ink">{p.name}<span className="rounded-full bg-[var(--portal-brand)]/10 px-2 py-0.5 text-[0.75rem] font-semibold text-[color:var(--portal-brand-ink)]">{p.status}</span></p>
+                {p.note && <p className="mt-1 text-[0.875rem] text-ink-muted">{p.note}</p>}
+                <p className="mt-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[color:var(--portal-brand-ink)]">Progress, time, requests & invoices<ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></p>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

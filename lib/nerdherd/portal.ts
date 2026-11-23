@@ -40,7 +40,12 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
   type T = { id: string; number: number; subject: string; status: TicketStatus; kind: string; last_activity_at: string; resolved_at: string | null; checklist: unknown; websites: { domain: string } | null };
   const planRows = (plans.data ?? []) as unknown as P[];
   const site = ((org.data?.settings ?? {}) as { site?: { domain?: string | null } }).site;
+  // Ongoing projects (Nerd Herd → Projects; before update 0118 there are none)
+  const { data: pj } = await db.from("nh_projects").select("id, name, status, status_note").eq("organisation_id", o.orgId).in("customer_id", ids).eq("portal", true).neq("status", "archived").order("updated_at", { ascending: false })
+    .then((r) => r, () => ({ data: null }));
+  const { STATUS_LABEL } = await import("./projects");
   return {
+    projects: ((pj ?? []) as { id: string; name: string; status: keyof typeof STATUS_LABEL; status_note: string | null }[]).map((x) => ({ id: x.id, name: x.name, status: STATUS_LABEL[x.status] ?? x.status, note: x.status_note, hours: 0 })),
     slug: o.slug, business: o.business, name: o.name, currency: o.currency, tz: o.tz,
     quoteHref: site?.domain ? `https://${site.domain}/quote` : `/site/${o.slug}/quote`,
     sites: ((sites.data ?? []) as unknown as S[]).map((s) => ({
