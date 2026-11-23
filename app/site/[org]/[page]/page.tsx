@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { publicOrg } from "@/lib/bookings/server";
@@ -220,7 +221,8 @@ async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>
     const pre = typeof sp.service === "string" ? sp.service.slice(0, 60) : undefined;
     return <AgencyFrame org={org}><JsonLd data={faqLd(QUOTE_FAQS)} /><AgencyQuote org={org} preselect={pre} /></AgencyFrame>;
   }
-  if (page === "care-hub") permanentRedirect(`/site/${org.slug}/website-maintenance`); // merged into website maintenance
+  // merged into website maintenance — on the business's own domain the address is just /website-maintenance
+  if (page === "care-hub") permanentRedirect((await headers()).get("x-site-host") ? "/website-maintenance" : `/site/${org.slug}/website-maintenance`);
   const s = serviceBySlug(page);
   if (!s) notFound();
   const path = `/site/${org.slug}/${s.slug}`;

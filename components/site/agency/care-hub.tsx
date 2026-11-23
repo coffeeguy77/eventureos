@@ -215,7 +215,7 @@ export function CareHubLanding({ org }: { org: PublicOrg }) {
               <div className="amt">{check.price} <span className="gst">{check.unit}</span></div>
             </div>
           )}
-          <p className="rule">Each request uses at least {minH}, then our time to the next 15 minutes — so group small changes into one list and they share that first hour.{fee !== null && adsWorth > fee ? ` The Google Ads add-on saves about ${m(adsWorth - fee)} a month on our hourly rate;` : ""} Your ad budget is paid to Google.</p>
+          <p className="rule">Each request uses at least {minH}, then our time to the next 15 minutes — so group small changes into one list and they share that first hour.{fee !== null && adsWorth > fee ? ` The Google Ads add-on saves about ${m(adsWorth - fee)} a month on our hourly rate.` : ""} Your ad budget is paid to Google.</p>
         </div>
       </section>
 
