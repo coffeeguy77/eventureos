@@ -85,7 +85,22 @@ export function LandingForm({ initial, pageUrl, courses, orgId }: { initial: Lan
         </Group>
 
         {courses.length > 0 && (
-          <Group title="Course cards" hint="Badge, what's covered, and the comparison table">
+          <Group title="Course cards" hint="Layout, badge, what's covered, and the comparison table">
+            {courses.length > 2 && (
+              <fieldset className="mb-4">
+                <legend className="mb-2 text-[0.8125rem] font-semibold text-ink">Layout</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {([["row", "All courses in a row", "Every course the same size, with “Not sure which course?” full width underneath"],
+                    ["feature", "Two side by side, the rest full width", `${courses[0]?.name ?? "First"} and ${courses[1]?.name ?? "second"} beside “Not sure which course?”, then each other course as a wide banner`]] as const).map(([v, t, d]) => (
+                    <label key={v} className={`flex cursor-pointer gap-2.5 rounded-lg p-3 ring-1 ring-inset ${l.courseLayout === v ? "bg-brand-50 ring-brand-500 dark:bg-brand-500/10" : "ring-line"}`}>
+                      <input type="radio" name="course-layout" className="mt-0.5 h-4 w-4" checked={l.courseLayout === v} onChange={() => set("courseLayout", v)} />
+                      <span><span className="block text-[0.875rem] font-medium text-ink">{t}</span><span className="block text-[0.75rem] text-ink-muted">{d}</span></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[0.75rem] text-ink-muted">The order follows your course order in Bookings → Courses.</p>
+              </fieldset>
+            )}
             <div className="space-y-4">
               {courses.map((c) => (
                 <div key={c.id} className="rounded-lg bg-zinc-50 p-3">

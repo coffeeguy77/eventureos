@@ -104,9 +104,11 @@ export interface Landing {
   giftCard: string | null;       // finished artwork for the front of the gift certificate (the back carries the message)
   giftCardBack: string | null;   // artwork without wording, shown faintly behind the message on the back (blank = plain paper)
   copy: Record<string, string>;  // headings and short texts that override the defaults (see LANDING_COPY)
+  /** Course cards: "row" = all in a row, help card beside or under; "feature" = first two beside the help card, the rest full width underneath */
+  courseLayout: "row" | "feature";
 }
 export const DEFAULT_LANDING: Landing = { title: null, description: null, headline: null, heroImage: null, highlights: [], sections: [],
-  eyebrow: null, phone: null, notes: [], stats: [], reviews: [], reviewsSource: null, gallery: [], benefits: [], courses: {}, locationPoints: [], locationImage: null, giftImage: null, giftHero: null, giftCard: null, giftCardBack: null, copy: {} };
+  eyebrow: null, phone: null, notes: [], stats: [], reviews: [], reviewsSource: null, gallery: [], benefits: [], courses: {}, locationPoints: [], locationImage: null, giftImage: null, giftHero: null, giftCard: null, giftCardBack: null, copy: {}, courseLayout: "row" };
 
 /** Headings and short texts on the booking page that a business can reword (key → default). */
 export const LANDING_COPY: Record<string, { label: string; def: string; long?: boolean }> = {
@@ -164,7 +166,7 @@ export function readLanding(raw: unknown): Landing {
     reviewsSource: src && str(src.label, 40) ? { label: str(src.label, 40)!, url: url(src.url) } : null,
     gallery: objs(o.gallery, 12).map((x) => ({ image: url(x.image) ?? "", caption: str(x.caption, 40) })).filter((x) => x.image),
     benefits: objs(o.benefits, 8).map((x) => ({ title: str(x.title, 40) ?? "", body: str(x.body, 240) ?? "" })).filter((x) => x.title && x.body),
-    courses, locationPoints: list(o.locationPoints, 6, 60), locationImage: url(o.locationImage), giftImage: url(o.giftImage), giftHero: url(o.giftHero), giftCard: url(o.giftCard), giftCardBack: url(o.giftCardBack), copy,
+    courses, locationPoints: list(o.locationPoints, 6, 60), locationImage: url(o.locationImage), giftImage: url(o.giftImage), giftHero: url(o.giftHero), giftCard: url(o.giftCard), giftCardBack: url(o.giftCardBack), copy, courseLayout: o.courseLayout === "feature" ? "feature" : "row",
   };
 }
 
