@@ -1,6 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { CATERING_LOCK_HOURS, cateringLocked, changeText, cleanChange, customerCanChange, customerCatalogue, isCatering, isEquipment, isSupplies, servesDescription, type EditLine, type EditService } from "./customer-edit";
+import { CATERING_LOCK_HOURS, cateringLocked, changeText, cleanChange, customerCanChange, customerCatalogue, hireDescription, isCatering, isEquipment, isSupplies, isUpsell, servesDescription, staffChangeLine, staffOptions,
+  type EditLine, type EditService, type StaffEdit } from "./customer-edit";
+import { isDaily, type PackageRules } from "@/lib/pricing/engine";
+import { shiftDays, type StaffDetails } from "./line-helpers";
 
 /** Everything the quote link needs to let the customer change their quote — or why they can't. */
 export interface CustomerEditData {
@@ -12,6 +15,10 @@ export interface CustomerEditData {
   busy: boolean;
   /** Within 48 hours of the event: catering can't be changed from the link (only by the business) */
   cateringLocked: boolean;
+  /** One-day job with barista hours: the customer can change the hours and add a second cart (null = they can't) */
+  staffEdit: StaffEdit | null;
+  /** Add-ons offered, e.g. a fully branded cart (not already on the quote) */
+  upsells: EditService[];
 }
 
 export const CATERING_LOCKED_MESSAGE = `Catering can't be changed online within ${CATERING_LOCK_HOURS} hours of the event — please contact us and we'll see what we can do.`;
@@ -48,21 +55,55 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
         details: i.details, is_optional: i.is_optional, section_id: i.section_id, category: i.service?.category ?? null };
       return { ...l, description: i.description, editable: customerCanChange(l, ps), section: i.section?.title ?? "" };
     });
-  let catalogue = customerCatalogue(((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) })), { supplies: lines.some((l) => isEquipment(l.category)) });
+  const services = ((svc ?? []) as EditService[]).map((s) => ({ ...s, unit_price: Number(s.unit_price), tax_rate: Number(s.tax_rate) }));
+  let catalogue = customerCatalogue(services, { supplies: lines.some((l) => isEquipment(l.category)) });
   // 48-hour lock: from 48 hours before the event the customer can't change, take off or add catering
   let locked = false;
+  let eventDate: string | null = null;
   if (q.event_id) {
     const { data: ev } = await db.from("events").select("event_date, start_time").eq("id", q.event_id).eq("organisation_id", q.organisation_id).maybeSingle();
-    locked = cateringLocked((ev?.event_date as string | null) ?? null, (ev?.start_time as string | null) ?? null, o?.timezone || "Australia/Sydney");
+    eventDate = (ev?.event_date as string | null) ?? null;
+    locked = cateringLocked(eventDate, (ev?.start_time as string | null) ?? null, o?.timezone || "Australia/Sydney");
   }
+  // Barista hours and a second cart: one-day jobs only, and not inside the last 48 hours (the roster is set by then)
+  const staffEdit = locked ? null : findStaffEdit(lines, (pkgs ?? []) as { rules: PackageRules | null }[], services, eventDate);
+  if (staffEdit) for (const l of lines) if (l.id === staffEdit.lineId) l.editable = false; // changed in its own panel
+  const upsells = locked ? [] : services.filter((s) => isUpsell(s) && !lines.some((l) => l.service_id === s.id)) .slice(0, 4);
   const hadCatering = lines.some((l) => l.editable && isCatering(l.category)) || catalogue.some((s) => isCatering(s.category));
   if (locked) {
     for (const l of lines) if (isCatering(l.category)) l.editable = false;
     catalogue = catalogue.filter((s) => !isCatering(s.category));
   }
-  if (!lines.some((l) => l.editable) && !catalogue.length) return { ok: false, reason: locked && hadCatering ? "locked" : "nothing" };
+  if (!lines.some((l) => l.editable) && !catalogue.length && !staffEdit && !upsells.length) return { ok: false, reason: locked && hadCatering ? "locked" : "nothing" };
   return { ok: true, data: { quoteId: q.id, quoteNumber: q.number as number, orgId: q.organisation_id as string, customerId: q.customer_id as string, eventId: q.event_id as string | null,
-    lines, catalogue, perServe, busy: !!q.has_unpublished_changes, cateringLocked: locked && hadCatering } };
+    lines, catalogue, perServe, busy: !!q.has_unpublished_changes, cateringLocked: locked && hadCatering, staffEdit, upsells } };
+}
+
+/**
+ * The quote's one staff line (one day, with times), the package it was priced from (for its minimum hours and
+ * setup), and the cart hire line a second cart goes on.
+ */
+function findStaffEdit(lines: (EditLine & { description: string | null })[], pkgs: { rules: PackageRules | null }[], services: EditService[], eventDate: string | null): StaffEdit | null {
+  const staffLines = lines.filter((l) => !l.is_optional && l.details?.kind === "staff");
+  if (staffLines.length !== 1) return null;
+  const st = staffLines[0];
+  const days = shiftDays(st.details as unknown as StaffDetails);
+  if (days.length !== 1) return null;
+  const day = days[0];
+  if (!day.start || !day.end) return null;
+  if (day.date && eventDate && day.date !== eventDate) return null; // the job's day has moved — the business re-prices it
+  const fits = pkgs.map((p) => p.rules).filter((r): r is PackageRules => !!r?.staff && r.staff.service_id === st.service_id);
+  const rules = fits.find((r) => r.hire && lines.some((l) => !l.is_optional && l.service_id === r.hire!.service_id)) ?? fits[0];
+  if (!rules?.staff) return null;
+  const hireSvc = rules.hire ? services.find((s) => s.id === rules.hire!.service_id) : undefined;
+  const hire = rules.hire && !isDaily(hireSvc?.unit) ? lines.find((l) => !l.is_optional && l.service_id === rules.hire!.service_id && Number(l.quantity) === 1) ?? null : null;
+  const carts = Math.max(1, Math.floor(day.units || 1)), staff = carts * Math.max(1, Math.floor(day.per_unit || 1));
+  return {
+    lineId: st.id, hireLineId: hire?.id ?? null, hirePrice: hire?.unit_price ?? 0, hireTax: hire?.tax_rate ?? 0, staffPrice: st.unit_price, staffTax: st.tax_rate,
+    start: day.start.slice(0, 5), end: day.end.slice(0, 5), carts, staff, setup_minutes: day.setup_minutes ?? 0,
+    date: day.date ?? eventDate, rule: rules.staff, label: rules.staff.label?.trim() || "staff", details: st.details as unknown as StaffDetails,
+    options: staffOptions(carts, staff, !!hire),
+  };
 }
 
 /**
@@ -75,14 +116,27 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
   const d = loaded.data;
   const { data: q } = await db.from("quotes").select("has_unpublished_changes").eq("id", d.quoteId).single();
   if (q?.has_unpublished_changes) throw new Error("We're updating this quote right now — please contact us, or try again shortly.");
-  const change = cleanChange(raw, d.lines, d.catalogue, new Set(d.perServe));
+  const change = cleanChange(raw, d.lines, [...d.catalogue, ...d.upsells], new Set(d.perServe), d.staffEdit);
   const byId = new Map(d.lines.map((l) => [l.id, l]));
+
+  // Barista hours and carts
+  if (change.staff && d.staffEdit) {
+    const e = d.staffEdit;
+    const next = staffChangeLine(e, change.staff);
+    const { error } = await db.from("quote_items").update({ quantity: next.quantity, details: next.details, description: next.description }).eq("id", e.lineId).eq("quote_id", d.quoteId);
+    if (error) throw new Error(`Couldn't save the change: ${error.message}`);
+    if (e.hireLineId && change.staff.carts !== e.carts) {
+      const hire = byId.get(e.hireLineId);
+      const { error: hErr } = await db.from("quote_items").update({ quantity: change.staff.carts, description: hireDescription(hire?.description ?? null, change.staff.carts) }).eq("id", e.hireLineId).eq("quote_id", d.quoteId);
+      if (hErr) throw new Error(`Couldn't save the change: ${hErr.message}`);
+    }
+  }
 
   for (const s of change.set) {
     const l = byId.get(s.id)!;
     const patch: Record<string, unknown> = { quantity: s.quantity };
     if (l.details?.kind === "serves") {
-      const cold = Math.min(s.quantity, Math.max(0, Number((l.details as { cold?: number }).cold ?? 0)));
+      const cold = s.cold !== undefined ? s.cold : Math.min(s.quantity, Math.max(0, Number((l.details as { cold?: number }).cold ?? 0)));
       patch.details = { kind: "serves", hot: s.quantity - cold, cold };
       patch.description = servesDescription(l.description, s.quantity - cold, cold);
     }
@@ -91,6 +145,20 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
   }
   if (change.remove.length) {
     const { error } = await db.from("quote_items").delete().eq("quote_id", d.quoteId).in("id", change.remove);
+    if (error) throw new Error(`Couldn't save the change: ${error.message}`);
+  }
+  // Add-ons (a branded cart) go in with the hire
+  const upsellAdds = change.add.filter((a) => d.upsells.some((u) => u.id === a.service_id));
+  change.add = change.add.filter((a) => !upsellAdds.includes(a));
+  if (upsellAdds.length) {
+    const hireSection = (d.staffEdit?.hireLineId ? byId.get(d.staffEdit.hireLineId)?.section_id : null) ?? byId.get(d.staffEdit?.lineId ?? "")?.section_id ?? d.lines[0]?.section_id;
+    if (!hireSection) throw new Error("Couldn't add that — contact us and we'll add it.");
+    const { data: last } = await db.from("quote_items").select("position").eq("section_id", hireSection).order("position", { ascending: false }).limit(1).maybeSingle();
+    let pos = (last?.position ?? -1) + 1;
+    const { error } = await db.from("quote_items").insert(upsellAdds.map((a) => {
+      const s = d.upsells.find((x) => x.id === a.service_id)!;
+      return { organisation_id: d.orgId, quote_id: d.quoteId, section_id: hireSection, service_id: s.id, name: s.name, description: s.description, quantity: 1, unit: s.unit, unit_price: s.unit_price, tax_rate: s.tax_rate, position: pos++ };
+    }));
     if (error) throw new Error(`Couldn't save the change: ${error.message}`);
   }
   // Supplies go in with the equipment hire
@@ -135,7 +203,7 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
   const { data: vid, error: pErr } = await db.rpc("publish_quote", { p_quote_id: d.quoteId });
   if (pErr) throw new Error(`Couldn't update the quote: ${pErr.message}`);
   const { data: v } = await db.from("quote_versions").select("version_number, total").eq("id", vid as string).single();
-  const what = changeText(change, d.lines, d.catalogue);
+  const what = changeText({ ...change, add: [...upsellAdds, ...change.add] }, d.lines, [...d.catalogue, ...d.upsells], d.staffEdit);
   const total = Number(v?.total ?? 0).toLocaleString("en-AU", { style: "currency", currency: "AUD" });
   const summary = `${who} changed Quote Q-${d.quoteNumber} on their quote link — ${what}. Now version ${v?.version_number} (${total}), waiting for them to accept.`;
   // publish_quote logged "Someone sent …" — say who and what instead
