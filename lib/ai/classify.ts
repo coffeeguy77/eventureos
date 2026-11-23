@@ -408,11 +408,39 @@ export function extractAll(email: EmailInput, ctx: ClassifyContext, form: boolea
   x.guest_count ??= extractGuests(text);
   x.budget ??= extractBudget(body);
   x.venue ??= extractVenue(body);
+  x.company ??= form ? null : signatureCompany(body);
   if (!x.company) {
     const cm = body.match(/\b(?:from|at|with|on behalf of)\s+([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,3}\s+(?:Pty\.? Ltd\.?|Ltd|Limited|Inc|Group|Consulting|Council|Club|Association|Foundation|Agency|Co\.?))\b/);
     if (cm) x.company = cm[1];
   }
   return x;
+}
+
+const ORG_WORD = /\b(school|grammar|college|university|uni|institute|academy|council|department|agency|authority|commission|pty\.?|ltd\.?|limited|inc\.?|group|club|association|foundation|church|hospital|health|centre|center|society|services|consulting|australia|partners|solutions|bank|embassy|high commission|government|parish|trust)\b/i;
+const SIGN_OFF = /^(kind regards|warm regards|best regards|regards|many thanks|thanks|thank you|cheers|best|sincerely)\b/i;
+const DISCLAIMER = /^(disclaimer|confidential|this email|cgg?s? acknowledges|we acknowledge|i acknowledge|please consider|the information in)/i;
+
+/**
+ * The organisation in an email signature: a short title-case line after the sign-off that names an organisation
+ * ("Canberra Girls Grammar School", "[Quantum Australia]"). Job titles and departments ("Human Resources") don't count.
+ */
+export function signatureCompany(body: string): string | null {
+  const lines = body.replace(/\r/g, "").split("\n").map((l) => l.trim());
+  let from = lines.findIndex((l) => SIGN_OFF.test(l));
+  if (from < 0) from = Math.max(0, lines.length - 15);
+  for (const raw of lines.slice(from + 1, from + 16)) {
+    if (DISCLAIMER.test(raw) || raw.length > 70) { if (DISCLAIMER.test(raw)) break; continue; }
+    const bracket = /^\[([^\]]{2,60})\](?:<[^>]*>)?$/.exec(raw);
+    const parts = bracket ? [bracket[1]] : raw.split(/\s+\|\s+/);
+    for (const p of parts) {
+      const t = p.replace(/<[^>]*>/g, "").trim();
+      if (!t || /@|https?:|www\.|\d{3}/.test(t) || /^(cid:|e |w |m |p |a |ph|mob|tel)/i.test(t)) continue;
+      const words = t.split(/\s+/);
+      if (words.length > 7 || !/^[A-Z]/.test(t) || !words.every((w) => /^([A-Z&(]|of$|the$|and$|for$|de$)/.test(w))) continue;
+      if (bracket || ORG_WORD.test(t)) return t.replace(/[.,]+$/, "");
+    }
+  }
+  return null;
 }
 
 export function classifyRules(email: EmailInput, ctx: ClassifyContext): ClassificationResult {

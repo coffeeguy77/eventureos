@@ -91,7 +91,7 @@ Classify ONE email into exactly one of:
 - supplier: from a supplier/vendor (orders, deliveries, their invoices, price lists)
 - spam: unsolicited marketing, scams, phishing
 - needs_review: genuinely unclear
-Also extract event details when present. Resolve relative dates ("this Saturday", "next month on the 5th") against the RECEIVED DATE given.
+Also extract event details when present. "company" is the business, school or organisation they're booking for — usually in the email signature (e.g. "Canberra Girls Grammar School"), never a job title or department like "Human Resources". Resolve relative dates ("this Saturday", "next month on the 5th") against the RECEIVED DATE given.
 If unsure, lower the confidence; never invent values — use null.
 Reply with ONLY a JSON object, no prose, exactly this shape:
 {"classification":"event_enquiry|existing_event|quote_discussion|general_email|supplier|spam|needs_review","confidence":0.0-1.0,"reasons":["short reason", "..."],"extracted":{"event_type":string|null,"event_date":"YYYY-MM-DD"|null,"guest_count":number|null,"budget":number|null,"venue":string|null,"name":string|null,"email":string|null,"phone":string|null,"company":string|null}}`;

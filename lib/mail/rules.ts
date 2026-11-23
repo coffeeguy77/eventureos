@@ -1,6 +1,6 @@
 import "server-only";
 import { classifyEmail, stripQuoted } from "@/lib/ai/classify";
-import { classifyContextBase } from "@/lib/integrations/gmail-sync";
+import { classifyContextBase, hireEnquiryTitle } from "@/lib/integrations/gmail-sync";
 import { GMAIL_BASE, getMessage, header, listMessages, parseAddressList, parseMessage, type GmailMessage, type ParsedMessage } from "@/lib/integrations/gmail";
 import { apiJSON, likeExact, saveIntegrationSettings, type SyncContext } from "@/lib/integrations/runtime";
 import { todayISO } from "@/lib/format";
@@ -95,7 +95,9 @@ async function enquiryFrom(ctx: SyncContext, rule: MailRule, pm: ParsedMessage):
   const who = (typeof x.name === "string" && x.name) || pm.from.name || email;
   const row = {
     organisation_id: ctx.org.id,
-    title: (pm.subject?.trim() || `${rule.tag ?? "Enquiry"} — ${who}`).slice(0, 200),
+    title: (await hireEnquiryTitle(db, ctx.org.id, [pm.subject, body], { company: typeof x.company === "string" ? x.company : null, venue: typeof x.venue === "string" ? x.venue : null,
+      event_type: typeof x.event_type === "string" ? x.event_type : null, name: typeof x.name === "string" ? x.name : pm.from.name }, cust?.customer_id ?? null)
+      ?? (pm.subject?.trim() || `${rule.tag ?? "Enquiry"} — ${who}`)).slice(0, 200),
     customer_id: cust?.customer_id ?? null, contact_id: cust?.id ?? null,
     contact_name: typeof x.name === "string" ? x.name : pm.from.name, contact_email: email, contact_phone: typeof x.phone === "string" ? x.phone : null, company: typeof x.company === "string" ? x.company : null,
     event_type: typeof x.event_type === "string" ? x.event_type : null, event_date: typeof x.event_date === "string" ? x.event_date : null,

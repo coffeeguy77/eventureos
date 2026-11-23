@@ -47,6 +47,14 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
   };
 
   const usesEvents = (org.settings as { uses_events?: unknown } | null)?.uses_events !== false;
+  // An older automatic title ("Community enquiry — HR Officer"): suggest "Coffee Van | Canberra Girls Grammar School" for the job instead
+  let jobName = e.title;
+  if (usesEvents && !e.event_id && /^(.{0,40}\benquiry|Bean Culture|Coffee \w+ Hire|Enquiry from) (—|from) /i.test(e.title)) {
+    const { hireEnquiryTitle } = await import("@/lib/integrations/gmail-sync");
+    const { signatureCompany } = await import("@/lib/ai/classify");
+    const company = e.company ?? (e.message ? signatureCompany(e.message) : null);
+    jobName = (await hireEnquiryTitle(supabase, org.id, [e.title, e.message], { company, venue: e.venue, event_type: e.event_type, name: e.contact_name }, e.customer_id)) ?? e.title;
+  }
   const threadFilter = [`enquiry_id.eq.${e.id}`, e.event_id ? `event_id.eq.${e.event_id}` : null].filter(Boolean).join(",");
   const dayStart = e.event_date ? zonedMidnightUTC(e.event_date, tz) : null;
   const dayEnd = e.event_date ? zonedMidnightUTC(addDaysISO(e.event_date, 1), tz) : null;
@@ -139,7 +147,7 @@ export default async function EnquiryPage({ params }: { params: Promise<{ id: st
           ) : (
             !["lost", "archived", "spam"].includes(e.status) && (cta.cta === "ticket"
               ? <TicketFromEnquiry enquiryId={e.id} className="col-span-2 h-10 sm:h-9" />
-              : cta.cta === "event" ? <ConvertToEvent id={e.id} defaultName={e.title} /> : null)
+              : cta.cta === "event" ? <ConvertToEvent id={e.id} defaultName={jobName} /> : null)
           )}
           {!["lost", "archived", "spam"].includes(e.status) && <ButtonLink href={`/calendar/appointments?book=1&enquiry=${e.id}`} className="col-span-2 h-10 sm:h-9">Book a meeting</ButtonLink>}
         </div>

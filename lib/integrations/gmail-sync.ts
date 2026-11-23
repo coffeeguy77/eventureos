@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { DETAIL_LABEL, extractDetailChange, looksLikeDetailChange, type DetailField, type DetailUpdate } from "@/lib/customers/detail-change";
 import {
   AUTO_ENQUIRY_THRESHOLD, classifyEmail, parseFormFields, stripQuoted,
@@ -593,11 +594,13 @@ async function createInboundThread(ctx: SyncContext, pm: ParsedMessage, bodyClea
       const x = events ? c.extracted : { ...c.extracted, event_type: null, event_date: null, guest_count: null, budget: null, venue: null };
       const who = x.name ?? contactEmail ?? pm.from.email;
       const formTitle = pm.subject?.match(/^(.{2,80}?)\s+message from\s+(.{2,80})$/i);
-      const title = preliminary.website_form && formTitle
+      // Event businesses: "Coffee Van | Canberra Girls Grammar" — what they're hiring (from the packages) and who the business is
+      const hireTitle = events ? await hireEnquiryTitle(db, ctx.org.id, [pm.subject, bodyClean], x, m?.customerId ?? null) : null;
+      const title = hireTitle ?? (preliminary.website_form && formTitle
         ? `${formTitle[1].trim()} — ${formTitle[2].trim()}`
         : preliminary.website_form && pm.subject
         ? pm.subject.replace(/^(new\s+)?(website\s+)?(enquiry|inquiry|form submission|submission)\s*[:\-–—]\s*/i, "").trim() || `${x.event_type ?? "Website"} enquiry`
-        : x.event_type ? `${x.event_type} enquiry — ${who}` : pm.subject?.slice(0, 120) || `Enquiry from ${who}`;
+        : x.event_type ? `${x.event_type} enquiry — ${who}` : pm.subject?.slice(0, 120) || `Enquiry from ${who}`);
       const { data: enq, error } = await db.from("enquiries").insert({
         organisation_id: ctx.org.id,
         title: title.slice(0, 200),
@@ -765,4 +768,17 @@ async function addCcPeople(ctx: SyncContext, eventId: string, customerId: string
       body: `${outsiders.join(", ")} — not added to the job. Add them from the job page if they should get quotes and updates.`,
       link: `/events/${eventId}`, entity_type: "event", entity_id: eventId });
   }
+}
+
+/** "Coffee Van | Canberra Girls Grammar" for an event enquiry; null when the business has no packages to hire. */
+export async function hireEnquiryTitle(db: SupabaseClient, orgId: string, texts: (string | null | undefined)[],
+  x: { company?: string | null; venue?: string | null; event_type?: string | null; name?: string | null }, customerId: string | null): Promise<string | null> {
+  try {
+    const { data: pk } = await db.from("service_packages").select("name, rules").eq("organisation_id", orgId).eq("active", true);
+    const labels = ((pk ?? []) as { name: string; rules: { calendar_label?: string } | null }[]).map((p) => p.rules?.calendar_label?.trim() || p.name);
+    if (!labels.length) return null;
+    const { data: c } = customerId ? await db.from("customers").select("name, kind").eq("id", customerId).maybeSingle() : { data: null };
+    const { enquiryTitle, hiringFrom } = await import("@/lib/enquiries/title");
+    return enquiryTitle({ hiring: hiringFrom(texts, labels), company: x.company, customer: (c as { name: string; kind: string } | null) ?? null, venue: x.venue, eventType: x.event_type, person: x.name });
+  } catch { return null; }
 }
