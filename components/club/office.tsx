@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Mail, MessageSquare, Plus, Search, Trash2, UserPlus, X } from "lucide-react";
+import { ExternalLink, Loader2, Mail, MessageSquare, Plus, Search, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
 import { OFFERS, OFFER_LABEL, type ClubRates, type Offer, type StandardOrder } from "@/lib/club/core";
@@ -310,6 +310,32 @@ export function ResyncRuns({ id }: { id: string }) {
 }
 
 /* ------------------------------------------------------------------ open their page as staff */
+
+/** A one-tap "Open their page" that signs you in as staff (no code) — for checking their pricing or walking them through it. */
+export function OpenTheirPage({ accountId, label = "Open their page", compact = false }: { accountId: string; label?: string; compact?: boolean }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const go = () => {
+    // open the tab now (inside the tap) so pop-up blockers allow it, then point it at their page
+    const tab = window.open("about:blank", "_blank");
+    start(async () => {
+      setErr(null);
+      const r = await openClubAsStaff(accountId, null);
+      if (r.ok) { if (tab) tab.location.href = r.data; else window.location.href = r.data; }
+      else { tab?.close(); setErr(r.error); }
+    });
+  };
+  return (
+    <span className="inline-flex flex-col">
+      <button type="button" onClick={go} disabled={busy} title="Opens their page signed in as you (staff) — no code needed"
+        className={compact ? "inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline disabled:opacity-50"
+          : "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.7812rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50 disabled:opacity-50"}>
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}{label}<ExternalLink className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+      </button>
+      {err && <span className="mt-1 text-[0.75rem] text-rose-700">{err}</span>}
+    </span>
+  );
+}
 
 export function OpenAsStaff({ accountId, people }: { accountId: string; people: { id: string; name: string }[] }) {
   const [who, setWho] = useState("");

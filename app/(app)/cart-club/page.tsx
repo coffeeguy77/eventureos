@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { money, todayISO } from "@/lib/format";
 import { daysText, OFFER_LABEL, cleanOffers } from "@/lib/club/core";
-import { clubUrl, readClubSettings } from "@/lib/club/server";
+import { readClubSettings } from "@/lib/club/server";
+import { OpenTheirPage } from "@/components/club/office";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -36,7 +36,6 @@ export default async function CartClubPage() {
   const B = (bookings ?? []) as B[];
   const count = (id: string, st: string) => B.filter((b) => b.account_id === id && b.status === st).length;
   const nameOf = new Map((accts ?? []).map((a) => [a.id as string, a.name as string]));
-  const orgLike = { slug: org.slug, settings: org.settings };
   return (
     <>
       <PageHeader eyebrow="Events" title={s.name} subtitle="Special clients book on their own page, at their own rates — quotes stay editable until they hit Book" />
@@ -55,7 +54,7 @@ export default async function CartClubPage() {
                   {count(a.id as string, "quote") > 0 && <Badge tone="red">{count(a.id as string, "quote")} not booked</Badge>}
                   {count(a.id as string, "booked") > 0 && <Badge tone="green">{count(a.id as string, "booked")} booked</Badge>}
                   {!a.enabled && <Badge tone="slate">Off</Badge>}
-                  {a.enabled && <a href={clubUrl(orgLike, a.slug as string)} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline">/{a.slug}<ExternalLink className="h-3 w-3" /></a>}
+                  {a.enabled && <OpenTheirPage accountId={a.id as string} label={`/${a.slug}`} compact />}
                 </li>
               ))}
             </ul>

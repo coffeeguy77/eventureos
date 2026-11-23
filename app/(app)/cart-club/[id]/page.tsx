@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink } from "lucide-react";
 import { requireOrg } from "@/lib/context";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { fmtDateTime, money, todayISO } from "@/lib/format";
@@ -11,7 +10,7 @@ import { addDaysISO } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AccountForm, CancelBooking, ClubToggle, OpenAsStaff, PeoplePanel, ResyncRuns, type PersonView } from "@/components/club/office";
+import { AccountForm, CancelBooking, ClubToggle, OpenAsStaff, OpenTheirPage, PeoplePanel, ResyncRuns, type PersonView } from "@/components/club/office";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Cart Club client" };
@@ -42,7 +41,7 @@ export default async function CartClubAccount({ params }: { params: Promise<{ id
       <PageHeader eyebrow={<Link href="/cart-club" className="hover:underline">{s.name}</Link>} title={a.name}
         subtitle={a.enabled ? url.replace(/^https?:\/\//, "") : "Switched off — their page is closed"}
         actions={<div className="flex flex-wrap items-center gap-2">
-          {a.enabled && <a href={url} target="_blank" rel="noopener" className="inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[0.7812rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">Open their page<ExternalLink className="h-3.5 w-3.5" /></a>}
+          {a.enabled && <OpenTheirPage accountId={a.id} />}
           <Link href={`/clients/${a.customer_id}`} className="inline-flex h-8 items-center rounded-lg px-3 text-[0.7812rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">Client</Link>
           <ClubToggle id={a.id} enabled={a.enabled} customerId={a.customer_id} />
         </div>} />
