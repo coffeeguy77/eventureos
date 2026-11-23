@@ -83,6 +83,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
   const Cup = themed ? Sparkles : Coffee;
   const courses = data.courses;
   const many = courses.length > 1;
+  const tiles = courses.slice(0, 2);
   const byCourse = (id: string) => data.sessions.filter((s) => s.course_id === id);
   const next = data.sessions.find((s) => !s.full) ?? null;
   const nextCourse = next ? courses.find((c) => c.id === next.course_id) : null;
@@ -207,15 +208,18 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
             </div>
             {C("coursesIntro") && <p {...ed("booking.landing.copy.coursesIntro", C("coursesIntro"))} className="max-w-[34rem] text-[1.0625rem] leading-relaxed text-[#696866] lg:justify-self-end">{C("coursesIntro")}</p>}
           </div>
-          <div className={`mt-12 grid gap-6 ${courses.length === 2 ? "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]" : courses.length > 2 ? "md:grid-cols-2 xl:grid-cols-3" : "lg:grid-cols-[minmax(0,1fr)_340px]"}`}>
-            {courses.map((c) => {
+          {/* The first two courses are tiles beside the help card; any more run full width underneath as banners */}
+          <div className={`mt-12 grid gap-6 ${tiles.length === 2 ? "md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_300px]" : "lg:grid-cols-[minmax(0,1fr)_340px]"}`}>
+            {courses.map((c, ci) => {
+              const banner = ci >= 2;
               const ss = byCourse(c.id), open = ss.filter((s) => !s.full), x = extra(c.id);
               return (
-                <article key={c.id} data-reveal className="group flex flex-col overflow-hidden rounded-[26px] border border-[#E9DFD5] bg-[#FFFDFC] shadow-[0_1px_2px_rgba(23,23,20,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(60,40,25,0.45)]">
-                  <div className="relative overflow-hidden">
+                <article key={c.id} data-reveal style={banner ? { order: 10 + ci } : undefined}
+                  className={`group overflow-hidden rounded-[26px] border border-[#E9DFD5] bg-[#FFFDFC] shadow-[0_1px_2px_rgba(23,23,20,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(60,40,25,0.45)] ${banner ? "col-span-full grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : "flex flex-col"}`}>
+                  <div className={`relative overflow-hidden ${banner ? "md:min-h-full" : ""}`}>
                     {c.image_url
-                      ? <img src={c.image_url} alt={`${clean(c.name)} at ${org.name}`} className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.04]" loading="lazy" />
-                      : <div className="aspect-[16/10] w-full" style={{ background: "linear-gradient(135deg, var(--b), color-mix(in srgb, var(--b) 45%, #2b1d16))" }} />}
+                      ? <img src={c.image_url} alt={`${clean(c.name)} at ${org.name}`} className={`w-full object-cover transition duration-700 group-hover:scale-[1.04] ${banner ? "aspect-[16/10] md:absolute md:inset-0 md:aspect-auto md:h-full" : "aspect-[16/10]"}`} loading="lazy" />
+                      : <div className={`aspect-[16/10] w-full ${banner ? "md:absolute md:inset-0 md:aspect-auto md:h-full" : ""}`} style={{ background: "linear-gradient(135deg, var(--b), color-mix(in srgb, var(--b) 45%, #2b1d16))" }} />}
                     {x.badge && <span className="absolute left-4 top-4 rounded-full bg-[var(--b)] px-3.5 py-1.5 text-[0.75rem] font-bold uppercase tracking-[0.1em] text-[var(--on-b)] shadow-sm">{x.badge}</span>}
                   </div>
                   <div className="flex flex-1 flex-col p-6 sm:p-8">
@@ -253,7 +257,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                 </article>
               );
             })}
-            <aside data-reveal className="relative flex flex-col overflow-hidden rounded-[26px] bg-[color-mix(in_srgb,var(--b)_10%,#FFFDFC)] p-7 sm:p-8 md:col-span-2 xl:col-span-1">
+            <aside data-reveal style={{ order: 5 }} className="relative flex flex-col overflow-hidden rounded-[26px] bg-[color-mix(in_srgb,var(--b)_10%,#FFFDFC)] p-7 sm:p-8 md:col-span-2 xl:col-span-1">
               <Cup className="h-9 w-9 text-[var(--b)]" strokeWidth={1.6} />
               <h3 {...ed("booking.landing.copy.helpTitle", C("helpTitle"))} className="lp-serif mt-5 text-[1.625rem] font-semibold leading-tight">{C("helpTitle")}</h3>
               <p {...ed("booking.landing.copy.helpText", C("helpText"))} className="mt-3 text-[1rem] leading-relaxed text-[#5b5955]">{C("helpText")}</p>
