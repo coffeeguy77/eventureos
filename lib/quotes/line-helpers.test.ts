@@ -50,7 +50,7 @@ eq("charge rounds up to the half hour", [chargeMinutes(105), chargeMinutes(120),
 eq("minutes text", minutesText(105), "1 hr 45 min");
 const trav = travelLine({ kind: "travel", address: "Arthursleigh Farm", km: 140, drive_minutes: 105, charge_minutes: 120, trips: 2 }, "Bean Culture");
 eq("travel km", trav.quantity, 560);
-eq("travel text", trav.description, "Bean Culture → Arthursleigh Farm\n140 km each way · 280 km return × 2 trips = 560 km\nDriving 1 hr 45 min each way (charged as 2 hrs) — on the barista hours");
+eq("travel text", trav.description, "Bean Culture → Arthursleigh Farm\n140 km each way · 2 return trips (there and back) × 280 km = 560 km\nDriving 1 hr 45 min each way (charged as 2 hrs) — on the barista hours");
 const vanRule = { service_id: "x", included_hours: 1, round_to_hours: 0.5, included_applies_to: "first" as const };
 const joshDays = [day({ date: "2026-10-22", start: "09:00", end: "13:00" }), day({ date: "2026-10-23", start: "09:00", end: "16:30" })];
 const josh = staffLine({ kind: "staff", days: joshDays, travel_minutes: 120 }, vanRule, "barista")!;

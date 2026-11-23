@@ -1,3 +1,4 @@
+import { baseSuburb } from "@/lib/quotes/line-helpers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Lock } from "lucide-react";
@@ -288,7 +289,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   return (
     <QuoteBuilder
       key={q.id}
-      travelFrom={org.name}
+      travelFrom={baseSuburb((org as { address?: string | null }).address) ?? org.name}
       customerLink={linkRow?.token ? `/q/${linkRow.token}?preview=1` : null}
       jobAddress={[evLink?.venue, evLink?.address].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null}
       replyTo={replyTo}

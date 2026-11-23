@@ -1,9 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { CATERING_LOCK_HOURS, cateringLocked, changeText, cleanChange, customerCanChange, customerCatalogue, hireDescription, isCatering, isEquipment, isSupplies, isUpsell, servesDescription, staffChangeLine, staffOptions,
+import { CATERING_LOCK_HOURS, cateringLocked, changeText, cleanChange, customerCanChange, customerCatalogue, hireDescription, isCatering, isEquipment, isSupplies, isUpsell, servesDescription, staffChangeLine, hireAndTravel,
   type EditLine, type EditService, type StaffEdit } from "./customer-edit";
 import { isDaily, type PackageRules } from "@/lib/pricing/engine";
-import { shiftDays, type StaffDetails } from "./line-helpers";
+import { baseSuburb, setupTime, shiftDays, travelLine, type StaffDetails, type TravelDetails } from "./line-helpers";
 
 /** Everything the quote link needs to let the customer change their quote — or why they can't. */
 export interface CustomerEditData {
@@ -28,10 +28,10 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
   const { data: r } = await db.from("email_send_recipients").select("quote_id, role").eq("token", token).maybeSingle();
   if (!r?.quote_id) return { ok: false, reason: "This link isn't valid." };
   if (r.role !== "to") return { ok: false, reason: "This is the sender's copy — only the customer can change the quote from their own link." };
-  const { data: q } = await db.from("quotes").select("id, number, status, expiry_date, organisation_id, customer_id, event_id, current_version_id, has_unpublished_changes, organisation:organisations(settings, timezone)")
+  const { data: q } = await db.from("quotes").select("id, number, status, expiry_date, organisation_id, customer_id, event_id, current_version_id, has_unpublished_changes, organisation:organisations(settings, timezone, address)")
     .eq("id", r.quote_id).maybeSingle();
   if (!q) return { ok: false, reason: "This quote isn't available." };
-  const o = q.organisation as unknown as { settings: Record<string, unknown> | null; timezone: string | null } | null;
+  const o = q.organisation as unknown as { settings: Record<string, unknown> | null; timezone: string | null; address?: string | null } | null;
   const settings = (o?.settings ?? {}) as Record<string, unknown>;
   if (settings.quote_customer_edit === false) return { ok: false, reason: "off" };
   if (!["sent", "viewed"].includes(q.status as string)) return { ok: false, reason: "This quote can't be changed now." };
@@ -66,7 +66,7 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
     locked = cateringLocked(eventDate, (ev?.start_time as string | null) ?? null, o?.timezone || "Australia/Sydney");
   }
   // Barista hours and a second cart: one-day jobs only, and not inside the last 48 hours (the roster is set by then)
-  const staffEdit = locked ? null : findStaffEdit(lines, (pkgs ?? []) as { rules: PackageRules | null }[], services, eventDate);
+  const staffEdit = locked ? null : findStaffEdit(lines, (pkgs ?? []) as { rules: PackageRules | null }[], services, eventDate, baseSuburb(o?.address));
   if (staffEdit) for (const l of lines) if (l.id === staffEdit.lineId) l.editable = false; // changed in its own panel
   // An add-on that names what it's for ("Coffee cart wrap") only shows when that's what's being hired
   const hireWords = hireUnitWords((pkgs ?? []) as { rules: PackageRules | null }[], services, lines);
@@ -102,34 +102,39 @@ function upsellFits(name: string, w: { all: Set<string>; onQuote: Set<string> })
 
 /**
  * The quote's one staff line (with times on every day), the package it was priced from (for its minimum hours and
- * setup), and the hire line another cart goes on. Another cart is only offered without travel (a van driving out is
- * priced by the business).
+ * setup), the hire line whose days follow it, and the travel line whose trips follow it. Another cart is only
+ * offered without travel (a van driving out is priced by the business).
  */
-function findStaffEdit(lines: (EditLine & { description: string | null })[], pkgs: { rules: PackageRules | null }[], services: EditService[], eventDate: string | null): StaffEdit | null {
+function findStaffEdit(lines: (EditLine & { description: string | null })[], pkgs: { rules: PackageRules | null }[], services: EditService[], eventDate: string | null, base: string | null = null): StaffEdit | null {
   const staffLines = lines.filter((l) => !l.is_optional && l.details?.kind === "staff");
   if (staffLines.length !== 1) return null;
   const st = staffLines[0];
   const det = st.details as unknown as StaffDetails;
   const days = shiftDays(det);
   if (!days.length || days.some((d) => !d.start || !d.end)) return null;
-  // every day run the same way (carts × staff), or the business set it up specially
-  const sig = (d: { units: number; per_unit: number }) => `${Math.max(1, Math.floor(d.units || 1))}x${Math.max(1, Math.floor(d.per_unit || 1))}`;
-  if (days.some((d) => sig(d) !== sig(days[0]))) return null;
+  const carts = Math.max(1, Math.floor(days[0].units || 1));
+  if (days.some((d) => Math.max(1, Math.floor(d.units || 1)) !== carts)) return null; // set up specially by the business
   const fits = pkgs.map((p) => p.rules).filter((r): r is PackageRules => !!r?.staff && r.staff.service_id === st.service_id);
   const rules = fits.find((r) => r.hire && lines.some((l) => !l.is_optional && l.service_id === r.hire!.service_id)) ?? fits[0];
   if (!rules?.staff) return null;
-  const travel = (det.travel_minutes ?? 0) > 0 || lines.some((l) => l.details?.kind === "travel");
+  const travelLines = lines.filter((l) => !l.is_optional && l.details?.kind === "travel");
+  const tl = travelLines.length === 1 ? travelLines[0] : null;
+  const td = tl ? (tl.details as unknown as TravelDetails) : null;
   const hireSvc = rules.hire ? services.find((s) => s.id === rules.hire!.service_id) : undefined;
-  const hire = rules.hire && !travel && !isDaily(hireSvc?.unit)
-    ? lines.find((l) => !l.is_optional && l.service_id === rules.hire!.service_id && (Number(l.quantity) === 1 || Number(l.quantity) === days.length)) ?? null : null;
-  const carts = Math.max(1, Math.floor(days[0].units || 1)), staff = carts * Math.max(1, Math.floor(days[0].per_unit || 1));
+  const hire = rules.hire && !isDaily(hireSvc?.unit) ? lines.find((l) => !l.is_optional && l.service_id === rules.hire!.service_id) ?? null : null;
+  const hasTravel = !!tl || (det.travel_minutes ?? 0) > 0;
   const unitWord = (det.unit_label?.trim() || (rules.calendar_label ?? "").trim().split(/\s+/).pop() || "cart").toLowerCase();
+  const single = days.length === 1;
   return {
     lineId: st.id, hireLineId: hire?.id ?? null, hirePrice: hire?.unit_price ?? 0, hireTax: hire?.tax_rate ?? 0, staffPrice: st.unit_price, staffTax: st.tax_rate,
-    hirePerDay: !!hire && days.length > 1 && Number(hire.quantity) === days.length,
-    days: days.map((d) => ({ date: d.date ?? (days.length === 1 ? eventDate : null), start: d.start!.slice(0, 5), end: d.end!.slice(0, 5), setup_minutes: d.setup_minutes ?? 0 })),
-    carts, staff, rule: rules.staff, label: rules.staff.label?.trim() || "staff", unitWord, details: det,
-    options: staffOptions(carts, staff, !!hire),
+    hirePerDay: !!hire && Number(hire.quantity) === days.length * carts,
+    canAddCart: !!hire && !hasTravel,
+    travel: tl && td && td.mode !== "hours" && td.trips % days.length === 0
+      ? { lineId: tl.id, price: tl.unit_price, tax: tl.tax_rate, km: td.km, tripsPerDay: td.trips / days.length, from: base ?? ((tl.description ?? "").split("\n")[0].split(" → ")[0] || null), details: td } : null,
+    days: days.map((d) => ({ date: d.date ?? (single ? eventDate : null), start: d.start!.slice(0, 5), end: d.end!.slice(0, 5), setup_minutes: d.setup_minutes ?? 0,
+      team: Math.max(1, Math.floor(d.units || 1)) * Math.max(1, Math.floor(d.per_unit || 1)), extra: (d.extra ?? []).map((x) => ({ start: x.start.slice(0, 5), end: x.end.slice(0, 5) })) })),
+    carts, rule: rules.staff, label: rules.staff.label?.trim() || "staff", unitWord, details: det,
+    maxDays: 7,
   };
 }
 
@@ -143,23 +148,37 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
   const d = loaded.data;
   const { data: q } = await db.from("quotes").select("has_unpublished_changes").eq("id", d.quoteId).single();
   if (q?.has_unpublished_changes) throw new Error("We're updating this quote right now — please contact us, or try again shortly.");
-  const change = cleanChange(raw, d.lines, [...d.catalogue, ...d.upsells], new Set(d.perServe), d.staffEdit);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
+  const change = cleanChange(raw, d.lines, [...d.catalogue, ...d.upsells], new Set(d.perServe), d.staffEdit, today);
   const byId = new Map(d.lines.map((l) => [l.id, l]));
 
-  // Barista hours and carts
+  // Barista days, hours and carts — the hire, travel and the job's dates follow them
   if (change.staff && d.staffEdit) {
-    const e = d.staffEdit;
-    const next = staffChangeLine(e, change.staff);
+    const e = d.staffEdit, c = change.staff;
+    const next = staffChangeLine(e, c);
     const { error } = await db.from("quote_items").update({ quantity: next.quantity, details: next.details, description: next.description }).eq("id", e.lineId).eq("quote_id", d.quoteId);
     if (error) throw new Error(`Couldn't save the change: ${error.message}`);
-    if (e.hireLineId && change.staff.carts !== e.carts) {
-      const hire = byId.get(e.hireLineId);
-      const qty = Number(hire?.quantity ?? 1) + (change.staff.carts - e.carts) * (e.hirePerDay ? e.days.length : 1);
-      const { error: hErr } = await db.from("quote_items").update({ quantity: qty, description: hireDescription(hire?.description ?? null, change.staff.carts > 1, e.unitWord) }).eq("id", e.hireLineId).eq("quote_id", d.quoteId);
+    const hire = e.hireLineId ? byId.get(e.hireLineId) : null;
+    const ht = hireAndTravel(e, c, Number(hire?.quantity ?? 1));
+    const dates = c.days.map((x) => x.date).filter((x): x is string => !!x);
+    if (hire) {
+      const { error: hErr } = await db.from("quote_items").update({ quantity: ht.hire, description: hireDescription(hire.description ?? null, c.carts > 1, e.unitWord, dates.length === c.days.length ? dates : []) }).eq("id", hire.id).eq("quote_id", d.quoteId);
       if (hErr) throw new Error(`Couldn't save the change: ${hErr.message}`);
     }
+    if (e.travel && c.days.length !== e.days.length) {
+      const td = { ...e.travel.details, trips: ht.trips };
+      const tl = travelLine(td, e.travel.from, c.days.length);
+      const { error: tErr } = await db.from("quote_items").update({ quantity: tl.quantity, details: td, description: tl.description }).eq("id", e.travel.lineId).eq("quote_id", d.quoteId);
+      if (tErr) throw new Error(`Couldn't save the change: ${tErr.message}`);
+    }
+    // The job's own dates and times follow (one day: the event date and times; several: its days)
+    if (d.eventId && dates.length === c.days.length) {
+      const evDays = c.days.map((x, i) => ({ date: x.date!, setup: setupTime({ start: x.start, setup_minutes: e.days[Math.min(i, e.days.length - 1)].setup_minutes }), start: x.start, finish: x.end }));
+      const one = evDays.length === 1;
+      await db.from("events").update({ event_date: evDays[0].date, days: one ? [] : evDays, ...(one ? { start_time: evDays[0].start, finish_time: evDays[0].finish, setup_time: evDays[0].setup } : {}) })
+        .eq("id", d.eventId).eq("organisation_id", d.orgId);
+    }
   }
-
   for (const s of change.set) {
     const l = byId.get(s.id)!;
     const patch: Record<string, unknown> = { quantity: s.quantity };

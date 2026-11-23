@@ -369,7 +369,7 @@ function LineHelperPanel({ it, helper, h }: { it: ItemDraft; helper: LineHelper;
 function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHelper, { kind: "travel" }>; h: SectionHandlers }) {
   const saved = it.details?.kind === "travel" ? it.details : null;
   const [d, setD] = useState<TravelDetails>(() => saved ?? { kind: "travel", address: helper.address ?? "", km: 0, drive_minutes: 0, charge_minutes: 0, trips: Math.max(1, helper.trips) });
-  const commit = (next: TravelDetails) => { setD(next); h.onDetails(it.id, next, travelLine(next, helper.from)); };
+  const commit = (next: TravelDetails) => { setD(next); h.onDetails(it.id, next, travelLine(next, helper.from, helper.trips)); };
   const hrs = Math.floor(d.drive_minutes / 60), min = d.drive_minutes % 60;
   const setDrive = (H: number, M: number) => {
     const drive = Math.max(0, Math.round(H) * 60 + Math.round(M));
@@ -379,7 +379,7 @@ function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHe
   const hoursOnly = d.mode === "hours";
   const rounded = d.charge_minutes !== d.drive_minutes && d.drive_minutes > 0;
   const lab = "mb-0.5 block text-[0.6562rem] font-medium uppercase tracking-wide text-ink-faint";
-  const r = travelLine(d, helper.from);
+  const r = travelLine(d, helper.from, helper.trips);
   return (
     <div className="mt-1.5 rounded-lg bg-zinc-50 px-2 py-2 ring-1 ring-inset ring-line">
       <div className="flex flex-wrap items-end gap-2">
@@ -388,7 +388,7 @@ function TravelHelper({ it, helper, h }: { it: ItemDraft; helper: Extract<LineHe
         <label className="w-24"><span className={lab}>Km each way</span>
           <input type="number" min={0} step={1} inputMode="decimal" value={d.km || ""} onChange={(e) => commit({ ...d, km: Math.max(0, Number(e.target.value) || 0) })} className={cn(helperInput, "tabular text-right")} aria-label="Kilometres each way" /></label>
         <label className="w-20"><span className={lab}>Trips</span>
-          <input type="number" min={1} max={62} inputMode="numeric" value={d.trips} onChange={(e) => commit({ ...d, trips: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label="Return trips" title="Return trips — one per day the van goes out" /></label>
+          <input type="number" min={1} max={62} inputMode="numeric" value={d.trips} onChange={(e) => commit({ ...d, trips: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className={cn(helperInput, "tabular text-right")} aria-label="Return trips" title="Return trips (there and back) — usually one per day the van goes out" /></label>
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-2">
         <span className="w-full text-[0.6875rem] font-medium text-ink-muted sm:w-auto sm:pb-2">Driving each way</span>

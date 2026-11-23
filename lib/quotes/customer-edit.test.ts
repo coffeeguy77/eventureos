@@ -56,33 +56,39 @@ test("catering locks 48 hours before the event starts (business timezone)", asyn
   assert.equal(cateringLocked(null, null, tz), false);
 });
 
-test("staff hours: 3-hour minimum, second cart, hours per day", async () => {
-  const { cleanStaffChange, staffChangeLine, staffOptions, staffQuote, hireDescription } = await import("./customer-edit");
+test("staff days: minimum shift, extra baristas, add/remove days, moving dates", async () => {
+  const { cleanStaffChange, staffChangeLine, staffQuote, hireDescription, moveDays, addDay } = await import("./customer-edit");
   const e = {
-    lineId: "s", hireLineId: "h", hirePrice: 400, hireTax: 10, staffPrice: 75, staffTax: 10, hirePerDay: false,
-    days: [{ date: "2027-02-19", start: "08:00", end: "15:00", setup_minutes: 30 }], carts: 1, staff: 2,
+    lineId: "s", hireLineId: "h", hirePrice: 400, hireTax: 10, staffPrice: 75, staffTax: 10, hirePerDay: true, canAddCart: true, travel: null,
+    days: [{ date: "2027-02-19", start: "08:00", end: "15:00", setup_minutes: 30, team: 2, extra: [] }], carts: 1,
     rule: { service_id: "b", min_hours: 3, setup_minutes: 30, round_to_hours: 0.5 }, label: "barista", unitWord: "cart",
-    details: { kind: "staff" as const, days: [{ date: null, start: "08:00", end: "15:00", setup_minutes: 30, units: 1, per_unit: 2 }] },
-    options: staffOptions(1, 2, true),
+    details: { kind: "staff" as const, days: [{ date: null, start: "08:00", end: "15:00", setup_minutes: 30, units: 1, per_unit: 2 }] }, maxDays: 7,
   };
-  assert.deepEqual(e.options, [{ carts: 1, staff: 2 }, { carts: 2, staff: 2 }, { carts: 2, staff: 3 }, { carts: 2, staff: 4 }]);
+  const day = (o: object = {}) => ({ date: "2027-02-19", start: "08:00", end: "15:00", team: 2, extra: [] as { start: string; end: string }[], ...o });
   // as quoted: 7 hrs + 30 min setup = 7.5 × 2
-  assert.equal(staffChangeLine(e, { days: [{ start: "08:00", end: "15:00" }], carts: 1, staff: 2 }).quantity, 15);
+  assert.equal(staffChangeLine(e, { carts: 1, days: [day()] }).quantity, 15);
+  assert.equal(cleanStaffChange({ carts: 1, days: [day()] }, e), null);
   // 1.5 hours of service still charges the 3 hr minimum each
-  const short = cleanStaffChange({ days: [{ start: "9:00", end: "10:30" }], carts: 1, staff: 2 }, e)!;
-  assert.equal(staffChangeLine(e, short).quantity, 6);
-  // the day gets the event date (Day 1)
-  assert.equal(staffChangeLine(e, short).details.days[0].date, "2027-02-19");
-  // split across two carts: +$400 hire, same hours
-  const q = staffQuote(e, { days: [{ start: "08:00", end: "15:00" }], carts: 2, staff: 2 });
-  assert.equal(q.hours, 15); assert.equal(q.hireCost, 400);
-  // 3 staff on 2 carts is described
-  assert.match(staffChangeLine(e, { days: [{ start: "08:00", end: "15:00" }], carts: 2, staff: 3 }).description, /2 carts · 3 baristas between them/);
-  assert.equal(cleanStaffChange({ days: [{ start: "08:00", end: "15:00" }], carts: 1, staff: 2 }, e), null);
-  assert.throws(() => cleanStaffChange({ days: [{ start: "10:00", end: "09:00" }], carts: 1, staff: 2 }, e), /after the start/);
-  assert.throws(() => cleanStaffChange({ days: [{ start: "08:00", end: "15:00" }], carts: 3, staff: 2 }, e), /isn't available/);
+  assert.equal(staffChangeLine(e, cleanStaffChange({ carts: 1, days: [day({ start: "9:00", end: "10:30" })] }, e)!).quantity, 6);
+  // an extra barista on their own 1-hour shift is still charged 3 hrs
+  const x = cleanStaffChange({ carts: 1, days: [day({ team: 1, extra: [{ start: "10:00", end: "11:00" }] })] }, e)!;
+  const xl = staffChangeLine(e, x);
+  assert.equal(xl.quantity, 7.5 + 3);
+  assert.match(xl.description, /\+ 1 barista 10am – 11am/);
+  // a second day doubles the hire; dates move together
+  const two = addDay([day()]);
+  assert.equal(two[1].date, "2027-02-20");
+  assert.equal(staffQuote(e, { carts: 1, days: two }, 1).hire, 2);
+  assert.deepEqual(moveDays(two, 1, "2027-04-05").map((d) => d.date), ["2027-04-04", "2027-04-05"]);
+  // second cart: +1 hire a day
+  assert.equal(staffQuote(e, { carts: 2, days: two }, 1).hire, 4);
+  assert.match(staffChangeLine(e, { carts: 2, days: [day({ team: 3 })] }).description, /3 baristas across 2 carts/);
+  assert.throws(() => cleanStaffChange({ carts: 1, days: [day({ start: "10:00", end: "09:00" })] }, e), /after the start/);
+  assert.throws(() => cleanStaffChange({ carts: 3, days: [day()] }, e), /isn't available/);
+  assert.throws(() => cleanStaffChange({ carts: 1, days: [day(), day()] }, e), /same date/);
+  assert.throws(() => cleanStaffChange({ carts: 1, days: [day()] }, e, "2027-03-01"), /in the past/);
   assert.equal(hireDescription("Coffee cart hire", true, "cart"), "Coffee cart hire\nIncludes a second cart — no extra delivery charge.");
-  assert.equal(hireDescription("Coffee cart hire\nIncludes a second cart — no extra delivery charge.", false, "cart"), "Coffee cart hire");
+  assert.equal(hireDescription("Coffee cart hire\nIncludes a second cart — no extra delivery charge.", false, "cart", ["2027-04-04", "2027-04-05"]), "Coffee cart hire\n\n2 days hire – Sun 4 & Mon 5 April 2027");
 });
 
 test("drinks: hot and cold chosen separately", async () => {

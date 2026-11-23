@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clock, Loader2, Lock, Minus, Pencil, Plus, Sparkles, Trash2, Undo2 } from "lucide-react";
+import { CalendarPlus, Check, Clock, Loader2, Lock, Minus, Pencil, Plus, Sparkles, Trash2, Undo2, UserPlus, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { money } from "@/lib/format";
 import { customerChangeQuote } from "@/app/q/actions";
-import { staffQuote, type StaffChange, type StaffEdit } from "@/lib/quotes/customer-edit";
+import { addDay, moveDays, staffQuote, type StaffChange, type StaffEdit } from "@/lib/quotes/customer-edit";
 import { longDay } from "@/lib/quotes/line-helpers";
 
 export interface ChangeLine {
@@ -44,15 +44,24 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const initQty = () => Object.fromEntries(lines.map((l) => [l.id, Number(l.quantity)]));
-  const initSplit = () => Object.fromEntries(lines.filter((l) => l.serves).map((l) => [l.id, { ...l.serves! }]));
-  const initStaff = (): StaffChange | null => (staffEdit ? { days: staffEdit.days.map((d) => ({ start: d.start, end: d.end })), carts: staffEdit.carts, staff: staffEdit.staff } : null);
-  const [qty, setQty] = useState<Record<string, number>>(initQty);
-  const [split, setSplit] = useState<Record<string, { hot: number; cold: number }>>(initSplit);
-  const [staff, setStaff] = useState<StaffChange | null>(initStaff);
-  const [extras, setExtras] = useState<Set<string>>(new Set());
-  const [removed, setRemoved] = useState<Set<string>>(new Set());
-  const [added, setAdded] = useState<{ service_id: string; quantity: number }[]>([]);
+  type Edit = { qty: Record<string, number>; split: Record<string, { hot: number; cold: number }>; staff: StaffChange | null; extras: string[]; removed: string[]; added: { service_id: string; quantity: number }[] };
+  const init = (): Edit => ({
+    qty: Object.fromEntries(lines.map((l) => [l.id, Number(l.quantity)])),
+    split: Object.fromEntries(lines.filter((l) => l.serves).map((l) => [l.id, { ...l.serves! }])),
+    staff: staffEdit ? { carts: staffEdit.carts, days: staffEdit.days.map((d) => ({ date: d.date, start: d.start, end: d.end, team: d.team, extra: d.extra.map((x) => ({ ...x })) })) } : null,
+    extras: [], removed: [], added: [],
+  });
+  const [ed, setEd] = useState<Edit>(init);
+  const [history, setHistory] = useState<Edit[]>([]);
+  /** Every change can be undone, one step at a time */
+  const change = (fn: (e: Edit) => Edit) => setEd((cur) => { setHistory((h) => [...h.slice(-49), cur]); return fn(cur); });
+  const undo = () => setHistory((h) => { if (!h.length) return h; setEd(h[h.length - 1]); return h.slice(0, -1); });
+  const { qty, split, staff } = ed;
+  const extras = useMemo(() => new Set(ed.extras), [ed.extras]);
+  const removed = useMemo(() => new Set(ed.removed), [ed.removed]);
+  const added = ed.added;
+  const setStaff = (fn: (s: StaffChange) => StaffChange) => change((e) => (e.staff ? { ...e, staff: fn(e.staff) } : e));
+  const setDay = (i: number, patch: Partial<StaffChange["days"][number]>) => setStaff((s) => ({ ...s, days: s.days.map((d, k) => (k === i ? { ...d, ...patch } : d)) }));
   const [pick, setPick] = useState(""); const [pickQty, setPickQty] = useState("10");
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -72,10 +81,12 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
   const byId = useMemo(() => new Map([...catalogue, ...upsells].map((c) => [c.id, c])), [catalogue, upsells]);
 
   // The staff line and hire as they'd now be charged
-  const sq = useMemo(() => { try { return staffEdit && staff ? staffQuote(staffEdit, staff) : null; } catch { return null; } }, [staffEdit, staff]);
+  const hireQuoted = Number(lines.find((l) => l.id === staffEdit?.hireLineId)?.quantity ?? 1);
+  const sq = useMemo(() => { try { return staffEdit && staff ? staffQuote(staffEdit, staff, hireQuoted) : null; } catch { return null; } }, [staffEdit, staff, hireQuoted]);
   const qtyOf = (l: ChangeLine) => {
     if (staffEdit && sq && l.id === staffEdit.lineId) return sq.hours;
-    if (staffEdit && sq && l.id === staffEdit.hireLineId) return Number(l.quantity) + sq.extraHire;
+    if (staffEdit && sq && l.id === staffEdit.hireLineId) return sq.hire;
+    if (staffEdit?.travel && sq && l.id === staffEdit.travel.lineId) return sq.km;
     if (l.serves) { const s = split[l.id] ?? l.serves; return s.hot + s.cold; }
     return qty[l.id] ?? l.quantity;
   };
@@ -83,13 +94,13 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
     + added.reduce((t, a) => { const c = byId.get(a.service_id); return t + (c ? inc(c.unit_price, c.tax_rate) * a.quantity : 0); }, 0)
     + [...extras].reduce((t, id) => { const c = byId.get(id); return t + (c ? inc(c.unit_price, c.tax_rate) : 0); }, 0);
   const was = lines.reduce((t, l) => t + inc(l.unit_price, l.tax_rate) * Number(l.quantity), 0);
-  const staffChanged = !!(staffEdit && staff && (staff.carts !== staffEdit.carts || staff.staff !== staffEdit.staff || staff.days.some((d, i) => d.start !== staffEdit.days[i].start || d.end !== staffEdit.days[i].end)));
+  const staffChanged = !!(staffEdit && staff && JSON.stringify(staff) !== JSON.stringify(init().staff));
   const splitChanged = lines.some((l) => l.serves && !removed.has(l.id) && (split[l.id]?.hot !== l.serves.hot || split[l.id]?.cold !== l.serves.cold));
   const changed = added.length > 0 || removed.size > 0 || extras.size > 0 || staffChanged || splitChanged
     || lines.some((l) => !l.serves && (qty[l.id] ?? l.quantity) !== Number(l.quantity));
-  const step = (id: string, by: number) => setQty((q) => ({ ...q, [id]: clamp((q[id] ?? 1) + by, 1, 10000) }));
+  const step = (id: string, by: number) => change((e) => ({ ...e, qty: { ...e.qty, [id]: clamp((e.qty[id] ?? 1) + by, 1, 10000) } }));
   const stepBy = (unitQty: number) => (unitQty >= 100 ? 10 : unitQty >= 20 ? 5 : 1);
-  const reset = () => { setQty(initQty()); setSplit(initSplit()); setStaff(initStaff()); setExtras(new Set()); setAdded([]); setRemoved(new Set()); };
+  const reset = () => { setEd(init()); setHistory([]); };
 
   const save = () => start(async () => {
     setErr(null);
@@ -103,12 +114,12 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
       .catch(() => ({ ok: false as const, error: "Couldn't reach us — check your connection and try again." }));
     if (!r.ok) { setErr(r.error); return; }
     setDone(`Your quote is updated — version ${r.version}, ${money(r.total, currency, { cents: true })}. Check it above, then accept it below.`);
-    setOpen(false); setAdded([]); setRemoved(new Set()); setExtras(new Set());
+    setOpen(false); setHistory([]);
     router.refresh();
   });
 
   if (!open) {
-    const what = [staffEdit ? `${staffEdit.label} hours` : null, lines.some((l) => l.serves) ? "hot and cold drinks" : null, catalogue.length ? "catering" : null].filter(Boolean) as string[];
+    const what = [staffEdit ? `${staffEdit.label} days and hours` : null, lines.some((l) => l.serves) ? "hot and cold drinks" : null, catalogue.length ? "catering" : null].filter(Boolean) as string[];
     return (
       <div id="change-order" className="scroll-mt-4 rounded-2xl border border-line bg-surface p-5 print:hidden">
         {assumed && !done && (
@@ -122,7 +133,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
             <p className="text-[0.9375rem] font-semibold text-ink">Make it fit your event and budget</p>
             <p className="text-[0.8125rem] text-ink-muted">
               {what.length ? `Change the ${what.length > 1 ? `${what.slice(0, -1).join(", ")} and ${what[what.length - 1]}` : what[0]}` : "Change the numbers"}
-              {staffEdit && staffEdit.options.length > 1 ? `, or add a second ${staffEdit.unitWord} for faster service` : ""} — the quote updates straight away.
+              {staffEdit?.canAddCart ? `, or add a second ${staffEdit.unitWord} for faster service` : ""} — the quote updates straight away.
             </p>
           </div>
           <button type="button" onClick={() => { setDone(null); setOpen(true); }}
@@ -135,61 +146,96 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
   }
 
   const sel = "h-11 w-full rounded-lg border border-line bg-surface px-2.5 text-[0.9375rem] text-ink";
+  const today = new Date().toLocaleDateString("en-CA");
   return (
     <div id="change-order" className="scroll-mt-4 rounded-2xl border border-line bg-surface p-4 sm:p-5 print:hidden">
       <p className="text-[1rem] font-semibold text-ink">Change your order</p>
-      <p className="mb-4 text-[0.8125rem] text-ink-muted">Items with a lock are set by {businessName} — contact us to change those.</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <p className="text-[0.8125rem] text-ink-muted">Items with a lock are set by {businessName} — contact us to change those.</p>
+        <button type="button" disabled={!history.length} onClick={undo}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-zinc-50 disabled:opacity-40"><Undo2 className="h-4 w-4" />Undo</button>
+      </div>
 
       {staffEdit && staff && (
         <section className="mb-4 rounded-xl border border-line p-3 sm:p-4">
-          <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink"><Clock className="h-4 w-4 text-ink-muted" /><span className="capitalize">{staffEdit.label}</span> hours</p>
+          <p className="flex items-center gap-1.5 text-[0.9375rem] font-semibold text-ink"><Clock className="h-4 w-4 text-ink-muted" /><span className="capitalize">{staffEdit.label}</span>&nbsp;days &amp; hours</p>
           <p className="mb-3 text-[0.8125rem] text-ink-muted">
-            When you&apos;d like service to run. Setup time is added before it{staffEdit.rule.min_hours ? `, and each ${staffEdit.label} is charged at least ${hrs(staffEdit.rule.min_hours)}` : ""}.
+            Change the dates, service times and team for each day. Setup time is added before service{staffEdit.rule.min_hours ? `, and every ${staffEdit.label} is charged at least ${hrs(staffEdit.rule.min_hours)} a shift — even for a shorter service` : ""}.
+            {staffEdit.hireLineId ? ` Adding or removing a day changes the ${staffEdit.unitWord} hire too.` : ""}
           </p>
           <div className="space-y-3">
-            {staffEdit.days.map((d, i) => {
+            {staff.days.map((d, i) => {
               const day = sq?.perDay[i];
+              const timeSel = (value: string, on: (v: string) => void, label: string) => (
+                <label className="block text-[0.75rem] text-ink-muted">{label}
+                  <select className={sel} value={value} onChange={(ev) => on(ev.target.value)}>{withTime(value).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select></label>
+              );
               return (
-                <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_9rem] sm:items-end">
-                  <p className="col-span-2 text-[0.875rem] font-medium text-ink sm:col-span-1 sm:pb-3">
-                    {d.date ? longDay(d.date) : staffEdit.days.length > 1 ? `Day ${i + 1}` : "Your event"}
-                    {day && <span className="block text-[0.75rem] font-normal text-ink-muted">{plural(day.staff, staffEdit.label)} · {hrs(day.hours)} charged</span>}
-                  </p>
-                  <label className="block text-[0.75rem] text-ink-muted">Start
-                    <select className={sel} value={staff.days[i].start} onChange={(e) => setStaff((s) => s && ({ ...s, days: s.days.map((x, n) => (n === i ? { ...x, start: e.target.value } : x)) }))}>
-                      {withTime(staff.days[i].start).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select></label>
-                  <label className="block text-[0.75rem] text-ink-muted">Finish
-                    <select className={sel} value={staff.days[i].end} onChange={(e) => setStaff((s) => s && ({ ...s, days: s.days.map((x, n) => (n === i ? { ...x, end: e.target.value } : x)) }))}>
-                      {withTime(staff.days[i].end).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select></label>
+                <div key={i} className="rounded-xl bg-zinc-50 p-3 ring-1 ring-inset ring-line">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 text-[0.875rem] font-semibold text-ink">
+                      {staff.days.length > 1 ? `Day ${i + 1}` : "Your event"}{d.date ? <span className="font-normal text-ink-muted"> · {longDay(d.date)}</span> : null}
+                      {day && <span className="block text-[0.75rem] font-normal text-ink-muted">{plural(day.staff, staffEdit.label)} · {hrs(day.hours)} charged</span>}
+                    </p>
+                    {staff.days.length > 1 && (
+                      <button type="button" onClick={() => setStaff((s) => ({ ...s, days: s.days.filter((_, k) => k !== i) }))}
+                        className="inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-[0.8125rem] font-medium text-ink-muted ring-1 ring-inset ring-line hover:bg-rose-50 hover:text-rose-700"><X className="h-4 w-4" />Remove day</button>
+                    )}
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                    <label className="col-span-2 block text-[0.75rem] text-ink-muted sm:col-span-1">Date
+                      <input type="date" className={sel} value={d.date ?? ""} min={today} onChange={(ev) => ev.target.value && setStaff((s) => ({ ...s, days: moveDays(s.days, i, ev.target.value) }))} /></label>
+                    {timeSel(d.start, (v) => setDay(i, { start: v }), "Start")}
+                    {timeSel(d.end, (v) => setDay(i, { end: v }), "Finish")}
+                  </div>
+                  {staff.days.length > 1 && <p className="mt-1 text-[0.75rem] text-ink-faint">Changing a date moves the other days with it.</p>}
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-[0.8125rem] text-ink">{plural(d.team, staffEdit.label)} on these hours</span>
+                    <span className="inline-flex items-center rounded-lg ring-1 ring-inset ring-line">
+                      <button type="button" aria-label={`Fewer ${staffEdit.label}s`} disabled={d.team <= staff.carts} onClick={() => setDay(i, { team: d.team - 1 })} className="grid h-9 w-9 place-items-center text-ink-muted hover:text-ink disabled:opacity-30"><Minus className="h-4 w-4" /></button>
+                      <span className="w-8 text-center text-[0.9375rem] tabular">{d.team}</span>
+                      <button type="button" aria-label={`More ${staffEdit.label}s`} disabled={d.team + d.extra.length >= 8} onClick={() => setDay(i, { team: d.team + 1 })} className="grid h-9 w-9 place-items-center text-ink-muted hover:text-ink disabled:opacity-30"><Plus className="h-4 w-4" /></button>
+                    </span>
+                  </div>
+                  {d.extra.map((x, k) => (
+                    <div key={k} className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 rounded-lg bg-surface p-2 ring-1 ring-inset ring-line">
+                      <p className="col-span-3 text-[0.8125rem] font-medium text-ink">Extra {staffEdit.label} — own hours <span className="font-normal text-ink-muted">(still charged at least {hrs(staffEdit.rule.min_hours_extra ?? staffEdit.rule.min_hours ?? 0)})</span></p>
+                      {timeSel(x.start, (v) => setDay(i, { extra: d.extra.map((y, n) => (n === k ? { ...y, start: v } : y)) }), "Start")}
+                      {timeSel(x.end, (v) => setDay(i, { extra: d.extra.map((y, n) => (n === k ? { ...y, end: v } : y)) }), "Finish")}
+                      <button type="button" aria-label="Remove this extra shift" onClick={() => setDay(i, { extra: d.extra.filter((_, n) => n !== k) })} className="grid h-11 w-11 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" disabled={d.team + d.extra.length >= 8} onClick={() => setDay(i, { team: d.team + 1 })}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-surface disabled:opacity-40"><UserPlus className="h-4 w-4" />Extra {staffEdit.label} — need faster service?</button>
+                    <button type="button" disabled={d.team + d.extra.length >= 8} onClick={() => setDay(i, { extra: [...d.extra, { start: d.start, end: d.end }] })}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink-muted hover:text-ink disabled:opacity-40">+ Extra {staffEdit.label} on different hours</button>
+                  </div>
                 </div>
               );
             })}
           </div>
-          {!sq && <p className="mt-2 text-[0.8125rem] font-medium text-rose-700">The finish time needs to be after the start time.</p>}
+          {!sq && <p className="mt-2 text-[0.8125rem] font-medium text-rose-700">Check the times — each finish needs to be after its start.</p>}
+          {staff.days.length < staffEdit.maxDays && (
+            <button type="button" onClick={() => setStaff((s) => ({ ...s, days: addDay(s.days) }))}
+              className="mt-3 inline-flex h-11 items-center gap-2 rounded-xl px-4 text-[0.9375rem] font-semibold text-[color:var(--portal-brand-ink)] ring-1 ring-inset ring-[color:var(--portal-brand)] hover:bg-zinc-50">
+              <CalendarPlus className="h-4 w-4" />Add a day{staffEdit.hireLineId ? ` (${staffEdit.label} + ${staffEdit.unitWord} hire)` : ""}
+            </button>
+          )}
 
-          {staffEdit.options.length > 1 && (
+          {staffEdit.canAddCart && (
             <div className="mt-4">
-              <p className="text-[0.875rem] font-semibold text-ink">Faster service</p>
-              <p className="mb-2 text-[0.8125rem] text-ink-muted">A second {staffEdit.unitWord} serves twice the queue. It&apos;s {money(inc(staffEdit.hirePrice, staffEdit.hireTax), currency)} inc GST{staffEdit.hirePerDay ? " a day" : ""} — we bring it with the first, so there&apos;s no extra delivery.</p>
+              <p className="text-[0.875rem] font-semibold text-ink">Second {staffEdit.unitWord}</p>
+              <p className="mb-2 text-[0.8125rem] text-ink-muted">Serves twice the queue. {money(inc(staffEdit.hirePrice, staffEdit.hireTax), currency)} inc GST{staffEdit.hirePerDay ? " a day" : ""} — it comes with the first, so there&apos;s no extra delivery. Split your {staffEdit.label}s across both, or add more.</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                {staffEdit.options.map((o) => {
-                  const on = staff.carts === o.carts && staff.staff === o.staff;
-                  const quoted = o.carts === staffEdit.carts && o.staff === staffEdit.staff;
-                  let delta = 0;
-                  try { const q = staffQuote(staffEdit, { ...staff, carts: o.carts, staff: o.staff }); const base = staffQuote(staffEdit, { ...staff, carts: staffEdit.carts, staff: staffEdit.staff }); delta = inc(q.staffCost - base.staffCost, staffEdit.staffTax) + inc(q.hireCost, staffEdit.hireTax); } catch { /* times not valid yet */ }
-                  const desc = o.carts === 1 ? `1 ${staffEdit.unitWord} · ${plural(o.staff, staffEdit.label)}`
-                    : o.staff === o.carts ? `${o.carts} ${staffEdit.unitWord}s · 1 ${staffEdit.label} each`
-                    : `${o.carts} ${staffEdit.unitWord}s · ${plural(o.staff, staffEdit.label)}`;
+                {[1, 2].map((n) => {
+                  const on = staff.carts === n;
                   return (
-                    <button key={`${o.carts}x${o.staff}`} type="button" aria-pressed={on} onClick={() => setStaff((s) => s && ({ ...s, carts: o.carts, staff: o.staff }))}
+                    <button key={n} type="button" aria-pressed={on} onClick={() => setStaff((s) => ({ ...s, carts: n, days: s.days.map((d) => ({ ...d, team: Math.max(d.team, n) })) }))}
                       className={cn("flex min-h-[3.25rem] items-center gap-3 rounded-xl px-3 py-2 text-left ring-1 ring-inset", on ? "bg-[color:var(--portal-brand)]/10 ring-[color:var(--portal-brand)]" : "ring-line hover:bg-zinc-50")}>
                       <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full ring-1 ring-inset", on ? "bg-[var(--portal-brand)] text-white ring-[color:var(--portal-brand)]" : "ring-line")}>{on && <Check className="h-3 w-3" />}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[0.875rem] font-medium text-ink">{desc}</span>
-                        <span className="block text-[0.75rem] text-ink-muted">{quoted ? "As quoted" : `${delta >= 0 ? "+" : "−"}${money(Math.abs(delta), currency)} inc GST`}</span>
-                      </span>
+                      <span className="text-[0.875rem] font-medium text-ink">{n === 1 ? `1 ${staffEdit.unitWord}` : `2 ${staffEdit.unitWord}s (+${money(inc(staffEdit.hirePrice, staffEdit.hireTax), currency)}${staffEdit.hirePerDay ? " a day" : ""})`}{n === staffEdit.carts ? <span className="block text-[0.75rem] font-normal text-ink-muted">As quoted</span> : null}</span>
                     </button>
                   );
                 })}
@@ -203,7 +249,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
         {lines.map((l) => {
           const gone = removed.has(l.id);
           const q = qty[l.id] ?? l.quantity;
-          const managed = !!staffEdit && (l.id === staffEdit.lineId || l.id === staffEdit.hireLineId);
+          const managed = !!staffEdit && (l.id === staffEdit.lineId || l.id === staffEdit.hireLineId || l.id === staffEdit.travel?.lineId);
           const s = split[l.id];
           return (
             <li key={l.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5", gone && "bg-zinc-50")}>
@@ -217,22 +263,22 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
               ) : !l.editable ? (
                 <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-muted"><Lock className="h-3.5 w-3.5" />{Number(l.quantity)}{l.unit ? ` ${l.unit}` : ""}</span>
               ) : gone ? (
-                <button type="button" onClick={() => setRemoved((x) => { const n = new Set(x); n.delete(l.id); return n; })} className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-surface"><Undo2 className="h-4 w-4" />Put back</button>
+                <button type="button" onClick={() => change((e) => ({ ...e, removed: e.removed.filter((x) => x !== l.id) }))} className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line hover:bg-surface"><Undo2 className="h-4 w-4" />Put back</button>
               ) : l.serves && s ? (
                 <span className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
-                  <Stepper label="Hot drinks" value={s.hot} min={0} onChange={(v) => setSplit((x) => ({ ...x, [l.id]: { ...x[l.id], hot: v } }))} />
-                  <Stepper label="Cold drinks" value={s.cold} min={0} onChange={(v) => setSplit((x) => ({ ...x, [l.id]: { ...x[l.id], cold: v } }))} />
-                  <button type="button" aria-label={`Take off ${l.name}`} onClick={() => setRemoved((x) => new Set(x).add(l.id))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  <Stepper label="Hot drinks" value={s.hot} min={0} onChange={(v) => change((e) => ({ ...e, split: { ...e.split, [l.id]: { ...e.split[l.id], hot: v } } }))} />
+                  <Stepper label="Cold drinks" value={s.cold} min={0} onChange={(v) => change((e) => ({ ...e, split: { ...e.split, [l.id]: { ...e.split[l.id], cold: v } } }))} />
+                  <button type="button" aria-label={`Take off ${l.name}`} onClick={() => change((e) => ({ ...e, removed: [...e.removed, l.id] }))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <span className="inline-flex items-center rounded-lg ring-1 ring-inset ring-line">
                     <button type="button" aria-label={`Fewer ${l.name}`} onClick={() => step(l.id, -stepBy(q))} className="grid h-10 w-10 place-items-center text-ink-muted hover:text-ink"><Minus className="h-4 w-4" /></button>
-                    <input aria-label={`${l.name} quantity`} inputMode="numeric" value={q} onChange={(e) => setQty((x) => ({ ...x, [l.id]: clamp(Math.round(Number(e.target.value.replace(/\D/g, "")) || 1), 1, 10000) }))}
+                    <input aria-label={`${l.name} quantity`} inputMode="numeric" value={q} onChange={(ev) => { const v = clamp(Math.round(Number(ev.target.value.replace(/\D/g, "")) || 1), 1, 10000); change((e) => ({ ...e, qty: { ...e.qty, [l.id]: v } })); }}
                       className="h-10 w-16 border-x border-line bg-transparent text-center text-[0.9375rem] tabular focus:outline-none" />
                     <button type="button" aria-label={`More ${l.name}`} onClick={() => step(l.id, stepBy(q))} className="grid h-10 w-10 place-items-center text-ink-muted hover:text-ink"><Plus className="h-4 w-4" /></button>
                   </span>
-                  <button type="button" aria-label={`Take off ${l.name}`} onClick={() => setRemoved((x) => new Set(x).add(l.id))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" aria-label={`Take off ${l.name}`} onClick={() => change((e) => ({ ...e, removed: [...e.removed, l.id] }))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </span>
               )}
               {l.serves && s && !gone && s.hot + s.cold < 1 && <p className="w-full text-[0.75rem] font-medium text-rose-700">Choose at least one drink — or take the drinks off.</p>}
@@ -248,7 +294,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
                 <p className="text-[0.75rem] text-ink-faint">{c ? money(c.unit_price, currency, { cents: true }) : ""}{c?.unit ? ` / ${c.unit}` : ""} + GST</p>
               </div>
               <span className="text-[0.875rem] tabular text-ink">× {a.quantity}</span>
-              <button type="button" aria-label={`Take off ${c?.name}`} onClick={() => setAdded((x) => x.filter((_, n) => n !== i))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Take off ${c?.name}`} onClick={() => change((e) => ({ ...e, added: e.added.filter((_, n) => n !== i) }))} className="grid h-10 w-10 place-items-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
             </li>
           );
         })}
@@ -259,7 +305,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
           {upsells.map((u) => {
             const on = extras.has(u.id);
             return (
-              <button key={u.id} type="button" aria-pressed={on} onClick={() => setExtras((x) => { const n = new Set(x); if (n.has(u.id)) n.delete(u.id); else n.add(u.id); return n; })}
+              <button key={u.id} type="button" aria-pressed={on} onClick={() => change((e) => ({ ...e, extras: e.extras.includes(u.id) ? e.extras.filter((x) => x !== u.id) : [...e.extras, u.id] }))}
                 className={cn("flex w-full items-start gap-3 rounded-xl p-3 text-left ring-1 ring-inset", on ? "bg-[color:var(--portal-brand)]/10 ring-[color:var(--portal-brand)]" : "ring-line hover:bg-zinc-50")}>
                 <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--portal-brand-ink)]" />
                 <span className="min-w-0 flex-1">
@@ -285,7 +331,7 @@ export function CustomerChange({ token, lines, catalogue, currency, businessName
               ))}
             </select>
             <input aria-label="How many" inputMode="numeric" value={pickQty} onChange={(e) => setPickQty(e.target.value.replace(/\D/g, ""))} className="h-11 w-20 rounded-lg border border-line bg-surface px-3 text-center text-[0.875rem] tabular" />
-            <button type="button" disabled={!pick || !Number(pickQty)} onClick={() => { setAdded((x) => [...x, { service_id: pick, quantity: clamp(Number(pickQty), 1, 10000) }]); setPick(""); }}
+            <button type="button" disabled={!pick || !Number(pickQty)} onClick={() => { const a = { service_id: pick, quantity: clamp(Number(pickQty), 1, 10000) }; change((e) => ({ ...e, added: [...e.added, a] })); setPick(""); }}
               className="inline-flex h-11 items-center gap-1.5 rounded-lg bg-[var(--portal-brand)] px-4 text-[0.875rem] font-semibold text-white disabled:opacity-40"><Plus className="h-4 w-4" />Add</button>
           </div>
           {pick && byId.get(pick)?.description && <p className="mt-2 text-[0.75rem] text-ink-muted">{byId.get(pick)!.description}</p>}

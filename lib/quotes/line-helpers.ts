@@ -16,6 +16,8 @@ export interface ShiftDay {
   setup_minutes: number;        // paid setup before service
   units: number;                // carts / stations running that day
   per_unit: number;             // staff per cart
+  /** More staff that day on their own hours (e.g. a second barista just for the morning rush) */
+  extra?: { start: string; end: string }[];
 }
 export interface StaffDetails {
   kind: "staff";
@@ -113,17 +115,23 @@ export function staffLine(d: StaffDetails, rule: StaffRule | null, label = "staf
     const units = Math.max(1, Math.floor(day.units || 1)), per = Math.max(1, Math.floor(day.per_unit || 1));
     const staff = units * per;
     const travel = Math.max(0, d.travel_minutes ?? 0) * 2 / 60;
-    const each = Array.from({ length: staff }, (_, n) => Math.round((staffHours(r, hrs, n === 0) + travel) * 100) / 100);
+    const extras = (day.extra ?? []).filter((x) => toMin(x.start) != null && toMin(x.end) != null);
+    const each = [
+      ...Array.from({ length: staff }, (_, n) => Math.round((staffHours(r, hrs, n === 0) + travel) * 100) / 100),
+      // extra staff on their own hours: never the "first" person, so the minimum shift always applies
+      ...extras.map((x) => Math.round((staffHours(r, serviceHours(toMin(x.start)!, toMin(x.end)!), false) + travel) * 100) / 100),
+    ];
     const hours = Math.round(each.reduce((a, b) => a + b, 0) * 100) / 100;
-    out.push({ day: dayLabel(day, i), staff, perPerson: each[0], hours, each });
+    out.push({ day: dayLabel(day, i), staff: staff + extras.length, perPerson: each[0], hours, each });
     const setup = setupTime(day);
     const who = units > 1 ? ` – ${plural(per, label)} / per ${unitWord}` : staff > 1 && multi ? ` – ${plural(staff, label)}` : "";
     const lines = [
-      multi ? `${dayLabel(day, i)} – ${hrsText(each[0])}${staff > 1 && each.some((x) => x !== each[0]) ? ` + ${each.slice(1).map(hrLabel).join(" + ")} (${hrsText(hours)})` : staff > 1 ? ` x${staff} (${hrsText(hours)})` : ""}` : null,
+      multi || extras.length ? `${dayLabel(day, i)} – ${hrsText(each[0])}${each.length > 1 && each.some((x) => x !== each[0]) ? ` + ${each.slice(1).map(hrLabel).join(" + ")} (${hrsText(hours)})` : each.length > 1 ? ` x${each.length} (${hrsText(hours)})` : ""}` : null,
       day.setup_minutes > 0 && setup ? `Setup ${shortTime(setup)}` : null,
       `Service ${shortTime(day.start)} – ${shortTime(day.end)}${who}`,
+      ...extras.map((x) => `+ 1 ${label} ${shortTime(x.start)} – ${shortTime(x.end)}`),
       travel > 0 ? `Travel ${minutesText(d.travel_minutes!)} each way (${hrsText(travel)})` : null,
-      !multi && staff > 1 ? (each.every((x) => x === each[0]) ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : `${plural(staff, label)}: ${each.map(hrLabel).join(" + ")}`) : null,
+      !multi && staff + extras.length > 1 && !extras.length ? (each.every((x) => x === each[0]) ? `${plural(staff, label)} × ${hrsText(each[0]).replace("hrs", " hrs")}` : `${plural(staff, label)}: ${each.map(hrLabel).join(" + ")}`) : null,
     ].filter(Boolean);
     blocks.push(lines.join("\n"));
   }
@@ -157,7 +165,9 @@ export function cleanDetails(raw: unknown): LineDetails | null {
     const days = rawDays.slice(0, 31).map((x) => {
       const y = (x ?? {}) as Record<string, unknown>;
       return { date: date(y.date), start: t(y.start), end: t(y.end), setup_minutes: Math.round(n(y.setup_minutes, 600)),
-        units: Math.max(1, Math.round(n(y.units ?? 1, 50))), per_unit: Math.max(1, Math.round(n(y.per_unit ?? 1, 50))) };
+        units: Math.max(1, Math.round(n(y.units ?? 1, 50))), per_unit: Math.max(1, Math.round(n(y.per_unit ?? 1, 50))),
+        ...(Array.isArray(y.extra) && y.extra.length ? { extra: y.extra.slice(0, 10).map((e) => { const o = (e ?? {}) as Record<string, unknown>; return { start: t(o.start), end: t(o.end) }; })
+          .filter((e): e is { start: string; end: string } => !!e.start && !!e.end) } : {}) };
     });
     const unit = typeof r.unit_label === "string" ? r.unit_label.trim().slice(0, 30) : "";
     const travel = Math.round(n(r.travel_minutes, 24 * 60));
@@ -183,7 +193,7 @@ export function minutesText(m: number) {
 export const chargeMinutes = (drive: number) => Math.ceil(Math.max(0, drive) / 30) * 30;
 
 /** The travel line: return kilometres for every trip, and its description. */
-export function travelLine(d: TravelDetails, from: string | null) {
+export function travelLine(d: TravelDetails, from: string | null, days = 0) {
   const trips = Math.max(1, Math.round(d.trips || 1));
   const hoursOnly = d.mode === "hours";
   const kmTotal = Math.round(d.km * 2 * trips * 10) / 10;
@@ -192,8 +202,17 @@ export function travelLine(d: TravelDetails, from: string | null) {
   const lines = [
     `${from?.trim() || "Our base"} → ${d.address.trim() || "the venue"}`,
     hoursOnly ? (d.km > 0 ? `${km(d.km)} each way — no kilometre charge` : "No kilometre charge")
-      : `${km(d.km)} each way · ${km(d.km * 2)} return${trips > 1 ? ` × ${trips} trips = ${km(kmTotal)}` : ""}`,
+      : trips === 1 ? `${km(d.km)} each way · there and back = ${km(kmTotal)}`
+      : days > 1 && trips % days === 0
+        ? `${km(d.km)} each way · ${trips / days === 1 ? "there and back each day" : `${trips / days} return trips a day (there and back)`} · ${km(d.km * 2 * (trips / days))} a day × ${days} days = ${km(kmTotal)}`
+        : `${km(d.km)} each way · ${trips} return trips (there and back) × ${km(d.km * 2)} = ${km(kmTotal)}`,
     d.charge_minutes > 0 ? `Driving ${minutesText(d.drive_minutes || d.charge_minutes)} each way${d.charge_minutes !== d.drive_minutes ? ` (charged as ${minutesText(d.charge_minutes)})` : ""} — on the barista hours` : null,
   ].filter(Boolean);
   return { quantity, description: lines.join("\n") };
+}
+
+/** "U5, 47-49 Vicars St, Mitchell ACT 2911" → "Mitchell" (where the van leaves from). */
+export function baseSuburb(address: string | null | undefined): string | null {
+  const m = /(?:^|,)\s*([A-Za-z][A-Za-z' -]*?)\s+(?:ACT|NSW|VIC|QLD|SA|WA|TAS|NT)\b\s*\d{4}?\s*$/i.exec((address ?? "").trim());
+  return m ? m[1].trim() : null;
 }

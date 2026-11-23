@@ -397,14 +397,15 @@ export function QuoteBuilder(p: BuilderProps) {
       queue(`i:${id}`, { details, quantity: derived.quantity, description: derived.description }, sendItem(id), SAVE_DELAY);
       // Travel: the driving time (each way) goes on every barista line, which works its hours out again
       if (details.kind === "travel") syncStaffTravel(details.charge_minutes, items);
-      // Barista days changed: a travel line that had one trip per day keeps one trip per day
+      // Barista days changed: a travel line keeps the same trips per day
       if (details.kind === "staff") {
         const before = items.find((i) => i.id === id)?.details as StaffDetails | undefined;
         const was = before ? shiftDays(before).length : 0, now = shiftDays(details).length;
         if (was && was !== now) {
-          for (const tr of items.filter((x) => x.details?.kind === "travel" && (x.details as TravelDetails).trips === was)) {
-            const next: TravelDetails = { ...(tr.details as TravelDetails), trips: now };
-            const r = travelLine(next, p.travelFrom ?? null);
+          // a travel line with the same trips every day (there and back, or more) keeps that many a day
+          for (const tr of items.filter((x) => x.details?.kind === "travel" && (x.details as TravelDetails).trips % was === 0)) {
+            const next: TravelDetails = { ...(tr.details as TravelDetails), trips: ((tr.details as TravelDetails).trips / was) * now };
+            const r = travelLine(next, p.travelFrom ?? null, now);
             setItems((all) => all.map((i) => (i.id === tr.id ? { ...i, details: next, quantity: numStr(r.quantity), description: r.description } : i)));
             queue(`i:${tr.id}`, { details: next, quantity: r.quantity, description: r.description }, sendItem(tr.id), SAVE_DELAY);
           }

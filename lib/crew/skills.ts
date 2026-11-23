@@ -41,10 +41,10 @@ export function staffNeededFromLines(lines: { details?: unknown }[]): number | n
   const perDay = new Map<string, number>();
   let found = false;
   for (const l of lines) {
-    const d = (l.details ?? null) as { kind?: string; days?: { date?: string | null; units?: number; per_unit?: number }[] } | null;
+    const d = (l.details ?? null) as { kind?: string; days?: { date?: string | null; units?: number; per_unit?: number; extra?: unknown[] }[] } | null;
     if (d?.kind !== "staff" || !Array.isArray(d.days)) continue;
     for (const [i, day] of d.days.entries()) {
-      const n = Math.max(0, Math.round(Number(day.units ?? 1) * Number(day.per_unit ?? 1)));
+      const n = Math.max(0, Math.round(Number(day.units ?? 1) * Number(day.per_unit ?? 1))) + (Array.isArray(day.extra) ? day.extra.length : 0);
       if (!Number.isFinite(n)) continue;
       const k = day.date ?? `#${i}`;
       perDay.set(k, (perDay.get(k) ?? 0) + n);
