@@ -96,6 +96,55 @@ async function replyThreads(supabase: SupabaseClient, orgId: string, q: { event_
   return out;
 }
 
+/**
+ * Everyone the customer CC'd (or also sent to) on this job's emails: added to the client as contacts and to the job,
+ * so the send dialog ticks them. Our own addresses and colleagues (same domain as the business) are left out.
+ */
+async function addCcContacts(supabase: SupabaseClient, orgId: string, q: { event_id: string; customer_id: string }, own: string[]) {
+  if (!q.event_id || !q.customer_id) return;
+  const { data: ev } = await supabase.from("events").select("enquiry_id").eq("id", q.event_id).maybeSingle();
+  const filter = [`event_id.eq.${q.event_id}`, ev?.enquiry_id ? `enquiry_id.eq.${ev.enquiry_id}` : null].filter(Boolean).join(",");
+  const { data: threads } = await supabase.from("email_threads").select("id").eq("organisation_id", orgId).or(filter).neq("classification", "spam").limit(10);
+  const ids = ((threads ?? []) as { id: string }[]).map((t) => t.id);
+  if (!ids.length) return;
+  const { data: msgs } = await supabase.from("email_messages").select("direction, from_email, to_emails, cc_emails").eq("organisation_id", orgId).in("thread_id", ids).limit(100);
+  const [{ data: org }, { data: team }] = await Promise.all([
+    supabase.from("organisations").select("contact_email").eq("id", orgId).single(),
+    supabase.from("organisation_users").select("user:users!organisation_users_user_id_fkey(email)").eq("organisation_id", orgId),
+  ]);
+  const mine = new Set([...own, org?.contact_email, ...((team ?? []) as unknown as { user: { email: string | null } | null }[]).map((m) => m.user?.email)].filter((x): x is string => !!x).map((x) => x.toLowerCase()));
+  const myDomains = new Set([...mine].map((e) => e.split("@")[1]).filter(Boolean));
+  const found = new Set<string>();
+  for (const m of (msgs ?? []) as { direction: string; from_email: string | null; to_emails: string[] | null; cc_emails: string[] | null }[]) {
+    // CCs on any message in the conversation; extra "To" people only on the customer's own emails
+    const list = [...(m.cc_emails ?? []), ...(m.direction === "inbound" ? m.to_emails ?? [] : [])];
+    for (const raw of list) {
+      const e = String(raw ?? "").trim().toLowerCase().replace(/^.*<([^>]+)>.*$/, "$1");
+      if (!EMAIL.test(e) || mine.has(e) || myDomains.has(e.split("@")[1]) || /^(no-?reply|mailer-daemon|notifications?)@/.test(e)) continue;
+      found.add(e);
+    }
+  }
+  if (!found.size) return;
+  const { data: have } = await supabase.from("contacts").select("id, email").eq("organisation_id", orgId).eq("customer_id", q.customer_id);
+  const byEmail = new Map(((have ?? []) as { id: string; email: string | null }[]).filter((c) => c.email).map((c) => [c.email!.toLowerCase(), c.id]));
+  const { data: onJob } = await supabase.from("event_contacts").select("contact_id").eq("event_id", q.event_id);
+  const already = new Set(((onJob ?? []) as { contact_id: string }[]).map((r) => r.contact_id));
+  for (const email of [...found].slice(0, 10)) {
+    let id = byEmail.get(email) ?? null;
+    if (!id) {
+      // The address is all we have: "skye.luton@…" → Skye Luton (editable on the client)
+      const parts = email.split("@")[0].split(/[._-]+/).filter((x) => /^[a-z]{2,}$/i.test(x)).map((x) => x[0].toUpperCase() + x.slice(1));
+      const { data: c } = await supabase.from("contacts").insert({ organisation_id: orgId, customer_id: q.customer_id, first_name: parts[0] ?? email.split("@")[0], last_name: parts.slice(1).join(" ") || null, email, is_primary: false })
+        .select("id").single();
+      id = (c?.id as string | undefined) ?? null;
+    }
+    if (id && !already.has(id)) {
+      await supabase.from("event_contacts").insert({ organisation_id: orgId, event_id: q.event_id, contact_id: id, role: "CC'd on the enquiry" });
+      already.add(id);
+    }
+  }
+}
+
 /** The logo for the PDF (PNG or JPEG only; anything else, or a slow server, means no logo). */
 async function logoBytes(url: string | null | undefined): Promise<Uint8Array | null> {
   if (!url || !/^https:\/\//.test(url)) return null;
@@ -114,12 +163,15 @@ const needsPublishing = (q: { current_version_id: string | null; has_unpublished
 export async function quoteSendSetup(quoteId: string): Promise<ActionResult<QuoteSendSetup>> {
   try {
     const { supabase, org, user, profile, q } = await load(quoteId);
+    const gm = await gmailSender(supabase, org.id, user.id);
+    // People CC'd on the enquiry emails become contacts on this job, so the quote goes to them too
+    await addCcContacts(supabase, org.id, q, gm ? ownAddresses(gm.ctx) : []).catch(() => undefined);
     const [{ data: contacts }, { data: versions }, { data: prev }, { data: o }, { data: jobPeople }] = await Promise.all([
       supabase.from("contacts").select("id, first_name, last_name, email, is_primary").eq("organisation_id", org.id).eq("customer_id", q.customer_id).not("email", "is", null),
       supabase.from("quote_versions").select("version_number, total").eq("quote_id", q.id).order("version_number", { ascending: false }).limit(1),
       supabase.from("email_send_recipients").select("email").eq("quote_id", q.id).eq("role", "to"),
       supabase.from("organisations").select("brand_colour, logo_url, contact_email").eq("id", org.id).single(),
-      supabase.from("event_contacts").select("contact_id").eq("organisation_id", org.id).eq("event_id", q.event_id),
+      supabase.from("event_contacts").select("contact_id, role").eq("organisation_id", org.id).eq("event_id", q.event_id),
     ]);
 
     // Suggestions: the people on this job first (all ticked), then the client's general email, then the client's other
@@ -137,7 +189,8 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
     if (q.event?.primary_contact_id) onJob.add(q.event.primary_contact_id);
     const eventContact = cs.find((c) => c.id === q.event?.primary_contact_id);
     if (eventContact) push(eventContact.email, full(eventContact), "Main contact for this job");
-    for (const c of cs.filter((c) => onJob.has(c.id))) push(c.email, full(c), "On this job");
+    const ccd = new Set(((jobPeople ?? []) as { contact_id: string; role: string | null }[]).filter((r) => r.role === "CC'd on the enquiry").map((r) => r.contact_id));
+    for (const c of cs.filter((c) => onJob.has(c.id))) push(c.email, full(c), ccd.has(c.id) ? "CC'd on the enquiry" : "On this job");
     const jobEmails = suggestions.map((x) => x);
     push(q.customer?.email, q.customer?.kind === "company" ? null : q.customer?.name ?? null, "Client's general email");
     for (const c of cs.filter((c) => !onJob.has(c.id)).sort((a, b) => Number(b.is_primary) - Number(a.is_primary))) push(c.email, full(c), "Not on this job");
@@ -154,7 +207,6 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
       if (snap && typeof (snap as { total?: unknown }).total !== "undefined") total = Number((snap as { total: number }).total);
     }
 
-    const gm = await gmailSender(supabase, org.id, user.id);
     const threads = gm ? await replyThreads(supabase, org.id, q, ownAddresses(gm.ctx)) : [];
     let signature: QuoteSendSetup["signature"] = null;
     try { const s = await signatureForSend(supabase, org.id, user.id, null); if (s) signature = { html: s.html, text: s.text }; } catch { /* no signature */ }
