@@ -16,8 +16,9 @@ const dur = (m: number) => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)
 const field = "h-12 w-full rounded-xl border border-line-strong bg-surface px-4 text-[1rem] text-ink focus:outline-none focus:ring-2";
 
 /** The public "Book a meeting" page: how and how long → day and time → your details → booked (with your portal). */
-export function BookingFlow({ slug, business, logo, accent, title, intro, kinds, durations, location, days: initialDays, tz, autoConfirm }: {
+export function BookingFlow({ slug, business, logo, accent, title, intro, kinds, durations, location, days: initialDays, tz, autoConfirm, embedded = false }: {
   slug: string; business: string; logo: string | null; accent: string; title: string; intro: string; kinds: ApptKind[]; durations: number[]; location: string; days: DaySlots[]; tz: string; autoConfirm: boolean;
+  /** inside the business's own website frame (header and menu above it), not a page on its own */ embedded?: boolean;
 }) {
   const [kind, setKind] = useState<ApptKind>(kinds[0]);
   const [duration, setDuration] = useState(durations[0]);
@@ -38,7 +39,7 @@ export function BookingFlow({ slug, business, logo, accent, title, intro, kinds,
   });
   const style = { ["--accent" as string]: accent };
   return (
-    <div className="min-h-[100dvh] bg-canvas" style={style}>
+    <div className={embedded ? "bg-transparent" : "min-h-[100dvh] bg-canvas"} style={style}>
       <div className="h-48 w-full sm:h-56" style={{ background: `radial-gradient(1200px 300px at 20% -20%, ${accent}cc, transparent 60%), linear-gradient(135deg, ${accent}, ${accent}99)` }} />
       <div className="mx-auto -mt-32 max-w-5xl px-4 pb-16 sm:-mt-40">
         <div className="overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-line lg:grid lg:grid-cols-[320px_minmax(0,1fr)]">

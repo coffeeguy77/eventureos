@@ -16,6 +16,10 @@ import { AgencyFrame } from "@/components/site/agency/frame";
 import { AgencyLanding } from "@/components/site/agency/landing";
 import { AgencyQuote, AgencySupport, QUOTE_FAQS, SUPPORT_FAQS } from "@/components/site/agency/pages";
 import { JsonLd, faqLd } from "@/components/site/agency/ui";
+import { BookingFlow } from "@/components/meet/booking-flow";
+import { createServiceClient } from "@/lib/integrations/runtime";
+import { freeSlots, readApptSettings } from "@/lib/appointments/core";
+import { busyBetween } from "@/lib/appointments/server";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string; page: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> };
@@ -35,6 +39,7 @@ async function loadAgency(p: P) {
 const AGENCY_META: Record<string, { title: string; description: string }> = {
   quote: { title: "Get a Quote | Website Design, Hosting & Apps", description: "Request a quote for a new website, LeadPages or WordPress site, hosting, maintenance, Google Ads, SEO or a custom app. Canberra-based, clear prices." },
   support: { title: "Lodge a Support Ticket | Website, Email & Server Help", description: "Lodge a support request for your website, email or server. Get a ticket number straight away and track progress in the client portal." },
+  meet: { title: "Book a Meeting", description: "Pick a time that suits you to talk about your website, hosting, Google Ads or a new project." },
 };
 
 async function load(p: P) {
@@ -207,6 +212,7 @@ export default async function InfoPageView(p: P) {
 
 async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>>, page: string, p: P) {
   if (page === "support") return <AgencyFrame org={org}><JsonLd data={faqLd(SUPPORT_FAQS)} /><AgencySupport org={org} /></AgencyFrame>;
+  if (page === "meet") return <AgencyFrame org={org}><AgencyMeet org={org} /></AgencyFrame>;
   if (page === "quote") {
     const sp = (await p.searchParams) ?? {};
     const pre = typeof sp.service === "string" ? sp.service.slice(0, 60) : undefined;
@@ -222,4 +228,18 @@ async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>
       <AgencyLanding org={org} s={s} />
     </AgencyFrame>
   );
+}
+
+/** Book a meeting, inside the agency's own site (same header, menu and footer). */
+async function AgencyMeet({ org }: { org: NonNullable<Awaited<ReturnType<typeof publicOrg>>> }) {
+  const s = readApptSettings(org.rawSettings);
+  if (!s.enabled || !s.on_website) {
+    return <div className="mx-auto max-w-[640px] px-5 py-24 text-center"><p className="text-[1.5rem] font-semibold">Online booking isn&apos;t open right now</p><p className="mt-2 text-[var(--muted)]">Please get in touch{org.contact_phone ? ` on ${org.contact_phone}` : ""}{org.contact_email ? ` or ${org.contact_email}` : ""}.</p></div>;
+  }
+  const db = createServiceClient();
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: org.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const busy = await busyBetween(db, org.id, new Date().toISOString(), new Date(Date.now() + (s.horizon_days + 2) * 86_400_000).toISOString());
+  const days = freeSlots(s, { today, tz: org.timezone, now: Date.now(), duration: s.durations[0], busy });
+  const accent = /^#[0-9a-f]{6}$/i.test(org.brand_colour ?? "") ? org.brand_colour! : "#6028EC";
+  return <BookingFlow embedded slug={org.slug} business={org.name} logo={org.logo_url && /^https:\/\//.test(org.logo_url) ? org.logo_url : null} accent={accent} title={s.title} intro={s.intro} kinds={s.kinds} durations={s.durations} location={s.location} days={days} tz={org.timezone} autoConfirm={s.auto_confirm} />;
 }

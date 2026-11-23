@@ -546,7 +546,7 @@ export const SERVICES: Service[] = [
 export const serviceBySlug = (slug: string) => SERVICES.find((s) => s.slug === slug) ?? null;
 
 /** Every page this agency site adds (for routing and the sitemap). */
-export const AGENCY_PAGES = [...SERVICES.map((s) => s.slug), "quote", "support"];
+export const AGENCY_PAGES = [...SERVICES.map((s) => s.slug), "quote", "support", "meet"];
 export const isAgencyPage = (slug: string) => AGENCY_PAGES.includes(slug);
 
 export const GROUPS: { key: Service["group"]; label: string; text: string }[] = [

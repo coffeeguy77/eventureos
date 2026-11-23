@@ -13,7 +13,7 @@ export function AgencyHeader({ org }: { org: PublicOrg }) {
   }));
   const logo = darkLogo(org);
   const appt = readApptSettings(org.rawSettings);
-  const meet = appt.enabled && appt.on_website ? [{ href: `/meet/${org.slug}`, label: appt.title === "Book a meeting" ? "Book a meeting" : appt.title }] : [];
+  const meet = appt.enabled && appt.on_website ? [{ href: `${base}/meet`, label: appt.title === "Book a meeting" ? "Book a meeting" : appt.title }] : [];
   return (
     <AgencyNav
       name={org.name} logo={logo} home={base} groups={groups} phone={org.contact_phone}
