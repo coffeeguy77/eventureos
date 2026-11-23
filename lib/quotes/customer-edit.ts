@@ -159,28 +159,34 @@ export function cateringLocked(eventDate: string | null, startTime: string | nul
   return starts - now.getTime() < CATERING_LOCK_HOURS * 3_600_000;
 }
 
-/* ── Barista hours and carts (one-day jobs) ─────────────────────────────────────────────────────────────── */
+/* ── Barista hours and carts ─────────────────────────────────────────────────────────────────────────── */
 
-/** A way to run the job: how many carts, and how many baristas in total. */
+/** A way to run the job: how many carts (or vans), and how many staff in total. */
 export interface StaffSetup { carts: number; staff: number }
 
-/** What the quote link needs to let the customer change the barista hours and carts. */
+/** One day of the job as quoted: its date (the event date when a one-day line had none), service times and setup. */
+export interface StaffEditDay { date: string | null; start: string; end: string; setup_minutes: number }
+
+/** What the quote link needs to let the customer change the staff hours and carts. */
 export interface StaffEdit {
   lineId: string;
-  /** The hire line (the cart), when a second cart can be added */
+  /** The hire line (the cart / van), when another one can be added */
   hireLineId: string | null;
   hirePrice: number; hireTax: number; staffPrice: number; staffTax: number;
-  /** As quoted */
-  start: string; end: string; carts: number; staff: number;
-  setup_minutes: number;
-  /** The job's day (the event date when the line had none) */
-  date: string | null;
+  /** Hire charged once per day (a 2-day hire has quantity 2): a second cart adds one per day */
+  hirePerDay: boolean;
+  days: StaffEditDay[];
+  /** As quoted (the same every day) */
+  carts: number; staff: number;
   rule: StaffRule;
+  /** "barista" */
   label: string;
+  /** "cart" / "van" */
+  unitWord: string;
   details: StaffDetails;
   options: StaffSetup[];
 }
-export interface StaffChange { start: string; end: string; carts: number; staff: number }
+export interface StaffChange { days: { start: string; end: string }[]; carts: number; staff: number }
 
 const MAX_STAFF = 8;
 const TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
@@ -189,7 +195,7 @@ const pad = (t: string) => t.padStart(5, "0");
 
 /**
  * The setups on offer, starting with the quoted one. With one cart quoted (and a hire line to add to): a second cart
- * with the same team split one per cart, or with 1 or 2 extra baristas. More than one cart quoted: hours only.
+ * with the same team split one per cart, or with 1 or 2 extra staff. More than one cart quoted: hours only.
  */
 export function staffOptions(carts: number, staff: number, canAddCart: boolean): StaffSetup[] {
   const out: StaffSetup[] = [{ carts, staff }];
@@ -203,49 +209,61 @@ export function staffOptions(carts: number, staff: number, canAddCart: boolean):
 /** Check new hours and setup from the browser. Null when nothing changed. Throws a plain-English message. */
 export function cleanStaffChange(raw: unknown, e: StaffEdit): StaffChange | null {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const start = String(r.start ?? "").trim(), end = String(r.end ?? "").trim();
-  if (!TIME.test(start) || !TIME.test(end)) throw new Error("Choose a start and finish time, like 8:00 am.");
-  const len = mins(end) - mins(start);
-  if (len <= 0) throw new Error("The finish time needs to be after the start time.");
-  if (len < 30) throw new Error("Service needs to run for at least 30 minutes.");
-  if (len > 16 * 60) throw new Error("That's a very long day — contact us and we'll work out the staffing with you.");
+  const rawDays = Array.isArray(r.days) ? r.days : [];
+  if (rawDays.length !== e.days.length) throw new Error("Refresh the page and try again.");
+  const days = rawDays.map((x, i) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const start = String(o.start ?? "").trim(), end = String(o.end ?? "").trim();
+    const which = e.days.length > 1 ? ` (day ${i + 1})` : "";
+    if (!TIME.test(start) || !TIME.test(end)) throw new Error(`Choose a start and finish time${which}, like 8:00 am.`);
+    const len = mins(end) - mins(start);
+    if (len <= 0) throw new Error(`The finish time needs to be after the start time${which}.`);
+    if (len < 30) throw new Error(`Service needs to run for at least 30 minutes${which}.`);
+    if (len > 16 * 60) throw new Error("That's a very long day — contact us and we'll work out the staffing with you.");
+    return { start: pad(start), end: pad(end) };
+  });
   const carts = Number(r.carts ?? e.carts), staff = Number(r.staff ?? e.staff);
   if (!e.options.some((o) => o.carts === carts && o.staff === staff)) throw new Error("That setup isn't available — refresh the page and try again.");
-  const c = { start: pad(start), end: pad(end), carts, staff };
-  if (c.start === pad(e.start) && c.end === pad(e.end) && carts === e.carts && staff === e.staff) return null;
-  return c;
+  const same = days.every((d, i) => d.start === pad(e.days[i].start) && d.end === pad(e.days[i].end)) && carts === e.carts && staff === e.staff;
+  return same ? null : { days, carts, staff };
 }
 
 /** The staff line's new details, quantity (hours charged) and description — the minimum hours still apply. */
 export function staffChangeLine(e: StaffEdit, c: StaffChange) {
   const even = c.staff % c.carts === 0;
-  const day = { ...e.details.days[0], date: e.date, start: c.start, end: c.end, setup_minutes: e.setup_minutes,
-    units: even ? c.carts : 1, per_unit: even ? c.staff / c.carts : c.staff };
-  const details: StaffDetails = { ...e.details, kind: "staff", days: [day] };
+  const base = e.details.days?.length ? e.details.days : [];
+  const days = e.days.map((d, i) => ({ ...(base[i] ?? {}), date: d.date, start: c.days[i].start, end: c.days[i].end, setup_minutes: d.setup_minutes,
+    units: even ? c.carts : 1, per_unit: even ? c.staff / c.carts : c.staff }));
+  const details: StaffDetails = { ...e.details, kind: "staff", days, unit_label: e.unitWord };
   const calc = staffLine(details, e.rule, e.label);
   if (!calc) throw new Error("Choose a start and finish time.");
   const word = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  const description = !even ? `${calc.description}\n${word(c.carts, "cart")} · ${word(c.staff, e.label)} between them` : calc.description;
-  return { details, quantity: calc.quantity, description, perPerson: calc.days[0]?.each ?? [] };
+  const description = !even ? `${calc.description}\n${word(c.carts, e.unitWord)} · ${word(c.staff, e.label)} between them` : calc.description;
+  return { details, quantity: calc.quantity, description, perDay: calc.days };
 }
 
-/** Hours charged for each person under the rule (e.g. a 2-hour service still charges the 3-hour minimum). */
-export const staffQuote = (e: StaffEdit, c: StaffChange) => {
+/** The new staff line and the change to the hire, for the running total. */
+export function staffQuote(e: StaffEdit, c: StaffChange) {
   const l = staffChangeLine(e, c);
-  return { hours: l.quantity, each: l.perPerson, staffCost: l.quantity * e.staffPrice, cartCost: (c.carts - e.carts) * e.hirePrice };
-};
+  const extraHire = (c.carts - e.carts) * (e.hirePerDay ? e.days.length : 1);
+  return { hours: l.quantity, perDay: l.perDay, staffCost: l.quantity * e.staffPrice, extraHire, hireCost: extraHire * e.hirePrice };
+}
 
 const tf = (t: string) => { const m = mins(t); const h = Math.floor(m / 60), mm = m % 60; return `${h % 12 || 12}${mm ? `:${String(mm).padStart(2, "0")}` : ""}${h < 12 ? "am" : "pm"}`; };
 export function staffChangeText(e: StaffEdit, c: StaffChange) {
   const parts: string[] = [];
-  if (pad(c.start) !== pad(e.start) || pad(c.end) !== pad(e.end)) parts.push(`${e.label} hours ${tf(e.start)}–${tf(e.end)} → ${tf(c.start)}–${tf(c.end)}`);
-  if (c.carts !== e.carts || c.staff !== e.staff) parts.push(`${e.carts} cart${e.carts === 1 ? "" : "s"} / ${e.staff} ${e.label}${e.staff === 1 ? "" : "s"} → ${c.carts} cart${c.carts === 1 ? "" : "s"} / ${c.staff} ${e.label}${c.staff === 1 ? "" : "s"}`);
+  c.days.forEach((d, i) => {
+    const was = e.days[i];
+    if (d.start !== pad(was.start) || d.end !== pad(was.end)) parts.push(`${e.label} hours${e.days.length > 1 ? ` day ${i + 1}` : ""} ${tf(was.start)}–${tf(was.end)} → ${tf(d.start)}–${tf(d.end)}`);
+  });
+  const w = (n: number, x: string) => `${n} ${x}${n === 1 ? "" : "s"}`;
+  if (c.carts !== e.carts || c.staff !== e.staff) parts.push(`${w(e.carts, e.unitWord)} / ${w(e.staff, e.label)} → ${w(c.carts, e.unitWord)} / ${w(c.staff, e.label)}`);
   return parts.join("; ");
 }
 
 /** The hire line's wording for a second cart (no extra delivery). */
-export const SECOND_CART_NOTE = "Includes a second cart — no extra delivery charge.";
-export function hireDescription(description: string | null, carts: number) {
-  const base = (description ?? "").split("\n").filter((l) => l.trim() !== SECOND_CART_NOTE).join("\n").trim();
-  return carts > 1 ? (base ? `${base}\n${SECOND_CART_NOTE}` : SECOND_CART_NOTE) : base || null;
+export const secondNote = (unitWord: string) => `Includes a second ${unitWord} — no extra delivery charge.`;
+export function hireDescription(description: string | null, extra: boolean, unitWord: string) {
+  const base = (description ?? "").split("\n").filter((l) => !/^Includes a second \w+ — no extra delivery charge\.$/.test(l.trim())).join("\n").trim();
+  return extra ? (base ? `${base}\n${secondNote(unitWord)}` : secondNote(unitWord)) : base || null;
 }

@@ -55,3 +55,40 @@ test("catering locks 48 hours before the event starts (business timezone)", asyn
   assert.equal(cateringLocked("2026-10-22", null, tz, new Date("2026-10-19T13:01:00Z")), true);
   assert.equal(cateringLocked(null, null, tz), false);
 });
+
+test("staff hours: 3-hour minimum, second cart, hours per day", async () => {
+  const { cleanStaffChange, staffChangeLine, staffOptions, staffQuote, hireDescription } = await import("./customer-edit");
+  const e = {
+    lineId: "s", hireLineId: "h", hirePrice: 400, hireTax: 10, staffPrice: 75, staffTax: 10, hirePerDay: false,
+    days: [{ date: "2027-02-19", start: "08:00", end: "15:00", setup_minutes: 30 }], carts: 1, staff: 2,
+    rule: { service_id: "b", min_hours: 3, setup_minutes: 30, round_to_hours: 0.5 }, label: "barista", unitWord: "cart",
+    details: { kind: "staff" as const, days: [{ date: null, start: "08:00", end: "15:00", setup_minutes: 30, units: 1, per_unit: 2 }] },
+    options: staffOptions(1, 2, true),
+  };
+  assert.deepEqual(e.options, [{ carts: 1, staff: 2 }, { carts: 2, staff: 2 }, { carts: 2, staff: 3 }, { carts: 2, staff: 4 }]);
+  // as quoted: 7 hrs + 30 min setup = 7.5 × 2
+  assert.equal(staffChangeLine(e, { days: [{ start: "08:00", end: "15:00" }], carts: 1, staff: 2 }).quantity, 15);
+  // 1.5 hours of service still charges the 3 hr minimum each
+  const short = cleanStaffChange({ days: [{ start: "9:00", end: "10:30" }], carts: 1, staff: 2 }, e)!;
+  assert.equal(staffChangeLine(e, short).quantity, 6);
+  // the day gets the event date (Day 1)
+  assert.equal(staffChangeLine(e, short).details.days[0].date, "2027-02-19");
+  // split across two carts: +$400 hire, same hours
+  const q = staffQuote(e, { days: [{ start: "08:00", end: "15:00" }], carts: 2, staff: 2 });
+  assert.equal(q.hours, 15); assert.equal(q.hireCost, 400);
+  // 3 staff on 2 carts is described
+  assert.match(staffChangeLine(e, { days: [{ start: "08:00", end: "15:00" }], carts: 2, staff: 3 }).description, /2 carts · 3 baristas between them/);
+  assert.equal(cleanStaffChange({ days: [{ start: "08:00", end: "15:00" }], carts: 1, staff: 2 }, e), null);
+  assert.throws(() => cleanStaffChange({ days: [{ start: "10:00", end: "09:00" }], carts: 1, staff: 2 }, e), /after the start/);
+  assert.throws(() => cleanStaffChange({ days: [{ start: "08:00", end: "15:00" }], carts: 3, staff: 2 }, e), /isn't available/);
+  assert.equal(hireDescription("Coffee cart hire", true, "cart"), "Coffee cart hire\nIncludes a second cart — no extra delivery charge.");
+  assert.equal(hireDescription("Coffee cart hire\nIncludes a second cart — no extra delivery charge.", false, "cart"), "Coffee cart hire");
+});
+
+test("drinks: hot and cold chosen separately", async () => {
+  const { cleanChange } = await import("./customer-edit");
+  const lines = [{ id: "d", name: "Coffee", quantity: 400, unit: "cup", unit_price: 3, tax_rate: 10, service_id: "c", details: { kind: "serves", hot: 400, cold: 0 } as { kind: string }, is_optional: false, section_id: "s", category: "Coffee cart" }];
+  const c = cleanChange({ set: [{ id: "d", hot: 250, cold: 150 }] }, lines, [], new Set(["c"]));
+  assert.deepEqual(c.set, [{ id: "d", quantity: 400, hot: 250, cold: 150 }]);
+  assert.throws(() => cleanChange({ set: [{ id: "d", hot: 0, cold: 0 }] }, lines, [], new Set(["c"])), /at least one drink/);
+});

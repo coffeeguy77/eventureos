@@ -80,28 +80,34 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
 }
 
 /**
- * The quote's one staff line (one day, with times), the package it was priced from (for its minimum hours and
- * setup), and the cart hire line a second cart goes on.
+ * The quote's one staff line (with times on every day), the package it was priced from (for its minimum hours and
+ * setup), and the hire line another cart goes on. Another cart is only offered without travel (a van driving out is
+ * priced by the business).
  */
 function findStaffEdit(lines: (EditLine & { description: string | null })[], pkgs: { rules: PackageRules | null }[], services: EditService[], eventDate: string | null): StaffEdit | null {
   const staffLines = lines.filter((l) => !l.is_optional && l.details?.kind === "staff");
   if (staffLines.length !== 1) return null;
   const st = staffLines[0];
-  const days = shiftDays(st.details as unknown as StaffDetails);
-  if (days.length !== 1) return null;
-  const day = days[0];
-  if (!day.start || !day.end) return null;
-  if (day.date && eventDate && day.date !== eventDate) return null; // the job's day has moved — the business re-prices it
+  const det = st.details as unknown as StaffDetails;
+  const days = shiftDays(det);
+  if (!days.length || days.some((d) => !d.start || !d.end)) return null;
+  // every day run the same way (carts × staff), or the business set it up specially
+  const sig = (d: { units: number; per_unit: number }) => `${Math.max(1, Math.floor(d.units || 1))}x${Math.max(1, Math.floor(d.per_unit || 1))}`;
+  if (days.some((d) => sig(d) !== sig(days[0]))) return null;
   const fits = pkgs.map((p) => p.rules).filter((r): r is PackageRules => !!r?.staff && r.staff.service_id === st.service_id);
   const rules = fits.find((r) => r.hire && lines.some((l) => !l.is_optional && l.service_id === r.hire!.service_id)) ?? fits[0];
   if (!rules?.staff) return null;
+  const travel = (det.travel_minutes ?? 0) > 0 || lines.some((l) => l.details?.kind === "travel");
   const hireSvc = rules.hire ? services.find((s) => s.id === rules.hire!.service_id) : undefined;
-  const hire = rules.hire && !isDaily(hireSvc?.unit) ? lines.find((l) => !l.is_optional && l.service_id === rules.hire!.service_id && Number(l.quantity) === 1) ?? null : null;
-  const carts = Math.max(1, Math.floor(day.units || 1)), staff = carts * Math.max(1, Math.floor(day.per_unit || 1));
+  const hire = rules.hire && !travel && !isDaily(hireSvc?.unit)
+    ? lines.find((l) => !l.is_optional && l.service_id === rules.hire!.service_id && (Number(l.quantity) === 1 || Number(l.quantity) === days.length)) ?? null : null;
+  const carts = Math.max(1, Math.floor(days[0].units || 1)), staff = carts * Math.max(1, Math.floor(days[0].per_unit || 1));
+  const unitWord = (det.unit_label?.trim() || (rules.calendar_label ?? "").trim().split(/\s+/).pop() || "cart").toLowerCase();
   return {
     lineId: st.id, hireLineId: hire?.id ?? null, hirePrice: hire?.unit_price ?? 0, hireTax: hire?.tax_rate ?? 0, staffPrice: st.unit_price, staffTax: st.tax_rate,
-    start: day.start.slice(0, 5), end: day.end.slice(0, 5), carts, staff, setup_minutes: day.setup_minutes ?? 0,
-    date: day.date ?? eventDate, rule: rules.staff, label: rules.staff.label?.trim() || "staff", details: st.details as unknown as StaffDetails,
+    hirePerDay: !!hire && days.length > 1 && Number(hire.quantity) === days.length,
+    days: days.map((d) => ({ date: d.date ?? (days.length === 1 ? eventDate : null), start: d.start!.slice(0, 5), end: d.end!.slice(0, 5), setup_minutes: d.setup_minutes ?? 0 })),
+    carts, staff, rule: rules.staff, label: rules.staff.label?.trim() || "staff", unitWord, details: det,
     options: staffOptions(carts, staff, !!hire),
   };
 }
@@ -127,7 +133,8 @@ export async function applyCustomerChange(db: SupabaseClient, token: string, raw
     if (error) throw new Error(`Couldn't save the change: ${error.message}`);
     if (e.hireLineId && change.staff.carts !== e.carts) {
       const hire = byId.get(e.hireLineId);
-      const { error: hErr } = await db.from("quote_items").update({ quantity: change.staff.carts, description: hireDescription(hire?.description ?? null, change.staff.carts) }).eq("id", e.hireLineId).eq("quote_id", d.quoteId);
+      const qty = Number(hire?.quantity ?? 1) + (change.staff.carts - e.carts) * (e.hirePerDay ? e.days.length : 1);
+      const { error: hErr } = await db.from("quote_items").update({ quantity: qty, description: hireDescription(hire?.description ?? null, change.staff.carts > 1, e.unitWord) }).eq("id", e.hireLineId).eq("quote_id", d.quoteId);
       if (hErr) throw new Error(`Couldn't save the change: ${hErr.message}`);
     }
   }

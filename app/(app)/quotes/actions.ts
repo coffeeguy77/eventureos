@@ -711,6 +711,11 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     const serves = timed ? checkNumber(input.serves, "Number of serves", 0, 100_000) as number : 0;
     const staff = timed ? checkNumber(input.staff, "Number of staff", 0, 20) as number : 0;
     const days = checkNumber(input.days ?? 1, "Hire days", 1, 365) as number;
+    // A one-day job's staff hours go on the job's date (Day 1) when none was picked
+    if (!(input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date)) && q.event_id && (input.days ?? 1) <= 1) {
+      const { data: ev } = await supabase.from("events").select("event_date").eq("id", q.event_id).maybeSingle();
+      if (ev?.event_date) input = { ...input, date: ev.event_date as string };
+    }
     const result = priceJob(rules, services, {
       start_minutes: timed ? hhmm(input.start, "Start time") : 0, end_minutes: timed ? hhmm(input.end, "Finish time") : 0,
       serves, staff_count: staff, include_delivery: !!input.includeDelivery, days, offer_delivery: !input.includeDelivery && !!input.offerDelivery,

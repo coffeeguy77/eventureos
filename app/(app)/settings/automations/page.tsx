@@ -190,7 +190,7 @@ export default async function AutomationsPage() {
 
       <Card>
         <CardHeader title="Invoice emails & payment reminders" subtitle="Get the invoice out the moment a job is won, and paid before the event." />
-        <PaymentReminderSettings autoEmail={raw.invoice_auto_email === true} reminders={readReminders(raw)} canEdit={canSettings} />
+        <PaymentReminderSettings autoEmail={raw.invoice_auto_email !== false} reminders={readReminders(raw)} canEdit={canSettings} />
       </Card>
 
       <Card>

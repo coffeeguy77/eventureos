@@ -145,9 +145,11 @@ export async function syncJobCalendar(db: SupabaseClient, orgId: string, eventId
 }
 
 /** After a quote is accepted / a booking approved: get the job's calendar to Google now. Never throws. */
-export async function jobCalendarAfterAccept(db: SupabaseClient, eventId: string) {
+export async function jobCalendarAfterAccept(db: SupabaseClient, eventId: string, opts: { create?: boolean } = {}) {
   try {
-    const { data } = await db.from("events").select("organisation_id").eq("id", eventId).maybeSingle();
-    if (data?.organisation_id) await syncJobCalendar(db, data.organisation_id as string, eventId, { create: false, mode: "service" });
+    const { data } = await db.from("events").select("organisation_id, status").eq("id", eventId).maybeSingle();
+    // only a confirmed job is added; one waiting for approval goes on when it's approved
+    const create = !!opts.create && data?.status === "confirmed";
+    if (data?.organisation_id) await syncJobCalendar(db, data.organisation_id as string, eventId, { create, mode: "service" });
   } catch { /* the half-hourly sync will send it */ }
 }

@@ -137,7 +137,9 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
           <div className="mt-6">
             <CustomerChange token={token} preview={preview} currency={cur} businessName={d.org.name} catalogue={edit.data.catalogue}
               assumed={assumedLine ? { id: assumedLine.id, quantity: Number(assumedLine.quantity) } : null}
-              lines={edit.data.lines.filter((l) => !l.is_optional).map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, editable: l.editable, section: l.section }))} />
+              staffEdit={edit.data.staffEdit} upsells={edit.data.upsells}
+              lines={edit.data.lines.filter((l) => !l.is_optional).map((l) => ({ id: l.id, name: l.name, quantity: l.quantity, unit: l.unit, unit_price: l.unit_price, tax_rate: l.tax_rate, editable: l.editable, section: l.section,
+                serves: l.details?.kind === "serves" ? { hot: Math.round(Number((l.details as { hot?: number }).hot ?? l.quantity)), cold: Math.round(Number((l.details as { cold?: number }).cold ?? 0)) } : null }))} />
           </div>
         )}
 

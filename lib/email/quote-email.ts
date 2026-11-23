@@ -59,7 +59,7 @@ export function defaultQuoteMessage(o: { firstName: string | null; eventName: st
   catering?: string | null }) {
   const extras = [
     o.canEdit ? "Need to change something? Open your quote and choose \u201cChange your order\u201d \u2014 you can update the numbers, take items off or add more, and the quote updates straight away, ready to accept." : null,
-    o.suggestIced ? "As your event is in summer, it's worth considering a mix of hot coffees and iced lattes \u2014 they're very popular on warm days. Just reply with the split you'd like and we'll update the quote." : null,
+    o.suggestIced ? "As your event is in summer, it's worth considering a mix of hot coffees and iced lattes \u2014 they're very popular on warm days. You can choose how many hot and cold drinks on your quote, or just reply with the split and we'll update it." : null,
     o.catering ? `We also do catering${o.catering ? ` \u2014 ${o.catering}` : ""}.${o.canEdit ? " You can add it to your quote yourself from the same link." : " Just let us know and we'll add it to your quote."}` : null,
   ].filter((x): x is string => !!x);
   const lines = [

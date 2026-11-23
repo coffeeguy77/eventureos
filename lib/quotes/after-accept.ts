@@ -5,8 +5,8 @@ export interface AfterAccept { late: boolean; payUrl: string | null; phone: stri
 
 /**
  * Everything after a quote is accepted (or a held booking approved), once the database has confirmed the job and
- * raised the invoice: send the calendar to Google now, and email the new invoice to the client when "Email the invoice
- * when a quote is accepted" is on.
+ * raised the invoice: put the job on the calendar and send it to Google now, and email the new invoice to the client
+ * (unless "Email the invoice when a quote is accepted" has been switched off).
  *
  * A customer acceptance after the quote's expiry, or inside the last 3 days before the event, is late: the job is
  * marked "availability to be confirmed" (calendar reads "TBC - …", the office is told), and the invoice email always
@@ -52,8 +52,9 @@ export async function afterQuoteAccepted(db: SupabaseClient, eventId: string, op
     } catch { /* the acceptance is recorded either way */ }
   }
 
+  // Put the job on the calendar (adding it if it isn't there yet) and send it to Google now
   const { jobCalendarAfterAccept } = await import("@/lib/calendar/job-sync");
-  await jobCalendarAfterAccept(db, eventId);
+  await jobCalendarAfterAccept(db, eventId, { create: true });
 
   try {
     if (!ev) return out;
@@ -65,7 +66,8 @@ export async function afterQuoteAccepted(db: SupabaseClient, eventId: string, op
     const { appBaseUrl } = await import("@/lib/integrations/registry");
     out.payUrl = `${appBaseUrl()}/pay/${inv.pay_token as string}`;
     const settings = (ev.organisation?.settings ?? {}) as Record<string, unknown>;
-    const wanted = opts.emailInvoice !== false && (settings.invoice_auto_email === true || (out.late && opts.byCustomer));
+    // On unless the business switched "Email the invoice when a quote is accepted" off (unset = on)
+    const wanted = opts.emailInvoice !== false && (settings.invoice_auto_email !== false || (out.late && opts.byCustomer));
     if (!wanted || ev.status !== "confirmed") return out;
     const { count } = await db.from("activity_logs").select("id", { count: "exact", head: true }).eq("entity_id", inv.id).eq("action", "invoice.emailed");
     if (count) return out;
