@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 import { PhotoUpload } from "./course-tools";
 
 const lines = (t: string) => t.split(/\n/).map((x) => x.trim()).filter(Boolean);
-const blankCourse: LandingCourse = { badge: null, points: [], bestFor: null, level: null, focus: null };
+const blankCourse: LandingCourse = { badge: null, points: [], bestFor: null, level: null, focus: null, cardImage: null };
 
 function Group({ title, hint, children, open }: { title: string; hint?: string; children: React.ReactNode; open?: boolean }) {
   return (

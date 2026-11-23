@@ -35,6 +35,7 @@ const FIELD_PATHS: RegExp[] = [
   /^shop\.(title|tagline|heroImage|subsHero|subsImage|roastNote|giftTagline)$/,
   /^booking\.landing\.(headline|eyebrow|heroImage|giftImage|locationImage)$/,
   /^booking\.landing\.copy\.[a-zA-Z]{2,40}$/,
+  /^booking\.landing\.courses\.[0-9a-f-]{36}\.cardImage$/,
   /^booking\.intro$/,
   /^jobs\.(heroImage|employerImage)$/,
   /^learn\.heroImage$/,

@@ -78,7 +78,9 @@ export function scheduleDates(sc: Schedule, closures: Closure[], today: string) 
 }
 
 export interface LandingReview { name: string; date: string | null; rating: number; text: string; course: string | null }
-export interface LandingCourse { badge: string | null; points: string[]; bestFor: string | null; level: string | null; focus: string | null }
+export interface LandingCourse { badge: string | null; points: string[]; bestFor: string | null; level: string | null; focus: string | null;
+  /** Photo on the courses page card (changed with "Edit this page"); falls back to the course's own image */
+  cardImage: string | null }
 export interface Landing {
   title: string | null;          // search result title, e.g. "Barista Courses Canberra | Bean Culture"
   description: string | null;    // search result description (about 150 characters)
@@ -144,7 +146,8 @@ export function readLanding(raw: unknown): Landing {
     for (const [id, v] of Object.entries(o.courses as Record<string, unknown>).slice(0, 30)) {
       if (!/^[0-9a-f-]{36}$/i.test(id) || !v || typeof v !== "object") continue;
       const c = v as Record<string, unknown>;
-      courses[id] = { badge: str(c.badge, 40), points: list(c.points, 12, 80), bestFor: str(c.bestFor, 80), level: str(c.level, 60), focus: str(c.focus, 80) };
+      courses[id] = { badge: str(c.badge, 40), points: list(c.points, 12, 80), bestFor: str(c.bestFor, 80), level: str(c.level, 60), focus: str(c.focus, 80),
+        cardImage: typeof c.cardImage === "string" && (/^https:\/\/[^\s"'<>]{4,500}$/.test(c.cardImage) || /^\/media\/[\w./-]{1,200}$/.test(c.cardImage)) ? c.cardImage : null };
     }
   }
   const copy: Record<string, string> = {};

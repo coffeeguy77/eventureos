@@ -96,7 +96,7 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
   const reviews = L.reviews;
   const avg = reviews.length ? reviews.reduce((a, r) => a + r.rating, 0) / reviews.length : 0;
   const maps = location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${org.name}, ${location}`)}` : null;
-  const extra = (id: string) => L.courses[id] ?? { badge: null, points: [], bestFor: null, level: null, focus: null };
+  const extra = (id: string) => L.courses[id] ?? { badge: null, points: [], bestFor: null, level: null, focus: null, cardImage: null };
   const gallery = L.gallery;
   const price = (c: CourseRow) => money(c.price, org.currency, { cents: Number(c.price) % 1 !== 0 });
   const giftImage = L.giftImage ?? courses.map((c) => c.image_url).filter(Boolean).slice(-1)[0] ?? hero;
@@ -217,8 +217,8 @@ export function BookLanding({ org, data, agent, initialCourse, utm, source, cert
                 <article key={c.id} data-reveal style={banner ? { order: 10 + ci } : undefined}
                   className={`group overflow-hidden rounded-[26px] border border-[#E9DFD5] bg-[#FFFDFC] shadow-[0_1px_2px_rgba(23,23,20,0.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(60,40,25,0.45)] ${banner ? "col-span-full grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" : "flex flex-col"}`}>
                   <div className={`relative overflow-hidden ${banner ? "md:min-h-full" : ""}`}>
-                    {c.image_url
-                      ? <img src={c.image_url} alt={`${clean(c.name)} at ${org.name}`} className={`w-full object-cover transition duration-700 group-hover:scale-[1.04] ${banner ? "aspect-[16/10] md:absolute md:inset-0 md:aspect-auto md:h-full" : "aspect-[16/10]"}`} loading="lazy" />
+                    {(x.cardImage ?? c.image_url)
+                      ? <img {...edImg(`booking.landing.courses.${c.id}.cardImage`)} src={(x.cardImage ?? c.image_url)!} alt={`${clean(c.name)} at ${org.name}`} className={`w-full object-cover transition duration-700 group-hover:scale-[1.04] ${banner ? "aspect-[16/10] md:absolute md:inset-0 md:aspect-auto md:h-full" : "aspect-[16/10]"}`} loading="lazy" />
                       : <div className={`aspect-[16/10] w-full ${banner ? "md:absolute md:inset-0 md:aspect-auto md:h-full" : ""}`} style={{ background: "linear-gradient(135deg, var(--b), color-mix(in srgb, var(--b) 45%, #2b1d16))" }} />}
                     {x.badge && <span className="absolute left-4 top-4 rounded-full bg-[var(--b)] px-3.5 py-1.5 text-[0.75rem] font-bold uppercase tracking-[0.1em] text-[var(--on-b)] shadow-sm">{x.badge}</span>}
                   </div>
