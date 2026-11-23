@@ -14,6 +14,7 @@ import { isAgencyPage, serviceBySlug } from "@/lib/site/agency/content";
 import { serviceLd } from "@/lib/site/agency/ld";
 import { AgencyFrame } from "@/components/site/agency/frame";
 import { AgencyLanding } from "@/components/site/agency/landing";
+import { CareHubLanding } from "@/components/site/agency/care-hub";
 import { AgencyQuote, AgencySupport, QUOTE_FAQS, SUPPORT_FAQS } from "@/components/site/agency/pages";
 import { JsonLd, faqLd } from "@/components/site/agency/ui";
 import { BookingFlow } from "@/components/meet/booking-flow";
@@ -221,6 +222,13 @@ async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>
   const s = serviceBySlug(page);
   if (!s) notFound();
   const path = `/site/${org.slug}/${s.slug}`;
+  if (s.slug === "care-hub") return (
+    <AgencyFrame org={org}>
+      <JsonLd data={serviceLd(org, s, canonicalFor(org, path), canonicalFor(org, `/site/${org.slug}`))} />
+      <JsonLd data={faqLd(s.faqs)} />
+      <CareHubLanding org={org} />
+    </AgencyFrame>
+  );
   return (
     <AgencyFrame org={org}>
       <JsonLd data={serviceLd(org, s, canonicalFor(org, path), canonicalFor(org, `/site/${org.slug}`))} />
