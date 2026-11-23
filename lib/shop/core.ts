@@ -36,6 +36,7 @@ export interface ShopSettings {
   giftTagline: string;              // script line on the gift card front
   grinder: string;                  // shown on the grind guide, e.g. the grinder model
   grindChart: GrindStep[];
+  grinderTips: string[];            // tips for customers using the same grinder (shown on the grind guide)
   eventAddon: boolean;              // offer bags of coffee to event / equipment-hire customers
   boxes: BoxConfig[];               // selection boxes (e.g. 4 × 200g): some coffees always in, the rest chosen by the customer
 }
@@ -86,6 +87,7 @@ export const DEFAULT_SHOP: ShopSettings = {
   giftTagline: "Freshly roasted, just for you.",
   grinder: "",
   grindChart: DEFAULT_GRIND_CHART,
+  grinderTips: [],
   eventAddon: true,
   boxes: [],
 };
@@ -133,6 +135,7 @@ export function readShop(orgSettings: unknown): ShopSettings {
       const o = x as Record<string, unknown>;
       return typeof o?.label === "string" && o.label.trim() ? { label: o.label.slice(0, 40), dial: str(o.dial, "", 20), use: str(o.use, "", 120) } : null;
     }, d.grindChart),
+    grinderTips: arr(raw.grinderTips, (x) => (typeof x === "string" && x.trim() ? x.trim().slice(0, 240) : null), d.grinderTips).slice(0, 8),
     eventAddon: raw.eventAddon !== false,
     boxes: arr(raw.boxes, (b) => {
       const o = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;

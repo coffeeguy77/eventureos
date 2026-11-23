@@ -65,6 +65,18 @@ export default async function GrindGuide({ params }: P) {
         {chart.some((x) => x.dial) && <p className="mt-4 text-[0.875rem] text-[#6b655f]">Dial numbers are our usual starting points{g ? ` on the ${g}` : ""}. Every machine is different — use the fine-tune setting to nudge it.</p>}
       </section>
 
+      {org.shop.grinderTips.length > 0 && (
+        <section id="grinder-tips" className={`${PAGE} scroll-mt-6 pb-14 sm:pb-16`}>
+          <h2 className={`${serif} text-[2rem] font-semibold leading-tight`}>{g ? `Got an ${g.replace(/^an?\s+/i, "")} too?` : "Tips for your grinder"}</h2>
+          <p className="mt-2 max-w-2xl text-[#5b5955]">How we get the best from ours — handy if you grind at home or in your café.</p>
+          <ul className="mt-6 grid gap-3 md:grid-cols-2">
+            {org.shop.grinderTips.map((t) => (
+              <li key={t} className="rounded-[20px] bg-[#FFFDFC] p-5 leading-relaxed text-[#3f3c38] ring-1 ring-[#E6DCD1]">{t}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="bg-[#F1EAE2] py-14 sm:py-16">
         <div className={`${PAGE} grid gap-6 md:grid-cols-2`}>
           <div className="rounded-[24px] bg-[#FFFDFC] p-7 ring-1 ring-[#E6DCD1]">

@@ -75,14 +75,16 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
         <div><Label htmlFor="ss-gr">Your grinder</Label><Input id="ss-gr" value={s.grinder} onChange={(e) => set("grinder", e.target.value)} placeholder="e.g. Mahlkönig EK43" /></div>
         <p className="text-[0.8125rem] text-ink-muted">Finest at the top. Set the dial numbers you actually use.</p>
         {s.grindChart.map((g, i) => (
-          <div key={i} className="grid grid-cols-[1fr_90px_1.4fr_auto] gap-2">
+          <div key={i} className="grid grid-cols-[1fr_80px_auto] gap-2 sm:grid-cols-[1fr_90px_1.4fr_auto]">
             <Input aria-label="Grind" value={g.label} onChange={(e) => set("grindChart", s.grindChart.map((x, k) => (k === i ? { ...x, label: e.target.value } : x)))} />
             <Input aria-label="Dial" value={g.dial} onChange={(e) => set("grindChart", s.grindChart.map((x, k) => (k === i ? { ...x, dial: e.target.value } : x)))} />
-            <Input aria-label="Used for" value={g.use} onChange={(e) => set("grindChart", s.grindChart.map((x, k) => (k === i ? { ...x, use: e.target.value } : x)))} />
+            <Input aria-label="Used for" className="col-span-3 row-start-2 sm:col-span-1 sm:row-start-auto" value={g.use} onChange={(e) => set("grindChart", s.grindChart.map((x, k) => (k === i ? { ...x, use: e.target.value } : x)))} />
             <button type="button" onClick={() => set("grindChart", s.grindChart.filter((_, k) => k !== i))} className="grid h-9 w-9 place-items-center rounded-lg text-ink-faint hover:bg-zinc-100" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
         <Button type="button" size="sm" variant="secondary" onClick={() => set("grindChart", [...s.grindChart, { label: "", dial: "", use: "" }])}><Plus className="h-4 w-4" />Add row</Button>
+        <div><Label htmlFor="ss-gtips" hint="one per line — shown on the grind guide for customers with the same grinder">Tips for your grinder</Label>
+          <Textarea id="ss-gtips" rows={5} value={s.grinderTips.join("\n")} onChange={(e) => set("grinderTips", e.target.value.split("\n").slice(0, 8))} /></div>
       </Card>
       <div className="flex items-center gap-3 xl:col-span-2">
         <Button type="button" variant="primary" disabled={pending} onClick={() => start(async () => { const { boxes: _boxes, ...rest } = s; void _boxes; const r = await saveShopSettings(rest); setMsg(r.ok ? { ok: true, text: "Saved." } : { ok: false, text: r.error }); router.refresh(); })}>Save settings</Button>

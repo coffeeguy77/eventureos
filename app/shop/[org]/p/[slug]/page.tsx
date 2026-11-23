@@ -91,6 +91,25 @@ export default async function ProductPage({ params }: P) {
           </div>
         </section>
       )}
+      {!machine && p.grinds.some((x) => !/whole/i.test(x)) && org.shop.grindChart.some((x) => x.dial) && (
+        <section className={`${PAGE} py-14`}>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className={`${serif} text-[2rem] font-semibold`}>Grind settings</h2>
+              <p className="mt-1 max-w-2xl text-[#5b5955]">{org.shop.grinder ? `We grind to order on our ${org.shop.grinder}. ` : ""}Our starting points, finest to coarsest — or buy whole beans and use these on your own grinder.</p>
+            </div>
+            <Link href={`/shop/${org.slug}/grind`} className="text-[0.9375rem] font-semibold underline underline-offset-4">Full grind guide{org.shop.grinderTips.length ? " & tips" : ""}</Link>
+          </div>
+          <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {org.shop.grindChart.filter((x) => x.dial).map((x) => (
+              <div key={x.label} className="rounded-2xl bg-[#F1EAE2] p-4">
+                <dt className="text-[0.9375rem] font-semibold">{x.label}</dt>
+                <dd className="mt-1 text-[0.875rem] text-[#6b655f]">Dial <span className="font-bold text-[#171714]">{x.dial}</span>{x.use ? <span className="block leading-snug">{x.use}</span> : null}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {others.length > 0 && (
         <section className={`${PAGE} py-16`}>
           <h2 className={`${serif} text-[2rem] font-semibold`}>You might also like</h2>
