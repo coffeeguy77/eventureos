@@ -113,7 +113,9 @@ export function CareHubLanding({ org }: { org: PublicOrg }) {
   const fee = care.adsFeeExGst;
   const adsWorth = Math.round(rate * 2 * 52 / 12);
   const m = (n: number) => money(n, org.currency, { cents: false });
-  const faqs = serviceBySlug("care-hub")?.faqs ?? [];
+  const svc = serviceBySlug("website-maintenance");
+  const faqs = svc?.faqs ?? [];
+  const check = svc?.pricing?.items[0] ?? null;
   const minH = nerd.minHours === 1 ? "1 hour" : `${nerd.minHours} hours`;
 
   return (
@@ -207,6 +209,12 @@ export function CareHubLanding({ org }: { org: PublicOrg }) {
             <div><div className="k">Add Google Ads to your package</div><p>We set up and run your campaigns with 2 hours of hands-on campaign work every week, block searches that waste money, and send you a detailed report each month. That&apos;s about 8.7 hours of work a month — {m(adsWorth)} + GST at our normal {m(rate)} rate.</p></div>
             <div className="amt">{fee !== null ? <>{m(fee)} <span className="gst">+ GST / month</span></> : <span className="gst">Ask us</span>}</div>
           </div>
+          {check && (
+            <div className="ads">
+              <div><div className="k">Prefer it scheduled? {check.name}</div><p>A regular visit on a cycle that suits your site ({check.note?.toLowerCase() ?? "monthly, quarterly or six-monthly"}): a backup first, WordPress, plugin and theme updates, a malware scan, then pages and forms tested on desktop and mobile. Each check is recorded in your portal.</p></div>
+              <div className="amt">{check.price} <span className="gst">{check.unit}</span></div>
+            </div>
+          )}
           <p className="rule">Each request uses at least {minH}, then our time to the next 15 minutes — so group small changes into one list and they share that first hour.{fee !== null && adsWorth > fee ? ` The Google Ads add-on saves about ${m(adsWorth - fee)} a month on our hourly rate;` : ""} Your ad budget is paid to Google.</p>
         </div>
       </section>
@@ -240,7 +248,7 @@ export function CareHubLanding({ org }: { org: PublicOrg }) {
             <div>
               <h2>Ready when you are.</h2>
               <p>Already a {org.name} client? Sign in to your portal with the email we have on file and choose a block. New to us? Call or email and we&apos;ll set you up.</p>
-              <div className="ctas"><Link className="btn lime" href={portal}>Open your client portal</Link><Link className="btn ghost" href={`${base}/quote?service=care-hub`}>Get in touch</Link></div>
+              <div className="ctas"><Link className="btn lime" href={portal}>Open your client portal</Link><Link className="btn ghost" href={`${base}/quote?service=website-maintenance`}>Get in touch</Link></div>
             </div>
             <div className="contact">
               {org.contact_phone && <div><span>Phone</span><span>{org.contact_phone}</span></div>}

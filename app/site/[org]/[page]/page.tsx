@@ -57,6 +57,7 @@ export async function generateMetadata(p: P): Promise<Metadata> {
     const a = await loadAgency(p);
     if (!a) return {};
     const s = serviceBySlug(a.page), m = AGENCY_META[a.page];
+    if (!s && !m) return {};
     return siteMeta(a.org, `/site/${a.org.slug}/${a.page}`, s
       ? { title: { absolute: s.metaTitle.replace(/\| Web Culture$/, `| ${a.org.name}`) }, description: s.metaDescription }
       : { title: { absolute: `${m.title} | ${a.org.name}` }, description: m.description });
@@ -219,10 +220,11 @@ async function agencyPage(org: NonNullable<Awaited<ReturnType<typeof publicOrg>>
     const pre = typeof sp.service === "string" ? sp.service.slice(0, 60) : undefined;
     return <AgencyFrame org={org}><JsonLd data={faqLd(QUOTE_FAQS)} /><AgencyQuote org={org} preselect={pre} /></AgencyFrame>;
   }
+  if (page === "care-hub") permanentRedirect(`/site/${org.slug}/website-maintenance`); // merged into website maintenance
   const s = serviceBySlug(page);
   if (!s) notFound();
   const path = `/site/${org.slug}/${s.slug}`;
-  if (s.slug === "care-hub") return (
+  if (s.slug === "website-maintenance") return (
     <AgencyFrame org={org}>
       <JsonLd data={serviceLd(org, s, canonicalFor(org, path), canonicalFor(org, `/site/${org.slug}`))} />
       <JsonLd data={faqLd(s.faqs)} />
