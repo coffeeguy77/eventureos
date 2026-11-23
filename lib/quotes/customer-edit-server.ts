@@ -68,7 +68,9 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
   // Barista hours and a second cart: one-day jobs only, and not inside the last 48 hours (the roster is set by then)
   const staffEdit = locked ? null : findStaffEdit(lines, (pkgs ?? []) as { rules: PackageRules | null }[], services, eventDate);
   if (staffEdit) for (const l of lines) if (l.id === staffEdit.lineId) l.editable = false; // changed in its own panel
-  const upsells = locked ? [] : services.filter((s) => isUpsell(s) && !lines.some((l) => l.service_id === s.id)) .slice(0, 4);
+  // An add-on that names what it's for ("Coffee cart wrap") only shows when that's what's being hired
+  const hireWords = hireUnitWords((pkgs ?? []) as { rules: PackageRules | null }[], services, lines);
+  const upsells = locked ? [] : services.filter((s) => isUpsell(s) && !lines.some((l) => l.service_id === s.id) && upsellFits(s.name, hireWords)).slice(0, 4);
   const hadCatering = lines.some((l) => l.editable && isCatering(l.category)) || catalogue.some((s) => isCatering(s.category));
   if (locked) {
     for (const l of lines) if (isCatering(l.category)) l.editable = false;
@@ -77,6 +79,25 @@ export async function loadCustomerEdit(db: SupabaseClient, token: string): Promi
   if (!lines.some((l) => l.editable) && !catalogue.length && !staffEdit && !upsells.length) return { ok: false, reason: locked && hadCatering ? "locked" : "nothing" };
   return { ok: true, data: { quoteId: q.id, quoteNumber: q.number as number, orgId: q.organisation_id as string, customerId: q.customer_id as string, eventId: q.event_id as string | null,
     lines, catalogue, perServe, busy: !!q.has_unpublished_changes, cateringLocked: locked && hadCatering, staffEdit, upsells } };
+}
+
+/** What can be hired ("cart", "van", "equipment") and which of those this quote hires. */
+function hireUnitWords(pkgs: { rules: PackageRules | null }[], services: EditService[], lines: EditLine[]) {
+  const word = (r: PackageRules) => ((r.calendar_label ?? "").trim().split(/\s+/).pop() ?? "").toLowerCase();
+  const all = new Set<string>(), onQuote = new Set<string>();
+  for (const r of pkgs.map((p) => p.rules).filter((r): r is PackageRules => !!r?.hire)) {
+    const w = word(r);
+    if (!w || w === "hire") continue;
+    all.add(w);
+    if (lines.some((l) => !l.is_optional && l.service_id === r.hire!.service_id)) onQuote.add(w);
+  }
+  void services;
+  return { all, onQuote };
+}
+/** An add-on naming a hire ("cart") needs that hire on the quote; one naming none fits any quote. */
+function upsellFits(name: string, w: { all: Set<string>; onQuote: Set<string> }) {
+  const named = [...w.all].filter((x) => new RegExp(`\\b${x}s?\\b`, "i").test(name));
+  return !named.length || named.some((x) => w.onQuote.has(x));
 }
 
 /**
