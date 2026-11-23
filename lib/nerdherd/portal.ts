@@ -16,7 +16,7 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
   const ids = o.customerIds;
   const [sites, plans, tickets, invoices, org] = await Promise.all([
     db.from("websites").select("id, domain, status, hosting_account_id, hosting_accounts(suspended)").eq("organisation_id", o.orgId).in("customer_id", ids).neq("status", "archived").order("domain"),
-    db.from("recurring_invoices").select("id, name, category, creates_ticket, total, every, unit, next_date, status, website_id, websites(domain)").eq("organisation_id", o.orgId).in("customer_id", ids).neq("status", "ended").order("next_date"),
+    db.from("recurring_invoices").select("id, name, category, creates_ticket, total, every, unit, next_date, status, xero_status, website_id, websites(domain)").eq("organisation_id", o.orgId).in("customer_id", ids).neq("status", "ended").order("next_date"),
     db.from("support_tickets").select("id, number, subject, status, kind, last_activity_at, resolved_at, checklist, websites(domain)").eq("organisation_id", o.orgId).in("customer_id", ids).order("last_activity_at", { ascending: false }).limit(100),
     db.from("invoices").select("id, number, issue_date, due_date, total, balance, status, pay_token").eq("organisation_id", o.orgId).in("customer_id", ids).not("status", "in", "(draft,void)").order("issue_date", { ascending: false }).limit(200),
     db.from("organisations").select("settings").eq("id", o.orgId).maybeSingle(),
@@ -72,7 +72,8 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
       return { id: a.id, name: a.name, report: last ? { token: last.token, month: last.period_start } : null };
     }), hasPlan: planRows.some((p) => planCategory(p) === "adwords" && p.status !== "ended") },
     prefs: readPrefs((prefRow as { portal_prefs?: unknown } | null)?.portal_prefs),
-    plans: planRows.map((p) => ({ id: p.id, name: p.name, category: planCategory(p), total: Number(p.total), every: p.every, unit: p.unit, next_date: p.next_date, status: p.status, website: p.websites?.domain ?? null })),
+    // a plan Xero still bills (paused here, AUTHORISED repeating invoice in Xero) is a live plan to the client
+    plans: planRows.map((p) => ({ id: p.id, name: p.name, category: planCategory(p), total: Number(p.total), every: p.every, unit: p.unit, next_date: p.next_date, status: p.status === "paused" && (p as { xero_status?: string | null }).xero_status === "AUTHORISED" ? "active" : p.status, website: p.websites?.domain ?? null })),
     tickets: ((tickets.data ?? []) as unknown as T[]).map((t) => ({ id: t.id, number: t.number, subject: t.subject, status: t.status, kind: t.kind, last_activity_at: t.last_activity_at, resolved_at: t.resolved_at, checklist: t.checklist, website: t.websites?.domain ?? null })),
     invoices: ((invoices.data ?? []) as { id: string; number: string | null; issue_date: string; due_date: string | null; total: number; balance: number | null; status: string; pay_token: string }[])
       .map((i) => ({ ...i, total: Number(i.total), balance: Number(i.balance ?? 0) })),

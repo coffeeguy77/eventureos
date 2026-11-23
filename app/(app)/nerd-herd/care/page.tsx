@@ -7,6 +7,7 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CareSettingsForm, GiveHours, VoidBlockButton } from "@/components/nerdherd/care-tools";
 import { allPages } from "@/lib/supabase/all-pages";
+import { CarePlans } from "@/components/nerdherd/care-plans";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export default async function CareHub() {
       </div>
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-5">
+          <CarePlans db={supabase} orgId={org.id} currency={org.currency} tz={org.timezone} />
           <Card>
             <CardHeader title="Prepaid hours by client" subtitle="Lowest first — anyone over their hours is at the top. Time logged on a “prepaid hours” ticket comes off here." />
             {rows.length ? (
