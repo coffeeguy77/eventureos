@@ -285,6 +285,62 @@ export const SERVICES: Service[] = [
     related: ["wordpress", "web-hosting", "website-support", "leadpages"],
   },
   {
+    slug: "care-hub", name: "Care Hub", blurb: "Prepaid hours, live update status, one inbox", icon: "clock", group: "care",
+    metaTitle: "Care Hub — Prepaid Website Updates & Support Canberra | Web Culture",
+    metaDescription: "Buy a block of hours, list the changes you want, attach your files and we do them. See which plugins need updating, track every request and add Google Ads — all in one client portal. From $240 + GST.",
+    serviceType: "Website maintenance and support",
+    title: "Your website, looked after in one place.",
+    lede: "Buy a block of hours, list the changes you want, and we get on with them. No quote to wait for, no email chains — and you can see exactly what your site needs.",
+    graphic: "checklist",
+    intro: [
+      "Small website changes shouldn't need a quote, three emails and a week. With the Care Hub you buy a block of hours up front, then list the changes you want in your client portal — new prices, a staff photo, an extra page, a form that needs another field. Attach the files, send it, and we do it. The time comes off your block and you can see every minute of it.",
+      "The Care Hub also shows you what your website actually needs. If your site has our connector plugin, your portal lists the WordPress, WooCommerce and PHP versions you're running next to the latest releases, and every plugin and theme with an update waiting. One tap asks us to run them.",
+      "Bigger job? Lodge it and we'll quote it first. Something broken? Report it and tell us how urgent it is. Every request, reply and file stays together in your portal, so nothing gets lost in someone's inbox.",
+    ],
+    benefits: [
+      { icon: "clock", title: "Prepaid hours", text: "Buy 2, 5 or 10 hours. Bigger blocks cost less an hour, and you always see what's left." },
+      { icon: "check", title: "Task lists, not email chains", text: "List the changes one per line and attach your files. We tick them off as we go." },
+      { icon: "refresh", title: "Live update status", text: "See which plugins and themes need updating on each site, and how you compare with the latest WordPress and WooCommerce." },
+      { icon: "ticket", title: "One place for everything", text: "Jobs, problems, replies and files all stay with the request, in your portal." },
+      { icon: "ads", title: "Add Google Ads", text: "Add managed Google Ads to your package, with daily checks and a plain-English report each month." },
+      { icon: "edit", title: "Make it yours", text: "Choose what your portal shows first: your hours, your sites, your requests or your Ads results." },
+    ],
+    included: [
+      "Your own client portal, signed in with a one-time email code — no password",
+      "Prepaid blocks of hours, paid online by card",
+      "Request tasks, lodge a job for a quote, or report a problem — with file attachments",
+      "Every plugin and theme update waiting on your WordPress sites",
+      "The latest WordPress, WooCommerce, Elementor, Yoast and PHP versions",
+      "A backup before we make changes",
+      "A record of every change made, and the time it took",
+      "Optional Google Ads management with monthly reports",
+    ],
+    pricing: {
+      items: [
+        { name: "2 hours", price: "$240", unit: "+ GST", note: "$120 an hour" },
+        { name: "5 hours", price: "$570", unit: "+ GST", note: "Save 5% — $114 an hour" },
+        { name: "10 hours", price: "$1,080", unit: "+ GST", note: "Save 10% — $108 an hour" },
+        { name: "Google Ads add-on", price: "$400", unit: "+ GST / month", note: "Management fee — your ad budget is paid to Google" },
+      ],
+      note: "Each request uses at least 1 hour, then our time to the next 15 minutes — so group small changes into one list. Hours count as soon as the block is paid.",
+    },
+    process: [
+      { title: "Buy a block", text: "Choose 2, 5 or 10 hours in your portal and pay by card. The hours are ready straight away." },
+      { title: "List what you need", text: "Add your changes one per line, pick the website and attach any files — logos, photos, documents." },
+      { title: "We do the work", text: "We take a backup, make the changes and reply in your portal. Bigger jobs are quoted first." },
+      { title: "See what was done", text: "Each request shows the tasks ticked off, the time used, and what's left on your block." },
+    ],
+    faqs: [
+      { q: "How is time taken off my block?", a: "Each request uses at least 1 hour. Above that, it's the time we actually spend, rounded up to the next 15 minutes. Put several small changes in one list and they share that first hour." },
+      { q: "What happens when my hours run out?", a: "Your portal shows your balance on every page. When it's getting low you can top up in a couple of clicks — or lodge the next change as a job and we'll quote it." },
+      { q: "How do you know which plugins need updating?", a: "Our connector plugin on your WordPress site reports the versions it's running and which updates are waiting. Your portal shows that list, so you can see what needs doing and ask us to run it." },
+      { q: "Is this instead of a maintenance plan?", a: "It works alongside one. A maintenance plan is a scheduled check on a regular cycle. The Care Hub is for the changes you ask for, whenever you need them. Many clients have both." },
+      { q: "Can I add Google Ads later?", a: "Yes. There's an Add Google Ads button in your portal. Tell us your budget and what you want more of, and we'll take it from there." },
+      { q: "Do my staff need their own login?", a: "Anyone on your account can sign in with their own email address and see the same requests and hours." },
+    ],
+    related: ["website-maintenance", "website-support", "google-ads", "wordpress"],
+  },
+  {
     slug: "website-support", name: "Website & IT support", blurb: "Help with websites, email and servers", icon: "support", group: "care",
     metaTitle: "Website, Email & Server Support Canberra | Web Culture",
     metaDescription: "Local help for websites, email and servers in Canberra. Lodge a support ticket online, track it in your client portal, and get it fixed by Web Culture. $120 + GST an hour.",
@@ -539,6 +595,6 @@ export const TIMEFRAMES = ["As soon as possible", "Within a month", "1–3 month
 /** Service page → the matching choice on the quote form (so "Get a quote" arrives pre-ticked). */
 export const QUOTE_FOR: Record<string, string> = {
   "website-design": "New website", wordpress: "WordPress work", leadpages: "LeadPages website", "web-hosting": "Web hosting",
-  "website-maintenance": "Website maintenance", "website-support": "Something else", "google-ads": "Google Ads", seo: "SEO",
+  "website-maintenance": "Website maintenance", "care-hub": "Website maintenance", "website-support": "Something else", "google-ads": "Google Ads", seo: "SEO",
   "email-and-domains": "Email & domains", "ai-and-custom-apps": "AI or custom app",
 };
