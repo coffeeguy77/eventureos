@@ -302,7 +302,7 @@ export const SERVICES: Service[] = [
       { icon: "check", title: "Task lists, not email chains", text: "List the changes one per line and attach your files. We tick them off as we go." },
       { icon: "refresh", title: "Live update status", text: "See which plugins and themes need updating on each site, and how you compare with the latest WordPress and WooCommerce." },
       { icon: "ticket", title: "One place for everything", text: "Jobs, problems, replies and files all stay with the request, in your portal." },
-      { icon: "ads", title: "Add Google Ads", text: "Add managed Google Ads to your package, with daily checks and a plain-English report each month." },
+      { icon: "ads", title: "Add Google Ads", text: "Add managed Google Ads to your package: 2 hours of campaign work every week, daily checks and a detailed monthly report." },
       { icon: "edit", title: "Make it yours", text: "Choose what your portal shows first: your hours, your sites, your requests or your Ads results." },
     ],
     included: [
@@ -313,14 +313,14 @@ export const SERVICES: Service[] = [
       "The latest WordPress, WooCommerce, Elementor, Yoast and PHP versions",
       "A backup before we make changes",
       "A record of every change made, and the time it took",
-      "Optional Google Ads management with monthly reports",
+      "Optional Google Ads management: 2 hours of campaign work a week and a detailed monthly report",
     ],
     pricing: {
       items: [
         { name: "2 hours", price: "$240", unit: "+ GST", note: "$120 an hour" },
         { name: "5 hours", price: "$570", unit: "+ GST", note: "Save 5% — $114 an hour" },
         { name: "10 hours", price: "$1,080", unit: "+ GST", note: "Save 10% — $108 an hour" },
-        { name: "Google Ads add-on", price: "$400", unit: "+ GST / month", note: "Management fee — your ad budget is paid to Google" },
+        { name: "Google Ads add-on", price: "$600", unit: "+ GST / month", note: "Includes 2 hours of campaign work every week (about 8.7 hours a month — $1,040 + GST at our $120 rate) and a detailed monthly report. Your ad budget is paid to Google." },
       ],
       note: "Each request uses at least 1 hour, then our time to the next 15 minutes — so group small changes into one list. Hours count as soon as the block is paid.",
     },
@@ -335,6 +335,7 @@ export const SERVICES: Service[] = [
       { q: "What happens when my hours run out?", a: "Your portal shows your balance on every page. When it's getting low you can top up in a couple of clicks — or lodge the next change as a job and we'll quote it." },
       { q: "How do you know which plugins need updating?", a: "Our connector plugin on your WordPress site reports the versions it's running and which updates are waiting. Your portal shows that list, so you can see what needs doing and ask us to run it." },
       { q: "Is this instead of a maintenance plan?", a: "It works alongside one. A maintenance plan is a scheduled check on a regular cycle. The Care Hub is for the changes you ask for, whenever you need them. Many clients have both." },
+      { q: "What does the $600 Google Ads add-on include?", a: "2 hours of hands-on campaign work every week — about 8.7 hours a month, which at our normal $120 an hour would be $1,040 + GST — plus a detailed report each month. You pay $600 + GST, saving about $440 a month. Your ad budget is paid directly to Google." },
       { q: "Can I add Google Ads later?", a: "Yes. There's an Add Google Ads button in your portal. Tell us your budget and what you want more of, and we'll take it from there." },
       { q: "Do my staff need their own login?", a: "Anyone on your account can sign in with their own email address and see the same requests and hours." },
     ],

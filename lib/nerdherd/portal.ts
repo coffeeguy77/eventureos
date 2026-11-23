@@ -67,7 +67,7 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
       minHours: nerd.minHours,
     } : null,
     versions,
-    ads: { feeExGst: care.adsFeeExGst, accounts: ((ads ?? []) as unknown as { id: string; name: string; mk_reports: { token: string; period_start: string; status: string }[] | null }[]).map((a) => {
+    ads: { feeExGst: care.adsFeeExGst, rate: nerd.hourlyRate, accounts: ((ads ?? []) as unknown as { id: string; name: string; mk_reports: { token: string; period_start: string; status: string }[] | null }[]).map((a) => {
       const last = (a.mk_reports ?? []).filter((r) => r.status === "sent").sort((x, y) => y.period_start.localeCompare(x.period_start))[0];
       return { id: a.id, name: a.name, report: last ? { token: last.token, month: last.period_start } : null };
     }), hasPlan: planRows.some((p) => planCategory(p) === "adwords" && p.status !== "ended") },

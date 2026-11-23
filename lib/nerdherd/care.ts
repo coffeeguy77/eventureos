@@ -36,7 +36,7 @@ export function readCare(settings: unknown): CareSettings {
   const fee = Number(c.ads_fee_ex_gst);
   return {
     packs: packs.length ? packs : DEFAULT_PACKS,
-    adsFeeExGst: c.ads_fee_ex_gst === null ? null : Number.isFinite(fee) && fee > 0 ? Math.round(fee * 100) / 100 : 400,
+    adsFeeExGst: c.ads_fee_ex_gst === null ? null : Number.isFinite(fee) && fee > 0 ? Math.round(fee * 100) / 100 : 600,
     enabled: c.enabled !== false,
   };
 }

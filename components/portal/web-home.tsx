@@ -33,7 +33,7 @@ export interface WebHomeData {
     minHours: number;
   } | null;
   versions: LatestVersions;
-  ads: { feeExGst: number | null; hasPlan: boolean; accounts: { id: string; name: string; report: { token: string; month: string } | null }[] };
+  ads: { feeExGst: number | null; rate: number; hasPlan: boolean; accounts: { id: string; name: string; report: { token: string; month: string } | null }[] };
   prefs: PortalPrefs;
 }
 
@@ -368,8 +368,8 @@ function Ads({ d }: { d: WebHomeData }) {
       <Head title="Add Google Ads" icon={Megaphone} />
       <div className={tile}>
         <p className="font-semibold">More enquiries, without the wasted spend.</p>
-        <p className="mt-1 text-[0.9375rem] text-[#575270]">We set up and run your Google Ads, check them every day, block searches that waste money, and send you a plain-English report each month.</p>
-        {a.feeExGst !== null && <p className="mt-3 text-[0.9375rem]"><span className="text-[1.5rem] font-semibold">{money(a.feeExGst, d.currency, { cents: false })}</span> + GST a month to manage, plus your ad budget paid to Google.</p>}
+        <p className="mt-1 text-[0.9375rem] text-[#575270]">We set up and run your Google Ads, put 2 hours of campaign work into them every week, block searches that waste money, and send you a detailed report each month.</p>
+        {a.feeExGst !== null && <p className="mt-3 text-[0.9375rem]"><span className="text-[1.5rem] font-semibold">{money(a.feeExGst, d.currency, { cents: false })}</span> + GST a month — includes 2 hours of campaign work every week and a detailed monthly report. That&apos;s about 8.7 hours a month — {money(Math.round(a.rate * 2 * 52 / 12), d.currency, { cents: false })} + GST at our normal rate. Your ad budget is paid to Google.</p>}
         <AdsAddOn slug={d.slug} customer={d.customerId} />
       </div>
     </section>
