@@ -52,9 +52,9 @@ export default async function CareHub() {
           <Card key={k} className="px-5 py-4"><p className="text-[0.75rem] text-ink-muted">{k}</p><p className="mt-1 text-[1.375rem] font-semibold text-ink">{v}</p></Card>
         ))}
       </div>
+      <CarePlans db={supabase} orgId={org.id} currency={org.currency} tz={org.timezone} />
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-5">
-          <CarePlans db={supabase} orgId={org.id} currency={org.currency} tz={org.timezone} />
           <Card>
             <CardHeader title="Prepaid hours by client" subtitle="Lowest first — anyone over their hours is at the top. Time logged on a “prepaid hours” ticket comes off here." />
             {rows.length ? (
