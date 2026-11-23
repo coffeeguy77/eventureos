@@ -65,7 +65,16 @@ export default async function Storefront({ params, searchParams }: P) {
 
       {/* Hero: a bright roastery scene, the words over its washed-out left side */}
       <section className="relative isolate overflow-hidden lg:flex lg:min-h-[min(805px,calc(100vw*805/1440))] lg:items-center">
-        {s.heroImage && (
+        {s.heroVideo && (
+          <>
+            {/* A muted loop behind the words; the photo is its poster, and stays for people who turn off motion */}
+            <video src={s.heroVideo} poster={s.heroImage ?? undefined} autoPlay muted loop playsInline preload="metadata" aria-hidden
+              className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] motion-reduce:!hidden lg:block" />
+            {s.heroImage && <img src={s.heroImage} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] motion-reduce:lg:block" />}
+            <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(252,250,247,.86)_0%,rgba(252,250,247,.62)_28%,rgba(252,250,247,0)_48%)] lg:block" />
+          </>
+        )}
+        {!s.heroVideo && s.heroImage && (
           <>
             <img {...edImg("shop.heroImage")} src={s.heroImage} alt="" className="absolute inset-0 -z-10 hidden h-full w-full object-cover object-[60%_50%] lg:block" />
             <div className="absolute inset-0 -z-10 hidden bg-[linear-gradient(90deg,rgba(252,250,247,.86)_0%,rgba(252,250,247,.62)_28%,rgba(252,250,247,0)_48%)] lg:block" />
@@ -96,7 +105,12 @@ export default async function Storefront({ params, searchParams }: P) {
             )}
           </div>
         </div>
-        {s.heroImage && <img {...edImg("shop.heroImage")} src={s.heroImage} alt="" className="mx-4 mb-6 aspect-[4/3] w-[calc(100%-2rem)] rounded-[20px] object-cover object-[70%_50%] sm:mx-8 sm:w-[calc(100%-4rem)] lg:hidden" />}
+        {s.heroVideo ? (
+          <div className="mx-4 mb-6 overflow-hidden rounded-[20px] sm:mx-8 lg:hidden">
+            <video src={s.heroVideo} poster={s.heroImage ?? undefined} autoPlay muted loop playsInline preload="metadata" aria-hidden className="aspect-[4/3] w-full object-cover object-[70%_50%] motion-reduce:hidden" />
+            {s.heroImage && <img src={s.heroImage} alt="" className="hidden aspect-[4/3] w-full object-cover object-[70%_50%] motion-reduce:block" />}
+          </div>
+        ) : s.heroImage && <img {...edImg("shop.heroImage")} src={s.heroImage} alt="" className="mx-4 mb-6 aspect-[4/3] w-[calc(100%-2rem)] rounded-[20px] object-cover object-[70%_50%] sm:mx-8 sm:w-[calc(100%-4rem)] lg:hidden" />}
       </section>
 
       {promo.length > 0 && (

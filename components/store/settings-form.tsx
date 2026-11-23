@@ -8,7 +8,7 @@ import { frequencyLabel, WEEKDAYS, type IntervalUnit, type ShopSettings } from "
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/form";
 import { Card } from "@/components/ui/card";
-import { PhotoUpload } from "@/components/bookings/course-tools";
+import { PhotoUpload, VideoUpload } from "@/components/bookings/course-tools";
 
 export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; initial: ShopSettings; shopUrl: string }) {
   const router = useRouter();
@@ -28,6 +28,9 @@ export function ShopSettingsForm({ orgId, initial, shopUrl }: { orgId: string; i
         <div><Label htmlFor="ss-t" hint="put | where you want a line break">Shop heading</Label><Input id="ss-t" value={s.title} onChange={(e) => set("title", e.target.value)} /></div>
         <div><Label htmlFor="ss-tg">Tagline</Label><Input id="ss-tg" value={s.tagline} onChange={(e) => set("tagline", e.target.value)} /></div>
         <div><Label htmlFor="ss-h">Hero photo</Label><div className="flex gap-2"><Input id="ss-h" value={s.heroImage ?? ""} onChange={(e) => set("heroImage", e.target.value || null)} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("heroImage", u)} /></div></div>
+        <div><Label htmlFor="ss-hv" hint="optional — a short muted loop (10–20 sec) behind the hero words; the hero photo shows while it loads and for people who turn off motion">Hero video</Label>
+          <div className="flex gap-2"><Input id="ss-hv" value={s.heroVideo ?? ""} onChange={(e) => set("heroVideo", e.target.value || null)} placeholder="https://… .mp4" /><VideoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("heroVideo", u)} /></div>
+          {s.heroVideo && <video src={s.heroVideo} muted loop autoPlay playsInline className="mt-2 aspect-video w-full max-w-xs rounded-lg bg-black object-cover ring-1 ring-line" />}</div>
         <div><Label htmlFor="ss-si" hint="subscriptions page and the gift-subscription panel — e.g. your delivery box">Subscriptions photo</Label><div className="flex gap-2"><Input id="ss-si" value={s.subsImage ?? ""} onChange={(e) => set("subsImage", e.target.value || null)} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("subsImage", u)} /></div></div>
         <div><Label htmlFor="ss-sh" hint="wide picture behind the subscriptions heading — blank uses the subscriptions photo">Subscriptions page banner</Label><div className="flex gap-2"><Input id="ss-sh" value={s.subsHero ?? ""} onChange={(e) => set("subsHero", e.target.value || null)} placeholder="https://…" /><PhotoUpload orgId={orgId} folder="shop" onUploaded={(u) => set("subsHero", u)} /></div></div>
         <div><Label htmlFor="ss-ri" hint="shows “Locally roasted in …” — leave blank to hide">Roasted in</Label><Input id="ss-ri" value={s.roastedIn} onChange={(e) => set("roastedIn", e.target.value)} placeholder="e.g. Canberra" /></div>

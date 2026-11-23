@@ -225,3 +225,32 @@ export function PhotoUpload({ orgId, onUploaded, folder = "courses" }: { orgId: 
     </span>
   );
 }
+
+/** Upload a short video (mp4 / webm / mov, up to 50 MB) straight to storage — for website heroes. */
+export function VideoUpload({ orgId, onUploaded, folder = "site" }: { orgId: string; onUploaded: (url: string) => void; folder?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const pick = async (f: File) => {
+    setErr(null);
+    if (!/^video\/(mp4|webm|quicktime)$/.test(f.type)) { setErr("Choose an MP4, WebM or MOV video."); return; }
+    if (f.size > 50 * 1024 * 1024) { setErr("That video is over 50 MB — trim it or export it smaller (about 10–20 seconds at 1080p works well)."); return; }
+    setBusy(true);
+    try {
+      const supabase = createClient();
+      const ext = f.type === "video/webm" ? "webm" : f.type === "video/quicktime" ? "mov" : "mp4";
+      const path = `${orgId}/${folder}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from("videos").upload(path, f, { contentType: f.type, cacheControl: "31536000", upsert: false });
+      if (error) throw new Error(/bucket not found/i.test(error.message) ? "Video uploads need update 0117 run in Supabase first." : /row-level|policy/i.test(error.message) ? "Only owners and admins can upload videos." : error.message);
+      onUploaded(supabase.storage.from("videos").getPublicUrl(path).data.publicUrl);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed"); } finally { setBusy(false); }
+  };
+  return (
+    <span className="shrink-0">
+      <label className="inline-flex h-[38px] cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />}{busy ? "Uploading…" : "Upload video"}
+        <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = ""; }} />
+      </label>
+      {err && <span className="mt-1 block text-[0.75rem] text-rose-700">{err}</span>}
+    </span>
+  );
+}

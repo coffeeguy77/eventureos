@@ -15,6 +15,7 @@ export interface ShopSettings {
   title: string;
   tagline: string;
   heroImage: string | null;
+  heroVideo: string | null;          // short looping video behind the hero words (mp4/webm); the hero photo shows while it loads
   subsImage: string | null;         // photo on the subscriptions page and the gift-subscription panel (e.g. the delivery box)
   subsHero: string | null;          // wide picture behind the subscriptions page heading (blank = the subscriptions photo)
   roastedIn: string;                // "Locally roasted in …" (blank = not shown)
@@ -66,6 +67,7 @@ export const DEFAULT_SHOP: ShopSettings = {
   title: "Coffee shop",
   tagline: "Freshly roasted coffee, delivered.",
   heroImage: null,
+  heroVideo: null,
   subsImage: null,
   subsHero: null,
   roastedIn: "",
@@ -105,6 +107,7 @@ export function readShop(orgSettings: unknown): ShopSettings {
     title: str(raw.title, d.title, 80) || d.title,
     tagline: str(raw.tagline, d.tagline, 200),
     heroImage: typeof raw.heroImage === "string" && /^https:\/\/|^\//.test(raw.heroImage) ? raw.heroImage : null,
+    heroVideo: typeof raw.heroVideo === "string" && /^(https:\/\/[^\s"'<>]{4,500}|\/media\/[\w./-]{1,200})$/.test(raw.heroVideo) ? raw.heroVideo : null,
     subsImage: typeof raw.subsImage === "string" && /^https:\/\/|^\//.test(raw.subsImage) ? raw.subsImage : null,
     roastedIn: str(raw.roastedIn, "", 40),
     subsHero: typeof raw.subsHero === "string" && /^https:\/\/|^\//.test(raw.subsHero) ? raw.subsHero : null,
