@@ -34,16 +34,44 @@ export function defaultQuoteSubject(o: { businessName: string; quoteNumber: numb
   return `Quote Q-${o.quoteNumber} from ${o.businessName}${o.eventName ? ` — ${o.eventName}` : ""}`;
 }
 
-export function defaultQuoteMessage(o: { firstName: string | null; eventName: string | null; eventDate: string | null; validUntil: string | null; senderFirstName: string | null; isUpdate: boolean }) {
+/** "Coffee Cart | Quantum Australia" → "coffee cart quote for Quantum Australia"; any other name → "quote for <name>". */
+export function quoteFor(eventName: string | null) {
+  const m = eventName ? /^(.+?)\s+\|\s+(.+)$/.exec(eventName.trim()) : null;
+  if (m) return `${m[1].toLowerCase()} quote for ${m[2]}`;
+  return eventName ? `quote for ${eventName}` : "quote";
+}
+
+/** Dec–Feb: the Australian summer, when iced drinks are worth suggesting. */
+export const isSummer = (isoDate: string | null | undefined) => !!isoDate && /^\d{4}-(12|01|02)-/.test(isoDate);
+
+/** "breakfast, morning & afternoon tea and lunch" from the price list's catering categories. */
+export function cateringWords(categories: (string | null)[]) {
+  const names = [...new Set(categories.map((c) => (c ?? "").replace(/^catering\s*·\s*/i, "").trim()).filter((c) => c && !/^catering$/i.test(c)).map((c) => c.toLowerCase()))].slice(0, 4);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0] ?? null;
+}
+
+export function defaultQuoteMessage(o: { firstName: string | null; eventName: string | null; eventDate: string | null; validUntil: string | null; senderFirstName: string | null; isUpdate: boolean;
+  /** The customer can change their order on the quote link */
+  canEdit?: boolean;
+  /** Summer job with hot drinks only on the quote: suggest a mix with iced lattes */
+  suggestIced?: boolean;
+  /** Catering they can add from the link, e.g. "breakfast, morning & afternoon tea and lunch" (null = none) */
+  catering?: string | null }) {
+  const extras = [
+    o.canEdit ? "Need to change something? Open your quote and choose \u201cChange your order\u201d \u2014 you can update the numbers, take items off or add more, and the quote updates straight away, ready to accept." : null,
+    o.suggestIced ? "As your event is in summer, it's worth considering a mix of hot coffees and iced lattes \u2014 they're very popular on warm days. Just reply with the split you'd like and we'll update the quote." : null,
+    o.catering ? `We also do catering${o.catering ? ` \u2014 ${o.catering}` : ""}.${o.canEdit ? " You can add it to your quote yourself from the same link." : " Just let us know and we'll add it to your quote."}` : null,
+  ].filter((x): x is string => !!x);
   const lines = [
     `Hi ${o.firstName?.trim() || "there"},`,
     "",
     o.isUpdate
-      ? `I've updated your quote${o.eventName ? ` for ${o.eventName}` : ""}${o.eventDate ? ` on ${o.eventDate}` : ""}. The latest version is below.`
-      : `Thanks for getting in touch. Here's your quote${o.eventName ? ` for ${o.eventName}` : ""}${o.eventDate ? ` on ${o.eventDate}` : ""}.`,
+      ? `I've updated your ${quoteFor(o.eventName)}${o.eventDate ? ` on ${o.eventDate}` : ""}. The latest version is below.`
+      : `Thanks for getting in touch. Here's your ${quoteFor(o.eventName)}${o.eventDate ? ` on ${o.eventDate}` : ""}.`,
     "",
     `You can view the full quote and accept it online using the button below.${o.validUntil ? ` It's valid until ${o.validUntil}.` : ""}`,
     "",
+    ...extras.flatMap((x) => [x, ""]),
     "If you have any questions or would like to change anything, just reply to this email.",
     "",
     "Kind regards,",

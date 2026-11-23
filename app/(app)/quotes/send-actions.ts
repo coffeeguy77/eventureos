@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { emailConfigured, sendEmail } from "@/lib/email/send";
-import { defaultQuoteMessage, defaultQuoteSubject, quoteEmail } from "@/lib/email/quote-email";
+import { cateringWords, defaultQuoteMessage, defaultQuoteSubject, isSummer, quoteEmail } from "@/lib/email/quote-email";
 import { appBaseUrl } from "@/lib/integrations/registry";
 import { signatureForSend } from "@/lib/signatures/server";
 import { fmtDate, money } from "@/lib/format";
@@ -159,6 +159,20 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
     let signature: QuoteSendSetup["signature"] = null;
     try { const s = await signatureForSend(supabase, org.id, user.id, null); if (s) signature = { html: s.html, text: s.text }; } catch { /* no signature */ }
 
+    // Extras in the message: changing the order online, iced drinks in summer, and catering they can add
+    const settings = (org.settings as Record<string, unknown> | null ?? {}) as Record<string, unknown>;
+    const [{ data: lines }, { data: cats }] = await Promise.all([
+      supabase.from("quote_items").select("details, service:services(category)").eq("quote_id", q.id).eq("is_optional", false),
+      supabase.from("services").select("category").eq("organisation_id", org.id).eq("active", true).ilike("category", "catering%"),
+    ]);
+    type L = { details: { kind?: string; cold?: number } | null; service: { category: string | null } | null };
+    const ls = (lines ?? []) as unknown as L[];
+    const { cateringLocked } = await import("@/lib/quotes/customer-edit");
+    const locked = cateringLocked(q.event?.event_date ?? null, null, org.timezone || "Australia/Sydney");
+    const canEdit = settings.quote_customer_edit !== false;
+    const hotOnly = ls.some((l) => l.details?.kind === "serves" && !Number(l.details.cold ?? 0));
+    const hasCatering = ls.some((l) => /^catering\b/i.test(l.service?.category ?? ""));
+    const catering = !locked && !hasCatering ? cateringWords(((cats ?? []) as { category: string | null }[]).map((c) => c.category)) : null;
     const eventDate = q.event?.event_date ? fmtDate(q.event.event_date, "long") : null;
     const validUntil = q.expiry_date ? fmtDate(q.expiry_date, "long") : null;
     const orgRow = o as { brand_colour: string | null; logo_url: string | null; contact_email: string | null } | null;
@@ -173,6 +187,7 @@ export async function quoteSendSetup(quoteId: string): Promise<ActionResult<Quot
           senderFirstName: profile.full_name?.split(" ")[0] ?? null,
           // An "update" only once the customer has actually been emailed an earlier version
           isUpdate: needsPublish && (prev ?? []).length > 0,
+          canEdit, suggestIced: hotOnly && isSummer(q.event?.event_date), catering,
         }),
         senderEmail: profile.email,
         replyTo: gm?.address ?? profile.email,
