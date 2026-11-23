@@ -54,12 +54,12 @@ export function ProductCard({ p, slug, s, currency, prices = "from" }: { p: Prod
       </Link>
     );
   }
-  // Coffee page card: bag on a blush panel with the badges, details below
+  // Coffee page card: the photo on white (machines fill the panel), badges on top, details below
   return (
     <Link href={`/shop/${slug}/p/${p.slug}`} className="shop-card group flex h-full flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_2px_4px_rgba(60,40,30,.03),0_18px_40px_-28px_rgba(80,45,40,.35)]">
-      <div className="relative h-[244px] overflow-hidden bg-[linear-gradient(180deg,#F8EDE8,#FBF1EC)]">
+      <div className="relative h-[244px] overflow-hidden bg-white">
         {p.image_url
-          ? <img src={p.image_url} alt="" className="shop-zoom absolute inset-x-0 bottom-0 top-[46px] mx-auto h-[calc(100%-46px)] w-full object-contain object-bottom drop-shadow-[0_16px_16px_rgba(60,30,20,.2)]" loading="lazy" />
+          ? <img src={p.image_url} alt="" className={`shop-zoom absolute inset-0 h-full w-full object-contain ${p.kind === "coffee" ? "px-4 pb-3 pt-[46px] object-bottom drop-shadow-[0_16px_16px_rgba(60,30,20,.2)]" : "p-2"}`} loading="lazy" />
           : <span className={`${serif} absolute inset-0 grid place-items-center text-[3rem] text-[var(--pk)]`}>{p.name[0]}</span>}
         {(p.featured || sub !== null) && (
           <div className="absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-1.5">

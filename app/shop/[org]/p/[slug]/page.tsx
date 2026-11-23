@@ -56,8 +56,8 @@ export default async function ProductPage({ params }: P) {
       </div>
       <section className={`${PAGE} grid gap-8 pb-16 pt-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-14`}>
         <div>
-          <div className="relative aspect-square overflow-hidden rounded-[32px] bg-[radial-gradient(ellipse_at_50%_35%,#FFFFFF,color-mix(in_srgb,var(--b)_10%,#F1E9E0))]">
-            {p.image_url ? <img src={p.image_url} alt={p.name} className="absolute inset-0 h-full w-full object-contain p-10 sm:p-16" /> : <span className={`${serif} absolute inset-0 grid place-items-center text-[6rem] text-[var(--b)]`}>{p.name[0]}</span>}
+          <div className="relative aspect-square overflow-hidden rounded-[32px] bg-white ring-1 ring-[#EFE8E2]">
+            {p.image_url ? <img src={p.image_url} alt={p.name} className={`absolute inset-0 h-full w-full object-contain ${machine ? "p-4 sm:p-6" : "p-10 sm:p-16"}`} /> : <span className={`${serif} absolute inset-0 grid place-items-center text-[6rem] text-[var(--b)]`}>{p.name[0]}</span>}
           </div>
           {p.images.length > 1 && (
             <div className="mt-3 grid grid-cols-4 gap-3">{p.images.slice(0, 4).map((src) => <img key={src} src={src} alt="" className="aspect-square w-full rounded-2xl bg-white object-contain p-2" />)}</div>
