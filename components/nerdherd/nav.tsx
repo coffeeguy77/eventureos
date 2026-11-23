@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/nerd-herd", label: "Help desk" },
   { href: "/nerd-herd/tickets", label: "Tickets" },
   { href: "/nerd-herd/maintenance", label: "Maintenance jobs" },
+  { href: "/nerd-herd/care", label: "Care Hub" },
   { href: "/nerd-herd/websites", label: "Websites" },
   { href: "/nerd-herd/ai", label: "AI maintenance" },
   { href: "/nerd-herd/vault", label: "Vault" },

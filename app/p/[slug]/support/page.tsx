@@ -98,6 +98,12 @@ export default async function PortalSupport({ params }: { params: Promise<{ slug
           )}
         </div>
         <Panel title="Ask for help" subtitle={`We'll reply here — you'll see it next time you sign in.`}>
+          <div className="flex flex-wrap gap-2 border-t border-line px-4 py-4 sm:px-6">
+            {[["tasks", "Request tasks"], ["job", "Lodge a job"], ["problem", "Report a problem"]].map(([k, l]) => (
+              <Link key={k} href={`/p/${slug}/care/new?type=${k}`} className="inline-flex h-9 items-center rounded-full px-4 text-[0.8125rem] font-semibold text-[var(--portal-brand-ink)] ring-1 ring-inset ring-[var(--portal-brand-line)] hover:bg-[var(--portal-brand-soft)]">{l}</Link>
+            ))}
+            <p className="w-full text-[0.8125rem] text-ink-muted">Task lists, files and job details go through these. For a quick question, use the form below.</p>
+          </div>
           <div className="border-t border-line px-4 py-5 sm:px-6"><RaiseTicketForm slug={slug} customers={customers} sites={sites.filter((s) => s.status !== "archived")} /></div>
         </Panel>
       </div>

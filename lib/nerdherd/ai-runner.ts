@@ -319,10 +319,27 @@ async function finish(db: Db, job: AiJob, site: Awaited<ReturnType<typeof connec
     });
   }
 
-  // draft invoice for billable jobs (not for quotes — the quote's invoice already paid for it)
+  // a job on a prepaid-hours request (Care Hub): the usual hours come off the client's block instead of an invoice
   let invoiceId = job.invoice_id;
   let invoiceNote = "";
-  if (job.billable && !invoiceId && changes.length) {
+  let fromBlock = false;
+  if (job.ticket_id && job.billable && !invoiceId && changes.length) {
+    const { data: t } = await db.from("support_tickets").select("billing").eq("id", job.ticket_id).maybeSingle().then((r) => r, () => ({ data: null }));
+    if ((t as { billing?: string | null } | null)?.billing === "block") {
+      fromBlock = true;
+      const { data: logged } = await db.from("support_ticket_updates").select("id").eq("ticket_id", job.ticket_id).eq("author_name", "Nerd Herd AI").ilike("body", `AI-${job.number} time%`).limit(1);
+      if (!logged?.length) {
+        const hours = Math.max(0.25, Number(job.manual_hours) || 0.25) + (ai.backupHours > 0 ? ai.backupHours : 0);
+        await db.from("support_ticket_updates").insert({
+          organisation_id: job.organisation_id, ticket_id: job.ticket_id, kind: "time", minutes: Math.round(hours * 60), billable: true, public: false, author_id: null, author_name: "Nerd Herd AI",
+          body: `AI-${job.number} time — the hours this work normally takes${ai.backupHours > 0 ? ", including the backup first" : ""} (from the client's prepaid hours)`,
+        });
+        try { const { syncBlockUsage } = await import("./care-server"); await syncBlockUsage(db, job.ticket_id); } catch (e) { invoiceNote = `Logged the time, but the prepaid hours didn't update: ${e instanceof Error ? e.message : e}`; }
+      }
+    }
+  }
+  // draft invoice for billable jobs (not for quotes — the quote's invoice already paid for it)
+  if (job.billable && !invoiceId && changes.length && !fromBlock) {
     if (!job.customer_id) invoiceNote = "No draft invoice: the website isn't linked to a client.";
     else {
       const rateInc = Math.round(nerd.hourlyRate * 1.1 * 100) / 100;

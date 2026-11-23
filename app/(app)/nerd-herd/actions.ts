@@ -27,6 +27,14 @@ const refresh = (id?: string) => {
   if (id) revalidatePath(`/nerd-herd/tickets/${id}`);
 };
 
+/** A prepaid-hours request: keep the client's balance in step with the time logged (Care Hub). */
+async function syncHours(ticketId: string) {
+  const { createServiceClient } = await import("@/lib/integrations/runtime");
+  const { syncBlockUsage } = await import("@/lib/nerdherd/care-server");
+  try { await syncBlockUsage(createServiceClient(), ticketId); }
+  catch (e) { if (!/nh_block_usage|billing/.test(String(e))) throw e; } // before the Care Hub update is run: nothing to keep in step
+}
+
 async function loadTicket(id: string) {
   if (!UUID.test(id)) throw new Error("That ticket doesn't exist.");
   const ctx = await desk();
@@ -86,6 +94,8 @@ async function defaultChecklist(supabase: Awaited<ReturnType<typeof requireOrg>>
 export interface TicketPatch {
   status?: TicketStatus; priority?: Priority; kind?: TicketKind; assigned_to?: string | null; customer_id?: string | null;
   website_id?: string | null; due_date?: string | null; subject?: string;
+  /** how it's paid for: the client's prepaid hours, a one-off quote, or as before (null) */
+  billing?: "block" | "quote" | null;
 }
 
 export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
@@ -110,6 +120,10 @@ export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
     if (p.website_id !== undefined) patch.website_id = p.website_id && UUID.test(p.website_id) ? p.website_id : null;
     if (p.due_date !== undefined) patch.due_date = p.due_date && DATE.test(p.due_date) ? p.due_date : null;
     if (p.subject !== undefined) { const s = t(p.subject, 300); if (!s) throw new Error("The subject can't be empty."); patch.subject = s; }
+    if (p.billing !== undefined) {
+      const b = p.billing === "block" || p.billing === "quote" ? p.billing : null;
+      if (b !== ((ticket as { billing?: string | null }).billing ?? null)) { patch.billing = b; said.push(b === "block" ? "paid from prepaid hours" : b === "quote" ? "a job to quote" : "billed as usual"); }
+    }
     const { error } = await supabase.from("support_tickets").update(patch).eq("id", id).eq("organisation_id", org.id);
     if (error) throw new Error(`Couldn't save: ${error.message}`);
     if (said.length) {
@@ -117,6 +131,7 @@ export async function updateTicket(id: string, p: TicketPatch): Promise<R> {
     }
     await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "ticket.updated", entityType: "support_ticket", entityId: id, customerId: (patch.customer_id as string | undefined) ?? ticket.customer_id, summary: `${actorName(profile)} updated ticket #${ticket.number}${said.length ? ` (${said.join(", ")})` : ""}` });
     if (newAssignee && newAssignee !== user.id) await tellAssignee(org.id, id, newAssignee, user.id, `${actorName(profile)} assigned this ticket to you`, []);
+    if (patch.billing !== undefined) await syncHours(id);
     refresh(id);
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
@@ -156,6 +171,7 @@ export async function addUpdate(id: string, i: UpdateInput): Promise<R> {
       patch.resolved_at = i.status === "resolved" || i.status === "closed" ? new Date().toISOString() : null;
     } else if (ticket.status === "new") patch.status = "in_progress";
     await supabase.from("support_tickets").update(patch).eq("id", id);
+    if (minutes) await syncHours(id);
     await logActivity(supabase, {
       orgId: org.id, actorId: user.id, action: kind === "time" ? "ticket.time" : "ticket.comment", entityType: "support_ticket", entityId: id, customerId: ticket.customer_id,
       summary: kind === "time" ? `${actorName(profile)} logged ${fmtMinutes(minutes ?? 0)} on ticket #${ticket.number}` : `${actorName(profile)} ${kind === "comment" ? "replied on" : "added a note to"} ticket #${ticket.number}`,
@@ -189,6 +205,7 @@ export async function billTime(id: string): Promise<R<string>> {
     const { supabase, org, user, profile } = ctx;
     if (!canManage(ctx.role)) throw new Error("Only owners, admins and managers can raise invoices.");
     if (!ticket.customer_id) throw new Error("Choose the client for this ticket first.");
+    if ((ticket as { billing?: string | null }).billing === "block") throw new Error("This request is paid from the client's prepaid hours — its time comes off their block, so there's nothing to invoice. Change “Paid by” to bill it separately.");
     const { data: rows, error } = await supabase.from("support_ticket_updates").select("id, minutes, body, created_at").eq("ticket_id", id).eq("billable", true).is("billed_invoice_id", null).gt("minutes", 0);
     if (error) throw new Error(error.message);
     const list = (rows ?? []) as { id: string; minutes: number; body: string | null; created_at: string }[];

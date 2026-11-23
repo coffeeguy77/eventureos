@@ -13,6 +13,11 @@ import { TicketTabs, type TabRow } from "@/components/nerdherd/ticket-tabs";
 import { TicketQuotes, type QuoteView, type ViewRow } from "@/components/nerdherd/ticket-quotes";
 import { cn } from "@/lib/cn";
 import { allPages } from "@/lib/supabase/all-pages";
+import { createServiceClient } from "@/lib/integrations/runtime";
+import { fmtBytes } from "@/lib/nerdherd/care";
+import { loadBlock, signFiles } from "@/lib/nerdherd/care-server";
+import { BillingPicker, WorkTimer } from "@/components/nerdherd/care-tools";
+import { Paperclip } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +88,20 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   const unbilled = allUpdates.filter((u) => u.billable && !u.billed_invoice_id).reduce((a, u) => a + Number(u.minutes ?? 0), 0);
   const checklist = readChecklist(tk.checklist);
   const s = readNerd(org.settings);
+  // Care Hub: the timer, how this request is paid for, the client's prepaid hours, and files on messages
+  const svc = createServiceClient();
+  const billing = ((data as { billing?: string | null }).billing ?? null) as "block" | "quote" | null;
+  const [{ data: timerRow }, block, { data: useRow }, { data: fileRows }] = await Promise.all([
+    supabase.from("nh_timers").select("ticket_id, started_at, support_tickets(number)").eq("user_id", user.id).maybeSingle().then((r) => r, () => ({ data: null })),
+    tk.customer_id ? loadBlock(svc, org.id, [tk.customer_id]).catch(() => null) : Promise.resolve(null),
+    svc.from("nh_block_usage").select("minutes_logged, minutes_charged").eq("ticket_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
+    svc.from("support_ticket_updates").select("id, files").eq("ticket_id", id).then((r) => r, () => ({ data: [] })),
+  ]);
+  const tr = timerRow as { ticket_id: string; started_at: string; support_tickets: { number: number } | null } | null;
+  const running = tr ? { ticketId: tr.ticket_id, number: tr.support_tickets?.number ?? null, startedAt: tr.started_at } : null;
+  const usage = (useRow as { minutes_logged: number; minutes_charged: number } | null) ?? { minutes_logged: 0, minutes_charged: 0 };
+  const filesBy = new Map<string, Awaited<ReturnType<typeof signFiles>>>();
+  for (const r of (fileRows ?? []) as { id: string; files: unknown }[]) { const f = await signFiles(svc, r.files); if (f.length) filesBy.set(r.id, f); }
   const manage = canManage(role);
 
   const na: NextAction =
@@ -106,6 +125,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <WorkTimer ticketId={tk.id} running={running} />
           {aiSite && manage && tk.website_id && <Link href={`/nerd-herd/ai?site=${tk.website_id}&ticket=${tk.id}`} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[0.75rem] font-medium text-brand-600 ring-1 ring-inset ring-line-strong hover:bg-canvas">AI job on {aiSite.domain}</Link>}
           {tk.priority !== "normal" && <Badge tone={PRIORITY[tk.priority].tone}>{PRIORITY[tk.priority].label}</Badge>}
           <Badge tone={TICKET_STATUS[tk.status].tone}>{TICKET_STATUS[tk.status].label}</Badge>
@@ -119,9 +139,9 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
             <CardHeader title="Quote & payment" subtitle="Quote the fix, send it, and start once it's paid — red until paid, green when it's ready to do." />
             <div className="border-t border-line px-5 py-4"><TicketQuotes ticketId={tk.id} ticketNumber={tk.number} hasClient={!!tk.customer_id} defaultRate={s.hourlyRate} currency={org.currency} tz={org.timezone} quotes={quotes} views={views} needsMigration={!!qRes.error} aiSite={aiSite} minHours={s.minHours} quickTasks={s.quickTasks} /></div>
           </Card>
-          {tk.kind === "maintenance" && (
+          {(tk.kind === "maintenance" || checklist.length > 0) && (
             <Card>
-              <CardHeader title="Maintenance checklist" subtitle={tk.recurring_invoices ? <>From plan <Link className="underline" href={`/hosting/recurring/${tk.recurring_invoices.id}`}>{tk.recurring_invoices.name}</Link></> : undefined} />
+              <CardHeader title={tk.kind === "maintenance" ? "Maintenance checklist" : "Client's task list"} subtitle={tk.recurring_invoices ? <>From plan <Link className="underline" href={`/hosting/recurring/${tk.recurring_invoices.id}`}>{tk.recurring_invoices.name}</Link></> : undefined} />
               <div className="border-t border-line px-5 py-4"><Checklist id={tk.id} items={checklist} locked={tk.status === "awaiting_payment"} /></div>
             </Card>
           )}
@@ -148,6 +168,11 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
                           {u.minutes ? <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-ink-muted">{fmtMinutes(u.minutes)}{u.billable ? (u.billed_invoice_id ? " · billed" : " · billable") : " · not billed"}</span> : null}
                         </p>
                         {u.body && <p className="mt-1 whitespace-pre-wrap break-words text-[0.8438rem] text-ink">{u.body}</p>}
+                        {filesBy.get(u.id) && (
+                          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                            {filesBy.get(u.id)!.map((f) => <li key={f.path}><a href={f.url ?? "#"} target="_blank" rel="noreferrer" className="inline-flex max-w-[240px] items-center gap-1 rounded-md bg-canvas px-2 py-1 text-[0.75rem] text-ink ring-1 ring-line hover:ring-brand-400"><Paperclip className="h-3 w-3 shrink-0" /><span className="truncate">{f.name}</span><span className="shrink-0 text-ink-faint">{fmtBytes(f.size)}</span></a></li>)}
+                          </ul>
+                        )}
                       </>}
                     </li>
                   ))}
@@ -164,6 +189,12 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
             <div className="border-t border-line px-5 py-4">
               <TicketControls id={tk.id} initial={{ status: tk.status, priority: tk.priority, kind: tk.kind, assigned_to: tk.assigned_to, customer_id: tk.customer_id, website_id: tk.website_id, due_date: tk.due_date }}
                 members={members.map((m) => ({ id: m.id, name: m.full_name ?? m.email }))} clients={(clients ?? []) as { id: string; name: string }[]} sites={(sites ?? []) as { id: string; domain: string; customer_id: string | null }[]} />
+            </div>
+          </Card>
+          <Card>
+            <CardHeader title="How it's paid for" />
+            <div className="border-t border-line px-5 py-4">
+              <BillingPicker id={tk.id} billing={billing} hasClient={!!tk.customer_id} currency={org.currency} block={block ? { leftMin: block.leftMin, boughtMin: block.boughtMin, pendingMin: block.pendingMin } : null} charged={usage.minutes_charged} logged={usage.minutes_logged} />
             </div>
           </Card>
           {tk.invoices && (
