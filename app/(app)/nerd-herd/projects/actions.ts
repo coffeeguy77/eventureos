@@ -6,7 +6,7 @@ import { actorName, logActivity } from "@/lib/activity";
 import { todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
 import { loadMargins, missing0120, NEEDS_0120 } from "@/lib/nerdherd/margins";
-import { billLines, entryKey, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
+import { billLines, entryKey, splitParts, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
 
 /** Nerd Herd → Projects (office): create a project, keep its record and time log, and bill the time as it goes. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -297,13 +297,14 @@ export async function sendProjectInvite(id: string, contactId: string): Promise<
 }
 
 /** Change a time entry: what was done, the recorded hours, and (optionally) the billed hours set by hand. */
-export async function updateTime(id: string, entryId: string, i: { work: string; hours: string; billed: string; billable: boolean; who?: string }): Promise<R> {
+export async function updateTime(id: string, entryId: string, i: { work: string; hours: string; billed: string; billable: boolean; who?: string; date?: string; dateTo?: string }): Promise<R> {
   try {
     const { supabase, org } = await manager();
     await own(supabase, org.id, id);
     if (!UUID.test(entryId)) throw new Error("Refresh and try again.");
-    const { data: t } = await supabase.from("nh_project_time").select("billed_invoice_id, source").eq("id", entryId).eq("project_id", id).maybeSingle();
-    if (!t) throw new Error("That entry doesn't exist.");
+    const { data: t0 } = await supabase.from("nh_project_time").select("*").eq("id", entryId).eq("project_id", id).maybeSingle();
+    if (!t0) throw new Error("That entry doesn't exist.");
+    const t = { ...(t0 as { billed_invoice_id: string | null; source: string | null }), has_range: "work_date_to" in (t0 as object) };
     let draft: string | null = null;
     if (t.billed_invoice_id) {
       const { data: inv } = await supabase.from("invoices").select("status").eq("id", t.billed_invoice_id).maybeSingle();
@@ -318,9 +319,47 @@ export async function updateTime(id: string, entryId: string, i: { work: string;
     if (billed !== null && !(billed >= 0 && billed <= 500)) throw new Error("Billed hours should be 0 to 500 — or leave it blank to work it out.");
     const patch: Record<string, unknown> = { work, hours: Math.round(hours * 100) / 100, billed_hours: billed === null ? null : Math.round(billed * 100) / 100, billable: i.billable !== false };
     if (t.source === "meeting" && i.who?.trim()) patch.by_name = i.who.trim().slice(0, 300);
+    if (i.date !== undefined) {
+      if (!ISO.test(i.date)) throw new Error("Pick the day the work was done.");
+      patch.work_date = i.date;
+      const to = String(i.dateTo ?? "").trim();
+      if (to && !ISO.test(to)) throw new Error("The 'to' date isn't a date.");
+      if (to && to < i.date) throw new Error("The 'to' date can't be before the first day.");
+      if (to && to > i.date) patch.work_date_to = to; else if (t.has_range) patch.work_date_to = null;
+    }
     const { error } = await supabase.from("nh_project_time").update(patch).eq("id", entryId).eq("project_id", id);
-    if (error) throw new Error(/billed_hours/.test(error.message) ? "Run update 0119 (billed hours) in Supabase first." : error.message);
+    if (error) throw new Error(/billed_hours/.test(error.message) ? "Run update 0119 (billed hours) in Supabase first." : /work_date_to/.test(error.message) ? "Run update 0121 (date ranges) in Supabase first." : error.message);
     if (draft) await rebuildDraft(supabase, org, id, draft);
+    refresh(id);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** Split one task over several days (each part is its own line). Its billed hours are shared as you set them. */
+export async function splitTime(id: string, entryId: string, parts: { date: string; billed: string }[]): Promise<R> {
+  try {
+    const { supabase, org, user } = await manager();
+    await own(supabase, org.id, id);
+    if (!UUID.test(entryId)) throw new Error("Refresh and try again.");
+    const { data: row } = await supabase.from("nh_project_time").select("*").eq("id", entryId).eq("project_id", id).maybeSingle();
+    if (!row) throw new Error("That entry doesn't exist.");
+    const e = toEntry(row as Record<string, unknown>);
+    if (e.billed_invoice_id) {
+      const { data: inv } = await supabase.from("invoices").select("status").eq("id", e.billed_invoice_id).maybeSingle();
+      if (inv?.status !== "draft") throw new Error("That time is on an invoice that's been sent — it can't be split now.");
+    }
+    const list = splitParts(e, parts.slice(0, 14).map((p) => ({ date: String(p.date ?? ""), billed: Number(p.billed) })));
+    const [first, ...rest] = list;
+    const base = row as Record<string, unknown>;
+    const { error } = await supabase.from("nh_project_time").update({ work_date: first.date, hours: first.hours, billed_hours: first.billed, ...("work_date_to" in base ? { work_date_to: null } : {}) }).eq("id", entryId);
+    if (error) throw new Error(error.message);
+    const copy = (p: (typeof list)[number]) => {
+      const { id: _i, created_at: _c, updated_at: _u, work_date_to: _t, ...r } = base;
+      return { ...r, work_date: p.date, hours: p.hours, billed_hours: p.billed, created_by: user.id };
+    };
+    const { error: iErr } = await supabase.from("nh_project_time").insert(rest.map(copy));
+    if (iErr) throw new Error(`Couldn't add the other days: ${iErr.message}`);
+    if (e.billed_invoice_id) await rebuildDraft(supabase, org, id, e.billed_invoice_id);
     refresh(id);
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }

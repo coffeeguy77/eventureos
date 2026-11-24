@@ -20,6 +20,8 @@ export interface TimeEntry {
   kind: "ai" | "staff"; source: string | null; by_name: string | null; billable: boolean; billed_invoice_id: string | null;
   /** Billed hours set by hand for this task (null = recorded hours, times the client margin for AI time) */
   billed_hours?: number | null;
+  /** Last day of a task that spans days (update 0121); null = one day */
+  work_date_to?: string | null;
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -55,6 +57,7 @@ export const toEntry = (r: Record<string, unknown>): TimeEntry => ({
   hours: Number(r.hours), work: String(r.work ?? ""), kind: r.kind === "ai" ? "ai" : "staff", source: (r.source as string | null) ?? null, by_name: (r.by_name as string | null) ?? null,
   billable: r.billable !== false, billed_invoice_id: (r.billed_invoice_id as string | null) ?? null,
   billed_hours: r.billed_hours == null ? null : Number(r.billed_hours),
+  work_date_to: typeof r.work_date_to === "string" && r.work_date_to > String(r.work_date) ? r.work_date_to : null,
 });
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -90,7 +93,7 @@ export function billLines(entries: TimeEntry[], p: Pick<Project, "name">, margin
   const lines = [...entries].filter((e) => e.billable && billedHours(e, mOf(marginPercent, e)) > 0).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
     const q = billedHours(e, mOf(marginPercent, e));
     const what = e.source === "meeting" ? `Meeting with ${e.by_name ?? "you"}: ${e.work.split("\n").map((x) => x.trim().replace(/^[•\-*]\s*/, "")).filter(Boolean).join("; ")}` : e.work;
-    return { description: `${fmtShort(e.work_date)} — ${what}`.slice(0, 1000), quantity: q, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(q * inc) };
+    return { description: `${fmtSpan(e.work_date, e.work_date_to)} — ${what}`.slice(0, 1000), quantity: q, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(q * inc) };
   });
   return { lines, ...totals(entries, marginPercent, rateExGst) };
 }
@@ -104,6 +107,30 @@ export function clientMargin(settings: unknown, customerId: string): number {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const fmtShort = (iso: string) => { const [y, m, d] = iso.split("-").map(Number); return `${d} ${MONTHS[m - 1]} ${y}`; };
+/** "14 Nov 2026", "12–14 Nov 2026", "30 Oct – 2 Nov 2026", "30 Dec 2026 – 2 Jan 2027" */
+export function fmtSpan(from: string, to?: string | null) {
+  if (!to || to <= from) return fmtShort(from);
+  const [y1, m1, d1] = from.split("-").map(Number), [y2, m2, d2] = to.split("-").map(Number);
+  if (y1 !== y2) return `${fmtShort(from)} – ${fmtShort(to)}`;
+  if (m1 !== m2) return `${d1} ${MONTHS[m1 - 1]} – ${d2} ${MONTHS[m2 - 1]} ${y2}`;
+  return `${d1}–${d2} ${MONTHS[m2 - 1]} ${y2}`;
+}
+
+/** Split one task's billed hours over several days: recorded hours are shared in the same proportion. */
+export function splitParts(e: Pick<TimeEntry, "hours">, parts: { date: string; billed: number }[]) {
+  const total = parts.reduce((a, p) => a + p.billed, 0);
+  if (parts.length < 2) throw new Error("Split it into at least two days.");
+  if (parts.some((p) => !ISO.test(p.date))) throw new Error("Give every part a date.");
+  if (parts.some((p) => !(p.billed > 0))) throw new Error("Every part needs some hours.");
+  if (new Set(parts.map((p) => p.date)).size !== parts.length) throw new Error("Use a different day for each part.");
+  let left = r2(e.hours);
+  return parts.map((p, i) => {
+    const rec = i === parts.length - 1 ? r2(left) : r2((e.hours * p.billed) / total);
+    left = r2(left - rec);
+    return { date: p.date, billed: r2(p.billed), hours: Math.max(0.01, rec) };
+  });
+}
+
 export const fmtHours = (h: number) => `${Number(h.toFixed(2))} hr${h === 1 ? "" : "s"}`;
 
 /** AI-recorded sources (the margin applies); anything else is someone's own time. */

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { billLines, billedHours, entryKey, marginFor, parseImport, totals, type TimeEntry } from "./projects";
+import { billLines, billedHours, entryKey, fmtSpan, marginFor, splitParts, parseImport, totals, type TimeEntry } from "./projects";
 
 const e = (o: Partial<TimeEntry>): TimeEntry => ({ id: "x", work_date: "2026-11-14", start_time: null, end_time: null, hours: 1, work: "w", kind: "ai", source: "commits", by_name: null, billable: true, billed_invoice_id: null, ...o });
 
@@ -31,4 +31,14 @@ test("marginFor: a draft invoice's override wins over the client margin", () => 
   const m = marginFor(150, new Map([["inv1", 100]]));
   const t = totals([e({ hours: 10, billed_invoice_id: "inv1" }), e({ hours: 10 }), e({ hours: 4, kind: "staff", billed_invoice_id: "inv1" })], m, 120);
   assert.equal(t.hours, 20 + 25 + 4);
+});
+
+test("fmtSpan and splitParts", () => {
+  assert.equal(fmtSpan("2026-11-14"), "14 Nov 2026");
+  assert.equal(fmtSpan("2026-11-12", "2026-11-14"), "12–14 Nov 2026");
+  assert.equal(fmtSpan("2026-10-30", "2026-11-02"), "30 Oct – 2 Nov 2026");
+  const s = splitParts({ hours: 4.95 }, [{ date: "2026-11-13", billed: 5.57 }, { date: "2026-11-14", billed: 5.57 }]);
+  assert.deepEqual(s.map((x) => x.billed), [5.57, 5.57]);
+  assert.equal(Math.round((s[0].hours + s[1].hours) * 100) / 100, 4.95);
+  assert.throws(() => splitParts({ hours: 1 }, [{ date: "2026-11-13", billed: 1 }]), /at least two/);
 });

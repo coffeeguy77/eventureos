@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtDate, money } from "@/lib/format";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, billedHours, fmtHours, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, billedHours, fmtHours, fmtSpan, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
 import { loadMargins } from "@/lib/nerdherd/margins";
 import { Panel } from "../../ui";
 import { isUuid, requirePortal } from "../../portal-data";
@@ -75,7 +75,7 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
                   {!entries.length && <tr><td colSpan={billing ? 3 : 2} className="px-6 py-6 text-center text-ink-muted">{billing ? "No time logged yet." : "Nothing logged yet."}</td></tr>}
                   {entries.map((e) => (
                     <tr key={e.id} className="align-top">
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink sm:px-6">{fmtDate(e.work_date)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-ink sm:px-6">{fmtSpan(e.work_date, e.work_date_to)}</td>
                       {billing && <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, mOf(e))}</td>}
                       <td className="px-3 py-2.5 text-ink">
                         {e.source === "meeting"

@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { canManage, requireOrg } from "@/lib/context";
 import { fmtDate, money, todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, billedHours, fmtHours, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, billedHours, fmtHours, fmtSpan, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
 import { loadMargins } from "@/lib/nerdherd/margins";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -84,7 +84,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   {!entries.length && <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-muted">No time yet — add it below, or import a project record.</td></tr>}
                   {entries.map((e) => (
                     <tr key={e.id} className={`align-top ${e.billable ? "" : "opacity-60"}`}>
-                      <td className="whitespace-nowrap px-5 py-2.5 text-ink">{fmtDate(e.work_date)}</td>
+                      <td className="whitespace-nowrap px-5 py-2.5 text-ink">{fmtSpan(e.work_date, e.work_date_to)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{e.start_time ? `${e.start_time}${e.end_time && e.end_time !== e.start_time ? `–${e.end_time}` : ""}` : "—"}</td>
                       <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, mOf(e))}{manage && (e.billed_hours != null || (e.kind === "ai" && mOf(e) > 0)) && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded{e.billed_hours != null ? " · set by hand" : ""}</span>}</td>
                       <td className="px-3 py-2.5 text-ink">

@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Mail, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { Check, Loader2, Mail, Pencil, Plus, Receipt, Split, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
-import { addPortalPerson, addTime, billProject, createProject, deleteTime, importRecord, saveProject, sendProjectInvite, setClientMargin, setInvoiceMargin, setPortalRole, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
+import { addPortalPerson, addTime, billProject, createProject, deleteTime, importRecord, saveProject, sendProjectInvite, setClientMargin, setInvoiceMargin, setPortalRole, splitTime, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
 import type { Project } from "@/lib/nerdherd/projects";
 
 /* ------------------------------------------------------------------ new project */
@@ -218,15 +218,28 @@ export function ClientMargin({ customerId, value, clientName }: { customerId: st
 
 /* ------------------------------------------------------------------ edit an entry */
 
-export function EditTime({ id, e, computed }: { id: string; e: { id: string; work: string; hours: number; billed_hours?: number | null; billable: boolean; source: string | null; by_name: string | null }; computed: number }) {
+export function EditTime({ id, e, computed }: { id: string; e: { id: string; work: string; hours: number; billed_hours?: number | null; billable: boolean; source: string | null; by_name: string | null; work_date: string; work_date_to?: string | null }; computed: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ work: e.work, hours: String(e.hours), billed: e.billed_hours == null ? "" : String(e.billed_hours), billable: e.billable, who: e.by_name ?? "" });
+  const [splitting, setSplitting] = useState(false);
+  const [f, setF] = useState({ work: e.work, hours: String(e.hours), billed: e.billed_hours == null ? "" : String(e.billed_hours), billable: e.billable, who: e.by_name ?? "", date: e.work_date, dateTo: e.work_date_to ?? "" });
   const [err, setErr] = useState<string | null>(null);
   const [busy, start] = useTransition();
-  if (!open) return <button type="button" onClick={() => setOpen(true)} className="mt-1 inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline dark:text-brand-300"><Pencil className="h-3 w-3" />Edit</button>;
+  const link = "mt-1 inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline dark:text-brand-300";
+  if (splitting) return <SplitTime id={id} e={e} total={e.billed_hours ?? computed} onClose={() => setSplitting(false)} />;
+  if (!open) return (
+    <span className="flex flex-wrap gap-x-3">
+      <button type="button" onClick={() => setOpen(true)} className={link}><Pencil className="h-3 w-3" />Edit</button>
+      <button type="button" onClick={() => setSplitting(true)} className={link}><Split className="h-3 w-3" />Split over days</button>
+    </span>
+  );
   return (
     <div className="mt-2 space-y-2 rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label htmlFor={`d-${e.id}`}>Date</Label><Input id={`d-${e.id}`} type="date" value={f.date} onChange={(x) => setF({ ...f, date: x.target.value })} /></div>
+        <div><Label htmlFor={`dt-${e.id}`} hint="optional">To</Label><Input id={`dt-${e.id}`} type="date" value={f.dateTo} min={f.date} onChange={(x) => setF({ ...f, dateTo: x.target.value })} /></div>
+      </div>
+      <p className="text-[0.75rem] text-ink-muted">Set a “To” date when the work ran over several days — the invoice shows e.g. “12–14 Nov 2026”.</p>
       {e.source === "meeting" && <div><Label htmlFor={`w-${e.id}`}>Who was there</Label><Input id={`w-${e.id}`} value={f.who} onChange={(x) => setF({ ...f, who: x.target.value })} /></div>}
       <div><Label htmlFor={`k-${e.id}`}>{e.source === "meeting" ? "What was discussed" : "What was done"}</Label><Textarea id={`k-${e.id}`} rows={3} value={f.work} onChange={(x) => setF({ ...f, work: x.target.value })} /></div>
       <div className="grid grid-cols-2 gap-2">
@@ -240,6 +253,37 @@ export function EditTime({ id, e, computed }: { id: string; e: { id: string; wor
           <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
           <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await updateTime(id, e.id, f); if (r.ok) { setOpen(false); router.refresh(); } else setErr(r.error); })}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Save</Button>
         </span>
+      </div>
+      <FormError message={err} />
+    </div>
+  );
+}
+
+/** Split one task's billed hours over several days: each day becomes its own line with the same description. */
+function SplitTime({ id, e, total, onClose }: { id: string; e: { id: string; work_date: string }; total: number; onClose: () => void }) {
+  const router = useRouter();
+  const prev = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+  const half = Math.round((total / 2) * 100) / 100;
+  const [parts, setParts] = useState([{ date: prev(e.work_date, 1), billed: String(half) }, { date: e.work_date, billed: String(Math.round((total - half) * 100) / 100) }]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const sum = Math.round(parts.reduce((a, p) => a + (Number(p.billed) || 0), 0) * 100) / 100;
+  const set = (i: number, k: "date" | "billed", v: string) => setParts((x) => x.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
+  return (
+    <div className="mt-2 space-y-2 rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
+      <p className="text-[0.8125rem] font-medium text-ink">Split {total} billed hrs over days</p>
+      {parts.map((p, i) => (
+        <div key={i} className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[9rem] flex-1"><Label htmlFor={`sd-${e.id}-${i}`}>Day {i + 1}</Label><Input id={`sd-${e.id}-${i}`} type="date" value={p.date} onChange={(x) => set(i, "date", x.target.value)} /></div>
+          <div className="w-24"><Label htmlFor={`sh-${e.id}-${i}`}>Billed hrs</Label><Input id={`sh-${e.id}-${i}`} inputMode="decimal" value={p.billed} onChange={(x) => set(i, "billed", x.target.value)} /></div>
+          {parts.length > 2 && <button type="button" aria-label={`Remove day ${i + 1}`} onClick={() => setParts((x) => x.filter((_, j) => j !== i))} className="mb-2 text-ink-faint hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>}
+        </div>
+      ))}
+      {parts.length < 14 && <button type="button" onClick={() => setParts((x) => [{ date: prev(x[0].date, 1), billed: "" }, ...x])} className="inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline dark:text-brand-300"><Plus className="h-3 w-3" />Add a day</button>}
+      <p className={`text-[0.75rem] ${Math.abs(sum - total) > 0.009 ? "text-amber-700 dark:text-amber-300" : "text-ink-muted"}`}>Total {sum} hrs{Math.abs(sum - total) > 0.009 ? ` — was ${total}. That's fine if you mean to change it.` : ""} Each part's billed hours are set by hand, so the margin no longer changes them.</p>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button size="sm" variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await splitTime(id, e.id, parts); if (r.ok) { onClose(); router.refresh(); } else setErr(r.error); })}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Split</Button>
       </div>
       <FormError message={err} />
     </div>
