@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,12 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
   const asLines = rows.map((r) => ({ quantity: num(r.quantity), unit_amount: num(r.unit_amount), tax_rate: r.tax_rate }));
   const totals = lineTotals(editing ? asLines : lines);
 
+  // "Edit invoice" in the Actions panel links here (#edit-invoice) and opens the editor
+  useEffect(() => {
+    const check = () => { if (canEdit && window.location.hash === "#edit-invoice") { setRows(lines.map(toRow)); setOk(null); setEditing(true); document.getElementById("edit-invoice")?.scrollIntoView({ behavior: "smooth", block: "start" }); } };
+    check(); window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, [canEdit, lines]);
   const cancel = () => { setRows(lines.map(toRow)); setErr(null); setEditing(false); };
   const save = () => start(async () => {
     setErr(null); setOk(null);
@@ -47,6 +53,7 @@ export function InvoiceLinesEditor({ invoiceId, lines, currency, canEdit, subtit
 
   return (
     <>
+      <span id="edit-invoice" className="block scroll-mt-20" />
       <CardHeader title="Invoice lines" subtitle={subtitle ?? "Prices include GST"}
         action={canEdit && !editing ? (
           <button type="button" onClick={() => { setRows(lines.map(toRow)); setOk(null); setEditing(true); }}

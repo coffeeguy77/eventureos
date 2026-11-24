@@ -287,6 +287,9 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 emailsHref: inv.event ? `/events/${inv.event.id}?tab=communication` : `/clients/${inv.customer.id}?tab=emails`,
               }} />
             )}
+            {editable && canManage(role) && inv.status !== "void" && (
+              <div className="px-5 pb-3"><a href="#edit-invoice" className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg text-[0.8125rem] font-medium text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50 sm:h-8 dark:hover:bg-white/[0.04]">Edit invoice lines</a></div>
+            )}
             <InvoiceActions id={inv.id} number={inv.number} status={inv.status} balance={Number(inv.balance)} balanceLabel={money(inv.balance, cur)}
               paid={Number(inv.amount_paid)} paidLabel={money(inv.amount_paid, cur)} today={today} xeroManaged={xeroManaged} canManage={canManage(role)} />
           </Card>
