@@ -14,6 +14,10 @@ export interface Project {
   id: string; customer_id: string; name: string; status: ProjectStatus; status_note: string | null; summary: string | null; delivered_by: string | null;
   started: string | null; rate: number | null; margin_percent: number; margin_label: string;
   phases: Phase[]; links: ProjectLink[]; open_items: string[]; notes: string | null; staff_notes: string | null; portal: boolean;
+  /** Friendly address on the business's own domain, e.g. webculture.au/tradeup (update 0122) */
+  short_slug: string | null;
+  /** The folder the documents live in (GitHub, Google Drive, Dropbox…) and individual documents */
+  docs_url: string | null; docs: ProjectLink[];
 }
 export interface TimeEntry {
   id: string; work_date: string; start_time: string | null; end_time: string | null; hours: number; work: string;
@@ -27,6 +31,10 @@ export interface TimeEntry {
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]?\d|2[0-3]):[0-5]\d$/;
+/** A project's short link: lower-case letters, numbers and dashes, 2–40 long */
+export const SHORT = /^[a-z0-9][a-z0-9-]{1,39}$/;
+/** Words a short link can't be — they're pages on the business's site */
+export const RESERVED_SHORT = new Set(["p", "q", "pay", "order", "print", "api", "auth", "media", "fonts", "brand", "downloads", "site", "shop", "book", "hire", "club", "quote", "contact", "about", "blog", "services", "login", "portal", "admin"]);
 
 export function readPhases(v: unknown): Phase[] {
   return (Array.isArray(v) ? v : []).slice(0, 40).map((x) => {
@@ -50,6 +58,8 @@ export function toProject(r: Record<string, unknown>): Project {
     status_note: str(r.status_note, 500), summary: str(r.summary, 4000), delivered_by: str(r.delivered_by, 120), started: typeof r.started === "string" ? r.started : null,
     rate: r.rate == null ? null : Number(r.rate), margin_percent: Number(r.margin_percent ?? 0), margin_label: str(r.margin_label, 120) ?? "Planning, direction and testing",
     phases: readPhases(r.phases), links: readLinks(r.links), open_items: readItems(r.open_items), notes: str(r.notes, 20000), staff_notes: str(r.staff_notes, 20000), portal: r.portal !== false,
+    short_slug: typeof r.short_slug === "string" && SHORT.test(r.short_slug) ? r.short_slug : null,
+    docs_url: typeof r.docs_url === "string" && /^https:\/\//.test(r.docs_url) ? r.docs_url.slice(0, 500) : null, docs: readLinks(r.docs),
   };
 }
 export const toEntry = (r: Record<string, unknown>): TimeEntry => ({

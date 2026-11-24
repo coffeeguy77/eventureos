@@ -30,6 +30,23 @@ async function lookup(host: string): Promise<Hit> {
   return org;
 }
 
+const shortCache = new Map<string, { at: number; id: string | null }>();
+async function projectShortLink(orgId: string, short: string): Promise<string | null> {
+  const k = `${orgId}/${short}`;
+  const c = shortCache.get(k);
+  if (c && Date.now() - c.at < 60_000) return c.id;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return null;
+  let id: string | null = null;
+  try {
+    const r = await fetch(`${url}/rest/v1/nh_projects?select=id&organisation_id=eq.${orgId}&short_slug=eq.${encodeURIComponent(short)}&portal=eq.true&status=neq.archived&limit=1`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: "no-store" });
+    if (r.ok) id = ((await r.json()) as { id: string }[])[0]?.id ?? null;
+  } catch { return c?.id ?? null; }
+  shortCache.set(k, { at: Date.now(), id });
+  return id;
+}
+
 function logHit(event: NextFetchEvent, orgId: string, path: string, kind: string, target: string | null, referrer: string | null) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) return;
@@ -58,6 +75,13 @@ export async function customDomain(request: NextRequest, event: NextFetchEvent):
   const cc = (org.settings.cart_club ?? {}) as { slugs?: unknown };
   const clubs = Array.isArray(cc.slugs) ? cc.slugs.filter((x): x is string => typeof x === "string") : [];
   const r = routeFor(site, org.slug, path, site.fallback ? newPages(org.settings, org.name) : [], agency, classesOn, clubs);
+  // A project's short link (Nerd Herd → Projects), e.g. webculture.au/tradeup → that project in the client portal.
+  // Only where no live page answers (old-address rules and the closest-page fallback give way to it).
+  const short = agency && (r.kind === "notfound" || r.kind === "redirect" || r.kind === "gone") ? /^\/([a-z0-9][a-z0-9-]{1,39})\/?$/.exec(path)?.[1] : undefined;
+  if (short) {
+    const id = await projectShortLink(org.id, short);
+    if (id) return NextResponse.redirect(new URL(`/p/${org.slug}/projects/${id}`, request.url), 302);
+  }
   const ref = request.headers.get("referer");
   const headers = new Headers(request.headers);
   headers.set("x-site-host", host);

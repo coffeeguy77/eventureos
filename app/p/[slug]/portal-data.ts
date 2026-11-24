@@ -121,7 +121,7 @@ export const requirePortal = cache(async (slug: string): Promise<PortalContext> 
   const ctQuery = (cols: string) => supabase.from("contacts").select(cols).eq("organisation_id", orgId).eq("portal_user_id", uid);
   let ct = await ctQuery("customer_id, first_name, last_name, portal_role");
   if (ct.error && /portal_role/.test(ct.error.message)) ct = await ctQuery("customer_id, first_name, last_name");
-  const contacts = (ct.data ?? null) as unknown as Ct[] | null;
+  const contacts = ((ct.data ?? []) as unknown as Ct[]).filter((c) => c.portal_role !== "removed");
   const ctErr = ct.error;
   if (ctErr) throw new Error(`Could not load your bookings: ${ctErr.message}`);
   const customerIds = [...new Set((contacts ?? []).map((c) => c.customer_id as string))];

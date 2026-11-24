@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, ChevronRight, ExternalLink } from "lucide-react";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { ArrowLeft, ArrowRight, ChevronRight, ExternalLink, FileText, FolderOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { fmtDate, money } from "@/lib/format";
 import { createServiceClient } from "@/lib/integrations/runtime";
@@ -9,7 +10,7 @@ import { STATUS_LABEL, billedHours, fmtHours, fmtSpan, toEntry, toProject, total
 import { loadMargins } from "@/lib/nerdherd/margins";
 import { Panel } from "../../ui";
 import { isUuid, requirePortal } from "../../portal-data";
-import { ProjectRequestForm } from "../forms";
+import { ProjectRequestForm, TeamPanel, type TeamPerson } from "../forms";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Project", robots: { index: false, follow: false } };
@@ -22,6 +23,9 @@ export const metadata = { title: "Project", robots: { index: false, follow: fals
 export default async function PortalProject({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
   if (!isUuid(id)) notFound();
+  // Signed out (e.g. from the short link): sign in, then straight back here
+  const { data: { user: signedIn } } = await (await createClient()).auth.getUser();
+  if (!signedIn) redirect(`/p/${slug}/login?next=${encodeURIComponent(`/p/${slug}/projects/${id}`)}`);
   const ctx = await requirePortal(slug);
   const db = createServiceClient();
   const { data: row } = await db.from("nh_projects").select("*").eq("id", id).eq("organisation_id", ctx.org.id).maybeSingle();
@@ -44,6 +48,14 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
   const owed = I.reduce((a, i) => a + Math.max(0, Number(i.balance)), 0);
   const cur = ctx.org.currency;
   const base = `/p/${slug}`;
+  // The client's people (for their main contact to manage their team)
+  let team: TeamPerson[] = [];
+  if (billing) {
+    const { data: ppl, error: pplErr } = await db.from("contacts").select("id, first_name, last_name, email, portal_role, portal_user_id").eq("customer_id", p.customer_id).not("email", "is", null).order("is_primary", { ascending: false }).order("first_name");
+    if (!pplErr) team = ((ppl ?? []) as { id: string; first_name: string; last_name: string | null; email: string; portal_role: string; portal_user_id: string | null }[])
+      .filter((x) => x.portal_role !== "removed")
+      .map((x) => ({ id: x.id, name: [x.first_name, x.last_name].filter(Boolean).join(" "), email: x.email, role: x.portal_role === "team" ? "team" : "accounts", signedIn: !!x.portal_user_id, you: x.portal_user_id === ctx.user.id }));
+  }
   const tickets = (tk ?? []) as { id: string; number: number; subject: string; status: string; last_activity_at: string }[];
 
   return (
@@ -108,6 +120,15 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
             </ul>
           </Panel>}
 
+          {(p.docs_url || p.docs.length > 0) && (
+            <Panel title="Documents">
+              <ul className="divide-y divide-line">
+                {p.docs_url && <li><a href={p.docs_url} target="_blank" rel="noopener" className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 sm:px-6 dark:hover:bg-white/[0.03]"><FolderOpen className="h-5 w-5 shrink-0 text-[color:var(--portal-brand-ink)]" /><span className="min-w-0 flex-1"><span className="block font-medium text-ink">All project documents</span><span className="block truncate text-[0.8125rem] text-ink-muted">{p.docs_url.replace(/^https:\/\//, "")}</span></span><ExternalLink className="h-4 w-4 shrink-0 text-ink-faint" /></a></li>}
+                {p.docs.map((d) => <li key={d.url}><a href={d.url} target="_blank" rel="noopener" className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 sm:px-6 dark:hover:bg-white/[0.03]"><FileText className="h-5 w-5 shrink-0 text-ink-faint" /><span className="min-w-0 flex-1 break-words font-medium text-ink">{d.label}</span><ExternalLink className="h-4 w-4 shrink-0 text-ink-faint" /></a></li>)}
+              </ul>
+            </Panel>
+          )}
+
           <Panel title="Your requests">
             <ul className="divide-y divide-line">
               {!tickets.length && <li className="px-6 py-5 text-center text-[0.875rem] text-ink-muted">Nothing asked for yet.</li>}
@@ -118,6 +139,12 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
               ))}
             </ul>
           </Panel>
+
+          {billing && team.length > 0 && (
+            <Panel title="Who can see this" subtitle="Give your staff access to follow the project and ask for work. They never see prices, hours or invoices.">
+              <TeamPanel slug={slug} project={p.id} people={team} />
+            </Panel>
+          )}
 
           {(p.phases.length > 0 || p.open_items.length > 0 || p.links.length > 0) && (
             <Panel title="Progress">

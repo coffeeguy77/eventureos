@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { todayISO } from "@/lib/format";
-import { readNerd } from "@/lib/nerdherd/core";
-import { loadMargins, missing0120, NEEDS_0120 } from "@/lib/nerdherd/margins";
-import { billLines, entryKey, splitParts, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
+import { missing0120, NEEDS_0120 } from "@/lib/nerdherd/margins";
+import { billToDraft, rebuildDraft as rebuildDraftCore } from "@/lib/nerdherd/project-billing";
+import { RESERVED_SHORT, SHORT, entryKey, splitParts, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
 
 /** Nerd Herd → Projects (office): create a project, keep its record and time log, and bill the time as it goes. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -50,7 +50,9 @@ export async function createProject(i: { customerId: string; name: string }): Pr
 export interface ProjectPatch {
   name: string; status: ProjectStatus; status_note: string; summary: string; delivered_by: string; started: string; rate: string;
   phases: unknown; links: unknown; open_items: unknown; notes: string; staff_notes: string; portal: boolean;
+  short_slug?: string; docs_url?: string; docs?: unknown;
 }
+const NEEDS_0122 = "Run update 0122 (short links, documents and the dev chat key) in Supabase first.";
 export async function saveProject(id: string, p: ProjectPatch): Promise<R> {
   try {
     const { supabase, org } = await manager();
@@ -60,12 +62,23 @@ export async function saveProject(id: string, p: ProjectPatch): Promise<R> {
     const rate = String(p.rate ?? "").trim() === "" ? null : Number(p.rate);
     if (rate !== null && !(rate >= 0 && rate <= 2000)) throw new Error("The hourly rate should be a number of dollars (ex GST).");
     const t = (v: string, n: number) => String(v ?? "").trim().slice(0, n) || null;
-    const { error } = await supabase.from("nh_projects").update({
+    const short = String(p.short_slug ?? "").trim().toLowerCase().replace(/^\/+|\/+$/g, "");
+    if (short && (!SHORT.test(short) || RESERVED_SHORT.has(short))) throw new Error(RESERVED_SHORT.has(short) ? `“${short}” is already a page on your site — pick another short link.` : "The short link can only use lower-case letters, numbers and dashes (2 to 40 long).");
+    const docsUrl = String(p.docs_url ?? "").trim();
+    if (docsUrl && !/^https:\/\/\S+$/.test(docsUrl)) throw new Error("The documents folder should be a full link starting with https://");
+    const base = {
       name, status: (["active", "on_hold", "complete", "archived"].includes(p.status) ? p.status : "active"), status_note: t(p.status_note, 500), summary: t(p.summary, 4000),
       delivered_by: t(p.delivered_by, 120), started: ISO.test(p.started) ? p.started : null, rate,
       phases: readPhases(p.phases), links: readLinks(p.links), open_items: readItems(p.open_items), notes: t(p.notes, 20000), staff_notes: t(p.staff_notes, 20000), portal: !!p.portal,
       updated_at: new Date().toISOString(),
-    }).eq("id", id).eq("organisation_id", org.id);
+    };
+    const extra = { short_slug: short || null, docs_url: docsUrl.slice(0, 500) || null, docs: readLinks(p.docs) };
+    let { error } = await supabase.from("nh_projects").update({ ...base, ...extra }).eq("id", id).eq("organisation_id", org.id);
+    if (error && /short_slug|docs/.test(error.message) && !/duplicate|unique/.test(error.message)) {
+      if (extra.short_slug || extra.docs_url || extra.docs.length) throw new Error(NEEDS_0122);
+      ({ error } = await supabase.from("nh_projects").update(base).eq("id", id).eq("organisation_id", org.id));
+    }
+    if (error && /duplicate|unique/.test(error.message)) throw new Error(`Another project already uses the short link “${short}”.`);
     if (error) throw err(error.message);
     refresh(id);
     return { ok: true, data: undefined };
@@ -141,45 +154,18 @@ export async function importRecord(id: string, text: string, replace: boolean): 
   } catch (e) { return fail(e); }
 }
 
-/** Raise a draft invoice for all unbilled billable time (build time, the margin line, other time). */
+/** Put all unbilled billable time on the project's draft invoice — starting one if there isn't one. */
 export async function billProject(id: string): Promise<R<string>> {
   try {
     const { supabase, org, user, profile } = await manager();
     const p = await own(supabase, org.id, id);
-    const { data: rows, error } = await supabase.from("nh_project_time").select("*").eq("project_id", id).eq("billable", true).is("billed_invoice_id", null);
-    if (error) throw err(error.message);
-    const list = ((rows ?? []) as Record<string, unknown>[]).map(toEntry);
-    if (!list.length) throw new Error("There's no unbilled time on this project.");
-    // Still a draft invoice for this project? Add the time to it rather than starting another.
-    const { data: open } = await supabase.from("invoices").select("id, number").eq("project_id", id).eq("organisation_id", org.id).eq("status", "draft").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (open) {
-      await supabase.from("nh_project_time").update({ billed_invoice_id: open.id }).in("id", list.map((e) => e.id));
-      await rebuildDraft(supabase, org, id, open.id as string);
-      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "invoice.updated", entityType: "invoice", entityId: open.id as string, customerId: p.customer_id, summary: `${actorName(profile)} added ${list.length} time ${list.length === 1 ? "entry" : "entries"} on “${p.name}” to draft ${open.number}` });
-      refresh(id);
-      revalidatePath("/invoices");
-      return { ok: true, data: open.id as string };
-    }
-    const s = readNerd(org.settings);
-    const rate = p.rate ?? s.hourlyRate;
-    const mg = await loadMargins(supabase, org.id, p.customer_id, org.settings);
-    const b = billLines(list, p, mg.client, rate, s.accountCode);
-    const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
-    const subtotal = Math.round((total / 1.1) * 100) / 100;
-    const today = todayISO(org.timezone);
-    const terms = Number((org.settings as { default_payment_terms_days?: unknown }).default_payment_terms_days) || 14;
-    const due = new Date(Date.parse(`${today}T00:00:00Z`) + terms * 86_400_000).toISOString().slice(0, 10);
-    const { data: inv, error: iErr } = await supabase.from("invoices").insert({
-      organisation_id: org.id, customer_id: p.customer_id, project_id: p.id, kind: "full", status: "draft", issue_date: today, due_date: due,
-      subtotal, tax_total: Math.round((total - subtotal) * 100) / 100, total, currency: org.currency, reference: p.name.slice(0, 100),
-      line_items: b.lines, created_by: user.id,
-    }).select("id, number").single();
-    if (iErr) throw err(`Couldn't raise the invoice: ${iErr.message}`);
-    await supabase.from("nh_project_time").update({ billed_invoice_id: inv.id }).in("id", list.map((e) => e.id));
-    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "invoice.created", entityType: "invoice", entityId: inv.id, customerId: p.customer_id, summary: `${actorName(profile)} billed ${b.hours} hrs on project “${p.name}” (draft ${inv.number})` });
+    const r = await billToDraft(supabase, org, id, user.id).catch((e) => { throw err(e instanceof Error ? e.message : String(e)); });
+    if (!r) throw new Error("There's no unbilled time on this project.");
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: r.created ? "invoice.created" : "invoice.updated", entityType: "invoice", entityId: r.id, customerId: p.customer_id,
+      summary: r.created ? `${actorName(profile)} billed ${r.hours} hrs on project “${p.name}” (draft ${r.number})` : `${actorName(profile)} added ${r.entries} time ${r.entries === 1 ? "entry" : "entries"} on “${p.name}” to draft ${r.number}` });
     refresh(id);
     revalidatePath("/invoices");
-    return { ok: true, data: inv.id as string };
+    return { ok: true, data: r.id };
   } catch (e) { return fail(e); }
 }
 
@@ -233,8 +219,8 @@ export async function setInvoiceMargin(id: string, invoiceId: string, percent: s
 /* ------------------------------------------------------------------ portal people */
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-export type PortalRole = "accounts" | "team";
-const role = (v: unknown): PortalRole => (v === "team" ? "team" : "accounts");
+export type PortalRole = "accounts" | "team" | "removed";
+const role = (v: unknown): PortalRole => (v === "team" ? "team" : v === "removed" ? "removed" : "accounts");
 
 /** Add someone at the client who can sign in to the portal: Accounts see hours and money, Team see the work only. */
 export async function addPortalPerson(id: string, i: { first: string; last: string; email: string; role: string }): Promise<R> {
@@ -245,7 +231,7 @@ export async function addPortalPerson(id: string, i: { first: string; last: stri
     const email = String(i.email ?? "").trim().toLowerCase();
     if (!first) throw new Error("Enter their first name.");
     if (!EMAIL.test(email) || email.length > 254) throw new Error("Enter a valid email address.");
-    const r = role(i.role);
+    const r = role(i.role) === "accounts" ? "accounts" : "team";
     const { data: had } = await supabase.from("contacts").select("id").eq("organisation_id", org.id).eq("customer_id", p.customer_id).ilike("email", email).maybeSingle();
     if (had) {
       const { error } = await supabase.from("contacts").update({ portal_role: r }).eq("id", had.id);
@@ -269,8 +255,9 @@ export async function setPortalRole(id: string, contactId: string, r: string): P
     const { supabase, org } = await manager();
     const p = await own(supabase, org.id, id);
     if (!UUID.test(contactId)) throw new Error("Refresh and try again.");
-    const { error, data } = await supabase.from("contacts").update({ portal_role: role(r) }).eq("id", contactId).eq("organisation_id", org.id).eq("customer_id", p.customer_id).select("id");
-    if (error) throw new Error(missing0120(error.message) ? NEEDS_0120 : error.message);
+    const next = role(r);
+    const { error, data } = await supabase.from("contacts").update({ portal_role: next, ...(next === "removed" ? { portal_user_id: null } : {}) }).eq("id", contactId).eq("organisation_id", org.id).eq("customer_id", p.customer_id).select("id");
+    if (error) throw new Error(missing0120(error.message) ? NEEDS_0120 : /check constraint/.test(error.message) ? NEEDS_0122 : error.message);
     if (!data?.length) throw new Error("That person isn't a contact for this client.");
     refresh(id);
     return { ok: true, data: undefined };
@@ -367,14 +354,37 @@ export async function splitTime(id: string, entryId: string, parts: { date: stri
 
 /** A draft project invoice follows its time entries: rebuild its lines when one changes. */
 async function rebuildDraft(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], org: Awaited<ReturnType<typeof requireOrg>>["org"], projectId: string, invoiceId: string) {
-  const p = await own(supabase, org.id, projectId);
-  const { data: rows } = await supabase.from("nh_project_time").select("*").eq("billed_invoice_id", invoiceId);
-  const s = readNerd(org.settings);
-  const mg = await loadMargins(supabase, org.id, p.customer_id, org.settings);
-  const b = billLines(((rows ?? []) as Record<string, unknown>[]).map(toEntry), p, mg.invoices.get(invoiceId) ?? mg.client, p.rate ?? s.hourlyRate, s.accountCode);
-  if (!b.lines.length) return;
-  const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
-  const subtotal = Math.round((total / 1.1) * 100) / 100;
-  await supabase.from("invoices").update({ line_items: b.lines, total, subtotal, tax_total: Math.round((total - subtotal) * 100) / 100 }).eq("id", invoiceId).eq("status", "draft");
+  await rebuildDraftCore(supabase, org, projectId, invoiceId);
   revalidatePath(`/invoices/${invoiceId}`);
+}
+
+/* ------------------------------------------------------------------ dev chat key */
+
+/** A new key for the dev chat (Claude Code, Cursor) to log work on this project. Shown once; only its hash is kept. */
+export async function createProjectKey(id: string): Promise<R<string>> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const p = await own(supabase, org.id, id);
+    const { randomBytes, createHash } = await import("node:crypto");
+    const token = `nhp_${randomBytes(32).toString("base64url")}`;
+    const hash = createHash("sha256").update(token).digest("hex");
+    await supabase.from("nh_project_keys").delete().eq("project_id", id);
+    const { error } = await supabase.from("nh_project_keys").insert({ project_id: id, organisation_id: org.id, token_hash: hash });
+    if (error) throw new Error(/nh_project_keys|does not exist|schema cache/.test(error.message) ? NEEDS_0122 : error.message);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "project.key", entityType: "customer", entityId: p.customer_id, customerId: p.customer_id, summary: `${actorName(profile)} made a new dev chat key for “${p.name}”` });
+    refresh(id);
+    return { ok: true, data: token };
+  } catch (e) { return fail(e); }
+}
+
+/** Stop the dev chat key working. */
+export async function revokeProjectKey(id: string): Promise<R> {
+  try {
+    const { supabase, org } = await manager();
+    await own(supabase, org.id, id);
+    const { error } = await supabase.from("nh_project_keys").delete().eq("project_id", id).eq("organisation_id", org.id);
+    if (error) throw new Error(error.message);
+    refresh(id);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
 }

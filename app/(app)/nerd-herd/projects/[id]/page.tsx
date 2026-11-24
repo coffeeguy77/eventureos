@@ -7,9 +7,10 @@ import { readNerd } from "@/lib/nerdherd/core";
 import { STATUS_LABEL, billedHours, fmtHours, fmtSpan, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
 import { loadMargins } from "@/lib/nerdherd/margins";
 import { createServiceClient } from "@/lib/integrations/runtime";
+import { appBaseUrl } from "@/lib/integrations/registry";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AddTime, BillProject, ClientMargin, DeleteTime, EditTime, ImportRecord, InvoiceMargin, PortalPeople, ProjectForm } from "@/components/nerdherd/project-tools";
+import { AddTime, BillProject, ClientMargin, DeleteTime, EditTime, ImportRecord, InvoiceMargin, PortalPeople, ProjectForm, DevChat } from "@/components/nerdherd/project-tools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Project" };
@@ -31,6 +32,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .then((r) => (r.error && /portal_role/.test(r.error.message) ? supabase.from("contacts").select("id, first_name, last_name, email, portal_user_id").eq("customer_id", p.customer_id).order("is_primary", { ascending: false }) : r)),
   ]);
   const entries = ((time ?? []) as Record<string, unknown>[]).map(toEntry);
+  const { data: key } = manage ? await supabase.from("nh_project_keys").select("last_used_at").eq("project_id", id).maybeSingle().then((r) => r, () => ({ data: null })) : { data: null };
   const rate = p.rate ?? readNerd(org.settings).hourlyRate;
   // Margins are managers-only (RLS); read them server-side so everyone's billed hours are right, but only managers see them
   const mg = await loadMargins(createServiceClient(), org.id, p.customer_id, org.settings);
@@ -115,7 +117,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </ul>
           </Card>
 
-          {manage && <Card><CardHeader title="Project details" subtitle="Everything here except staff notes shows in the client's portal." /><ProjectForm p={p} /></Card>}
+          {manage && <Card><CardHeader title="Project details" subtitle="Everything here except staff notes shows in the client's portal." /><ProjectForm p={p} domain={((org.settings ?? {}) as { site?: { domain?: string | null } }).site?.domain ?? null} /></Card>}
         </div>
 
         <div className="space-y-5">
@@ -125,7 +127,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <CardHeader title="Client portal" subtitle={p.portal ? "This project shows in their portal." : "Hidden from their portal."} />
             <div className="border-t border-line px-5 py-4">
               <PortalPeople id={p.id} manage={manage} clientName={client?.name ?? "this client"} ready={C.length ? C.every((c) => c.portal_role !== undefined) : mg.ready}
-                people={C.map((c) => ({ id: c.id, name: [c.first_name, c.last_name].filter(Boolean).join(" "), email: c.email, signedIn: !!c.portal_user_id, role: c.portal_role === "team" ? "team" : "accounts" }))} />
+                people={C.map((c) => ({ id: c.id, name: [c.first_name, c.last_name].filter(Boolean).join(" "), email: c.email, signedIn: !!c.portal_user_id, role: c.portal_role === "team" ? "team" : c.portal_role === "removed" ? "removed" : "accounts" }))} />
             </div>
           </Card>
 
@@ -154,6 +156,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </div>
             </Card>
           )}
+
+          {manage && <Card><CardHeader title="Dev chat" subtitle="Let Claude Code or Cursor log its work to this project." />
+            <DevChat id={p.id} hasKey={!!key} lastUsed={key?.last_used_at ? fmtDate(String(key.last_used_at).slice(0, 10)) : null} endpoint={`${appBaseUrl()}/api/public/projects/log`} /></Card>}
 
           {manage && <Card><CardHeader title="Import a project record" /><ImportRecord id={p.id} /></Card>}
         </div>

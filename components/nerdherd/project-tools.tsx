@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, Mail, Pencil, Plus, Receipt, Split, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
-import { addPortalPerson, addTime, billProject, createProject, deleteTime, importRecord, saveProject, sendProjectInvite, setClientMargin, setInvoiceMargin, setPortalRole, splitTime, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
+import { addPortalPerson, addTime, billProject, createProject, deleteTime, importRecord, saveProject, sendProjectInvite, setClientMargin, setInvoiceMargin, setPortalRole, splitTime, updateTime, createProjectKey, revokeProjectKey, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
 import type { Project } from "@/lib/nerdherd/projects";
 
 /* ------------------------------------------------------------------ new project */
@@ -110,7 +110,7 @@ export function BillProject({ id, label }: { id: string; label: string }) {
 
 const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 
-export function ProjectForm({ p }: { p: Project }) {
+export function ProjectForm({ p, domain }: { p: Project; domain?: string | null }) {
   const router = useRouter();
   const [f, setF] = useState({
     name: p.name, status: p.status, status_note: p.status_note ?? "", summary: p.summary ?? "", delivered_by: p.delivered_by ?? "", started: p.started ?? "",
@@ -118,6 +118,7 @@ export function ProjectForm({ p }: { p: Project }) {
     phases: p.phases.map((x) => [x.name, x.dates ?? "", x.status ?? ""].join(" | ")).join("\n"),
     links: p.links.map((x) => `${x.label} | ${x.url}`).join("\n"),
     open_items: p.open_items.join("\n"), notes: p.notes ?? "", staff_notes: p.staff_notes ?? "", portal: p.portal,
+    short_slug: p.short_slug ?? "", docs_url: p.docs_url ?? "", docs: p.docs.map((x) => `${x.label} | ${x.url}`).join("\n"),
   });
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -129,6 +130,7 @@ export function ProjectForm({ p }: { p: Project }) {
       ...f,
       phases: lines(f.phases).map((l) => { const [name, dates, status] = l.split("|").map((x) => x.trim()); return { name, dates: dates || null, status: status || null }; }),
       links: lines(f.links).map((l) => { const i = l.lastIndexOf("|"); return i > 0 ? { label: l.slice(0, i).trim(), url: l.slice(i + 1).trim() } : { label: "", url: l }; }),
+      docs: lines(f.docs).map((l) => { const i = l.lastIndexOf("|"); return i > 0 ? { label: l.slice(0, i).trim(), url: l.slice(i + 1).trim() } : { label: "", url: l }; }),
       open_items: lines(f.open_items),
     };
     const r = await saveProject(p.id, patch);
@@ -147,11 +149,24 @@ export function ProjectForm({ p }: { p: Project }) {
         <div className="sm:col-span-2"><Label htmlFor="pf-su">Summary</Label><Textarea id="pf-su" rows={3} value={f.summary} onChange={(e) => set("summary", e.target.value)} /></div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label htmlFor="pf-sl" hint="the client's easy address for this project">Short link</Label>
+          <div className="flex items-center overflow-hidden rounded-lg ring-1 ring-inset ring-line-strong focus-within:ring-brand-500">
+            <span className="shrink-0 bg-zinc-50 px-2.5 py-2 text-[0.8125rem] text-ink-muted dark:bg-white/[0.04]">{domain ? `${domain}/` : "your-site/"}</span>
+            <input id="pf-sl" value={f.short_slug} onChange={(e) => set("short_slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} placeholder="tradeup" maxLength={40} className="min-w-0 flex-1 bg-transparent px-2 py-2 text-[0.875rem] text-ink outline-none" />
+          </div>
+          {!domain && <p className="mt-1 text-[0.75rem] text-ink-muted">Works once your website's domain is set in Website settings.</p>}
+          {domain && f.short_slug && p.short_slug === f.short_slug && <a href={`https://${domain}/${f.short_slug}`} target="_blank" rel="noopener" className="mt-1 inline-block text-[0.75rem] font-medium text-brand-700 hover:underline dark:text-brand-300">Open {domain}/{f.short_slug}</a>}
+        </div>
+        <div><Label htmlFor="pf-du" hint="GitHub, Google Drive, Dropbox… everyone on the portal sees it">Documents folder</Label><Input id="pf-du" value={f.docs_url} onChange={(e) => set("docs_url", e.target.value)} placeholder="https://github.com/…/tree/main/docs" /></div>
+      </div>
+
       <div className="max-w-xs"><Label htmlFor="pf-r" hint="ex GST — blank = your Nerd Herd rate">Hourly rate</Label><Input id="pf-r" inputMode="decimal" value={f.rate} onChange={(e) => set("rate", e.target.value)} placeholder="120" /></div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div><Label htmlFor="pf-ph" hint="one a line: name | dates | status">Phases</Label><Textarea id="pf-ph" rows={4} value={f.phases} onChange={(e) => set("phases", e.target.value)} /></div>
         <div><Label htmlFor="pf-l" hint="one a line: label | https://…">Links</Label><Textarea id="pf-l" rows={4} value={f.links} onChange={(e) => set("links", e.target.value)} /></div>
+        <div className="lg:col-span-2"><Label htmlFor="pf-d" hint="one a line: name | https://… — shown under Documents">Documents</Label><Textarea id="pf-d" rows={3} value={f.docs} onChange={(e) => set("docs", e.target.value)} placeholder="Upgrade plan | https://github.com/…/docs/upgrade.md" /></div>
         <div><Label htmlFor="pf-o" hint="one a line">Open items & next steps</Label><Textarea id="pf-o" rows={5} value={f.open_items} onChange={(e) => set("open_items", e.target.value)} /></div>
         <div><Label htmlFor="pf-no" hint="what's been delivered, findings — the client sees this">Notes for the client</Label><Textarea id="pf-no" rows={5} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></div>
         <div className="lg:col-span-2"><Label htmlFor="pf-sf" hint="never shown to the client">Staff notes</Label><Textarea id="pf-sf" rows={3} value={f.staff_notes} onChange={(e) => set("staff_notes", e.target.value)} /></div>
@@ -314,8 +329,8 @@ export function InvoiceMargin({ id, invoiceId, value, clientMargin, ready }: { i
 
 /* ------------------------------------------------------------------ who can sign in to the portal */
 
-type Person = { id: string; name: string; email: string | null; signedIn: boolean; role: "accounts" | "team" };
-const ROLE_TEXT = { accounts: "Accounts — sees hours, invoices and what's owed", team: "Team — sees the work and requests only, no prices or hours" } as const;
+type Person = { id: string; name: string; email: string | null; signedIn: boolean; role: "accounts" | "team" | "removed" };
+const ROLE_TEXT = { accounts: "Accounts — sees hours, invoices and what's owed", team: "Team — sees the work and requests only, no prices or hours", removed: "No access" } as const;
 
 /** The client's people: what each one sees in the portal, adding someone, and emailing them a sign-in link. */
 export function PortalPeople({ id, manage, clientName, people, ready }: { id: string; manage: boolean; clientName: string; people: Person[]; ready: boolean }) {
@@ -338,15 +353,16 @@ export function PortalPeople({ id, manage, clientName, people, ready }: { id: st
       <ul className="space-y-2.5">
         {withEmail.map((x) => (
           <li key={x.id} className="rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
-            <p className="flex flex-wrap items-center gap-x-2 font-medium text-ink">{x.name}{x.signedIn && <span className="inline-flex items-center gap-0.5 text-[0.75rem] font-normal text-emerald-700 dark:text-emerald-400"><Check className="h-3 w-3" />has signed in</span>}</p>
+            <p className="flex flex-wrap items-center gap-x-2 font-medium text-ink">{x.name}{x.signedIn && x.role !== "removed" && <span className="inline-flex items-center gap-0.5 text-[0.75rem] font-normal text-emerald-700 dark:text-emerald-400"><Check className="h-3 w-3" />has signed in</span>}</p>
             <p className="break-all text-[0.75rem] text-ink-muted">{x.email}</p>
             {manage ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Select aria-label={`What ${x.name} sees`} value={x.role} disabled={busy || !ready} onChange={(e) => run(() => setPortalRole(id, x.id, e.target.value))} className="h-9 min-w-0 flex-1 text-[0.8125rem]">
                   <option value="accounts">{ROLE_TEXT.accounts}</option>
                   <option value="team">{ROLE_TEXT.team}</option>
+                  <option value="removed">{ROLE_TEXT.removed}</option>
                 </Select>
-                <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => sendProjectInvite(id, x.id), () => setSent(x.id))}><Mail className="h-3.5 w-3.5" />Email sign-in link</Button>
+                {x.role !== "removed" && <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => sendProjectInvite(id, x.id), () => setSent(x.id))}><Mail className="h-3.5 w-3.5" />Email sign-in link</Button>}
               </div>
             ) : <p className="mt-1 text-[0.75rem] text-ink-muted">{ROLE_TEXT[x.role]}</p>}
             {sent === x.id && <p className="mt-1 text-[0.75rem] text-emerald-700 dark:text-emerald-400">Sent to {x.email}.</p>}
@@ -374,6 +390,51 @@ export function PortalPeople({ id, manage, clientName, people, ready }: { id: st
       ) : (
         <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline dark:text-brand-300"><Plus className="h-3.5 w-3.5" />Add someone at {clientName}</button>
       ))}
+      <FormError message={err} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ dev chat key */
+
+/** Connect the dev chat (Claude Code, Cursor): a key it uses to log work here; new time goes onto the draft invoice. */
+export function DevChat({ id, hasKey, lastUsed, endpoint }: { id: string; hasKey: boolean; lastUsed: string | null; endpoint: string }) {
+  const router = useRouter();
+  const [token, setToken] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, start] = useTransition();
+  const brief = `## Log work to EventureOS (Nerd Herd project)
+After each piece of work (and at the end of every session), log it to the project so the client's board and the draft invoice stay up to date.
+- Endpoint: ${endpoint}
+- Key: the environment variable EVENTUREOS_PROJECT_KEY (never commit it)
+- Read the project and the client's open requests first:
+  curl -s -H "Authorization: Bearer $EVENTUREOS_PROJECT_KEY" ${endpoint}
+- Log time (hours = real session time, from first to last change; one entry per piece of work; date as YYYY-MM-DD, times 24h local):
+  curl -s -X POST -H "Authorization: Bearer $EVENTUREOS_PROJECT_KEY" -H "Content-Type: application/json" ${endpoint} -d '{
+    "entries": [{ "date": "2026-11-25", "start": "09:10", "end": "11:40", "hours": 2.5, "work": "Plain-English summary the client will read" }],
+    "status_note": "One line: where the project is up to",
+    "add_open_items": ["Next step"], "done_items": ["A next step that's now finished"],
+    "docs": [{ "label": "Upgrade plan", "url": "https://github.com/…/docs/upgrade.md" }]
+  }'
+- Write "work" for the client: what was achieved, no internal jargon, no secrets, no prices. Sending the same entry twice is ignored.`;
+  return (
+    <div className="space-y-3 border-t border-line px-5 py-4 text-[0.8125rem]">
+      <p className="text-ink-muted">{hasKey ? `Connected${lastUsed ? ` · last used ${lastUsed}` : " · not used yet"}.` : "Not connected."} The chat logs its sessions here and new time goes onto the draft invoice — nothing is sent to the client until you send it.</p>
+      {token && (
+        <div className="space-y-2 rounded-lg bg-amber-50 p-3 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:ring-amber-500/30">
+          <p className="font-medium text-amber-900 dark:text-amber-200">Copy this key now — it won't be shown again.</p>
+          <code className="block break-all rounded bg-surface px-2 py-1.5 font-mono text-[0.75rem] text-ink ring-1 ring-inset ring-line">{token}</code>
+          <p className="text-amber-900 dark:text-amber-200">Save it as <code>EVENTUREOS_PROJECT_KEY</code> where the dev chat runs (its environment or a .env file that isn't committed).</p>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant={hasKey ? "secondary" : "primary"} disabled={busy} onClick={() => { if (hasKey && !window.confirm("Make a new key? The old one stops working.")) return; start(async () => { setErr(null); const r = await createProjectKey(id); if (r.ok) { setToken(r.data); router.refresh(); } else setErr(r.error); }); }}>
+          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{hasKey ? "Make a new key" : "Make a key"}</Button>
+        {hasKey && <Button size="sm" variant="ghost" disabled={busy} onClick={() => { if (!window.confirm("Disconnect the dev chat? Its key stops working.")) return; start(async () => { const r = await revokeProjectKey(id); if (r.ok) { setToken(null); router.refresh(); } else setErr(r.error); }); }}>Disconnect</Button>}
+        <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard?.writeText(brief).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }, () => undefined); }}>{copied ? <Check className="h-3.5 w-3.5" /> : null}{copied ? "Copied" : "Copy instructions for the chat"}</Button>
+      </div>
+      <p className="text-[0.75rem] text-ink-muted">Paste the instructions into the project's CLAUDE.md (Claude Code) or .cursorrules (Cursor).</p>
       <FormError message={err} />
     </div>
   );
