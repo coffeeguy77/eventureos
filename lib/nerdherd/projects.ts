@@ -55,29 +55,39 @@ export const toEntry = (r: Record<string, unknown>): TimeEntry => ({
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Hours and money for a set of entries: recorded time, the margin on AI time, and what it comes to. */
+/**
+ * Hours billed for one entry: AI session time is multiplied up by the client's margin (it only captures the session,
+ * not the planning, direction and testing around it); your own time is billed as logged.
+ */
+export const billedHours = (e: Pick<TimeEntry, "hours" | "kind">, marginPercent: number) =>
+  r2(e.kind === "ai" ? e.hours * (1 + Math.max(0, marginPercent) / 100) : e.hours);
+
+/** Hours and money for a set of entries. */
 export function totals(entries: TimeEntry[], marginPercent: number, rateExGst: number) {
   const bill = entries.filter((e) => e.billable);
   const ai = r2(bill.filter((e) => e.kind === "ai").reduce((a, e) => a + e.hours, 0));
   const staff = r2(bill.filter((e) => e.kind === "staff").reduce((a, e) => a + e.hours, 0));
-  const margin = r2(ai * (Math.max(0, marginPercent) / 100));
-  const hours = r2(ai + staff + margin);
+  const hours = r2(bill.reduce((a, e) => a + billedHours(e, marginPercent), 0));
   const exGst = r2(hours * rateExGst);
-  return { ai, staff, margin, hours, exGst, incGst: r2(exGst * 1.1), recorded: r2(entries.reduce((a, e) => a + e.hours, 0)) };
+  return { ai, staff, margin: r2(hours - ai - staff), hours, exGst, incGst: r2(exGst * 1.1), recorded: r2(entries.reduce((a, e) => a + e.hours, 0)) };
 }
 
-/** Invoice lines (prices inc GST, like the rest of Nerd Herd) for the unbilled time. */
-export function billLines(entries: TimeEntry[], p: Pick<Project, "name" | "margin_percent" | "margin_label">, rateExGst: number, accountCode: string | null) {
-  const t = totals(entries, p.margin_percent, rateExGst);
-  const dates = entries.map((e) => e.work_date).sort();
-  const span = dates.length ? (dates[0] === dates[dates.length - 1] ? fmtShort(dates[0]) : `${fmtShort(dates[0])} – ${fmtShort(dates[dates.length - 1])}`) : "";
+/** Invoice lines (prices inc GST, like the rest of Nerd Herd): one per task, with its billed hours. */
+export function billLines(entries: TimeEntry[], p: Pick<Project, "name">, marginPercent: number, rateExGst: number, accountCode: string | null) {
   const inc = r2(rateExGst * 1.1);
-  const line = (description: string, quantity: number) => ({ description, quantity, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(quantity * inc) });
-  const out = [];
-  if (t.ai > 0) out.push(line(`${p.name} — build time (${span})`, t.ai));
-  if (t.margin > 0) out.push(line(`${p.name} — ${p.margin_label.toLowerCase()}`, t.margin));
-  if (t.staff > 0) out.push(line(`${p.name} — ${t.ai > 0 ? "other " : ""}time (${span})`, t.staff));
-  return { lines: out, ...t };
+  const lines = [...entries].filter((e) => e.billable).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
+    const q = billedHours(e, marginPercent);
+    const what = e.source === "meeting" ? `Meeting with ${e.by_name ?? "you"}: ${e.work.split("\n").map((x) => x.trim().replace(/^[•\-*]\s*/, "")).filter(Boolean).join("; ")}` : e.work;
+    return { description: `${fmtShort(e.work_date)} — ${what}`.slice(0, 1000), quantity: q, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(q * inc) };
+  });
+  return { lines, ...totals(entries, marginPercent, rateExGst) };
+}
+
+/** A client's margin (Nerd Herd → Projects): organisations.settings.nh_client_margins = { [customerId]: percent }. */
+export function clientMargin(settings: unknown, customerId: string): number {
+  const m = ((settings ?? {}) as { nh_client_margins?: Record<string, unknown> }).nh_client_margins?.[customerId];
+  const n = Number(m);
+  return Number.isFinite(n) && n >= 0 && n <= 500 ? n : 0;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

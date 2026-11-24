@@ -4,10 +4,10 @@ import { ExternalLink } from "lucide-react";
 import { canManage, requireOrg } from "@/lib/context";
 import { fmtDate, money, todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, billedHours, clientMargin, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AddTime, BillProject, DeleteTime, ImportRecord, ProjectForm } from "@/components/nerdherd/project-tools";
+import { AddTime, BillProject, ClientMargin, DeleteTime, ImportRecord, ProjectForm } from "@/components/nerdherd/project-tools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Project" };
@@ -29,8 +29,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   ]);
   const entries = ((time ?? []) as Record<string, unknown>[]).map(toEntry);
   const rate = p.rate ?? readNerd(org.settings).hourlyRate;
-  const all = totals(entries, p.margin_percent, rate);
-  const unbilled = totals(entries.filter((e) => !e.billed_invoice_id), p.margin_percent, rate);
+  const margin = clientMargin(org.settings, p.customer_id);
+  const all = totals(entries, margin, rate);
+  const unbilled = totals(entries.filter((e) => !e.billed_invoice_id), margin, rate);
   const I = (invs ?? []) as { id: string; number: string; status: string; issue_date: string; due_date: string | null; total: number; amount_paid: number | null }[];
   const invoiced = I.reduce((a, i) => a + Number(i.total), 0);
   const paid = I.reduce((a, i) => a + Number(i.amount_paid ?? 0), 0);
@@ -55,8 +56,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Recorded time" value={fmtHours(all.recorded)} note={`AI ${all.ai} · yours ${all.staff}`} />
-        <Stat label={`Margin (${p.margin_percent}%)`} value={fmtHours(all.margin)} note={p.margin_label} />
+        <Stat label="Billed hours" value={fmtHours(all.hours)} note={`AI ${all.ai} · yours ${all.staff} recorded`} />
+        <Stat label="Client margin" value={`${margin}%`} note="on AI session time" />
         <Stat label="Billable to date" value={money(all.incGst, org.currency)} note={`${all.hours} hrs × ${money(rate * 1.1, org.currency)} inc GST`} />
         <Stat label="Not billed yet" value={money(unbilled.incGst, org.currency)} note={`${unbilled.hours} hrs`} />
         <Stat label="Invoiced" value={money(invoiced, org.currency)} note={`${money(paid, org.currency)} paid`} />
@@ -66,12 +67,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <div className="space-y-5">
           <Card>
-            <CardHeader title="Time log" subtitle="AI session time comes from the work's own timestamps; the margin adds your planning, direction and testing on top."
+            <CardHeader title="Time log" subtitle={margin > 0 ? `AI session hours are multiplied by the client margin (+${margin}%). The client sees the billed hours only.` : "The client sees these hours. Set a client margin to multiply up AI session time."}
               action={manage && unbilled.hours > 0 ? <BillProject id={p.id} label={`Invoice ${money(unbilled.incGst, org.currency)}`} /> : undefined} />
             <div className="overflow-x-auto border-t border-line">
               <table className="w-full min-w-[640px] text-[0.8125rem]">
                 <thead className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">
-                  <tr><th className="px-5 py-2 font-medium">Date</th><th className="px-3 py-2 font-medium">Time</th><th className="px-3 py-2 font-medium">Hours</th><th className="px-3 py-2 font-medium">Work</th><th className="px-3 py-2 font-medium">Billed</th><th className="px-3 py-2" /></tr>
+                  <tr><th className="px-5 py-2 font-medium">Date</th><th className="px-3 py-2 font-medium">Time</th><th className="px-3 py-2 font-medium">Billed hrs</th><th className="px-3 py-2 font-medium">Work</th><th className="px-3 py-2 font-medium">Billed</th><th className="px-3 py-2" /></tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {!entries.length && <tr><td colSpan={6} className="px-5 py-6 text-center text-ink-muted">No time yet — add it below, or import a project record.</td></tr>}
@@ -79,17 +80,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     <tr key={e.id} className={`align-top ${e.billable ? "" : "opacity-60"}`}>
                       <td className="whitespace-nowrap px-5 py-2.5 text-ink">{fmtDate(e.work_date)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{e.start_time ? `${e.start_time}${e.end_time && e.end_time !== e.start_time ? `–${e.end_time}` : ""}` : "—"}</td>
-                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{e.hours}</td>
-                      <td className="px-3 py-2.5 text-ink">{e.work}
-                        <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{e.kind === "ai" ? `AI session${e.source ? ` · ${e.source}` : ""}` : `My time${e.by_name ? ` · ${e.by_name}` : ""}`}{e.billable ? "" : " · not billable"}</span></td>
+                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, margin)}{e.kind === "ai" && margin > 0 && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded</span>}</td>
+                      <td className="px-3 py-2.5 text-ink">
+                        {e.source === "meeting"
+                          ? <><span className="font-medium">Meeting with {e.by_name}</span><ul className="mt-1 list-disc space-y-0.5 pl-4">{e.work.split("\n").filter((x) => x.trim()).map((x, k) => <li key={k}>{x.replace(/^[•\-*]\s*/, "")}</li>)}</ul></>
+                          : <span className="whitespace-pre-line">{e.work}</span>}
+                        <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{e.source === "meeting" ? "Meeting" : e.kind === "ai" ? `AI session${e.source ? ` · ${e.source}` : ""}` : `My time${e.by_name ? ` · ${e.by_name}` : ""}`}{e.billable ? "" : " · not billable"}</span></td>
                       <td className="px-3 py-2.5">{e.billed_invoice_id ? <Link href={`/invoices/${e.billed_invoice_id}`} className="text-brand-700 hover:underline dark:text-brand-300">Invoice</Link> : <span className="text-ink-faint">Not yet</span>}</td>
                       <td className="px-3 py-2.5 text-right">{manage && !e.billed_invoice_id && <DeleteTime id={p.id} entryId={e.id} />}</td>
                     </tr>
                   ))}
-                  {all.margin > 0 && (
-                    <tr className="bg-zinc-50/60 dark:bg-white/[0.02]"><td className="px-5 py-2.5 text-ink-muted" colSpan={2}>Margin</td><td className="px-3 py-2.5 font-medium tabular-nums text-ink">{all.margin}</td>
-                      <td className="px-3 py-2.5 text-ink" colSpan={3}>{p.margin_label} — {p.margin_percent}% of {all.ai} hrs AI session time</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
@@ -112,6 +112,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="space-y-5">
+          {manage && client && <Card><CardHeader title="Client margin" subtitle={`Applies to every ${client.name} project and invoice.`} /><ClientMargin customerId={client.id} value={margin} clientName={client.name} /></Card>}
+
           <Card>
             <CardHeader title="Client portal" subtitle={p.portal ? "This project shows in their portal." : "Hidden from their portal."} />
             <div className="space-y-2 border-t border-line px-5 py-4 text-[0.8125rem]">

@@ -5,7 +5,7 @@ import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { billLines, entryKey, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
+import { billLines, clientMargin, entryKey, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
 
 /** Nerd Herd → Projects (office): create a project, keep its record and time log, and bill the time as it goes. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -47,7 +47,7 @@ export async function createProject(i: { customerId: string; name: string }): Pr
 }
 
 export interface ProjectPatch {
-  name: string; status: ProjectStatus; status_note: string; summary: string; delivered_by: string; started: string; rate: string; margin_percent: string; margin_label: string;
+  name: string; status: ProjectStatus; status_note: string; summary: string; delivered_by: string; started: string; rate: string;
   phases: unknown; links: unknown; open_items: unknown; notes: string; staff_notes: string; portal: boolean;
 }
 export async function saveProject(id: string, p: ProjectPatch): Promise<R> {
@@ -58,12 +58,10 @@ export async function saveProject(id: string, p: ProjectPatch): Promise<R> {
     if (!name) throw new Error("Give the project a name.");
     const rate = String(p.rate ?? "").trim() === "" ? null : Number(p.rate);
     if (rate !== null && !(rate >= 0 && rate <= 2000)) throw new Error("The hourly rate should be a number of dollars (ex GST).");
-    const margin = Number(p.margin_percent || 0);
-    if (!(margin >= 0 && margin <= 500)) throw new Error("The margin should be 0 to 500%.");
     const t = (v: string, n: number) => String(v ?? "").trim().slice(0, n) || null;
     const { error } = await supabase.from("nh_projects").update({
       name, status: (["active", "on_hold", "complete", "archived"].includes(p.status) ? p.status : "active"), status_note: t(p.status_note, 500), summary: t(p.summary, 4000),
-      delivered_by: t(p.delivered_by, 120), started: ISO.test(p.started) ? p.started : null, rate, margin_percent: margin, margin_label: t(p.margin_label, 120) ?? "Planning, direction and testing",
+      delivered_by: t(p.delivered_by, 120), started: ISO.test(p.started) ? p.started : null, rate,
       phases: readPhases(p.phases), links: readLinks(p.links), open_items: readItems(p.open_items), notes: t(p.notes, 20000), staff_notes: t(p.staff_notes, 20000), portal: !!p.portal,
       updated_at: new Date().toISOString(),
     }).eq("id", id).eq("organisation_id", org.id);
@@ -73,7 +71,7 @@ export async function saveProject(id: string, p: ProjectPatch): Promise<R> {
   } catch (e) { return fail(e); }
 }
 
-export async function addTime(id: string, i: { date: string; start: string; end: string; hours: string; work: string; kind: string; billable: boolean }): Promise<R> {
+export async function addTime(id: string, i: { date: string; start: string; end: string; hours: string; work: string; kind: string; billable: boolean; who?: string }): Promise<R> {
   try {
     const { supabase, org, user, profile } = await manager();
     await own(supabase, org.id, id);
@@ -83,9 +81,13 @@ export async function addTime(id: string, i: { date: string; start: string; end:
     const work = String(i.work ?? "").trim().slice(0, 2000);
     if (!work) throw new Error("Say what was done.");
     const tm = (v: string) => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(v ?? "") ? v.padStart(5, "0") : null);
+    // A meeting is your own time (billed as logged), with who was there and what was discussed
+    const meeting = i.kind === "meeting";
+    const who = String(i.who ?? "").trim().slice(0, 300);
+    if (meeting && !who) throw new Error("Say who was in the meeting.");
     const kind = i.kind === "ai" ? "ai" : "staff";
     const { error } = await supabase.from("nh_project_time").insert({ organisation_id: org.id, project_id: id, work_date: i.date, start_time: tm(i.start), end_time: tm(i.end), hours: Math.round(hours * 100) / 100, work, kind,
-      source: kind === "ai" ? "AI session" : "timesheet", by_name: kind === "staff" ? actorName(profile) : null, billable: i.billable !== false, created_by: user.id });
+      source: meeting ? "meeting" : kind === "ai" ? "AI session" : "timesheet", by_name: meeting ? who : kind === "staff" ? actorName(profile) : null, billable: i.billable !== false, created_by: user.id });
     if (error) throw err(error.message);
     await supabase.from("nh_projects").update({ updated_at: new Date().toISOString() }).eq("id", id);
     refresh(id);
@@ -149,7 +151,7 @@ export async function billProject(id: string): Promise<R<string>> {
     if (!list.length) throw new Error("There's no unbilled time on this project.");
     const s = readNerd(org.settings);
     const rate = p.rate ?? s.hourlyRate;
-    const b = billLines(list, p, rate, s.accountCode);
+    const b = billLines(list, p, clientMargin(org.settings, p.customer_id), rate, s.accountCode);
     const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
     const subtotal = Math.round((total / 1.1) * 100) / 100;
     const today = todayISO(org.timezone);
@@ -166,5 +168,26 @@ export async function billProject(id: string): Promise<R<string>> {
     refresh(id);
     revalidatePath("/invoices");
     return { ok: true, data: inv.id as string };
+  } catch (e) { return fail(e); }
+}
+
+/** The client's margin: AI session time on all their projects (and invoices) is multiplied up by this much. */
+export async function setClientMargin(customerId: string, percent: string): Promise<R> {
+  try {
+    const { supabase, org } = await manager();
+    if (!UUID.test(customerId)) throw new Error("That client doesn't exist.");
+    const n = String(percent ?? "").trim() === "" ? 0 : Number(percent);
+    if (!(n >= 0 && n <= 500)) throw new Error("The margin should be 0 to 500%.");
+    const { data: c } = await supabase.from("customers").select("id").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
+    if (!c) throw new Error("That client doesn't exist.");
+    const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
+    const settings = { ...((o?.settings ?? {}) as Record<string, unknown>) };
+    const map = { ...((settings.nh_client_margins ?? {}) as Record<string, number>) };
+    if (n > 0) map[customerId] = Math.round(n * 100) / 100; else delete map[customerId];
+    settings.nh_client_margins = map;
+    const { error } = await supabase.from("organisations").update({ settings }).eq("id", org.id);
+    if (error) throw new Error(error.message);
+    revalidatePath("/nerd-herd/projects", "layout");
+    return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
 }

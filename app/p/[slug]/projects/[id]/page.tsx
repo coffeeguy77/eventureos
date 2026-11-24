@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { fmtDate, money } from "@/lib/format";
 import { createServiceClient } from "@/lib/integrations/runtime";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, billedHours, clientMargin, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
 import { Panel } from "../../ui";
 import { isUuid, requirePortal } from "../../portal-data";
 import { ProjectRequestForm } from "../forms";
@@ -33,8 +33,9 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
   ]);
   const entries = ((time ?? []) as Record<string, unknown>[]).map(toEntry);
   const rate = p.rate ?? readNerd(o?.settings).hourlyRate;
-  const t = totals(entries, p.margin_percent, rate);
-  const notBilled = totals(entries.filter((e) => !e.billed_invoice_id), p.margin_percent, rate);
+  const m = clientMargin(o?.settings, p.customer_id);
+  const t = totals(entries, m, rate);
+  const notBilled = totals(entries.filter((e) => !e.billed_invoice_id), m, rate);
   const I = (invs ?? []) as { id: string; number: string | null; issue_date: string; due_date: string | null; total: number; balance: number; status: string; pay_token: string }[];
   const owed = I.reduce((a, i) => a + Math.max(0, Number(i.balance)), 0);
   const cur = ctx.org.currency;
@@ -70,12 +71,15 @@ export default async function PortalProject({ params }: { params: Promise<{ slug
                   {!entries.length && <tr><td colSpan={3} className="px-6 py-6 text-center text-ink-muted">No time logged yet.</td></tr>}
                   {entries.map((e) => (
                     <tr key={e.id} className="align-top">
-                      <td className="whitespace-nowrap px-4 py-2.5 text-ink sm:px-6">{fmtDate(e.work_date)}{e.start_time && <span className="block text-[0.75rem] text-ink-muted">{e.start_time}{e.end_time && e.end_time !== e.start_time ? `–${e.end_time}` : ""}</span>}</td>
-                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{e.hours}</td>
-                      <td className="px-3 py-2.5 text-ink">{e.work}{e.billed_invoice_id ? <span className="block text-[0.75rem] text-ink-muted">Invoiced</span> : null}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-ink sm:px-6">{fmtDate(e.work_date)}</td>
+                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, m)}</td>
+                      <td className="px-3 py-2.5 text-ink">
+                        {e.source === "meeting"
+                          ? <><span className="font-medium">Meeting with {e.by_name}</span><ul className="mt-1 list-disc space-y-0.5 pl-4">{e.work.split("\n").filter((x) => x.trim()).map((x, k) => <li key={k}>{x.replace(/^[•\-*]\s*/, "")}</li>)}</ul></>
+                          : <span className="whitespace-pre-line">{e.work}</span>}
+                        {e.billed_invoice_id ? <span className="block text-[0.75rem] text-ink-muted">Invoiced</span> : null}</td>
                     </tr>
                   ))}
-                  {t.margin > 0 && <tr className="align-top"><td className="px-4 py-2.5 text-ink-muted sm:px-6">Ongoing</td><td className="px-3 py-2.5 font-medium tabular-nums text-ink">{t.margin}</td><td className="px-3 py-2.5 text-ink">{p.margin_label}</td></tr>}
                 </tbody>
                 {entries.length > 0 && <tfoot><tr className="border-t border-line-strong"><td className="px-4 py-2.5 font-semibold text-ink sm:px-6">Total</td><td className="px-3 py-2.5 font-semibold tabular-nums text-ink">{t.hours}</td><td className="px-3 py-2.5 font-semibold text-ink">{money(t.incGst, cur)} inc GST</td></tr></tfoot>}
               </table>

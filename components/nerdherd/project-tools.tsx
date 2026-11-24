@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
-import { addTime, billProject, createProject, deleteTime, importRecord, saveProject, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
+import { addTime, billProject, createProject, deleteTime, importRecord, saveProject, setClientMargin, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
 import type { Project } from "@/lib/nerdherd/projects";
 
 /* ------------------------------------------------------------------ new project */
@@ -38,7 +38,7 @@ export function NewProject({ clients }: { clients: { id: string; name: string }[
 
 export function AddTime({ id, today }: { id: string; today: string }) {
   const router = useRouter();
-  const blank = { date: today, start: "", end: "", hours: "", work: "", kind: "staff", billable: true };
+  const blank = { date: today, start: "", end: "", hours: "", work: "", kind: "staff", billable: true, who: "" };
   const [f, setF] = useState(blank);
   const [err, setErr] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -56,7 +56,7 @@ export function AddTime({ id, today }: { id: string; today: string }) {
     <form className="space-y-3 border-t border-line p-4 sm:p-5" onSubmit={(e) => { e.preventDefault(); start(async () => {
       setErr(null);
       const r = await addTime(id, f);
-      if (r.ok) { setF({ ...blank, date: f.date, kind: f.kind }); router.refresh(); } else setErr(r.error);
+      if (r.ok) { setF({ ...blank, date: f.date, kind: f.kind, who: f.who }); router.refresh(); } else setErr(r.error);
     }); }}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.7fr)]">
         <div className="col-span-2 sm:col-span-1"><Label htmlFor="t-d">Date</Label><Input id="t-d" type="date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
@@ -64,12 +64,15 @@ export function AddTime({ id, today }: { id: string; today: string }) {
         <div><Label htmlFor="t-e">Finish</Label><Input id="t-e" type="time" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
         <div className="col-span-2 sm:col-span-1"><Label htmlFor="t-h">Hours</Label><Input id="t-h" inputMode="decimal" value={f.hours} onChange={(e) => set("hours", e.target.value)} placeholder="1.5" /></div>
       </div>
-      <div><Label htmlFor="t-w">What was done</Label><Textarea id="t-w" rows={2} value={f.work} onChange={(e) => set("work", e.target.value)} placeholder="e.g. Worked through the variations flow with Chris; tested on phone" /></div>
+      {f.kind === "meeting" && <div><Label htmlFor="t-who">Who was there</Label><Input id="t-who" value={f.who} onChange={(e) => set("who", e.target.value)} placeholder="e.g. Shaun, Chris Kingdom, the owner" /></div>}
+      <div><Label htmlFor="t-w" hint={f.kind === "meeting" ? "one point a line" : undefined}>{f.kind === "meeting" ? "What was discussed" : "What was done"}</Label>
+        <Textarea id="t-w" rows={f.kind === "meeting" ? 4 : 2} value={f.work} onChange={(e) => set("work", e.target.value)} placeholder={f.kind === "meeting" ? "Walked through the TradeUp AI demo\nAgreed credit notes come next\nChris to send Bitbucket access" : "e.g. Worked through the variations flow; tested on phone"} /></div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="radio" name="kind" checked={f.kind === "staff"} onChange={() => set("kind", "staff")} />My time (planning, testing, calls)</label>
-        <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="radio" name="kind" checked={f.kind === "ai"} onChange={() => set("kind", "ai")} />AI session (margin applies)</label>
+        <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="radio" name="kind" checked={f.kind === "meeting"} onChange={() => set("kind", "meeting")} />Meeting</label>
+        <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="radio" name="kind" checked={f.kind === "ai"} onChange={() => set("kind", "ai")} />AI session (client margin applies)</label>
         <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="checkbox" checked={f.billable} onChange={(e) => set("billable", e.target.checked)} />Billable</label>
-        <Button type="submit" variant="primary" size="sm" className="ml-auto" disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add time</Button>
+        <Button type="submit" variant="primary" size="sm" className="ml-auto" disabled={busy}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}{f.kind === "meeting" ? "Add meeting" : "Add time"}</Button>
       </div>
       <FormError message={err} />
     </form>
@@ -111,7 +114,7 @@ export function ProjectForm({ p }: { p: Project }) {
   const router = useRouter();
   const [f, setF] = useState({
     name: p.name, status: p.status, status_note: p.status_note ?? "", summary: p.summary ?? "", delivered_by: p.delivered_by ?? "", started: p.started ?? "",
-    rate: p.rate == null ? "" : String(p.rate), margin_percent: String(p.margin_percent), margin_label: p.margin_label,
+    rate: p.rate == null ? "" : String(p.rate),
     phases: p.phases.map((x) => [x.name, x.dates ?? "", x.status ?? ""].join(" | ")).join("\n"),
     links: p.links.map((x) => `${x.label} | ${x.url}`).join("\n"),
     open_items: p.open_items.join("\n"), notes: p.notes ?? "", staff_notes: p.staff_notes ?? "", portal: p.portal,
@@ -144,15 +147,7 @@ export function ProjectForm({ p }: { p: Project }) {
         <div className="sm:col-span-2"><Label htmlFor="pf-su">Summary</Label><Textarea id="pf-su" rows={3} value={f.summary} onChange={(e) => set("summary", e.target.value)} /></div>
       </div>
 
-      <fieldset className="rounded-xl p-3 ring-1 ring-inset ring-line">
-        <legend className="px-1 text-[0.8125rem] font-semibold text-ink">Billing</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div><Label htmlFor="pf-r" hint="ex GST — blank = your Nerd Herd rate">Hourly rate</Label><Input id="pf-r" inputMode="decimal" value={f.rate} onChange={(e) => set("rate", e.target.value)} placeholder="120" /></div>
-          <div><Label htmlFor="pf-m" hint="added to AI session time">Margin %</Label><Input id="pf-m" inputMode="decimal" value={f.margin_percent} onChange={(e) => set("margin_percent", e.target.value)} placeholder="0" /></div>
-          <div><Label htmlFor="pf-ml" hint="how the margin line reads">Margin line</Label><Input id="pf-ml" value={f.margin_label} onChange={(e) => set("margin_label", e.target.value)} /></div>
-        </div>
-        <p className="mt-2 text-[0.75rem] text-ink-muted">AI session time is only what the session timestamps show. The margin adds your own planning, direction and testing on top, as its own line on the record and the invoice (e.g. 50% on 10 hrs = 5 hrs). Or log your own time as “My time” entries — or both.</p>
-      </fieldset>
+      <div className="max-w-xs"><Label htmlFor="pf-r" hint="ex GST — blank = your Nerd Herd rate">Hourly rate</Label><Input id="pf-r" inputMode="decimal" value={f.rate} onChange={(e) => set("rate", e.target.value)} placeholder="120" /></div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div><Label htmlFor="pf-ph" hint="one a line: name | dates | status">Phases</Label><Textarea id="pf-ph" rows={4} value={f.phases} onChange={(e) => set("phases", e.target.value)} /></div>
@@ -193,6 +188,29 @@ export function ImportRecord({ id }: { id: string }) {
         })}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Import</Button>
       </div>
       {msg && <p className="text-[0.8125rem] text-emerald-700 dark:text-emerald-400">{msg}</p>}
+      <FormError message={err} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ client margin */
+
+export function ClientMargin({ customerId, value, clientName }: { customerId: string; value: number; clientName: string }) {
+  const router = useRouter();
+  const [v, setV] = useState(String(value || ""));
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const [busy, start] = useTransition();
+  const n = Number(v || 0);
+  return (
+    <div className="space-y-2 border-t border-line px-5 py-4">
+      <div className="flex items-end gap-2">
+        <div className="w-28"><Label htmlFor="cm">Margin %</Label><Input id="cm" inputMode="decimal" value={v} onChange={(e) => { setOk(false); setV(e.target.value); }} placeholder="0" /></div>
+        <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await setClientMargin(customerId, v); if (r.ok) { setOk(true); router.refresh(); } else setErr(r.error); })}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}Save</Button>
+      </div>
+      <p className="text-[0.75rem] text-ink-muted">AI session time for {clientName} is multiplied up by this on every project and invoice{n > 0 ? ` — 10 hrs becomes ${Number((10 * (1 + n / 100)).toFixed(2))} hrs` : ""}. Your own time is billed as logged. The client only sees the billed hours.</p>
+      {ok && <p className="text-[0.8125rem] text-emerald-700 dark:text-emerald-400">Saved.</p>}
       <FormError message={err} />
     </div>
   );

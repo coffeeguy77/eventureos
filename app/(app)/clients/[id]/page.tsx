@@ -229,12 +229,14 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   // Nerd Herd: the client's web account (sites, hosting, plans, maintenance, tickets, payment record)
   const nerd = appAllowed(await orgAppAccess(org.id), "nerdherd");
+  // Businesses that don't run events (e.g. a web agency) don't see events on a client
+  const usesEvents = ((org.settings ?? {}) as { uses_events?: unknown }).uses_events !== false;
   const webAccount = nerd && tab === "web" ? await loadClientAccount(supabase, org.id, id, todayISO(tz)) : null;
   const tabs = [
     { key: "overview", label: "Overview" },
     ...(nerd ? [{ key: "web", label: "Web account" }] : []),
     { key: "history", label: "Job history", count: invoices.filter((i) => i.status !== "void").length + xeroQuotes.length + bookings.length },
-    { key: "events", label: "Events", count: events.length },
+    ...(usesEvents ? [{ key: "events", label: "Events", count: events.length }] : []),
     { key: "emails", label: "Emails", count: threads.length },
     { key: "quotes", label: "Quotes", count: quotes.length },
     { key: "invoices", label: "Invoices", count: invoices.length },
@@ -278,17 +280,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
               )}
               {lastContact && <span className="text-ink-faint">· Last email {relative(lastContact)}</span>}
             </div>
-            {canManage(role) && ((org.settings ?? {}) as { uses_events?: unknown }).uses_events !== false && <ClubOnClient orgId={org.id} orgSettings={org.settings} customerId={c.id} />}
+            {canManage(role) && usesEvents && <ClubOnClient orgId={org.id} orgSettings={org.settings} customerId={c.id} />}
           </div>
           <div className="flex w-full gap-2 sm:w-auto">
-            <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">New event for this client</ButtonLink>
+            {usesEvents && <ButtonLink href={`/events/new?customer=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">New event for this client</ButtonLink>}
+            {!usesEvents && nerd && canManage(role) && <ButtonLink href={`/nerd-herd/projects?client=${c.id}`} variant="primary" className="h-10 flex-1 sm:h-9 sm:flex-none">Projects</ButtonLink>}
             {canManage(role) && <ButtonLink href={`/invoices/new?customer=${c.id}`} className="h-10 flex-1 sm:h-9 sm:flex-none">New invoice</ButtonLink>}
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-line pt-5 sm:grid-cols-4">
           <HeaderStat label="Customer since" value={fmtDate(c.customer_since)} sub={firstEnquiry ? `First enquiry via ${ENQUIRY_SOURCE[firstEnquiry.source]}` : c.source ? `Via ${ENQUIRY_SOURCE[c.source]}` : undefined} />
           <HeaderStat label="Lifetime value" value={money(lifetime, cur)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"} received`} />
-          <HeaderStat label="Events" value={String(events.length)} sub={upcoming.length ? `${upcoming.length} upcoming` : events.length ? "None upcoming" : "No events yet"} />
+          {usesEvents && <HeaderStat label="Events" value={String(events.length)} sub={upcoming.length ? `${upcoming.length} upcoming` : events.length ? "None upcoming" : "No events yet"} />}
           <HeaderStat label="Outstanding" value={money(outstanding, cur)} alert={overdue.length > 0}
             sub={overdue.length ? `${overdue.length} overdue` : openInvoices.length ? `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}` : "Nothing owing"} />
         </dl>

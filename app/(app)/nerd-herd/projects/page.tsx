@@ -2,7 +2,7 @@ import Link from "next/link";
 import { canManage, requireOrg } from "@/lib/context";
 import { fmtDate, money } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, clientMargin, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewProject } from "@/components/nerdherd/project-tools";
@@ -11,9 +11,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Projects" };
 
 /** Nerd Herd → Projects: ongoing client work with a running time log and bill. */
-export default async function Projects() {
+export default async function Projects({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
+  const { client: only } = await searchParams;
   const { supabase, org, role } = await requireOrg();
-  const { data, error } = await supabase.from("nh_projects").select("*, customers(name)").eq("organisation_id", org.id).neq("status", "archived").order("updated_at", { ascending: false });
+  const { data, error } = await supabase.from("nh_projects").select("*, customers(name)").eq("organisation_id", org.id).neq("status", "archived").order("updated_at", { ascending: false })
+    .then((r) => (only && /^[0-9a-f-]{36}$/i.test(only) ? { ...r, data: (r.data ?? []).filter((x) => (x as { customer_id: string }).customer_id === only) } : r));
   if (error) return <Card><EmptyState title="Run the Projects update first">Open Supabase → SQL editor and run supabase/migrations/0118_nh_projects.sql, then refresh.</EmptyState></Card>;
   const rows = (data ?? []) as (Record<string, unknown> & { customers: { name: string } | null })[];
   const ids = rows.map((r) => r.id as string);
@@ -33,8 +35,9 @@ export default async function Projects() {
             {rows.map((r) => {
               const p = toProject(r);
               const mine = entries.filter((e) => e.project_id === p.id);
-              const all = totals(mine, p.margin_percent, p.rate ?? rate);
-              const unbilled = totals(mine.filter((e) => !e.billed_invoice_id), p.margin_percent, p.rate ?? rate);
+              const m = clientMargin(org.settings, p.customer_id);
+              const all = totals(mine, m, p.rate ?? rate);
+              const unbilled = totals(mine.filter((e) => !e.billed_invoice_id), m, p.rate ?? rate);
               const last = mine.map((e) => e.work_date).sort().pop();
               return (
                 <li key={p.id}>
@@ -44,7 +47,7 @@ export default async function Projects() {
                       <p className="text-[0.8125rem] text-ink-muted">{r.customers?.name ?? "Client"}{p.status_note ? ` · ${p.status_note}` : ""}</p>
                     </div>
                     <div className="text-right text-[0.8125rem]">
-                      <p className="font-semibold text-ink">{all.recorded} hrs recorded</p>
+                      <p className="font-semibold text-ink">{all.hours} hrs</p>
                       <p className="text-ink-muted">{unbilled.hours > 0 ? `${money(unbilled.incGst, org.currency)} unbilled` : "All billed"}{last ? ` · last ${fmtDate(last)}` : ""}</p>
                     </div>
                   </Link>
