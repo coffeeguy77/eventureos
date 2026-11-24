@@ -69,7 +69,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <div className="space-y-5">
           <Card>
             <CardHeader title="Time log" subtitle={margin > 0 ? `AI session hours are multiplied by the client margin (+${margin}%). The client sees the billed hours only.` : "The client sees these hours. Set a client margin to multiply up AI session time."}
-              action={manage && unbilled.hours > 0 ? <BillProject id={p.id} label={`Invoice ${money(unbilled.incGst, org.currency)}`} /> : undefined} />
+              action={manage && unbilled.hours > 0 ? <BillProject id={p.id} label={drafts.size ? `Add ${money(unbilled.incGst, org.currency)} to the draft invoice` : `Invoice ${money(unbilled.incGst, org.currency)}`} /> : undefined} />
             <div className="overflow-x-auto border-t border-line">
               <table className="w-full min-w-[640px] text-[0.8125rem]">
                 <thead className="text-left text-[0.7188rem] uppercase tracking-wide text-ink-faint">

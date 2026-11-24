@@ -149,6 +149,16 @@ export async function billProject(id: string): Promise<R<string>> {
     if (error) throw err(error.message);
     const list = ((rows ?? []) as Record<string, unknown>[]).map(toEntry);
     if (!list.length) throw new Error("There's no unbilled time on this project.");
+    // Still a draft invoice for this project? Add the time to it rather than starting another.
+    const { data: open } = await supabase.from("invoices").select("id, number").eq("project_id", id).eq("organisation_id", org.id).eq("status", "draft").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (open) {
+      await supabase.from("nh_project_time").update({ billed_invoice_id: open.id }).in("id", list.map((e) => e.id));
+      await rebuildDraft(supabase, org, id, open.id as string);
+      await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "invoice.updated", entityType: "invoice", entityId: open.id as string, customerId: p.customer_id, summary: `${actorName(profile)} added ${list.length} time ${list.length === 1 ? "entry" : "entries"} on “${p.name}” to draft ${open.number}` });
+      refresh(id);
+      revalidatePath("/invoices");
+      return { ok: true, data: open.id as string };
+    }
     const s = readNerd(org.settings);
     const rate = p.rate ?? s.hourlyRate;
     const b = billLines(list, p, clientMargin(org.settings, p.customer_id), rate, s.accountCode);
