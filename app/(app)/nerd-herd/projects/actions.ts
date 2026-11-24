@@ -101,7 +101,7 @@ export async function deleteTime(id: string, entryId: string): Promise<R> {
     await own(supabase, org.id, id);
     if (!UUID.test(entryId)) throw new Error("Refresh and try again.");
     const { data: t } = await supabase.from("nh_project_time").select("billed_invoice_id").eq("id", entryId).eq("project_id", id).maybeSingle();
-    if (t?.billed_invoice_id) throw new Error("That time is on an invoice — void the invoice first.");
+    if (t?.billed_invoice_id) throw new Error("That time is on an invoice — void or delete the invoice first.");
     const { error } = await supabase.from("nh_project_time").delete().eq("id", entryId).eq("project_id", id);
     if (error) throw err(error.message);
     refresh(id);
@@ -190,4 +190,47 @@ export async function setClientMargin(customerId: string, percent: string): Prom
     revalidatePath("/nerd-herd/projects", "layout");
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
+}
+
+/** Change a time entry: what was done, the recorded hours, and (optionally) the billed hours set by hand. */
+export async function updateTime(id: string, entryId: string, i: { work: string; hours: string; billed: string; billable: boolean; who?: string }): Promise<R> {
+  try {
+    const { supabase, org } = await manager();
+    await own(supabase, org.id, id);
+    if (!UUID.test(entryId)) throw new Error("Refresh and try again.");
+    const { data: t } = await supabase.from("nh_project_time").select("billed_invoice_id, source").eq("id", entryId).eq("project_id", id).maybeSingle();
+    if (!t) throw new Error("That entry doesn't exist.");
+    let draft: string | null = null;
+    if (t.billed_invoice_id) {
+      const { data: inv } = await supabase.from("invoices").select("status").eq("id", t.billed_invoice_id).maybeSingle();
+      if (inv?.status !== "draft") throw new Error("That time is on an invoice that's been sent — change the invoice instead.");
+      draft = t.billed_invoice_id as string;
+    }
+    const hours = Number(i.hours);
+    if (!(hours > 0 && hours <= 24)) throw new Error("Recorded hours should be more than 0 and no more than 24.");
+    const work = String(i.work ?? "").trim().slice(0, 2000);
+    if (!work) throw new Error("Say what was done.");
+    const billed = String(i.billed ?? "").trim() === "" ? null : Number(i.billed);
+    if (billed !== null && !(billed >= 0 && billed <= 500)) throw new Error("Billed hours should be 0 to 500 — or leave it blank to work it out.");
+    const patch: Record<string, unknown> = { work, hours: Math.round(hours * 100) / 100, billed_hours: billed === null ? null : Math.round(billed * 100) / 100, billable: i.billable !== false };
+    if (t.source === "meeting" && i.who?.trim()) patch.by_name = i.who.trim().slice(0, 300);
+    const { error } = await supabase.from("nh_project_time").update(patch).eq("id", entryId).eq("project_id", id);
+    if (error) throw new Error(/billed_hours/.test(error.message) ? "Run update 0119 (billed hours) in Supabase first." : error.message);
+    if (draft) await rebuildDraft(supabase, org, id, draft);
+    refresh(id);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** A draft project invoice follows its time entries: rebuild its lines when one changes. */
+async function rebuildDraft(supabase: Awaited<ReturnType<typeof requireOrg>>["supabase"], org: Awaited<ReturnType<typeof requireOrg>>["org"], projectId: string, invoiceId: string) {
+  const p = await own(supabase, org.id, projectId);
+  const { data: rows } = await supabase.from("nh_project_time").select("*").eq("billed_invoice_id", invoiceId);
+  const s = readNerd(org.settings);
+  const b = billLines(((rows ?? []) as Record<string, unknown>[]).map(toEntry), p, clientMargin(org.settings, p.customer_id), p.rate ?? s.hourlyRate, s.accountCode);
+  if (!b.lines.length) return;
+  const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
+  const subtotal = Math.round((total / 1.1) * 100) / 100;
+  await supabase.from("invoices").update({ line_items: b.lines, total, subtotal, tax_total: Math.round((total - subtotal) * 100) / 100 }).eq("id", invoiceId).eq("status", "draft");
+  revalidatePath(`/invoices/${invoiceId}`);
 }

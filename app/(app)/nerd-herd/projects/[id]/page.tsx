@@ -7,7 +7,7 @@ import { readNerd } from "@/lib/nerdherd/core";
 import { STATUS_LABEL, billedHours, clientMargin, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AddTime, BillProject, ClientMargin, DeleteTime, ImportRecord, ProjectForm } from "@/components/nerdherd/project-tools";
+import { AddTime, BillProject, ClientMargin, DeleteTime, EditTime, ImportRecord, ProjectForm } from "@/components/nerdherd/project-tools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Project" };
@@ -33,6 +33,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const all = totals(entries, margin, rate);
   const unbilled = totals(entries.filter((e) => !e.billed_invoice_id), margin, rate);
   const I = (invs ?? []) as { id: string; number: string; status: string; issue_date: string; due_date: string | null; total: number; amount_paid: number | null }[];
+  const drafts = new Set(I.filter((i) => i.status === "draft").map((i) => i.id));
   const invoiced = I.reduce((a, i) => a + Number(i.total), 0);
   const paid = I.reduce((a, i) => a + Number(i.amount_paid ?? 0), 0);
   const owed = Math.round((invoiced - paid) * 100) / 100;
@@ -80,12 +81,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     <tr key={e.id} className={`align-top ${e.billable ? "" : "opacity-60"}`}>
                       <td className="whitespace-nowrap px-5 py-2.5 text-ink">{fmtDate(e.work_date)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{e.start_time ? `${e.start_time}${e.end_time && e.end_time !== e.start_time ? `–${e.end_time}` : ""}` : "—"}</td>
-                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, margin)}{e.kind === "ai" && margin > 0 && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded</span>}</td>
+                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, margin)}{(e.billed_hours != null || (e.kind === "ai" && margin > 0)) && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded{e.billed_hours != null ? " · set by hand" : ""}</span>}</td>
                       <td className="px-3 py-2.5 text-ink">
                         {e.source === "meeting"
                           ? <><span className="font-medium">Meeting with {e.by_name}</span><ul className="mt-1 list-disc space-y-0.5 pl-4">{e.work.split("\n").filter((x) => x.trim()).map((x, k) => <li key={k}>{x.replace(/^[•\-*]\s*/, "")}</li>)}</ul></>
                           : <span className="whitespace-pre-line">{e.work}</span>}
-                        <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{e.source === "meeting" ? "Meeting" : e.kind === "ai" ? `AI session${e.source ? ` · ${e.source}` : ""}` : `My time${e.by_name ? ` · ${e.by_name}` : ""}`}{e.billable ? "" : " · not billable"}</span></td>
+                        <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{e.source === "meeting" ? "Meeting" : e.kind === "ai" ? `AI session${e.source ? ` · ${e.source}` : ""}` : `My time${e.by_name ? ` · ${e.by_name}` : ""}`}{e.billable ? "" : " · not billable"}</span>
+                        {manage && (!e.billed_invoice_id || drafts.has(e.billed_invoice_id)) && <EditTime id={p.id} e={e} computed={billedHours({ ...e, billed_hours: null }, margin)} />}</td>
                       <td className="px-3 py-2.5">{e.billed_invoice_id ? <Link href={`/invoices/${e.billed_invoice_id}`} className="text-brand-700 hover:underline dark:text-brand-300">Invoice</Link> : <span className="text-ink-faint">Not yet</span>}</td>
                       <td className="px-3 py-2.5 text-right">{manage && !e.billed_invoice_id && <DeleteTime id={p.id} entryId={e.id} />}</td>
                     </tr>

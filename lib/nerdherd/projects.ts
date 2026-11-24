@@ -17,6 +17,8 @@ export interface Project {
 export interface TimeEntry {
   id: string; work_date: string; start_time: string | null; end_time: string | null; hours: number; work: string;
   kind: "ai" | "staff"; source: string | null; by_name: string | null; billable: boolean; billed_invoice_id: string | null;
+  /** Billed hours set by hand for this task (null = recorded hours, times the client margin for AI time) */
+  billed_hours?: number | null;
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -51,6 +53,7 @@ export const toEntry = (r: Record<string, unknown>): TimeEntry => ({
   id: String(r.id), work_date: String(r.work_date), start_time: (r.start_time as string | null) ?? null, end_time: (r.end_time as string | null) ?? null,
   hours: Number(r.hours), work: String(r.work ?? ""), kind: r.kind === "ai" ? "ai" : "staff", source: (r.source as string | null) ?? null, by_name: (r.by_name as string | null) ?? null,
   billable: r.billable !== false, billed_invoice_id: (r.billed_invoice_id as string | null) ?? null,
+  billed_hours: r.billed_hours == null ? null : Number(r.billed_hours),
 });
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -59,8 +62,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  * Hours billed for one entry: AI session time is multiplied up by the client's margin (it only captures the session,
  * not the planning, direction and testing around it); your own time is billed as logged.
  */
-export const billedHours = (e: Pick<TimeEntry, "hours" | "kind">, marginPercent: number) =>
-  r2(e.kind === "ai" ? e.hours * (1 + Math.max(0, marginPercent) / 100) : e.hours);
+export const billedHours = (e: Pick<TimeEntry, "hours" | "kind" | "billed_hours">, marginPercent: number) =>
+  e.billed_hours != null ? r2(e.billed_hours) : r2(e.kind === "ai" ? e.hours * (1 + Math.max(0, marginPercent) / 100) : e.hours);
 
 /** Hours and money for a set of entries. */
 export function totals(entries: TimeEntry[], marginPercent: number, rateExGst: number) {
@@ -75,7 +78,7 @@ export function totals(entries: TimeEntry[], marginPercent: number, rateExGst: n
 /** Invoice lines (prices inc GST, like the rest of Nerd Herd): one per task, with its billed hours. */
 export function billLines(entries: TimeEntry[], p: Pick<Project, "name">, marginPercent: number, rateExGst: number, accountCode: string | null) {
   const inc = r2(rateExGst * 1.1);
-  const lines = [...entries].filter((e) => e.billable).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
+  const lines = [...entries].filter((e) => e.billable && billedHours(e, marginPercent) > 0).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
     const q = billedHours(e, marginPercent);
     const what = e.source === "meeting" ? `Meeting with ${e.by_name ?? "you"}: ${e.work.split("\n").map((x) => x.trim().replace(/^[•\-*]\s*/, "")).filter(Boolean).join("; ")}` : e.work;
     return { description: `${fmtShort(e.work_date)} — ${what}`.slice(0, 1000), quantity: q, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(q * inc) };

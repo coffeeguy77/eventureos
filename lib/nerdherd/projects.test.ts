@@ -9,6 +9,7 @@ test("totals: AI time multiplied by the client margin, own time as logged", () =
   const t = totals([e({ hours: 10 }), e({ hours: 2, kind: "staff" }), e({ hours: 5, billable: false })], 150, 120);
   assert.deepEqual([t.ai, t.staff, t.hours, t.exGst], [10, 2, 27, 3240]);
   assert.equal(billedHours(e({ hours: 10 }), 150), 25);
+  assert.equal(billedHours(e({ hours: 2.5, billed_hours: 18 }), 150), 18);
 });
 
 test("billLines: one line per task with its billed hours", () => {

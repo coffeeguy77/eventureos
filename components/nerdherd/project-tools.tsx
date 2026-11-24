@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
-import { addTime, billProject, createProject, deleteTime, importRecord, saveProject, setClientMargin, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
+import { addTime, billProject, createProject, deleteTime, importRecord, saveProject, setClientMargin, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
 import type { Project } from "@/lib/nerdherd/projects";
 
 /* ------------------------------------------------------------------ new project */
@@ -211,6 +211,36 @@ export function ClientMargin({ customerId, value, clientName }: { customerId: st
       </div>
       <p className="text-[0.75rem] text-ink-muted">AI session time for {clientName} is multiplied up by this on every project and invoice{n > 0 ? ` — 10 hrs becomes ${Number((10 * (1 + n / 100)).toFixed(2))} hrs` : ""}. Your own time is billed as logged. The client only sees the billed hours.</p>
       {ok && <p className="text-[0.8125rem] text-emerald-700 dark:text-emerald-400">Saved.</p>}
+      <FormError message={err} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ edit an entry */
+
+export function EditTime({ id, e, computed }: { id: string; e: { id: string; work: string; hours: number; billed_hours?: number | null; billable: boolean; source: string | null; by_name: string | null }; computed: number }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ work: e.work, hours: String(e.hours), billed: e.billed_hours == null ? "" : String(e.billed_hours), billable: e.billable, who: e.by_name ?? "" });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="mt-1 inline-flex items-center gap-1 text-[0.75rem] font-medium text-brand-700 hover:underline dark:text-brand-300"><Pencil className="h-3 w-3" />Edit</button>;
+  return (
+    <div className="mt-2 space-y-2 rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
+      {e.source === "meeting" && <div><Label htmlFor={`w-${e.id}`}>Who was there</Label><Input id={`w-${e.id}`} value={f.who} onChange={(x) => setF({ ...f, who: x.target.value })} /></div>}
+      <div><Label htmlFor={`k-${e.id}`}>{e.source === "meeting" ? "What was discussed" : "What was done"}</Label><Textarea id={`k-${e.id}`} rows={3} value={f.work} onChange={(x) => setF({ ...f, work: x.target.value })} /></div>
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label htmlFor={`h-${e.id}`}>Recorded hours</Label><Input id={`h-${e.id}`} inputMode="decimal" value={f.hours} onChange={(x) => setF({ ...f, hours: x.target.value })} /></div>
+        <div><Label htmlFor={`b-${e.id}`} hint={`blank = ${computed}`}>Billed hours</Label><Input id={`b-${e.id}`} inputMode="decimal" value={f.billed} onChange={(x) => setF({ ...f, billed: x.target.value })} placeholder={String(computed)} /></div>
+      </div>
+      <p className="text-[0.75rem] text-ink-muted">Set billed hours to cover time the record doesn't show — e.g. hours working out the screens before the build. The client sees the billed hours.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex items-center gap-2 text-[0.8125rem] text-ink"><input type="checkbox" checked={f.billable} onChange={(x) => setF({ ...f, billable: x.target.checked })} />Billable</label>
+        <span className="ml-auto flex gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await updateTime(id, e.id, f); if (r.ok) { setOpen(false); router.refresh(); } else setErr(r.error); })}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Save</Button>
+        </span>
+      </div>
       <FormError message={err} />
     </div>
   );
