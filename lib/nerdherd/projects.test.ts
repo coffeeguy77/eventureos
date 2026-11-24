@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { billLines, billedHours, entryKey, parseImport, totals, type TimeEntry } from "./projects";
+import { billLines, billedHours, entryKey, marginFor, parseImport, totals, type TimeEntry } from "./projects";
 
 const e = (o: Partial<TimeEntry>): TimeEntry => ({ id: "x", work_date: "2026-11-14", start_time: null, end_time: null, hours: 1, work: "w", kind: "ai", source: "commits", by_name: null, billable: true, billed_invoice_id: null, ...o });
 
@@ -25,4 +25,10 @@ test("parseImport reads the TradeUp record", () => {
   assert.equal(entryKey(p.time[0]), `${p.time[0].work_date}|${p.time[0].start_time ?? ""}|${p.time[0].hours.toFixed(2)}`);
   assert.throws(() => parseImport("nope"), /Paste the JSON/);
   assert.throws(() => parseImport('{"time_entries":[{"date":"x","hours":2,"work":"a"}]}'), /Time entry 1/);
+});
+
+test("marginFor: a draft invoice's override wins over the client margin", () => {
+  const m = marginFor(150, new Map([["inv1", 100]]));
+  const t = totals([e({ hours: 10, billed_invoice_id: "inv1" }), e({ hours: 10 }), e({ hours: 4, kind: "staff", billed_invoice_id: "inv1" })], m, 120);
+  assert.equal(t.hours, 20 + 25 + 4);
 });

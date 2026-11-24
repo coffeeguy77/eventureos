@@ -14,7 +14,8 @@ export const metadata = { title: "Prepaid hours", robots: { index: false, follow
 /** The client's prepaid hours: balance, blocks bought, every request that used time, and buying more. */
 export default async function PrepaidHours({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { org, customerIds } = await requirePortal(slug);
+  const { org, billingCustomerIds: customerIds } = await requirePortal(slug);
+  if (!customerIds.length) return <NoBilling slug={slug} />;
   const svc = createServiceClient();
   const [{ data: o }, block] = await Promise.all([svc.from("organisations").select("settings").eq("id", org.id).single(), loadBlock(svc, org.id, customerIds)]);
   const care = readCare(o?.settings);
@@ -75,6 +76,16 @@ export default async function PrepaidHours({ params }: { params: Promise<{ slug:
           </ul>
         </section>
       )}
+    </div>
+  );
+}
+
+function NoBilling({ slug }: { slug: string }) {
+  return (
+    <div className="mx-auto max-w-[640px] space-y-4 py-10 text-center">
+      <h1 className="portal-serif text-[2rem] font-semibold leading-tight text-ink">Your accounts contact looks after this</h1>
+      <p className="text-[0.9375rem] text-ink-muted">Your access shows the work and your requests. Invoices, prices and hours go to the person who handles your accounts.</p>
+      <Link href={`/p/${slug}`} className="inline-flex font-semibold text-[color:var(--portal-brand-ink)] hover:underline">Back to your account</Link>
     </div>
   );
 }

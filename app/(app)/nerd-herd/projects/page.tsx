@@ -2,7 +2,9 @@ import Link from "next/link";
 import { canManage, requireOrg } from "@/lib/context";
 import { fmtDate, money } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, clientMargin, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { loadMargins } from "@/lib/nerdherd/margins";
+import { createServiceClient } from "@/lib/integrations/runtime";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewProject } from "@/components/nerdherd/project-tools";
@@ -25,6 +27,10 @@ export default async function Projects({ searchParams }: { searchParams: Promise
   ]);
   const entries = ((time ?? []) as Record<string, unknown>[]).map((t) => ({ ...toEntry(t), project_id: t.project_id as string }));
   const rate = readNerd(org.settings).hourlyRate;
+  // Margins are managers-only; read server-side so billed hours are right for everyone
+  const svc = createServiceClient();
+  const custIds = [...new Set(rows.map((r) => r.customer_id as string))];
+  const margins = new Map(await Promise.all(custIds.map(async (c) => [c, (await loadMargins(svc, org.id, c, org.settings)).of] as const)));
   const tone = { active: "brand", on_hold: "amber", complete: "green", archived: "neutral" } as const;
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -35,7 +41,7 @@ export default async function Projects({ searchParams }: { searchParams: Promise
             {rows.map((r) => {
               const p = toProject(r);
               const mine = entries.filter((e) => e.project_id === p.id);
-              const m = clientMargin(org.settings, p.customer_id);
+              const m = margins.get(p.customer_id) ?? 0;
               const all = totals(mine, m, p.rate ?? rate);
               const unbilled = totals(mine.filter((e) => !e.billed_invoice_id), m, p.rate ?? rate);
               const last = mine.map((e) => e.work_date).sort().pop();

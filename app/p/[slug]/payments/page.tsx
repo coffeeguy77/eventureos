@@ -13,7 +13,8 @@ export const metadata = { title: "Invoices & receipts", robots: { index: false, 
 /** Every invoice and payment for this customer, with a receipt to download for each payment. */
 export default async function PortalPayments({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { supabase, org, customerIds } = await requirePortal(slug);
+  const { supabase, org, billingCustomerIds: customerIds } = await requirePortal(slug);
+  if (!customerIds.length) return <NoBilling slug={slug} />;
   const { data: invData, error } = await supabase.from("invoices").select(INVOICE_COLUMNS).eq("organisation_id", org.id).in("customer_id", customerIds).neq("status", "draft").order("issue_date", { ascending: false });
   if (error) throw new Error(`Could not load your invoices: ${error.message}`);
   const invoices = (invData ?? []) as unknown as PortalInvoice[];
@@ -84,6 +85,16 @@ export default async function PortalPayments({ params }: { params: Promise<{ slu
           </ul>
         )}
       </Panel>
+    </div>
+  );
+}
+
+function NoBilling({ slug }: { slug: string }) {
+  return (
+    <div className="mx-auto max-w-[640px] space-y-4 py-10 text-center">
+      <h1 className="portal-serif text-[2rem] font-semibold leading-tight text-ink">Your accounts contact looks after this</h1>
+      <p className="text-[0.9375rem] text-ink-muted">Your access shows the work and your requests. Invoices, prices and hours go to the person who handles your accounts.</p>
+      <Link href={`/p/${slug}`} className="inline-flex font-semibold text-[color:var(--portal-brand-ink)] hover:underline">Back to your account</Link>
     </div>
   );
 }

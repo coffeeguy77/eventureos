@@ -4,7 +4,7 @@ import { pdfResponse, receiptPdf } from "@/lib/payments/receipt";
 /** A payment receipt, for the signed-in customer whose invoice it was. */
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = await params;
-  const { supabase, customerIds } = await requirePortal(slug);
+  const { supabase, billingCustomerIds: customerIds } = await requirePortal(slug);
   const { data: p } = await supabase.from("payments").select("id, invoice_id").eq("id", id).maybeSingle();
   if (!p?.invoice_id) return new Response("Receipt not found", { status: 404 });
   const { data: inv } = await supabase.from("invoices").select("customer_id").eq("id", p.invoice_id).maybeSingle();

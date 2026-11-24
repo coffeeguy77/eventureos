@@ -52,6 +52,7 @@ export async function submitRequest(_prev: CareState, form: FormData): Promise<C
     const svc = createServiceClient();
     const { data: orgRow } = await svc.from("organisations").select("settings").eq("id", ctx.org.id).single();
     if (type === "tasks") {
+      if (!ctx.billingCustomerIds.includes(customer)) throw new Error("Prepaid hours are managed by your accounts contact — lodge it as a job instead.");
       if (!readCare(orgRow?.settings).enabled) throw new Error("Prepaid hours aren't available — lodge it as a job instead.");
       const b = await loadBlock(svc, ctx.org.id, ctx.customerIds);
       if (!b) throw new Error(UPDATE_NEEDED);
@@ -123,6 +124,7 @@ export async function buyHours(_prev: CareState, form: FormData): Promise<CareSt
     const customer = String(form.get("customer") ?? "");
     const hours = Number(form.get("hours"));
     const ctx = await who(slug, customer);
+    if (!ctx.billingCustomerIds.includes(customer)) throw new Error("Only your accounts contact can buy hours.");
     const svc = createServiceClient();
     const { data: org } = await svc.from("organisations").select("id, currency, timezone, settings").eq("id", ctx.org.id).single();
     if (!org) throw new Error("Couldn't load your account — refresh and try again.");

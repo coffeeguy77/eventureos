@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { Check, Loader2, Mail, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea, FormError } from "@/components/ui/form";
-import { addTime, billProject, createProject, deleteTime, importRecord, saveProject, setClientMargin, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
+import { addPortalPerson, addTime, billProject, createProject, deleteTime, importRecord, saveProject, sendProjectInvite, setClientMargin, setInvoiceMargin, setPortalRole, updateTime, type ProjectPatch } from "@/app/(app)/nerd-herd/projects/actions";
 import type { Project } from "@/lib/nerdherd/projects";
 
 /* ------------------------------------------------------------------ new project */
@@ -241,6 +241,95 @@ export function EditTime({ id, e, computed }: { id: string; e: { id: string; wor
           <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await updateTime(id, e.id, f); if (r.ok) { setOpen(false); router.refresh(); } else setErr(r.error); })}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}Save</Button>
         </span>
       </div>
+      <FormError message={err} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ margin on one draft invoice */
+
+/** Override the margin on a draft invoice (office only — the client never sees a margin). Blank = the client's margin. */
+export function InvoiceMargin({ id, invoiceId, value, clientMargin, ready }: { id: string; invoiceId: string; value: number | null; clientMargin: number; ready: boolean }) {
+  const router = useRouter();
+  const [v, setV] = useState(value == null ? "" : String(value));
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const changed = v.trim() !== (value == null ? "" : String(value));
+  return (
+    <div className="flex flex-wrap items-center gap-2 px-5 pb-3 text-[0.75rem] text-ink-muted">
+      <label htmlFor={`im-${invoiceId}`}>Margin on this invoice</label>
+      <Input id={`im-${invoiceId}`} inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} placeholder={`${clientMargin}`} className="h-8 w-20" disabled={!ready} />
+      <span>%</span>
+      {changed && <Button size="sm" variant="primary" disabled={busy} onClick={() => start(async () => { setErr(null); const r = await setInvoiceMargin(id, invoiceId, v); if (r.ok) router.refresh(); else setErr(r.error); })}>
+        {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Apply</Button>}
+      <span className="w-full">{!ready ? "Run update 0120 in Supabase to set a margin per invoice." : value == null ? `Blank uses the client's ${clientMargin}%. Lines are rebuilt when you apply.` : `Overrides the client's ${clientMargin}%. Clear it to go back.`} Only your office sees this.</span>
+      {err && <span className="w-full"><FormError message={err} /></span>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ who can sign in to the portal */
+
+type Person = { id: string; name: string; email: string | null; signedIn: boolean; role: "accounts" | "team" };
+const ROLE_TEXT = { accounts: "Accounts — sees hours, invoices and what's owed", team: "Team — sees the work and requests only, no prices or hours" } as const;
+
+/** The client's people: what each one sees in the portal, adding someone, and emailing them a sign-in link. */
+export function PortalPeople({ id, manage, clientName, people, ready }: { id: string; manage: boolean; clientName: string; people: Person[]; ready: boolean }) {
+  const router = useRouter();
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ first: "", last: "", email: "", role: "team" });
+  const [err, setErr] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const withEmail = people.filter((x) => x.email);
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) => start(async () => {
+    setErr(null); setSent(null);
+    const r = await fn();
+    if (r.ok) { after?.(); router.refresh(); } else setErr(r.error ?? "Something went wrong.");
+  });
+  return (
+    <div className="space-y-3 text-[0.8125rem]">
+      {!ready && <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-500/30">Run update 0120 in Supabase to choose what each person sees. Until then everyone who signs in sees everything.</p>}
+      {!withEmail.length && <p className="text-ink-muted">Nobody at {clientName} has an email on file yet.</p>}
+      <ul className="space-y-2.5">
+        {withEmail.map((x) => (
+          <li key={x.id} className="rounded-lg bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
+            <p className="flex flex-wrap items-center gap-x-2 font-medium text-ink">{x.name}{x.signedIn && <span className="inline-flex items-center gap-0.5 text-[0.75rem] font-normal text-emerald-700 dark:text-emerald-400"><Check className="h-3 w-3" />has signed in</span>}</p>
+            <p className="break-all text-[0.75rem] text-ink-muted">{x.email}</p>
+            {manage ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Select aria-label={`What ${x.name} sees`} value={x.role} disabled={busy || !ready} onChange={(e) => run(() => setPortalRole(id, x.id, e.target.value))} className="h-9 min-w-0 flex-1 text-[0.8125rem]">
+                  <option value="accounts">{ROLE_TEXT.accounts}</option>
+                  <option value="team">{ROLE_TEXT.team}</option>
+                </Select>
+                <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => sendProjectInvite(id, x.id), () => setSent(x.id))}><Mail className="h-3.5 w-3.5" />Email sign-in link</Button>
+              </div>
+            ) : <p className="mt-1 text-[0.75rem] text-ink-muted">{ROLE_TEXT[x.role]}</p>}
+            {sent === x.id && <p className="mt-1 text-[0.75rem] text-emerald-700 dark:text-emerald-400">Sent to {x.email}.</p>}
+          </li>
+        ))}
+      </ul>
+      {manage && (adding ? (
+        <form className="space-y-2 rounded-lg p-3 ring-1 ring-inset ring-line" onSubmit={(e) => { e.preventDefault(); run(() => addPortalPerson(id, f), () => { setAdding(false); setF({ first: "", last: "", email: "", role: "team" }); }); }}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div><Label htmlFor="pp-f">First name</Label><Input id="pp-f" value={f.first} onChange={(e) => setF({ ...f, first: e.target.value })} required /></div>
+            <div><Label htmlFor="pp-l">Last name</Label><Input id="pp-l" value={f.last} onChange={(e) => setF({ ...f, last: e.target.value })} /></div>
+          </div>
+          <div><Label htmlFor="pp-e">Email</Label><Input id="pp-e" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required /></div>
+          <div><Label htmlFor="pp-r">What they see</Label>
+            <Select id="pp-r" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+              <option value="team">{ROLE_TEXT.team}</option>
+              <option value="accounts">{ROLE_TEXT.accounts}</option>
+            </Select></div>
+          <p className="text-[0.75rem] text-ink-muted">They're added as a contact for {clientName}. Nothing is emailed until you press “Email sign-in link”.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" disabled={busy || !ready}>{busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Add person</Button>
+            <Button size="sm" variant="ghost" type="button" onClick={() => setAdding(false)}>Cancel</Button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" onClick={() => setAdding(true)} className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline dark:text-brand-300"><Plus className="h-3.5 w-3.5" />Add someone at {clientName}</button>
+      ))}
       <FormError message={err} />
     </div>
   );

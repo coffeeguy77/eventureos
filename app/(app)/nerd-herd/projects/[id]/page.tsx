@@ -4,10 +4,12 @@ import { ExternalLink } from "lucide-react";
 import { canManage, requireOrg } from "@/lib/context";
 import { fmtDate, money, todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { STATUS_LABEL, billedHours, clientMargin, fmtHours, toEntry, toProject, totals } from "@/lib/nerdherd/projects";
+import { STATUS_LABEL, billedHours, fmtHours, toEntry, toProject, totals, type TimeEntry } from "@/lib/nerdherd/projects";
+import { loadMargins } from "@/lib/nerdherd/margins";
+import { createServiceClient } from "@/lib/integrations/runtime";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AddTime, BillProject, ClientMargin, DeleteTime, EditTime, ImportRecord, ProjectForm } from "@/components/nerdherd/project-tools";
+import { AddTime, BillProject, ClientMargin, DeleteTime, EditTime, ImportRecord, InvoiceMargin, PortalPeople, ProjectForm } from "@/components/nerdherd/project-tools";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Project" };
@@ -25,20 +27,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     supabase.from("nh_project_time").select("*").eq("project_id", id).order("work_date", { ascending: false }).order("start_time", { ascending: false }),
     supabase.from("invoices").select("id, number, status, issue_date, due_date, total, amount_paid").eq("project_id", id).neq("status", "void").order("issue_date", { ascending: false }),
     supabase.from("support_tickets").select("id, number, subject, status, created_at, last_activity_at").eq("project_id", id).order("created_at", { ascending: false }).limit(50),
-    supabase.from("contacts").select("id, first_name, last_name, email, portal_user_id").eq("customer_id", p.customer_id).order("is_primary", { ascending: false }),
+    supabase.from("contacts").select("id, first_name, last_name, email, portal_user_id, portal_role").eq("customer_id", p.customer_id).order("is_primary", { ascending: false })
+      .then((r) => (r.error && /portal_role/.test(r.error.message) ? supabase.from("contacts").select("id, first_name, last_name, email, portal_user_id").eq("customer_id", p.customer_id).order("is_primary", { ascending: false }) : r)),
   ]);
   const entries = ((time ?? []) as Record<string, unknown>[]).map(toEntry);
   const rate = p.rate ?? readNerd(org.settings).hourlyRate;
-  const margin = clientMargin(org.settings, p.customer_id);
-  const all = totals(entries, margin, rate);
-  const unbilled = totals(entries.filter((e) => !e.billed_invoice_id), margin, rate);
+  // Margins are managers-only (RLS); read them server-side so everyone's billed hours are right, but only managers see them
+  const mg = await loadMargins(createServiceClient(), org.id, p.customer_id, org.settings);
+  const margin = mg.client;
+  const mOf = (e: TimeEntry) => (typeof mg.of === "number" ? mg.of : mg.of(e));
+  const all = totals(entries, mg.of, rate);
+  const unbilled = totals(entries.filter((e) => !e.billed_invoice_id), mg.of, rate);
   const I = (invs ?? []) as { id: string; number: string; status: string; issue_date: string; due_date: string | null; total: number; amount_paid: number | null }[];
   const drafts = new Set(I.filter((i) => i.status === "draft").map((i) => i.id));
   const invoiced = I.reduce((a, i) => a + Number(i.total), 0);
   const paid = I.reduce((a, i) => a + Number(i.amount_paid ?? 0), 0);
   const owed = Math.round((invoiced - paid) * 100) / 100;
-  const C = (contacts ?? []) as { id: string; first_name: string; last_name: string | null; email: string | null; portal_user_id: string | null }[];
-  const onPortal = C.filter((c) => c.portal_user_id);
+  const C = (contacts ?? []) as { id: string; first_name: string; last_name: string | null; email: string | null; portal_user_id: string | null; portal_role?: string | null }[];
   const tone = { active: "brand", on_hold: "amber", complete: "green", archived: "neutral" } as const;
   const Stat = ({ label, value, note }: { label: string; value: string; note?: string }) => (
     <div className="rounded-xl bg-zinc-50 p-3 ring-1 ring-inset ring-line dark:bg-white/[0.03]">
@@ -58,7 +63,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <Stat label="Billed hours" value={fmtHours(all.hours)} note={`AI ${all.ai} · yours ${all.staff} recorded`} />
-        <Stat label="Client margin" value={`${margin}%`} note="on AI session time" />
+        {manage && <Stat label="Client margin" value={`${margin}%`} note="on AI session time · only you see this" />}
         <Stat label="Billable to date" value={money(all.incGst, org.currency)} note={`${all.hours} hrs × ${money(rate * 1.1, org.currency)} inc GST`} />
         <Stat label="Not billed yet" value={money(unbilled.incGst, org.currency)} note={`${unbilled.hours} hrs`} />
         <Stat label="Invoiced" value={money(invoiced, org.currency)} note={`${money(paid, org.currency)} paid`} />
@@ -68,7 +73,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <div className="space-y-5">
           <Card>
-            <CardHeader title="Time log" subtitle={margin > 0 ? `AI session hours are multiplied by the client margin (+${margin}%). The client sees the billed hours only.` : "The client sees these hours. Set a client margin to multiply up AI session time."}
+            <CardHeader title="Time log" subtitle={!manage ? "The client sees the billed hours." : margin > 0 ? `AI session hours are multiplied by the client margin (+${margin}%) unless a draft invoice overrides it. The client sees the billed hours only.` : "The client sees these hours. Set a client margin to multiply up AI session time."}
               action={manage && unbilled.hours > 0 ? <BillProject id={p.id} label={drafts.size ? `Add ${money(unbilled.incGst, org.currency)} to the draft invoice` : `Invoice ${money(unbilled.incGst, org.currency)}`} /> : undefined} />
             <div className="overflow-x-auto border-t border-line">
               <table className="w-full min-w-[640px] text-[0.8125rem]">
@@ -81,13 +86,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     <tr key={e.id} className={`align-top ${e.billable ? "" : "opacity-60"}`}>
                       <td className="whitespace-nowrap px-5 py-2.5 text-ink">{fmtDate(e.work_date)}</td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-ink-muted">{e.start_time ? `${e.start_time}${e.end_time && e.end_time !== e.start_time ? `–${e.end_time}` : ""}` : "—"}</td>
-                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, margin)}{(e.billed_hours != null || (e.kind === "ai" && margin > 0)) && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded{e.billed_hours != null ? " · set by hand" : ""}</span>}</td>
+                      <td className="px-3 py-2.5 font-medium tabular-nums text-ink">{billedHours(e, mOf(e))}{manage && (e.billed_hours != null || (e.kind === "ai" && mOf(e) > 0)) && <span className="block text-[0.6875rem] font-normal text-ink-faint">{e.hours} recorded{e.billed_hours != null ? " · set by hand" : ""}</span>}</td>
                       <td className="px-3 py-2.5 text-ink">
                         {e.source === "meeting"
                           ? <><span className="font-medium">Meeting with {e.by_name}</span><ul className="mt-1 list-disc space-y-0.5 pl-4">{e.work.split("\n").filter((x) => x.trim()).map((x, k) => <li key={k}>{x.replace(/^[•\-*]\s*/, "")}</li>)}</ul></>
                           : <span className="whitespace-pre-line">{e.work}</span>}
                         <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{e.source === "meeting" ? "Meeting" : e.kind === "ai" ? `AI session${e.source ? ` · ${e.source}` : ""}` : `My time${e.by_name ? ` · ${e.by_name}` : ""}`}{e.billable ? "" : " · not billable"}</span>
-                        {manage && (!e.billed_invoice_id || drafts.has(e.billed_invoice_id)) && <EditTime id={p.id} e={e} computed={billedHours({ ...e, billed_hours: null }, margin)} />}</td>
+                        {manage && (!e.billed_invoice_id || drafts.has(e.billed_invoice_id)) && <EditTime id={p.id} e={e} computed={billedHours({ ...e, billed_hours: null }, mOf(e))} />}</td>
                       <td className="px-3 py-2.5">{e.billed_invoice_id ? <Link href={`/invoices/${e.billed_invoice_id}`} className="text-brand-700 hover:underline dark:text-brand-300">Invoice</Link> : <span className="text-ink-faint">Not yet</span>}</td>
                       <td className="px-3 py-2.5 text-right">{manage && !e.billed_invoice_id && <DeleteTime id={p.id} entryId={e.id} />}</td>
                     </tr>
@@ -118,11 +123,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
           <Card>
             <CardHeader title="Client portal" subtitle={p.portal ? "This project shows in their portal." : "Hidden from their portal."} />
-            <div className="space-y-2 border-t border-line px-5 py-4 text-[0.8125rem]">
-              {onPortal.length
-                ? onPortal.map((c) => <p key={c.id} className="text-ink">✓ {c.first_name} {c.last_name ?? ""} <span className="text-ink-muted">can sign in</span></p>)
-                : <p className="text-ink-muted">Nobody at {client?.name ?? "this client"} can sign in yet.</p>}
-              {client && <Link href={`/clients/${client.id}`} className="inline-block font-medium text-brand-700 hover:underline dark:text-brand-300">Add a contact or send a portal invite →</Link>}
+            <div className="border-t border-line px-5 py-4">
+              <PortalPeople id={p.id} manage={manage} clientName={client?.name ?? "this client"} ready={C.length ? C.every((c) => c.portal_role !== undefined) : mg.ready}
+                people={C.map((c) => ({ id: c.id, name: [c.first_name, c.last_name].filter(Boolean).join(" "), email: c.email, signedIn: !!c.portal_user_id, role: c.portal_role === "team" ? "team" : "accounts" }))} />
             </div>
           </Card>
 
@@ -131,9 +134,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <ul className="divide-y divide-line border-t border-line">
               {!I.length && <li className="px-5 py-5 text-center text-[0.8125rem] text-ink-muted">None yet.</li>}
               {I.map((i) => (
-                <li key={i.id}><Link href={`/invoices/${i.id}`} className="flex items-center gap-2 px-5 py-2.5 text-[0.8125rem] hover:bg-zinc-50 dark:hover:bg-white/[0.03]">
-                  <span className="font-medium text-ink">{i.number}</span><Badge tone={i.status === "paid" ? "green" : i.status === "draft" ? "neutral" : i.status === "overdue" ? "red" : "brand"}>{i.status}</Badge>
-                  <span className="ml-auto tabular-nums text-ink">{money(Number(i.total), org.currency)}</span></Link></li>
+                <li key={i.id}>
+                  <Link href={`/invoices/${i.id}`} className="flex items-center gap-2 px-5 py-2.5 text-[0.8125rem] hover:bg-zinc-50 dark:hover:bg-white/[0.03]">
+                    <span className="font-medium text-ink">{i.number}</span><Badge tone={i.status === "paid" ? "green" : i.status === "draft" ? "neutral" : i.status === "overdue" ? "red" : "brand"}>{i.status}</Badge>
+                    <span className="ml-auto tabular-nums text-ink">{money(Number(i.total), org.currency)}</span></Link>
+                  {manage && i.status === "draft" && <InvoiceMargin id={p.id} invoiceId={i.id} value={mg.invoices.get(i.id) ?? null} clientMargin={margin} ready={mg.ready} />}
+                </li>
               ))}
             </ul>
           </Card>

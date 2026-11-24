@@ -14,12 +14,12 @@ export const metadata = { title: "New request", robots: { index: false, follow: 
 export default async function NewRequest({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ type?: string; site?: string; updates?: string; about?: string }> }) {
   const { slug } = await params;
   const q = await searchParams;
-  const { org, customerIds, customers } = await requirePortal(slug);
+  const { org, customerIds, customers, billingCustomerIds } = await requirePortal(slug);
   const svc = createServiceClient();
   const [{ data: ws }, { data: o }, block] = await Promise.all([
     svc.from("websites").select("id, domain, customer_id, status").eq("organisation_id", org.id).in("customer_id", customerIds).neq("status", "archived").order("domain"),
     svc.from("organisations").select("settings").eq("id", org.id).single(),
-    loadBlock(svc, org.id, customerIds),
+    billingCustomerIds.length ? loadBlock(svc, org.id, billingCustomerIds) : Promise.resolve(null),
   ]);
   const sites = (ws ?? []) as { id: string; domain: string; customer_id: string | null }[];
   const care = readCare(o?.settings);

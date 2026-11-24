@@ -86,6 +86,10 @@ export interface PortalContext {
   customerIds: string[];
   customers: { id: string; name: string }[];
   contactName: string | null;
+  /** The customers this person may see hours, prices and invoices for ('accounts' contacts). Team contacts see the work only. */
+  billingCustomerIds: string[];
+  /** True when they can see the money for at least one of their customers. */
+  billing: boolean;
 }
 
 /**
@@ -111,11 +115,14 @@ export const requirePortal = cache(async (slug: string): Promise<PortalContext> 
   if (orgErr) throw new Error(`Could not load your portal: ${orgErr.message}`);
   if (!org) redirect(`/p/${slug}/login?reason=no-access`);
 
-  const { data: contacts, error: ctErr } = await supabase
-    .from("contacts")
-    .select("customer_id, first_name, last_name")
-    .eq("organisation_id", org.id)
-    .eq("portal_user_id", user.id);
+  // portal_role arrived in update 0120; before it everyone sees everything
+  type Ct = { customer_id: string; first_name: string; last_name: string | null; portal_role?: string | null };
+  const orgId = org.id as string, uid = user.id;
+  const ctQuery = (cols: string) => supabase.from("contacts").select(cols).eq("organisation_id", orgId).eq("portal_user_id", uid);
+  let ct = await ctQuery("customer_id, first_name, last_name, portal_role");
+  if (ct.error && /portal_role/.test(ct.error.message)) ct = await ctQuery("customer_id, first_name, last_name");
+  const contacts = (ct.data ?? null) as unknown as Ct[] | null;
+  const ctErr = ct.error;
   if (ctErr) throw new Error(`Could not load your bookings: ${ctErr.message}`);
   const customerIds = [...new Set((contacts ?? []).map((c) => c.customer_id as string))];
   if (customerIds.length === 0) redirect(`/p/${slug}/login?reason=no-access`);
@@ -128,6 +135,8 @@ export const requirePortal = cache(async (slug: string): Promise<PortalContext> 
   if (cuErr) throw new Error(`Could not load your bookings: ${cuErr.message}`);
 
   const first = contacts?.[0];
+  const billingCustomerIds = [...new Set(((contacts ?? []) as { customer_id: string; portal_role?: string | null }[])
+    .filter((c) => (c.portal_role ?? "accounts") !== "team").map((c) => c.customer_id))];
   return {
     supabase,
     user: { id: user.id, email: user.email },
@@ -136,6 +145,8 @@ export const requirePortal = cache(async (slug: string): Promise<PortalContext> 
     customerIds,
     customers: (customers ?? []) as { id: string; name: string }[],
     contactName: first ? [first.first_name, first.last_name].filter(Boolean).join(" ") : null,
+    billingCustomerIds,
+    billing: billingCustomerIds.length > 0,
   };
 });
 

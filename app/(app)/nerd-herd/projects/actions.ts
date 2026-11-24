@@ -5,7 +5,8 @@ import { canManage, requireOrg } from "@/lib/context";
 import { actorName, logActivity } from "@/lib/activity";
 import { todayISO } from "@/lib/format";
 import { readNerd } from "@/lib/nerdherd/core";
-import { billLines, clientMargin, entryKey, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
+import { loadMargins, missing0120, NEEDS_0120 } from "@/lib/nerdherd/margins";
+import { billLines, entryKey, parseImport, readItems, readLinks, readPhases, toEntry, toProject, type ProjectStatus } from "@/lib/nerdherd/projects";
 
 /** Nerd Herd → Projects (office): create a project, keep its record and time log, and bill the time as it goes. */
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
@@ -161,7 +162,8 @@ export async function billProject(id: string): Promise<R<string>> {
     }
     const s = readNerd(org.settings);
     const rate = p.rate ?? s.hourlyRate;
-    const b = billLines(list, p, clientMargin(org.settings, p.customer_id), rate, s.accountCode);
+    const mg = await loadMargins(supabase, org.id, p.customer_id, org.settings);
+    const b = billLines(list, p, mg.client, rate, s.accountCode);
     const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
     const subtotal = Math.round((total / 1.1) * 100) / 100;
     const today = todayISO(org.timezone);
@@ -190,14 +192,106 @@ export async function setClientMargin(customerId: string, percent: string): Prom
     if (!(n >= 0 && n <= 500)) throw new Error("The margin should be 0 to 500%.");
     const { data: c } = await supabase.from("customers").select("id").eq("id", customerId).eq("organisation_id", org.id).maybeSingle();
     if (!c) throw new Error("That client doesn't exist.");
-    const { data: o } = await supabase.from("organisations").select("settings").eq("id", org.id).single();
-    const settings = { ...((o?.settings ?? {}) as Record<string, unknown>) };
-    const map = { ...((settings.nh_client_margins ?? {}) as Record<string, number>) };
-    if (n > 0) map[customerId] = Math.round(n * 100) / 100; else delete map[customerId];
-    settings.nh_client_margins = map;
-    const { error } = await supabase.from("organisations").update({ settings }).eq("id", org.id);
-    if (error) throw new Error(error.message);
+    const del = await supabase.from("nh_margins").delete().eq("organisation_id", org.id).eq("customer_id", customerId);
+    if (del.error) throw new Error(missing0120(del.error.message) ? NEEDS_0120 : del.error.message);
+    if (n > 0) {
+      const { error } = await supabase.from("nh_margins").insert({ organisation_id: org.id, customer_id: customerId, margin_percent: Math.round(n * 100) / 100 });
+      if (error) throw new Error(error.message);
+    }
+    // Draft project invoices without their own margin follow the client's
+    const { data: drafts } = await supabase.from("invoices").select("id, project_id").eq("organisation_id", org.id).eq("customer_id", customerId).eq("status", "draft").not("project_id", "is", null);
+    for (const d of (drafts ?? []) as { id: string; project_id: string }[]) await rebuildDraft(supabase, org, d.project_id, d.id);
     revalidatePath("/nerd-herd/projects", "layout");
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** Override the margin on one draft project invoice (blank = use the client's margin). Only the office sees it. */
+export async function setInvoiceMargin(id: string, invoiceId: string, percent: string): Promise<R> {
+  try {
+    const { supabase, org } = await manager();
+    await own(supabase, org.id, id);
+    if (!UUID.test(invoiceId)) throw new Error("Refresh and try again.");
+    const { data: inv } = await supabase.from("invoices").select("id, status").eq("id", invoiceId).eq("project_id", id).eq("organisation_id", org.id).maybeSingle();
+    if (!inv) throw new Error("That invoice isn't on this project.");
+    if (inv.status !== "draft") throw new Error("That invoice has been sent — its margin can't change now.");
+    const blank = String(percent ?? "").trim() === "";
+    const n = blank ? 0 : Number(percent);
+    if (!blank && !(n >= 0 && n <= 500)) throw new Error("The margin should be 0 to 500% — or leave it blank to use the client's.");
+    const del = await supabase.from("nh_margins").delete().eq("organisation_id", org.id).eq("invoice_id", invoiceId);
+    if (del.error) throw new Error(missing0120(del.error.message) ? NEEDS_0120 : del.error.message);
+    if (!blank) {
+      const { error } = await supabase.from("nh_margins").insert({ organisation_id: org.id, invoice_id: invoiceId, margin_percent: Math.round(n * 100) / 100 });
+      if (error) throw new Error(error.message);
+    }
+    await rebuildDraft(supabase, org, id, invoiceId);
+    refresh(id);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/* ------------------------------------------------------------------ portal people */
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+export type PortalRole = "accounts" | "team";
+const role = (v: unknown): PortalRole => (v === "team" ? "team" : "accounts");
+
+/** Add someone at the client who can sign in to the portal: Accounts see hours and money, Team see the work only. */
+export async function addPortalPerson(id: string, i: { first: string; last: string; email: string; role: string }): Promise<R> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const p = await own(supabase, org.id, id);
+    const first = String(i.first ?? "").trim().slice(0, 100);
+    const email = String(i.email ?? "").trim().toLowerCase();
+    if (!first) throw new Error("Enter their first name.");
+    if (!EMAIL.test(email) || email.length > 254) throw new Error("Enter a valid email address.");
+    const r = role(i.role);
+    const { data: had } = await supabase.from("contacts").select("id").eq("organisation_id", org.id).eq("customer_id", p.customer_id).ilike("email", email).maybeSingle();
+    if (had) {
+      const { error } = await supabase.from("contacts").update({ portal_role: r }).eq("id", had.id);
+      if (error) throw new Error(missing0120(error.message) ? NEEDS_0120 : error.message);
+    } else {
+      const { error } = await supabase.from("contacts").insert({ organisation_id: org.id, customer_id: p.customer_id, first_name: first,
+        last_name: String(i.last ?? "").trim().slice(0, 100) || null, email, is_primary: false, portal_role: r, created_by: user.id });
+      if (error) throw new Error(missing0120(error.message) ? NEEDS_0120 : `Couldn't add them: ${error.message}`);
+    }
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "contact.created", entityType: "customer", entityId: p.customer_id, customerId: p.customer_id,
+      summary: `${actorName(profile)} gave ${first} (${email}) ${r === "accounts" ? "Accounts" : "Team"} access to the portal` });
+    refresh(id);
+    revalidatePath(`/clients/${p.customer_id}`);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** Change what a client contact sees in the portal. */
+export async function setPortalRole(id: string, contactId: string, r: string): Promise<R> {
+  try {
+    const { supabase, org } = await manager();
+    const p = await own(supabase, org.id, id);
+    if (!UUID.test(contactId)) throw new Error("Refresh and try again.");
+    const { error, data } = await supabase.from("contacts").update({ portal_role: role(r) }).eq("id", contactId).eq("organisation_id", org.id).eq("customer_id", p.customer_id).select("id");
+    if (error) throw new Error(missing0120(error.message) ? NEEDS_0120 : error.message);
+    if (!data?.length) throw new Error("That person isn't a contact for this client.");
+    refresh(id);
+    return { ok: true, data: undefined };
+  } catch (e) { return fail(e); }
+}
+
+/** Email one client contact a link to sign in and open this project. Only when you press the button. */
+export async function sendProjectInvite(id: string, contactId: string): Promise<R> {
+  try {
+    const { supabase, org, user, profile } = await manager();
+    const p = await own(supabase, org.id, id);
+    if (!p.portal) throw new Error("This project is hidden from the client's portal — show it first.");
+    const { data: c } = await supabase.from("contacts").select("first_name, email").eq("id", contactId).eq("organisation_id", org.id).eq("customer_id", p.customer_id).maybeSingle();
+    if (!c?.email) throw new Error("They need an email address first.");
+    const { data: o } = await supabase.from("organisations").select("name, slug, brand_colour, logo_url, contact_email").eq("id", org.id).single();
+    const { sendProjectPortalInvite } = await import("@/lib/email/portal-invite");
+    const problem = await sendProjectPortalInvite({ org: o as { name: string; slug: string }, project: { id: p.id, name: p.name }, to: c.email as string, firstName: c.first_name as string,
+      invitedBy: profile.full_name ? `${profile.full_name} from ${o?.name ?? org.name}` : (o?.name ?? org.name), replyTo: profile.email });
+    if (problem) throw new Error(`The invite wasn't sent: ${problem}.`);
+    await logActivity(supabase, { orgId: org.id, actorId: user.id, action: "portal.invite", entityType: "customer", entityId: p.customer_id, customerId: p.customer_id,
+      summary: `${actorName(profile)} emailed ${c.first_name} a portal invite for “${p.name}”` });
     return { ok: true, data: undefined };
   } catch (e) { return fail(e); }
 }
@@ -237,7 +331,8 @@ async function rebuildDraft(supabase: Awaited<ReturnType<typeof requireOrg>>["su
   const p = await own(supabase, org.id, projectId);
   const { data: rows } = await supabase.from("nh_project_time").select("*").eq("billed_invoice_id", invoiceId);
   const s = readNerd(org.settings);
-  const b = billLines(((rows ?? []) as Record<string, unknown>[]).map(toEntry), p, clientMargin(org.settings, p.customer_id), p.rate ?? s.hourlyRate, s.accountCode);
+  const mg = await loadMargins(supabase, org.id, p.customer_id, org.settings);
+  const b = billLines(((rows ?? []) as Record<string, unknown>[]).map(toEntry), p, mg.invoices.get(invoiceId) ?? mg.client, p.rate ?? s.hourlyRate, s.accountCode);
   if (!b.lines.length) return;
   const total = Math.round(b.lines.reduce((a, l) => a + l.line_amount, 0) * 100) / 100;
   const subtotal = Math.round((total / 1.1) * 100) / 100;

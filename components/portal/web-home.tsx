@@ -21,6 +21,8 @@ export interface SiteCare {
   pending: { name: string; from: string; to: string; kind: "plugin" | "theme" }[]; behindWp: boolean; behindWc: boolean;
 }
 export interface WebHomeData {
+  /** False for a client's team contacts: no invoices, prices or prepaid hours anywhere on the page */
+  billing?: boolean;
   slug: string; business: string; name: string; currency: string; tz: string; quoteHref: string | null;
   sites: { id: string; domain: string; status: string; hosted: boolean; suspended: boolean; plans: PlanCategory[]; care: SiteCare | null }[];
   plans: { id: string; name: string; category: PlanCategory; total: number; every: number; unit: Unit; next_date: string; status: string; website: string | null }[];
@@ -62,8 +64,8 @@ export function WebHome({ d }: { d: WebHomeData }) {
     sites: <Sites d={d} />,
     versions: <Versions v={d.versions} />,
     ads: <Ads d={d} />,
-    plans: d.plans.length ? <Plans d={d} /> : null,
-    invoices: <Invoices d={d} owing={owing} />,
+    plans: d.plans.length && d.billing !== false ? <Plans d={d} /> : null,
+    invoices: d.billing !== false ? <Invoices d={d} owing={owing} /> : null,
   };
   const shown = d.prefs.order.filter((k) => !d.prefs.hidden.includes(k) && tiles[k]);
 
@@ -94,9 +96,14 @@ export function WebHome({ d }: { d: WebHomeData }) {
               left !== null ? { k: left < 0 ? "Hours over" : "Prepaid hours left", v: fmtHours(left).replace(" over", ""), icon: Clock, alert: left < 0, href: `${base}/care/hours` }
                 : { k: "Websites", v: String(d.sites.filter((s) => s.status !== "archived").length), icon: Globe },
               { k: "Open requests", v: String(open.length), icon: CircleDot },
-              { k: due > 0 ? "To pay" : "Nothing owing", v: money(due, d.currency, { cents: false }), icon: Receipt, alert: overdue.length > 0, href: `${base}/payments` },
-              { k: "Care & hosting", v: live.length ? `${money(perMonth, d.currency, { cents: false })}/mo` : "—", icon: ShieldCheck },
-            ].map((x) => {
+              ...(d.billing !== false ? [
+                { k: due > 0 ? "To pay" : "Nothing owing", v: money(due, d.currency, { cents: false }), icon: Receipt, alert: overdue.length > 0, href: `${base}/payments` },
+                { k: "Care & hosting", v: live.length ? `${money(perMonth, d.currency, { cents: false })}/mo` : "—", icon: ShieldCheck },
+              ] : [
+                { k: "Projects", v: String(d.projects?.length ?? 0), icon: ShieldCheck },
+                { k: "Waiting on you", v: String(waitingOnYou.length), icon: AlertTriangle, alert: waitingOnYou.length > 0 },
+              ]),
+            ].map((x: { k: string; v: string; icon: typeof Globe; alert?: boolean; href?: string }) => {
               const inner = (<>
                 <x.icon className={`h-5 w-5 ${x.alert ? "text-rose-300" : "text-[var(--portal-brand)]"}`} />
                 <p className="mt-2 text-[1.75rem] font-semibold leading-none">{x.v}</p>
@@ -138,7 +145,7 @@ export function WebHome({ d }: { d: WebHomeData }) {
               <Link key={p.id} href={`${base}/projects/${p.id}`} className="group rounded-[24px] bg-surface p-5 ring-1 ring-line transition hover:ring-[color:var(--portal-brand)]">
                 <p className="flex flex-wrap items-center gap-2 text-[1.0625rem] font-semibold text-ink">{p.name}<span className="rounded-full bg-[var(--portal-brand)]/10 px-2 py-0.5 text-[0.75rem] font-semibold text-[color:var(--portal-brand-ink)]">{p.status}</span></p>
                 {p.note && <p className="mt-1 text-[0.875rem] text-ink-muted">{p.note}</p>}
-                <p className="mt-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[color:var(--portal-brand-ink)]">Progress, time, requests & invoices<ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></p>
+                <p className="mt-3 inline-flex items-center gap-1 text-[0.875rem] font-semibold text-[color:var(--portal-brand-ink)]">{d.billing !== false ? "Progress, time, requests & invoices" : "Progress and requests"}<ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></p>
               </Link>
             ))}
           </div>

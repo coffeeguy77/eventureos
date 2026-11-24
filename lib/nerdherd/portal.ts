@@ -10,15 +10,18 @@ import { readNerd } from "./core";
 /**
  * The portal dashboard for a web agency's client. Uses the service client, so it is ONLY called after requirePortal()
  * has proved who the client is — every query is limited to their own customer ids, and only client-safe columns
- * are read (no internal notes, costs or hosting credentials).
+ * are read (no internal notes, costs or hosting credentials). Team contacts (no billing customers) get no invoices,
+ * prices or prepaid hours at all — they're left out of the data, not just hidden on screen.
  */
-export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: string; customerIds: string[]; business: string; name: string; currency: string; tz: string }): Promise<WebHomeData> {
+export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: string; customerIds: string[]; billingCustomerIds?: string[]; business: string; name: string; currency: string; tz: string }): Promise<WebHomeData> {
   const ids = o.customerIds;
+  const bill = o.billingCustomerIds ?? ids;
+  const billing = bill.length > 0;
   const [sites, plans, tickets, invoices, org] = await Promise.all([
     db.from("websites").select("id, domain, status, hosting_account_id, hosting_accounts(suspended)").eq("organisation_id", o.orgId).in("customer_id", ids).neq("status", "archived").order("domain"),
     db.from("recurring_invoices").select("id, name, category, creates_ticket, total, every, unit, next_date, status, xero_status, website_id, websites(domain)").eq("organisation_id", o.orgId).in("customer_id", ids).neq("status", "ended").order("next_date"),
     db.from("support_tickets").select("id, number, subject, status, kind, last_activity_at, resolved_at, checklist, websites(domain)").eq("organisation_id", o.orgId).in("customer_id", ids).order("last_activity_at", { ascending: false }).limit(100),
-    db.from("invoices").select("id, number, issue_date, due_date, total, balance, status, pay_token").eq("organisation_id", o.orgId).in("customer_id", ids).not("status", "in", "(draft,void)").order("issue_date", { ascending: false }).limit(200),
+    db.from("invoices").select("id, number, issue_date, due_date, total, balance, status, pay_token").eq("organisation_id", o.orgId).in("customer_id", bill.length ? bill : ["00000000-0000-0000-0000-000000000000"]).not("status", "in", "(draft,void)").order("issue_date", { ascending: false }).limit(200),
     db.from("organisations").select("settings").eq("id", o.orgId).maybeSingle(),
   ]);
   // Care Hub: prepaid hours, what each site needs updating, the latest versions, the client's own layout
@@ -46,6 +49,7 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
   const { STATUS_LABEL } = await import("./projects");
   return {
     projects: ((pj ?? []) as { id: string; name: string; status: keyof typeof STATUS_LABEL; status_note: string | null }[]).map((x) => ({ id: x.id, name: x.name, status: STATUS_LABEL[x.status] ?? x.status, note: x.status_note, hours: 0 })),
+    billing,
     slug: o.slug, business: o.business, name: o.name, currency: o.currency, tz: o.tz,
     quoteHref: site?.domain ? `https://${site.domain}/quote` : `/site/${o.slug}/quote`,
     sites: ((sites.data ?? []) as unknown as S[]).map((s) => ({
@@ -66,19 +70,19 @@ export async function loadWebHome(db: SupabaseClient, o: { slug: string; orgId: 
     })),
     customerId: ids[0],
     customers: ids,
-    care: care.enabled ? {
+    care: care.enabled && billing ? {
       block: block ? { leftMin: block.leftMin, boughtMin: block.boughtMin, usedMin: block.usedMin, pendingMin: block.pendingMin, unpaid: block.blocks.filter((b) => !b.paid && b.invoice).map((b) => ({ hours: b.hours, number: b.invoice!.number, payToken: b.invoice!.pay_token })), recent: block.usage.slice(0, 5) } : null,
       packs: care.packs.map((p) => ({ ...p, ...packPrice(p, nerd.hourlyRate) })),
       minHours: nerd.minHours,
     } : null,
     versions,
-    ads: { feeExGst: care.adsFeeExGst, rate: nerd.hourlyRate, accounts: ((ads ?? []) as unknown as { id: string; name: string; mk_reports: { token: string; period_start: string; status: string }[] | null }[]).map((a) => {
+    ads: { feeExGst: billing ? care.adsFeeExGst : null, rate: billing ? nerd.hourlyRate : 0, accounts: ((ads ?? []) as unknown as { id: string; name: string; mk_reports: { token: string; period_start: string; status: string }[] | null }[]).map((a) => {
       const last = (a.mk_reports ?? []).filter((r) => r.status === "sent").sort((x, y) => y.period_start.localeCompare(x.period_start))[0];
       return { id: a.id, name: a.name, report: last ? { token: last.token, month: last.period_start } : null };
     }), hasPlan: planRows.some((p) => planCategory(p) === "adwords" && p.status !== "ended") },
     prefs: readPrefs((prefRow as { portal_prefs?: unknown } | null)?.portal_prefs),
     // a plan Xero still bills (paused here, AUTHORISED repeating invoice in Xero) is a live plan to the client
-    plans: planRows.map((p) => ({ id: p.id, name: p.name, category: planCategory(p), total: Number(p.total), every: p.every, unit: p.unit, next_date: p.next_date, status: p.status === "paused" && (p as { xero_status?: string | null }).xero_status === "AUTHORISED" ? "active" : p.status, website: p.websites?.domain ?? null })),
+    plans: planRows.map((p) => ({ id: p.id, name: p.name, category: planCategory(p), total: billing ? Number(p.total) : 0, every: p.every, unit: p.unit, next_date: p.next_date, status: p.status === "paused" && (p as { xero_status?: string | null }).xero_status === "AUTHORISED" ? "active" : p.status, website: p.websites?.domain ?? null })),
     tickets: ((tickets.data ?? []) as unknown as T[]).map((t) => ({ id: t.id, number: t.number, subject: t.subject, status: t.status, kind: t.kind, last_activity_at: t.last_activity_at, resolved_at: t.resolved_at, checklist: t.checklist, website: t.websites?.domain ?? null })),
     invoices: ((invoices.data ?? []) as { id: string; number: string | null; issue_date: string; due_date: string | null; total: number; balance: number | null; status: string; pay_token: string }[])
       .map((i) => ({ ...i, total: Number(i.total), balance: Number(i.balance ?? 0) })),

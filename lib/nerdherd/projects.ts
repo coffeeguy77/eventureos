@@ -1,7 +1,8 @@
 /**
- * Nerd Herd → Projects (pure): ongoing client work with an evolving bill. Time recorded from AI sessions can carry a
- * margin — the owner's own planning, direction and testing, which the session timestamps don't capture — shown to the
- * client as its own line, never folded into the recorded hours. Used by the office, the client portal and tests.
+ * Nerd Herd → Projects (pure): ongoing client work with an evolving bill. Time recorded from AI sessions is multiplied
+ * up by the client's margin (the owner's planning, direction and testing, which the session timestamps don't capture);
+ * a draft invoice can override that margin. The client only ever sees the billed hours — never the margin. Used by the
+ * office, the client portal and tests.
  */
 
 export type ProjectStatus = "active" | "on_hold" | "complete" | "archived";
@@ -65,28 +66,36 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export const billedHours = (e: Pick<TimeEntry, "hours" | "kind" | "billed_hours">, marginPercent: number) =>
   e.billed_hours != null ? r2(e.billed_hours) : r2(e.kind === "ai" ? e.hours * (1 + Math.max(0, marginPercent) / 100) : e.hours);
 
+/** A margin for every entry: one number, or worked out per entry (e.g. a draft invoice's own override). */
+export type Margin = number | ((e: TimeEntry) => number);
+const mOf = (m: Margin, e: TimeEntry) => (typeof m === "number" ? m : m(e));
+
+/** The margin for an entry: its invoice's override if it has one, otherwise the client's. */
+export const marginFor = (clientPercent: number, invoiceOverrides: Map<string, number>): Margin => (e) =>
+  (e.billed_invoice_id && invoiceOverrides.has(e.billed_invoice_id) ? invoiceOverrides.get(e.billed_invoice_id)! : clientPercent);
+
 /** Hours and money for a set of entries. */
-export function totals(entries: TimeEntry[], marginPercent: number, rateExGst: number) {
+export function totals(entries: TimeEntry[], marginPercent: Margin, rateExGst: number) {
   const bill = entries.filter((e) => e.billable);
   const ai = r2(bill.filter((e) => e.kind === "ai").reduce((a, e) => a + e.hours, 0));
   const staff = r2(bill.filter((e) => e.kind === "staff").reduce((a, e) => a + e.hours, 0));
-  const hours = r2(bill.reduce((a, e) => a + billedHours(e, marginPercent), 0));
+  const hours = r2(bill.reduce((a, e) => a + billedHours(e, mOf(marginPercent, e)), 0));
   const exGst = r2(hours * rateExGst);
   return { ai, staff, margin: r2(hours - ai - staff), hours, exGst, incGst: r2(exGst * 1.1), recorded: r2(entries.reduce((a, e) => a + e.hours, 0)) };
 }
 
 /** Invoice lines (prices inc GST, like the rest of Nerd Herd): one per task, with its billed hours. */
-export function billLines(entries: TimeEntry[], p: Pick<Project, "name">, marginPercent: number, rateExGst: number, accountCode: string | null) {
+export function billLines(entries: TimeEntry[], p: Pick<Project, "name">, marginPercent: Margin, rateExGst: number, accountCode: string | null) {
   const inc = r2(rateExGst * 1.1);
-  const lines = [...entries].filter((e) => e.billable && billedHours(e, marginPercent) > 0).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
-    const q = billedHours(e, marginPercent);
+  const lines = [...entries].filter((e) => e.billable && billedHours(e, mOf(marginPercent, e)) > 0).sort((a, b) => (a.work_date + (a.start_time ?? "")).localeCompare(b.work_date + (b.start_time ?? ""))).map((e) => {
+    const q = billedHours(e, mOf(marginPercent, e));
     const what = e.source === "meeting" ? `Meeting with ${e.by_name ?? "you"}: ${e.work.split("\n").map((x) => x.trim().replace(/^[•\-*]\s*/, "")).filter(Boolean).join("; ")}` : e.work;
     return { description: `${fmtShort(e.work_date)} — ${what}`.slice(0, 1000), quantity: q, unit_amount: inc, tax_rate: 10 as const, item_code: null, account_code: accountCode, inc: true as const, line_amount: r2(q * inc) };
   });
   return { lines, ...totals(entries, marginPercent, rateExGst) };
 }
 
-/** A client's margin (Nerd Herd → Projects): organisations.settings.nh_client_margins = { [customerId]: percent }. */
+/** Before update 0120 a client's margin was kept in organisations.settings.nh_client_margins = { [customerId]: percent }. */
 export function clientMargin(settings: unknown, customerId: string): number {
   const m = ((settings ?? {}) as { nh_client_margins?: Record<string, unknown> }).nh_client_margins?.[customerId];
   const n = Number(m);

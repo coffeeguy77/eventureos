@@ -61,6 +61,20 @@ export function portalInviteEmail(o: { businessName: string; inviterName: string
   return { subject, html, text };
 }
 
+/** Invite someone at a client to their portal, opening one ongoing project (Nerd Herd → Projects). */
+export function projectInviteEmail(o: { businessName: string; inviterName: string | null; firstName: string; projectName: string; url: string; brand?: string | null; logoUrl?: string | null }) {
+  const subject = `Your portal for ${o.projectName} with ${o.businessName}`;
+  const paragraphs = [
+    `Hi ${o.firstName},`,
+    `${o.inviterName ? `${o.inviterName} has given you` : "You've been given"} access to ${o.projectName} in the ${o.businessName} client portal.`,
+    "You can see where the project is up to and what's been done, and ask for changes or new tasks. Sign in with this email address — we'll send you a one-time code, no password needed.",
+  ];
+  const html = layout({ brand: o.brand ?? "#6028EC", logoUrl: o.logoUrl, businessName: o.businessName, heading: "Your client portal", paragraphs,
+    button: { label: "Open the project", url: o.url }, footer: `Sent on behalf of ${o.businessName}. Not expecting this? You can ignore it.` });
+  const text = `${paragraphs.join("\n\n")}\n\nOpen the project: ${o.url}`;
+  return { subject, html, text };
+}
+
 export function bookingApprovalEmail(o: { businessName: string; eventName: string; customer: string | null; when: string; dateText: string | null; venue: string | null; url: string }) {
   const subject = `Approve booking: ${o.eventName} — ${o.when}`;
   const paragraphs = [
