@@ -118,7 +118,7 @@ export const HOME_CSS = `
   .wch-hero .hand svg.cup{width:calc(36*var(--u));height:calc(36*var(--u))}
   .wch-hero .hand span{font-size:calc(19.5*var(--u));padding-bottom:calc(6*var(--u));transform:rotate(-2.2deg)}
   .wch-hero .hand .ul{height:calc(7*var(--u))}
-  .wch-hero .pic{position:absolute;margin:0;left:calc(458*var(--u));right:0;top:calc(-2*var(--u));height:calc(372*var(--u));aspect-ratio:auto}
+  .wch-hero .pic{position:absolute;margin:0;left:calc(458*var(--u));right:min(0px,calc((1920px - 100vw) / 2));top:calc(-2*var(--u));height:calc(372*var(--u));aspect-ratio:auto}
 
   .wch-strip{margin:calc(11*var(--u)) calc(14*var(--u)) 0;height:calc(77*var(--u));border-radius:calc(14*var(--u));padding:0;gap:0;grid-template-columns:230fr 195fr 185fr 195fr 191fr;align-items:center}
   .wch-strip .t{grid-column:auto;padding-left:calc(37*var(--u));font-size:calc(23.5*var(--u));line-height:calc(25*var(--u))}
@@ -176,7 +176,7 @@ export const HOME_CSS = `
   .wch-steps span{margin:calc(3*var(--u)) auto 0;font-size:calc(12.4*var(--u));line-height:calc(16*var(--u));max-width:calc(128*var(--u))}
   .wch-steps .arr{display:block;position:absolute;right:calc(-14*var(--u));top:calc(28*var(--u));width:calc(26*var(--u));height:calc(16*var(--u));color:#8E9089;stroke-width:2.6}
 
-  .wch-band{margin-top:calc(4*var(--u));height:calc(146*var(--u));padding:calc(31*var(--u)) 0 0}
+  .wch-band{margin-top:calc(4*var(--u));min-height:calc(146*var(--u));padding:calc(26*var(--u)) 0 calc(14*var(--u))}
   .wct{max-width:none;width:calc(516*var(--u))}
   .wct figure{min-height:calc(80*var(--u))}
   .wct blockquote{font-size:calc(18.2*var(--u));line-height:calc(24.5*var(--u));padding:0 calc(46*var(--u))}
@@ -275,11 +275,12 @@ export function AgencyHome({ org }: { org: PublicOrg }) {
           </ol>
         </section>
 
-        {/* Review */}
+
+      </div>
+      {/* Review */}
         <section className="wch-band" aria-label="What clients say">
           <Testimonials items={quotes} compact />
         </section>
-      </div>
     </div>
   );
 }

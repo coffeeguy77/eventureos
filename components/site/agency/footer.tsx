@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Mail, MapPin, Phone } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
 import { AGENCY, CATEGORIES, PRODUCTS } from "@/lib/site/agency/content";
+import { readApptSettings } from "@/lib/appointments/core";
 import { AgencyWordmark, Underline } from "./deco";
 
 const FOOT_CSS = `
@@ -42,6 +43,8 @@ const FOOT_CSS = `
 export function AgencyFooter({ org }: { org: PublicOrg }) {
   const base = `/site/${org.slug}`;
   const phone = org.contact_phone || AGENCY.phone, email = org.contact_email || AGENCY.email;
+  const appt = readApptSettings(org.rawSettings);
+  const meet = appt.enabled && appt.on_website ? appt.title || "Book a meeting" : null;
   const place = `${AGENCY.locality === "Mitchell" ? "Canberra" : AGENCY.locality}, ${AGENCY.region}`;
   return (
     <footer className="wcf ag-dark">
@@ -69,6 +72,7 @@ export function AgencyFooter({ org }: { org: PublicOrg }) {
             <li><Link href={`${base}#about`}>About Us</Link></li>
             <li><Link href={`${base}/support`}>Support</Link></li>
             <li><Link href={`${base}/quote`}>Contact</Link></li>
+            {meet && <li><Link href={`${base}/meet`}>{meet}</Link></li>}
           </ul>
         </nav>
         <div className="contact">
