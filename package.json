@@ -2,7 +2,7 @@
   "name": "eventureos",
   "version": "0.1.0",
   "private": true,
-  "description": "EventureOS \u2014 the operating system for event businesses",
+  "description": "EventureOS — the operating system for event businesses",
   "scripts": {
     "prebuild": "node scripts/gen-public-pages.mjs",
     "dev": "next dev",
@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource-variable/newsreader": "^5.3.0",
     "@fontsource/caveat": "^5.3.0",
     "@fontsource/playfair-display": "^5.3.0",

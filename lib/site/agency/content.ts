@@ -551,3 +551,41 @@ export const QUOTE_FOR: Record<string, string> = {
   "website-maintenance": "Website maintenance", "website-support": "Something else", "google-ads": "Google Ads", seo: "SEO",
   "email-and-domains": "Email & domains", "ai-and-custom-apps": "AI or custom app",
 };
+
+/**
+ * The six service categories (menus, the home page panel and the footer). Every link goes to a page that exists — a
+ * category's own overview page is a later step, so for now each category opens its main service page.
+ */
+export interface Category { key: string; name: string; line: string; intro: string; icon: IconKey; href: string; links: { slug: string; label: string }[] }
+export const CATEGORIES: Category[] = [
+  { key: "web", name: "Web Design & Development", line: "Beautiful on the outside. Clever on the inside.", intro: "New websites, redesigns and online stores.", icon: "design", href: "website-design",
+    links: [{ slug: "website-design", label: "Website design & redesigns" }, { slug: "wordpress", label: "WordPress & WooCommerce" }, { slug: "leadpages", label: "LeadPages websites" }] },
+  { key: "hosting", name: "Hosting & Infrastructure", line: "Your website needs a good home too.", intro: "Fast, secure hosting with domains, SSL and email.", icon: "hosting", href: "web-hosting",
+    links: [{ slug: "web-hosting", label: "Web hosting & backups" }, { slug: "email-and-domains", label: "Email, domains & SSL" }] },
+  { key: "seo", name: "SEO & Digital Growth", line: "Hide and seek is a terrible marketing strategy.", intro: "Get found on Google and turn searches into enquiries.", icon: "seo", href: "seo",
+    links: [{ slug: "seo", label: "SEO & social media" }, { slug: "google-ads", label: "Google Ads management" }] },
+  { key: "software", name: "Software & Web Applications", line: "Custom solutions for real-world problems.", intro: "Web apps, client portals and business systems.", icon: "code", href: "ai-and-custom-apps",
+    links: [{ slug: "ai-and-custom-apps", label: "Custom software & web apps" }] },
+  { key: "support", name: "Support & Website Care", line: "Real people. Real answers. Problems solved.", intro: "Maintenance, updates and help when it breaks.", icon: "support", href: "website-maintenance",
+    links: [{ slug: "website-maintenance", label: "Website maintenance (Care Hub)" }, { slug: "website-support", label: "Website & IT support" }, { slug: "support", label: "Lodge a support ticket" }] },
+  { key: "integrations", name: "Integrations & Automation", line: "Connecting the dots so everything just works.", intro: "Xero, Stripe and Gmail, automations and AI.", icon: "plug", href: "ai-and-custom-apps",
+    links: [{ slug: "ai-and-custom-apps", label: "Integrations, automation & AI" }] },
+];
+
+/** How a new website comes together (home page). */
+export const PROCESS: Step[] = [
+  { title: "Talk it through", text: "We learn about your business, your goals and what you need." },
+  { title: "Plan & design", text: "We create the right approach and a design that reflects your business." },
+  { title: "Build & launch", text: "We build, test and launch a website that's ready to perform." },
+  { title: "Look after it", text: "We provide ongoing support, maintenance and improvements." },
+];
+
+/** Why us — points of difference (home page). */
+export const POINTS = [
+  "Canberra-based, in Mitchell",
+  "Local people who answer the phone",
+  "Direct access to the people who build it",
+  "Reliable ongoing support",
+  "Long-term client relationships",
+  "Practical solutions for real businesses",
+];

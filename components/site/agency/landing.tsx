@@ -27,7 +27,7 @@ export function PageHero({ org, label, title, lede, children, aside }: { org: Pu
       <div className={`${WRAP} relative grid items-center gap-12 pb-16 pt-10 sm:pt-14 lg:pb-24 ${aside ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]" : ""}`}>
         <div>
           <Crumbs base={`/site/${org.slug}`} name={org.name} label={label} />
-          <h1 className="mt-8 max-w-[18ch] text-[2.5rem] font-semibold leading-[1.0] tracking-[-0.04em] sm:text-[3.5rem] lg:text-[4.25rem]">{title}</h1>
+          <h1 className="ag-serif mt-8 max-w-[18ch] text-[2.5rem] font-semibold leading-[1.02] tracking-[-0.025em] sm:text-[3.5rem] lg:text-[4.25rem]">{title}</h1>
           <p className="mt-6 max-w-[56ch] text-[1.125rem] leading-relaxed text-white/75 sm:text-[1.1875rem]">{lede}</p>
           {children}
         </div>
@@ -47,7 +47,7 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
     <>
       <PageHero org={org} label={s.name} title={s.title} lede={s.lede} aside={<ServiceGraphic kind={s.graphic} />}>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Link href={`${base}/quote?service=${s.slug}`} className={BTN.primary}>Get a quote</Link>
+          <Link href={`${base}/quote?service=${s.slug}`} className={BTN.lime}>Get a quote</Link>
           <Link href={`${base}/support`} className={BTN.ghostDark}>Lodge a support ticket</Link>
         </div>
         {from && /\d/.test(from.price) && (
@@ -75,7 +75,7 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
       </section>
 
       {/* Included + price */}
-      <section className="ag-light border-y border-[var(--line)] bg-white py-20 sm:py-24" aria-labelledby="inc-h">
+      <section className="ag-light border-y border-[var(--line)] bg-[var(--card)] py-20 sm:py-24" aria-labelledby="inc-h">
         <div className={`${WRAP} grid gap-12 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16`}>
           <div>
             <H2 id="inc-h">What&apos;s included</H2>
@@ -110,10 +110,10 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
 
       {/* LeadPages vs WordPress (full) */}
       {(s.slug === "leadpages" || s.slug === "wordpress") && (
-        <section className="ag-light py-20 sm:py-24" aria-labelledby="cmp-h">
+        <section id="compare" className="ag-light scroll-mt-24 py-20 sm:py-24" aria-labelledby="cmp-h">
           <div className={WRAP}>
             <H2 id="cmp-h" className="max-w-[20ch]">LeadPages or WordPress? An honest comparison.</H2>
-            <div className="mt-10 overflow-x-auto rounded-[24px] border border-[var(--line)] bg-white">
+            <div className="mt-10 overflow-x-auto rounded-[24px] border border-[var(--line)] bg-[var(--card)]">
               <table className="w-full min-w-[640px] text-left text-[1rem]">
                 <caption className="sr-only">LeadPages compared with WordPress</caption>
                 <thead><tr className="border-b border-[var(--line)]">
@@ -137,12 +137,12 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
       )}
 
       {/* Process */}
-      <section className={`ag-light py-20 sm:py-24 ${s.slug === "leadpages" || s.slug === "wordpress" ? "border-t border-[var(--line)] bg-white" : ""}`} aria-labelledby="how-h">
+      <section className={`ag-light py-20 sm:py-24 ${s.slug === "leadpages" || s.slug === "wordpress" ? "border-t border-[var(--line)] bg-[var(--card)]" : ""}`} aria-labelledby="how-h">
         <div className={WRAP}>
           <H2 id="how-h">How it works</H2>
           <ol className="mt-12 grid gap-px overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--line)] sm:grid-cols-2 lg:grid-cols-4">
             {s.process.map((p, i) => (
-              <li key={p.title} className="bg-white p-7">
+              <li key={p.title} className="bg-[var(--card)] p-7">
                 <span className="text-[2.5rem] font-semibold leading-none tracking-[-0.05em] text-[var(--ac-ink)]">{i + 1}</span>
                 <p className="mt-5 text-[1.125rem] font-semibold">{p.title}</p>
                 <p className="mt-2 text-[1rem] leading-relaxed text-[var(--muted)]">{p.text}</p>
@@ -153,7 +153,7 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
       </section>
 
       {/* FAQs */}
-      <section className="ag-light border-t border-[var(--line)] bg-white py-20 sm:py-24" aria-labelledby="faq-h">
+      <section className="ag-light border-t border-[var(--line)] bg-[var(--card)] py-20 sm:py-24" aria-labelledby="faq-h">
         <div className={`${WRAP} grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20`}>
           <H2 id="faq-h">{s.name}: common questions</H2>
           <FaqList faqs={s.faqs} />
@@ -168,7 +168,7 @@ export function AgencyLanding({ org, s }: { org: PublicOrg; s: Service }) {
             <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {related.map((r) => (
                 <li key={r.slug}>
-                  <Link href={`${base}/${r.slug}`} className="group flex h-full flex-col rounded-[20px] border border-[var(--line)] bg-white p-6 transition hover:border-[var(--ink)]">
+                  <Link href={`${base}/${r.slug}`} className="group flex h-full flex-col rounded-[20px] border border-[var(--line)] bg-[var(--card)] p-6 transition hover:border-[var(--ink)]">
                     <span className="flex items-center justify-between text-[var(--ac-ink)]"><Icon k={r.icon} className="h-6 w-6" /><ArrowUpRight aria-hidden className="h-5 w-5 text-[var(--muted)] transition group-hover:text-[var(--ink)]" strokeWidth={1.6} /></span>
                     <span className="mt-5 text-[1.0625rem] font-semibold">{r.name}</span>
                     <span className="mt-1 text-[0.9375rem] leading-snug text-[var(--muted)]">{r.blurb}</span>
@@ -200,7 +200,7 @@ export function QuoteBand({ org, preselect }: { org: PublicOrg; preselect?: stri
             <Link href={`/p/${org.slug}`} className={BTN.ghostDark}>Client login</Link>
           </div>
         </div>
-        <div className="ag-light rounded-[28px] bg-white p-6 text-[var(--ink)] sm:p-9">
+        <div className="ag-light rounded-[28px] bg-[var(--card)] p-6 text-[var(--ink)] sm:p-9">
           <p className="mb-6 text-[1.375rem] font-semibold tracking-[-0.02em]">Quick quote</p>
           <QuoteForm slug={org.slug} variant="quick" preselect={preselect} />
         </div>

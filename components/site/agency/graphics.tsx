@@ -11,7 +11,7 @@ const font = { fontFamily: "var(--font-geist-sans), system-ui, sans-serif" } as 
 function Window({ x, y, w, h, url, children }: { x: number; y: number; w: number; h: number; url?: string; children?: React.ReactNode }) {
   return (
     <g transform={`translate(${x} ${y})`}>
-      <rect width={w} height={h} rx="14" fill="#16122A" stroke={S.stroke} />
+      <rect width={w} height={h} rx="14" fill="#1B3A2D" stroke={S.stroke} />
       <path d={`M0 36h${w}`} stroke={S.stroke} />
       <circle cx="18" cy="18" r="4" fill="rgba(255,255,255,.18)" /><circle cx="32" cy="18" r="4" fill="rgba(255,255,255,.18)" /><circle cx="46" cy="18" r="4" fill="rgba(255,255,255,.18)" />
       {url && <><rect x="66" y="9" width={Math.min(w - 90, 220)} height="18" rx="9" fill={S.faint} /><text x="78" y="22" fontSize="10" fill={S.text} style={font}>{url}</text></>}
@@ -78,7 +78,7 @@ export function HeroComposite() {
       <g className="ag-in ag-d2"><Gauge x={440} y={250} /></g>
       <g className="ag-in ag-d3"><TicketCard x={60} y={340} /></g>
       <g className="ag-in ag-d3" transform="translate(316 404)">
-        <rect width="196" height="58" rx="14" fill="#16122A" stroke={S.stroke} />
+        <rect width="196" height="58" rx="14" fill="#1B3A2D" stroke={S.stroke} />
         <circle cx="28" cy="29" r="12" fill="none" stroke="var(--lime)" strokeWidth="1.6" />
         <path d="M23 29.5l3.4 3.4 6.2-6.6" fill="none" stroke="var(--lime)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         <text x="50" y="26" fontSize="12" fontWeight="600" fill="#fff" style={font}>Updates done</text>
@@ -93,7 +93,7 @@ function Server() {
     <svg viewBox="0 0 480 380" className="h-auto w-full" aria-hidden>
       {[0, 1, 2, 3].map((i) => (
         <g key={i} transform={`translate(60 ${40 + i * 74})`} className={`ag-in ag-d${(i % 3) + 1}`}>
-          <rect width="360" height="58" rx="12" fill="#16122A" stroke={S.stroke} />
+          <rect width="360" height="58" rx="12" fill="#1B3A2D" stroke={S.stroke} />
           {[0, 1, 2, 3, 4, 5].map((j) => <rect key={j} x={24 + j * 22} y="20" width="12" height="18" rx="3" fill={S.faint} stroke={S.stroke} />)}
           <rect x="190" y="25" width="90" height="8" rx="4" fill={S.faint} />
           <circle cx="310" cy="29" r="5" fill="var(--lime)" /><circle cx="330" cy="29" r="5" fill={i === 2 ? "var(--ac)" : "rgba(255,255,255,.2)"} />
@@ -155,7 +155,7 @@ function Ads() {
         </g>
       </Window>
       <g transform="translate(20 236)" className="ag-in ag-d2">
-        <rect width="440" height="140" rx="14" fill="#16122A" stroke={S.stroke} />
+        <rect width="440" height="140" rx="14" fill="#1B3A2D" stroke={S.stroke} />
         <text x="22" y="30" fontSize="11" fill={S.text} style={font}>Enquiries from ads</text>
         {bars.map((h, i) => <rect key={i} x={24 + i * 58} y={124 - h} width="34" height={h} rx="6" fill={i === bars.length - 1 ? "var(--lime)" : "var(--ac)"} opacity={i === bars.length - 1 ? 1 : 0.55 + i * 0.06} />)}
       </g>
@@ -172,7 +172,7 @@ function SearchG() {
         <text x="54" y="31" fontSize="14" fill="#0F0B1E" style={font}>web design near me</text>
       </g>
       <g transform="translate(30 104)" className="ag-in ag-d1">
-        <rect width="420" height="150" rx="14" fill="#16122A" stroke={S.stroke} />
+        <rect width="420" height="150" rx="14" fill="#1B3A2D" stroke={S.stroke} />
         <path d="M0 50h420M0 100h420" stroke={S.faint} />
         {[0, 1, 2].map((i) => (
           <g key={i} transform={`translate(18 ${14 + i * 50})`}>
@@ -184,7 +184,7 @@ function SearchG() {
         ))}
       </g>
       <g transform="translate(30 276)" className="ag-in ag-d2">
-        <rect width="420" height="96" rx="14" fill="#16122A" stroke={S.stroke} />
+        <rect width="420" height="96" rx="14" fill="#1B3A2D" stroke={S.stroke} />
         <path d="M20 76 C 90 70, 120 52, 170 50 S 260 30, 300 26 S 380 16, 400 14" fill="none" stroke="var(--lime)" strokeWidth="2.5" className="ag-draw" strokeDasharray="420" />
         <text x="20" y="26" fontSize="11" fill={S.text} style={font}>Visitors from Google</text>
       </g>
@@ -197,7 +197,7 @@ function MailG() {
   return (
     <svg viewBox="0 0 480 400" className="h-auto w-full" aria-hidden>
       <g transform="translate(40 30)" className="ag-in ag-d1">
-        <rect width="400" height="150" rx="16" fill="#16122A" stroke={S.stroke} />
+        <rect width="400" height="150" rx="16" fill="#1B3A2D" stroke={S.stroke} />
         <path d="M24 30l176 92 176-92" fill="none" stroke="var(--ac)" strokeWidth="2" strokeLinejoin="round" />
         <rect x="24" y="24" width="352" height="104" rx="10" fill="none" stroke={S.stroke} />
         <rect x="292" y="-12" width="96" height="30" rx="15" fill="var(--lime)" />
@@ -206,7 +206,7 @@ function MailG() {
       <g transform="translate(40 206)" className="ag-in ag-d2">
         {recs.map(([k, v], i) => (
           <g key={k} transform={`translate(${(i % 2) * 206} ${Math.floor(i / 2) * 80})`}>
-            <rect width="194" height="66" rx="12" fill="#16122A" stroke={S.stroke} />
+            <rect width="194" height="66" rx="12" fill="#1B3A2D" stroke={S.stroke} />
             <text x="18" y="30" fontSize="15" fontWeight="600" fill="#fff" style={font}>{k}</text>
             <text x="18" y="50" fontSize="11" fill={S.text} style={font}>{v}</text>
             <circle cx="166" cy="33" r="11" fill="none" stroke="var(--lime)" strokeWidth="1.6" />
@@ -231,7 +231,7 @@ function Flow() {
       </g>
       {nodes.map(([n, x, y], i) => (
         <g key={n} className={`ag-in ag-d${(i % 3) + 1}`}>
-          <rect x={x - 46} y={y - 20} width="92" height="40" rx="20" fill="#16122A" stroke={S.stroke} />
+          <rect x={x - 46} y={y - 20} width="92" height="40" rx="20" fill="#1B3A2D" stroke={S.stroke} />
           <text x={x} y={y + 4.5} textAnchor="middle" fontSize="12" fill="#fff" style={font}>{n}</text>
         </g>
       ))}
@@ -255,7 +255,7 @@ function Editor() {
       <g transform="translate(20 306)" className="ag-in ag-d2">
         {["Bookings", "Quotes", "Area map", "Reviews"].map((a, i) => (
           <g key={a} transform={`translate(${i * 112} 0)`}>
-            <rect width="100" height="70" rx="12" fill="#16122A" stroke={i === 0 ? "var(--lime)" : S.stroke} />
+            <rect width="100" height="70" rx="12" fill="#1B3A2D" stroke={i === 0 ? "var(--lime)" : S.stroke} />
             <rect x="14" y="14" width="18" height="18" rx="5" fill="none" stroke={i === 0 ? "var(--lime)" : "rgba(255,255,255,.4)"} />
             <text x="14" y="54" fontSize="11.5" fill="#fff" style={font}>{a}</text>
           </g>
@@ -289,7 +289,7 @@ function Browser() {
     <svg viewBox="0 0 480 400" className="h-auto w-full" aria-hidden>
       <g className="ag-in ag-d1"><Window x={10} y={20} w={400} h={300} url="yourbusiness.com.au"><Site w={400} /></Window></g>
       <g className="ag-in ag-d2" transform="translate(330 170)">
-        <rect width="130" height="220" rx="22" fill="#16122A" stroke={S.stroke} />
+        <rect width="130" height="220" rx="22" fill="#1B3A2D" stroke={S.stroke} />
         <rect x="45" y="10" width="40" height="6" rx="3" fill={S.faint} />
         <rect x="14" y="36" width="90" height="12" rx="4" fill="#fff" /><rect x="14" y="54" width="70" height="12" rx="4" fill="#fff" />
         <rect x="14" y="78" width="96" height="6" rx="3" fill={S.stroke} /><rect x="14" y="90" width="80" height="6" rx="3" fill={S.stroke} />

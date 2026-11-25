@@ -8,7 +8,7 @@ import { BUDGETS, QUOTE_FOR, QUOTE_SERVICES, TIMEFRAMES } from "@/lib/site/agenc
 import { quoteMessage } from "@/lib/site/agency/support";
 import { BTN } from "./ui";
 
-const input = "block h-12 w-full rounded-xl border border-[var(--line)] bg-white px-4 text-[1rem] text-[var(--ink)] outline-none transition placeholder:text-[#8A86A0] hover:border-[#C9C4DA] focus:border-[var(--ac)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--ac)_16%,transparent)]";
+const input = "block h-12 w-full rounded-xl border border-[var(--line)] bg-[var(--card)] px-4 text-[1rem] text-[var(--text)] outline-none transition placeholder:text-[#7D8378] hover:border-[var(--sage)] focus:border-[var(--ink)] focus:ring-4 focus:ring-[rgba(196,220,56,.35)]";
 const lbl = "mb-1.5 block text-[0.875rem] font-semibold text-[var(--ink)]";
 const opt = <span className="font-normal text-[var(--muted)]"> (optional)</span>;
 
@@ -76,7 +76,7 @@ export function QuoteForm({ slug, variant = "full", preselect }: { slug: string;
               {QUOTE_SERVICES.map((s) => (
                 <label key={s} className="cursor-pointer">
                   <input type="checkbox" className="peer sr-only" checked={services.includes(s)} onChange={() => toggle(s)} />
-                  <span className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full border border-[var(--line)] bg-white px-4 text-[0.9375rem] transition hover:border-[rgba(15,11,30,.4)] peer-checked:border-[var(--ink)] peer-checked:bg-[var(--ink)] peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--ac)]">
+                  <span className="inline-flex min-h-[42px] items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--card)] px-4 text-[0.9375rem] transition hover:border-[rgba(15,11,30,.4)] peer-checked:border-[var(--ink)] peer-checked:bg-[var(--ink)] peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--ac)]">
                     {services.includes(s) && <Check aria-hidden className="h-4 w-4 text-[var(--lime)]" strokeWidth={2} />}{s}
                   </span>
                 </label>
@@ -89,7 +89,7 @@ export function QuoteForm({ slug, variant = "full", preselect }: { slug: string;
               {BUDGETS.map((b) => (
                 <label key={b} className="cursor-pointer">
                   <input type="radio" name={id("budget")} value={b} className="peer sr-only" checked={f.budget === b} onChange={set("budget")} />
-                  <span className="inline-flex min-h-[42px] items-center rounded-full border border-[var(--line)] bg-white px-4 text-[0.9375rem] transition hover:border-[rgba(15,11,30,.4)] peer-checked:border-[var(--ac)] peer-checked:bg-[color-mix(in_srgb,var(--ac)_10%,white)] peer-checked:font-semibold peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--ac)]">{b}</span>
+                  <span className="inline-flex min-h-[42px] items-center rounded-full border border-[var(--line)] bg-[var(--card)] px-4 text-[0.9375rem] transition hover:border-[rgba(15,11,30,.4)] peer-checked:border-[var(--ac)] peer-checked:bg-[color-mix(in_srgb,var(--ac)_10%,white)] peer-checked:font-semibold peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--ac)]">{b}</span>
                 </label>
               ))}
             </div>
@@ -117,7 +117,7 @@ export function QuoteForm({ slug, variant = "full", preselect }: { slug: string;
         <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden className="hidden" value={f.website ?? ""} onChange={set("website")} />
       </div>
       <Err msg={err} />
-      <Submit pending={pending} label={variant === "quick" ? "Send quote request" : "Request a quote"} busy="Sending…" />
+      <Submit pending={pending} label={variant === "quick" ? "Let's get started" : "Request a quote"} busy="Sending…" />
     </form>
   );
 }

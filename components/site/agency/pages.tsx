@@ -21,7 +21,7 @@ export function AgencySupport({ org }: { org: PublicOrg }) {
       <PageHero org={org} label="Support" title="Lodge a support request" lede="Tell us what's wrong with your website, email or server. You'll get a ticket number straight away, and you can follow progress in your client portal." />
       <section className="ag-light py-16 sm:py-20">
         <div className={`${WRAP} grid gap-12 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)] lg:gap-16`}>
-          <div className="rounded-[28px] border border-[var(--line)] bg-white p-6 sm:p-10">
+          <div className="rounded-[28px] border border-[var(--line)] bg-[var(--card)] p-6 sm:p-10">
             <h2 className="mb-7 text-[1.5rem] font-semibold tracking-[-0.02em]">Your request</h2>
             <SupportForm slug={org.slug} portal={portal} phone={phone} />
           </div>
@@ -32,7 +32,7 @@ export function AgencySupport({ org }: { org: PublicOrg }) {
               <p className="mt-2 text-[0.9375rem] leading-relaxed text-white/70">See every ticket, every update and what&apos;s been done. Sign in with your email — we send you a one-time code, no password to remember.</p>
               <Link href={portal} className={`${BTN.lime} mt-6`}>Open the client portal</Link>
             </div>
-            <div className="rounded-[28px] border border-[var(--line)] bg-white p-7 sm:p-8">
+            <div className="rounded-[28px] border border-[var(--line)] bg-[var(--card)] p-7 sm:p-8">
               <h2 className="text-[1.25rem] font-semibold">What happens next</h2>
               <ol className="mt-5 space-y-5">
                 {[
@@ -55,7 +55,7 @@ export function AgencySupport({ org }: { org: PublicOrg }) {
           </div>
         </div>
       </section>
-      <section className="ag-light border-t border-[var(--line)] bg-white py-16 sm:py-20" aria-labelledby="sfaq-h">
+      <section className="ag-light border-t border-[var(--line)] bg-[var(--card)] py-16 sm:py-20" aria-labelledby="sfaq-h">
         <div className={`${WRAP} grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20`}>
           <H2 id="sfaq-h">Support questions</H2>
           <FaqList faqs={SUPPORT_FAQS} />
@@ -78,7 +78,7 @@ export function AgencyQuote({ org, preselect }: { org: PublicOrg; preselect?: st
       <PageHero org={org} label="Get a quote" title="Get a quote" lede="A few details is all we need. We'll look at what you're after and come back with a clear price — no jargon, no obligation." />
       <section className="ag-light py-16 sm:py-20">
         <div className={`${WRAP} grid gap-12 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:gap-16`}>
-          <div className="rounded-[28px] border border-[var(--line)] bg-white p-6 sm:p-10">
+          <div className="rounded-[28px] border border-[var(--line)] bg-[var(--card)] p-6 sm:p-10">
             <QuoteForm slug={org.slug} variant="full" preselect={preselect} />
           </div>
           <div className="space-y-8">
