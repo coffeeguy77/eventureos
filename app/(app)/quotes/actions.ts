@@ -9,6 +9,7 @@ import { fmtDate, money, todayISO } from "@/lib/format";
 import type { QuoteStatus } from "@/lib/types";
 import { isDaily, needsTimes, priceJob, type PackageRules } from "@/lib/pricing/engine";
 import { cleanDetails, servesLine, staffLine } from "@/lib/quotes/line-helpers";
+import { withHireDays } from "@/lib/events/days";
 import { xeroLinesToQuoteLines, type XeroLine } from "@/lib/quotes/xero-import";
 import { loadMatchContext } from "@/lib/quotes/history";
 import { quoteExpiryFor } from "@/lib/quotes/late";
@@ -684,6 +685,8 @@ export interface PriceJobInput {
   date?: string | null;
   /** The number of serves is a guess (the customer didn't say) — flagged so their quote lets them change it */
   assumedServes?: boolean;
+  /** A job over two or more days, each with its own service times: staff hours are worked out per day and the hire is charged per day */
+  shifts?: { date: string; start: string; end: string }[];
 }
 
 const hhmm = (v: string, label: string) => {
@@ -710,6 +713,11 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
     const timed = needsTimes(rules);
     const serves = timed ? checkNumber(input.serves, "Number of serves", 0, 100_000) as number : 0;
     const staff = timed ? checkNumber(input.staff, "Number of staff", 0, 20) as number : 0;
+    const shifts = timed && Array.isArray(input.shifts)
+      ? input.shifts.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d?.date ?? "")).slice(0, 31).map((d) => { hhmm(d.start, "Start time"); hhmm(d.end, "Finish time"); return d; })
+      : [];
+    const multi = shifts.length >= 2;
+    if (multi) input = { ...input, days: shifts.length, date: shifts[0].date, start: shifts[0].start, end: shifts[0].end };
     const days = checkNumber(input.days ?? 1, "Hire days", 1, 365) as number;
     // A one-day job's staff hours go on the job's date (Day 1) when none was picked
     if (!(input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date)) && q.event_id && (input.days ?? 1) <= 1) {
@@ -738,9 +746,17 @@ export async function addPricedSection(quoteId: string, input: PriceJobInput): P
       is_optional: !!l.optional,
       // Remember how the line was worked out so its helper (times / hot+cold) opens filled in
       ...(l.kind === "staff" && timed ? (() => {
-        const det = { kind: "staff" as const, days: [{ date: input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : null, start: input.start, end: input.end, setup_minutes: rules.staff?.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, staff) }] };
+        const one = (date: string | null, start: string, end: string) => ({ date, start, end, setup_minutes: rules.staff?.setup_minutes ?? 0, units: 1, per_unit: Math.max(1, staff) });
+        const det = { kind: "staff" as const, days: multi ? shifts.map((d) => one(d.date, d.start, d.end))
+          : [one(input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : null, input.start, input.end)] };
         const calc = staffLine(det, rules.staff ?? null, rules.staff?.label ?? "staff");
-        return { details: det, ...(calc ? { description: calc.description } : {}) };
+        // Several days: the hours are every day's added up (the engine priced day 1 only)
+        return { details: det, ...(calc ? { description: calc.description, ...(multi ? { quantity: calc.quantity } : {}) } : {}) };
+      })() : {}),
+      // Several days: the hire is one per day, with the dates under it ("2 days hire – Wed 2 & Thu 3 December")
+      ...(l.kind === "hire" && multi ? (() => {
+        const r = withHireDays(l.description, shifts.map((d) => ({ date: d.date, units: 1 })));
+        return { description: r.description || null, ...(r.quantity != null ? { quantity: r.quantity } : {}) };
       })() : {}),
       ...(l.kind === "per_serve" ? (() => {
         const det = { kind: "serves" as const, hot: Math.round(l.quantity), cold: 0, ...(input.assumedServes ? { assumed: true } : {}) };
@@ -1056,7 +1072,11 @@ export async function createQuoteForCustomer(customerId: string, title: string):
 export interface AutoQuoteResult {
   section: QSection; items: QItem[]; replaced: boolean;
   /** What was read from the emails, for the person quoting to check */
-  read: { packageName: string; date: string | null; start: string | null; end: string | null; serves: number; staff: number; assumedServes: boolean };
+  read: { packageName: string; date: string | null; start: string | null; end: string | null; serves: number; staff: number; assumedServes: boolean;
+    /** Every day read from the emails (two or more for a multi-day job) */
+    days?: { date: string; start: string | null; end: string | null }[];
+    /** Add-ons they asked about, added as optional lines */
+    extras?: string[] };
   notes: string[];
 }
 
@@ -1072,7 +1092,7 @@ export async function autoQuoteFromEmails(quoteId: string, replace: boolean): Pr
     if (role === "staff" || role === "customer") fail("Only the office team can build quotes.");
     const q = await loadQuote(supabase, org.id, quoteId);
     assertEditable(q);
-    const { data: ev } = await supabase.from("events").select("enquiry_id, event_date").eq("id", q.event_id).eq("organisation_id", org.id).maybeSingle();
+    const { data: ev } = await supabase.from("events").select("enquiry_id, event_date, days").eq("id", q.event_id).eq("organisation_id", org.id).maybeSingle();
     const filter = [`event_id.eq.${q.event_id}`, ev?.enquiry_id ? `enquiry_id.eq.${ev.enquiry_id}` : null].filter(Boolean).join(",");
     const { data: thr } = await supabase.from("email_threads").select("id").eq("organisation_id", org.id).or(filter).neq("classification", "spam").limit(6);
     const ids = (thr ?? []).map((t) => t.id as string);
@@ -1088,13 +1108,20 @@ export async function autoQuoteFromEmails(quoteId: string, replace: boolean): Pr
     const packages = (pkgs ?? []) as { id: string; name: string; summary: string | null; rules: PackageRules }[];
     if (!packages.length) fail("Set up a package in Settings → Services & pricing first — Auto quote prices from it.");
 
+    // Add-ons the customer can ask for (branding, extras…): the price list, less what the packages already price
+    const inPkgs = new Set(packages.flatMap((p) => { const r = p.rules ?? {}; return [r.hire?.service_id, r.staff?.service_id, r.delivery?.service_id, r.per_serve?.service_id]; }).filter(Boolean));
+    const { data: svcRows } = await supabase.from("services").select("id, name, description, category, unit, unit_price, tax_rate").eq("organisation_id", org.id).eq("active", true).order("position").limit(300);
+    const addons = ((svcRows ?? []) as { id: string; name: string; description: string | null; category: string | null; unit: string | null; unit_price: number; tax_rate: number }[]).filter((x) => !inPkgs.has(x.id));
+
     const { readJobFromEmails, DEFAULT_SERVES } = await import("@/lib/ai/auto-quote");
     const { orgAiKey } = await import("@/lib/ai/key");
     const today = todayISO(org.timezone);
-    const job = await readJobFromEmails(await orgAiKey(org.id), { name: org.name, timezone: org.timezone }, today, messages, packages);
+    const job = await readJobFromEmails(await orgAiKey(org.id), { name: org.name, timezone: org.timezone }, today, messages, packages, addons);
     const pkg = job.packageName ? packages.find((p) => p.name.toLowerCase() === job.packageName!.toLowerCase()) : undefined;
     if (!pkg) fail("Couldn't tell which package fits from the emails — use “Price a job” to choose one.");
     const timed = needsTimes(pkg!.rules ?? {});
+    // Several days: each needs its times — a day without them takes day 1's
+    const shifts = job.days.length >= 2 && job.start && job.end ? job.days.map((d) => ({ date: d.date, start: d.start ?? job.start!, end: d.end ?? job.end! })) : [];
     if (timed && (!job.start || !job.end)) fail(`The emails don't give the service times, so it can't be priced yet — use “Price a job” and enter them.${job.notes.length ? ` (${job.notes.join(" ")})` : ""}`);
     const assumedServes = timed && job.serves == null;
     const serves = timed ? job.serves ?? DEFAULT_SERVES : 0;
@@ -1109,12 +1136,35 @@ export async function autoQuoteFromEmails(quoteId: string, replace: boolean): Pr
       const { error: dS } = await supabase.from("quote_sections").delete().eq("quote_id", q.id).eq("organisation_id", org.id);
       if (dS) fail(`Couldn't clear the current sections: ${dS.message}`);
     }
-    const added = await addPricedSection(q.id, { packageId: pkg!.id, start: timed ? job.start! : "", end: timed ? job.end! : "", serves, staff, includeDelivery: true, date, assumedServes });
+    const added = await addPricedSection(q.id, { packageId: pkg!.id, start: timed ? job.start! : "", end: timed ? job.end! : "", serves, staff, includeDelivery: true, date, assumedServes,
+      ...(timed && shifts.length ? { shifts } : {}) });
     if (!added.ok) fail(added.error);
+    const section = added.data.section;
+    const items = [...added.data.items];
+
+    // Add-ons they asked about go in as optional lines (priced from the list), so they can tick them on their quote
+    const picked = job.extras.map((nm) => addons.find((a) => a.name === nm)).filter((a): a is (typeof addons)[number] => !!a);
+    if (picked.length) {
+      const qty = (unit: string | null) => (/^(each|cup|cups|serve|serves)$/i.test((unit ?? "").trim()) ? Math.max(1, serves) : 1);
+      const { data: ex, error: exErr } = await supabase.from("quote_items").insert(picked.map((a, i) => ({
+        organisation_id: org.id, quote_id: q.id, section_id: section.id, name: a.name, description: a.description,
+        quantity: qty(a.unit), unit: a.unit, unit_price: Number(a.unit_price), tax_rate: Number(a.tax_rate), position: items.length + i, service_id: a.id, is_optional: true,
+      }))).select(ITEM_COLS);
+      if (exErr) fail(`Priced the job, but couldn't add ${picked.map((a) => a.name).join(", ")}: ${exErr.message}`);
+      items.push(...((ex ?? []) as QItem[]).map((i) => ({ ...i, quantity: Number(i.quantity), unit_price: Number(i.unit_price), tax_rate: Number(i.tax_rate), discount_percent: Number(i.discount_percent), discount_amount: Number(i.discount_amount ?? 0) })));
+      refresh(q);
+    }
+
     const notes = [...job.notes];
-    if (job.date && ev?.event_date && job.date !== ev.event_date) notes.unshift(`The emails say ${fmtDate(job.date)}, but the job is set for ${fmtDate(ev.event_date as string)} — check which is right.`);
+    if (picked.length) notes.unshift(`Added as optional extras they can tick on their quote: ${picked.map((a) => a.name).join(", ")}.`);
+    const jobDaysSet = Array.isArray(ev?.days) ? (ev!.days as { date?: string }[]).map((d) => d.date).filter(Boolean) as string[] : [];
+    if (shifts.length) {
+      const span = shifts.map((d) => fmtDate(d.date)).join(", ");
+      if (jobDaysSet.join() !== shifts.map((d) => d.date).join()) notes.unshift(`The emails ask for ${shifts.length} days (${span}), but the job is set for ${jobDaysSet.length >= 2 ? `${jobDaysSet.length} days` : ev?.event_date ? `one day (${fmtDate(ev.event_date as string)})` : "no date"} — set the job's dates to match so the calendar and cart booking cover every day.`);
+      if (timed && job.serves != null) notes.push(`${serves} serves is for the whole job over ${shifts.length} days — change it if they'll want more than that each day.`);
+    } else if (job.date && ev?.event_date && job.date !== ev.event_date) notes.unshift(`The emails say ${fmtDate(job.date)}, but the job is set for ${fmtDate(ev.event_date as string)} — check which is right.`);
     if (assumedServes) notes.unshift(`They didn't say how many, so it's quoted for ${DEFAULT_SERVES}. Their quote tells them and lets them change the number — the price updates for them.`);
-    return { section: added.data.section, items: added.data.items, replaced: replace,
-      read: { packageName: pkg!.name, date, start: job.start, end: job.end, serves, staff, assumedServes }, notes };
+    return { section, items, replaced: replace,
+      read: { packageName: pkg!.name, date, start: job.start, end: job.end, serves, staff, assumedServes, ...(shifts.length ? { days: shifts } : {}), ...(picked.length ? { extras: picked.map((a) => a.name) } : {}) }, notes };
   });
 }

@@ -32,13 +32,14 @@ export function AutoQuotePanel({ quoteId, hasLines, flushAll, onClose, onDone }:
         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Auto quote from the emails</p>
-          {!res && <p className="mt-0.5 text-ink-muted">Claude reads the customer&apos;s emails for the package, day, times and how many — the prices come from your price list. You can change anything after.</p>}
+          {!res && <p className="mt-0.5 text-ink-muted">Claude reads the customer&apos;s emails for the package, every day and its times, how many, and any extras they asked about (like branding) — the prices come from your price list. You can change anything after.</p>}
         </div>
         <button type="button" onClick={onClose} className="rounded-md p-1 text-ink-faint hover:bg-surface hover:text-ink" aria-label="Close"><X className="h-4 w-4" /></button>
       </div>
       {rd && (
         <div className="mt-3 space-y-2">
-          <p><b>{res!.replaced ? "Replaced the quote with" : "Added"} {rd.packageName}</b>{rd.date ? ` · ${fmtDate(rd.date, "long")}` : ""}{rd.start ? ` · ${t12(rd.start)}–${t12(rd.end)}` : ""}{rd.serves ? ` · ${rd.serves} serves` : ""}{rd.staff ? ` · ${rd.staff} staff` : ""}.</p>
+          <p><b>{res!.replaced ? "Replaced the quote with" : "Added"} {rd.packageName}</b>{rd.days?.length ? ` · ${rd.days.length} days` : `${rd.date ? ` · ${fmtDate(rd.date, "long")}` : ""}${rd.start ? ` · ${t12(rd.start)}–${t12(rd.end)}` : ""}`}{rd.serves ? ` · ${rd.serves} serves` : ""}{rd.staff ? ` · ${rd.staff} staff` : ""}.</p>
+          {!!rd.days?.length && <ul className="space-y-0.5 pl-1">{rd.days.map((d) => <li key={d.date}>{fmtDate(d.date, "long")}{d.start ? ` · ${t12(d.start)}–${t12(d.end)}` : ""}</li>)}</ul>}
           {res!.notes.length > 0 && <ul className="list-disc space-y-1 pl-5 text-ink-muted">{res!.notes.map((n, i) => <li key={i} className={i === 0 && rd.assumedServes ? "text-amber-800" : undefined}>{n}</li>)}</ul>}
           <p className="text-ink-muted">Check it below, then send.</p>
         </div>
