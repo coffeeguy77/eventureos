@@ -3,12 +3,25 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 /** Genuine reviews, one at a time. Buttons and dots only — it never moves on its own. */
-export function Testimonials({ items }: { items: { quote: string; name: string }[] }) {
+export function Testimonials({ items, compact = false }: { items: { quote: string; name: string }[]; compact?: boolean }) {
   const [i, setI] = useState(0);
   const n = items.length;
   if (!n) return null;
   const t = items[i];
   const go = (d: number) => setI((x) => (x + d + n) % n);
+  if (compact) return (
+    <div className="wct" role="region" aria-roledescription="carousel" aria-label="Client reviews">
+      <figure key={i} className="ag-in" aria-roledescription="slide" aria-label={`${i + 1} of ${n}`} aria-live="polite">
+        <blockquote><span className="q" aria-hidden>“</span>“{t.quote}”</blockquote>
+        <figcaption>— {t.name}, Google review</figcaption>
+      </figure>
+      {n > 1 && <>
+        <button type="button" className="nav prev" onClick={() => go(-1)} aria-label="Previous review"><ArrowLeft aria-hidden strokeWidth={2.2} /></button>
+        <button type="button" className="nav next" onClick={() => go(1)} aria-label="Next review"><ArrowRight aria-hidden strokeWidth={2.2} /></button>
+        <div className="dots">{items.map((x, j) => <button key={x.name} type="button" onClick={() => setI(j)} aria-label={`Review ${j + 1}: ${x.name}`} aria-current={j === i ? "true" : undefined}><i /></button>)}</div>
+      </>}
+    </div>
+  );
   const btn = "grid h-12 w-12 shrink-0 place-items-center rounded-full border-[1.5px] border-[var(--ink)] text-[var(--ink)] transition-colors hover:bg-[var(--ink)] hover:text-[var(--card)]";
   return (
     <div role="region" aria-roledescription="carousel" aria-label="Client reviews">

@@ -558,18 +558,34 @@ export const QUOTE_FOR: Record<string, string> = {
  */
 export interface Category { key: string; name: string; line: string; intro: string; icon: IconKey; href: string; links: { slug: string; label: string }[] }
 export const CATEGORIES: Category[] = [
-  { key: "web", name: "Web Design & Development", line: "Beautiful on the outside. Clever on the inside.", intro: "New websites, redesigns and online stores.", icon: "design", href: "website-design",
+  { key: "web", name: "Web Design & Development", line: "Beautiful, fast and built to perform.", intro: "New websites, redesigns and online stores.", icon: "design", href: "website-design",
     links: [{ slug: "website-design", label: "Website design & redesigns" }, { slug: "wordpress", label: "WordPress & WooCommerce" }, { slug: "leadpages", label: "LeadPages websites" }] },
-  { key: "hosting", name: "Hosting & Infrastructure", line: "Your website needs a good home too.", intro: "Fast, secure hosting with domains, SSL and email.", icon: "hosting", href: "web-hosting",
-    links: [{ slug: "web-hosting", label: "Web hosting & backups" }, { slug: "email-and-domains", label: "Email, domains & SSL" }] },
-  { key: "seo", name: "SEO & Digital Growth", line: "Hide and seek is a terrible marketing strategy.", intro: "Get found on Google and turn searches into enquiries.", icon: "seo", href: "seo",
-    links: [{ slug: "seo", label: "SEO & social media" }, { slug: "google-ads", label: "Google Ads management" }] },
-  { key: "software", name: "Software & Web Applications", line: "Custom solutions for real-world problems.", intro: "Web apps, client portals and business systems.", icon: "code", href: "ai-and-custom-apps",
+  { key: "software", name: "Web Applications & Software", line: "Custom solutions for real business needs.", intro: "Web apps, client portals and business systems.", icon: "layers", href: "ai-and-custom-apps",
     links: [{ slug: "ai-and-custom-apps", label: "Custom software & web apps" }] },
-  { key: "support", name: "Support & Website Care", line: "Real people. Real answers. Problems solved.", intro: "Maintenance, updates and help when it breaks.", icon: "support", href: "website-maintenance",
+  { key: "hosting", name: "Hosting & Infrastructure", line: "Secure, fast and always on.", intro: "Fast, secure hosting with domains, SSL and email.", icon: "hosting", href: "web-hosting",
+    links: [{ slug: "web-hosting", label: "Web hosting & backups" }, { slug: "email-and-domains", label: "Email, domains & SSL" }] },
+  { key: "seo", name: "SEO & Digital Growth", line: "Get found, get customers and keep growing.", intro: "Get found on Google and turn searches into enquiries.", icon: "chart", href: "seo",
+    links: [{ slug: "seo", label: "SEO & social media" }, { slug: "google-ads", label: "Google Ads management" }] },
+  { key: "support", name: "Support & Care", line: "Real people, local support and quick resolutions.", intro: "Maintenance, updates and help when it breaks.", icon: "support", href: "website-maintenance",
     links: [{ slug: "website-maintenance", label: "Website maintenance (Care Hub)" }, { slug: "website-support", label: "Website & IT support" }, { slug: "support", label: "Lodge a support ticket" }] },
-  { key: "integrations", name: "Integrations & Automation", line: "Connecting the dots so everything just works.", intro: "Xero, Stripe and Gmail, automations and AI.", icon: "plug", href: "ai-and-custom-apps",
+  { key: "integrations", name: "Integrations & More", line: "Connect your tools, systems and workflows.", intro: "Xero, Stripe and Gmail, automations and AI.", icon: "plug", href: "ai-and-custom-apps",
     links: [{ slug: "ai-and-custom-apps", label: "Integrations, automation & AI" }] },
+];
+
+/** Our own software, as shown on the home page and in the footer (icon: a file in /media/webculture/site or a built-in mark). */
+export const PRODUCTS = [
+  { name: "Trade-Up", text: "Trade & service management", mark: "tradeup" },
+  { name: "Grasshopper Travel", text: "Travel, tours & bookings", mark: "grasshopper" },
+  { name: "TagFlow Print", text: "Test & tag management", mark: "tagflow" },
+  { name: "Bean Culture App", text: "Ordering, KDS & POS", mark: "beanapp" },
+] as const;
+
+/** The four steps on the home page. */
+export const LAUNCH: Step[] = [
+  { title: "Talk & Plan", text: "We learn about your business and goals." },
+  { title: "Design & Build", text: "A great-looking, high-performing site." },
+  { title: "Test & Launch", text: "We fine-tune, go live and make it shine." },
+  { title: "Ongoing Support", text: "Local, responsive support when you need it." },
 ];
 
 /** How a new website comes together (home page). */

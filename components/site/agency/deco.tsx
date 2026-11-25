@@ -88,8 +88,8 @@ export function AgencyWordmark({ name, tone = "light", size = "md" }: { name: st
   const ink = tone === "light" ? "var(--ink)" : "var(--card)";
   return (
     <span className="inline-flex items-center gap-2.5" style={{ color: ink }}>
-      <BracketMark className={size === "lg" ? "h-9 w-12" : "h-7 w-10"} slash={tone === "light" ? "var(--lime)" : "var(--lime)"} />
-      <span className={`font-extrabold tracking-[-0.035em] ${size === "lg" ? "text-[2rem]" : "text-[1.5rem] sm:text-[1.625rem]"}`}>{name}</span>
+      <BracketMark className={`wm-mark ${size === "lg" ? "h-9 w-12" : "h-7 w-10"}`} slash="var(--lime)" />
+      <span className={`wm font-bold tracking-[-0.03em] ${size === "lg" ? "text-[2rem]" : "text-[1.5rem] sm:text-[1.625rem]"}`}>{name}</span>
     </span>
   );
 }
@@ -255,6 +255,34 @@ export function EditorLaptop({ className = "" }: { className?: string }) {
       </g>
       <path d="M20 440h720l-36 40H56z" fill="#D9DAD6" />
       <path d="M318 440h124l-10 12H328z" fill="#A9ABA6" />
+    </svg>
+  );
+}
+
+/** Product marks for the software strip (simple, crisp redraws of each product's icon). */
+export function ProductMark({ mark, className = "" }: { mark: string; className?: string }) {
+  if (mark === "tradeup") return (
+    <svg viewBox="0 0 40 40" aria-hidden className={className}><rect width="40" height="40" rx="7" fill="#0B0D0C" /><path d="M13 27L26.5 13.5M16.5 13h10.5v10.5" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+  );
+  if (mark === "grasshopper") return (
+    <svg viewBox="0 0 40 40" aria-hidden className={className}><defs><linearGradient id="gh-g" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stopColor="#A9C61C" /><stop offset="1" stopColor="#7FA40E" /></linearGradient></defs><rect width="40" height="40" rx="7" fill="url(#gh-g)" /><text x="20" y="28" textAnchor="middle" fontSize="25" fontWeight="800" fill="#fff" fontFamily="'Manrope Variable',system-ui,sans-serif">g</text></svg>
+  );
+  if (mark === "tagflow") {
+    const cells = ["1110111", "1010101", "1110111", "0001000", "1101011", "1010110", "1110101"];
+    return (
+      <svg viewBox="0 0 40 40" aria-hidden className={className}>
+        <rect width="40" height="40" rx="7" fill="#6E3A1C" />
+        {cells.flatMap((row, y) => [...row].map((c, x) => (c === "1" ? <rect key={`${x}-${y}`} x={8.5 + x * 3.3} y={8.5 + y * 3.3} width="3" height="3" rx=".4" fill="#F6EFE4" /> : null)))}
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 40 40" aria-hidden className={className}>
+      <rect width="40" height="40" rx="7" fill="#F5EEE0" />
+      <path d="M8 15h20v8.5c0 5.2-4.4 9.5-10 9.5S8 28.7 8 23.5z" fill="#fff" stroke="#151914" strokeWidth="1.8" />
+      <ellipse cx="18" cy="15.5" rx="9.2" ry="2.2" fill="#C8833F" />
+      <path d="M28 17.5h2.4a3.6 3.6 0 010 7.2H27.4" fill="none" stroke="#151914" strokeWidth="1.8" />
+      <path d="M15 11c-1-1.3 1-2.3 0-3.7M20 11c-1-1.3 1-2.3 0-3.7" stroke="#C9B48E" strokeWidth="1.2" fill="none" strokeLinecap="round" />
     </svg>
   );
 }

@@ -46,23 +46,20 @@ export function AgencyNav({ name, home, categories, links, login, talk, phone }:
   useEffect(() => { if (mega) firstLink.current?.focus({ preventScroll: true }); }, [mega]);
 
   const inServices = categories.some((c) => c.links.some((l) => l.href === path));
-  const linkCls = (href: string) => `relative rounded-full px-3 py-2 text-[0.9375rem] font-semibold transition-colors xl:px-3.5 ${path === href ? "text-[var(--ink)]" : "text-[rgba(20,45,35,.8)] hover:text-[var(--ink)]"}`;
   const tel = phone ? `tel:${phone.replace(/[^\d+]/g, "")}` : null;
 
   return (
-    <div ref={wrap} className={`sticky top-0 z-50 border-b bg-[var(--paper)] transition-[border-color,box-shadow] ${scrolled || mega ? "border-[var(--line)] shadow-[0_8px_24px_-20px_rgba(20,45,35,.5)]" : "border-transparent"}`}>
-      <div className={`${WRAP} flex h-[76px] items-center gap-4`}>
-        <Link href={home} aria-label={`${name} home`} className="shrink-0"><AgencyWordmark name={name} /></Link>
+    <div ref={wrap} className={`wcn sticky top-0 z-50 border-b transition-[border-color,box-shadow] ${scrolled || mega ? "border-[var(--line)] shadow-[0_8px_24px_-20px_rgba(20,45,35,.5)]" : "border-transparent"}`}>
+      <div className="wcn-bar">
+        <Link href={home} aria-label={`${name} home`} className="wcn-logo"><AgencyWordmark name={name} /></Link>
 
-        <nav aria-label="Main" className="ml-auto hidden items-center gap-0.5 lg:flex">
-          <Link href={`${home}#work`} className={linkCls(`${home}#work`)}>Our Work</Link>
-          <button ref={megaBtn} type="button" aria-expanded={mega} aria-controls={megaId} onClick={() => setMega((v) => !v)}
-            className={`inline-flex items-center gap-1 rounded-full px-3 py-2 text-[0.9375rem] font-semibold transition-colors xl:px-3.5 ${mega || inServices ? "text-[var(--ink)]" : "text-[rgba(20,45,35,.8)] hover:text-[var(--ink)]"}`}>
-            What We Do<ChevronDown aria-hidden className={`h-4 w-4 transition-transform duration-300 ${mega ? "rotate-180" : ""}`} strokeWidth={2} />
+        <nav aria-label="Main" className="wcn-links">
+          <Link href={`${home}#work`}>Our Work</Link>
+          <button ref={megaBtn} type="button" aria-expanded={mega} aria-controls={megaId} onClick={() => setMega((v) => !v)} className={mega || inServices ? "on" : undefined}>
+            What We Do<ChevronDown aria-hidden className={`wcn-chev transition-transform duration-300 ${mega ? "rotate-180" : ""}`} strokeWidth={2.2} />
           </button>
-          {links.map((l) => <Link key={l.href} href={l.href} className={linkCls(l.href)} aria-current={path === l.href ? "page" : undefined}>{l.label}</Link>)}
-          <Link href={login} className={`${linkCls(login)} text-[var(--muted)]`}>Client login</Link>
-          <Link href={talk} className={`${BTN.primary} ml-3 min-h-[46px] px-5`}>Let&apos;s Talk<ArrowUpRight aria-hidden className="ag-arrow h-4 w-4" strokeWidth={2.2} /></Link>
+          {links.map((l) => <Link key={l.href} href={l.href} aria-current={path === l.href ? "page" : undefined}>{l.label}</Link>)}
+          <Link href={talk} className="wcn-talk">Let&apos;s Talk<ArrowUpRight aria-hidden className="ag-arrow" strokeWidth={2.4} /></Link>
         </nav>
 
         <button type="button" className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[rgba(20,45,35,.25)] text-[var(--ink)] lg:hidden" aria-expanded={drawer} aria-controls={drawerId} onClick={() => setDrawer(true)}>

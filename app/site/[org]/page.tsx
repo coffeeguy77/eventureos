@@ -21,8 +21,7 @@ import { agencyMode } from "@/lib/site/agency/server";
 import { businessLd } from "@/lib/site/agency/ld";
 import { AgencyFrame } from "@/components/site/agency/frame";
 import { AgencyHome } from "@/components/site/agency/home";
-import { JsonLd, faqLd } from "@/components/site/agency/ui";
-import { HOME_FAQS } from "@/lib/site/agency/content";
+import { JsonLd } from "@/components/site/agency/ui";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ org: string }> };
@@ -52,7 +51,6 @@ export default async function SiteHome({ params }: P) {
     return (
       <AgencyFrame org={org}>
         <JsonLd data={businessLd(org, canonicalFor(org, `/site/${org.slug}`))} />
-        <JsonLd data={faqLd(HOME_FAQS)} />
         <AgencyHome org={org} />
       </AgencyFrame>
     );

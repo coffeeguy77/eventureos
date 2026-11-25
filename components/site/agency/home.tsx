@@ -1,286 +1,285 @@
 import Link from "next/link";
-import { ArrowUpRight, Check, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowUpRight, BarChart3, Cloud, Code2, Headphones, Layers, Monitor, Puzzle, Users } from "lucide-react";
 import type { PublicOrg } from "@/lib/bookings/server";
-import { readSite } from "@/lib/site/site";
-import { readApptSettings } from "@/lib/appointments/core";
-import { AGENCY, BUILT, CATEGORIES, CLIENTS, HOME_FAQS, POINTS, PROCESS, TESTIMONIALS, YEAR_STATS, serviceBySlug } from "@/lib/site/agency/content";
-import { QuoteForm } from "./forms";
-import { BTN, FaqList, H2, Icon, WRAP } from "./ui";
-import { Brackets, Cup, Cursor, EditorLaptop, HandArrow, OrganicClip, Sparks, StepArrow, Underline, WorkspaceScene } from "./deco";
+import { CATEGORIES, LAUNCH, PRODUCTS, TESTIMONIALS, YEAR_STATS } from "@/lib/site/agency/content";
+import { Cup, ProductMark, Sparks, StepArrow, Underline } from "./deco";
 import { Testimonials } from "./testimonials";
 
-const eyebrow = "text-[0.8125rem] font-bold uppercase tracking-[0.12em] text-[var(--ink)]";
-const lede = "text-[1.125rem] leading-[1.65] text-[var(--muted)] sm:text-[1.1875rem]";
-const Arrow = () => <ArrowUpRight aria-hidden className="ag-arrow h-[18px] w-[18px]" strokeWidth={2.2} />;
-
 /**
- * The agency's home page, top to bottom: hero, credibility strip, selected work, all things digital (six categories),
- * the people, LeadPages, software, process, reviews, FAQs and the contact form. Only real clients, reviews, numbers
- * and products appear; photos come from Website settings (hero and about images) and fall back to illustrations.
+ * The agency home page, laid out to match the approved design board (1024px artboard). On screens 1024px and wider
+ * every size is in artboard units (--u = one artboard pixel at the current width, up to 1920px), so the page is the
+ * design at any desktop width; below that it reflows for tablets and phones. Photos come from the design board.
  */
+const IMG = "/media/webculture/site";
+const CAT_LINES: Record<string, [string, string?]> = { web: ["Web Design &", "Development"], software: ["Web Applications", "& Software"], hosting: ["Hosting &", "Infrastructure"], seo: ["SEO &", "Digital Growth"], support: ["Support & Care"], integrations: ["Integrations", "& More"] };
+const CAT_DESC: Record<string, string> = { web: "Beautiful, fast and|built to perform.", software: "Custom solutions for|real business needs.", hosting: "Secure, fast and|always on.", seo: "Get found, get customers|and keep growing.", support: "Real people, local support|and quick resolutions.", integrations: "Connect your tools,|systems and workflows." };
+const CAT_ICONS = { web: Monitor, software: Layers, hosting: Cloud, seo: BarChart3, support: Headphones, integrations: Puzzle } as const;
+
+export const HOME_CSS = `
+.wch{--hbg:#FBF5EB;--hink:#0E1410;--hbody:#1A1F1B;--forest-d:#1E3527;--foot:#10251B;--lime2:#C5DE1E;background:var(--hbg);color:var(--hbody);letter-spacing:-.012em;overflow-x:clip}
+.wch .serif{font-family:'Fraunces Variable',Georgia,serif;font-variation-settings:'opsz' 72;letter-spacing:-.02em}
+.wch .btn{display:inline-flex;align-items:center;justify-content:center;gap:.45em;border-radius:999px;font-weight:760;letter-spacing:-.01em;white-space:nowrap;transition:background-color .2s,color .2s}
+.wch .btn-dark{background:#1C3026;color:#fff}.wch .btn-dark:hover{background:#264233}
+.wch .btn-dark svg{color:var(--lime2)}
+.wch .btn-line{border:1.5px solid #1A1F1B;color:#1A1F1B;background:transparent}.wch .btn-line:hover{background:#1A1F1B;color:#fff}
+.wch .eyebrow{font-weight:700;text-transform:uppercase;letter-spacing:.045em;color:#1A1F1B}
+
+/* phones and tablets */
+.wch-hero{position:relative;padding:28px 20px 0}
+.wch-hero .eyebrow{font-size:11.5px;line-height:1.35;display:flex;align-items:center;gap:10px}
+.wch-hero .eyebrow i{display:block;width:44px;height:3px;border-radius:3px;background:var(--lime2);flex:none}
+.wch-hero h1{margin-top:14px;font-size:44px;line-height:.98;font-weight:800;letter-spacing:-.025em;color:var(--hink)}
+.wch-hero h1 em{display:block;font-weight:400;color:var(--forest-d);letter-spacing:-.02em}
+.wch-hero .lede{margin-top:16px;font-size:17px;line-height:1.45;max-width:30em;font-weight:500;color:#111}
+.wch-hero .ctas{margin-top:22px;display:flex;flex-wrap:wrap;gap:12px}
+.wch-hero .ctas .btn{height:48px;padding:0 22px;font-size:15px}
+.wch-hero .hand{margin-top:18px;display:flex;align-items:flex-end;gap:10px;color:#1A1F1B}
+.wch-hero .hand svg.cup{width:36px;height:36px;flex:none}
+.wch-hero .hand span{font-family:'Caveat',cursive;font-size:20px;line-height:1.05;position:relative;transform:rotate(-2deg);display:inline-block;padding-bottom:6px}
+.wch-hero .hand .ul{position:absolute;left:52%;right:0;bottom:-2px;height:8px;width:48%}
+.wch-hero .pic{margin:26px -20px 0;aspect-ratio:566/372}
+.wch-hero .pic img{width:100%;height:100%;object-fit:cover;object-position:left top}
+
+.wch-strip{margin:18px 14px 0;border-radius:14px;background:#F4EEE3;display:grid;grid-template-columns:1fr 1fr;gap:18px 12px;padding:20px}
+.wch-strip .t{grid-column:1/-1;font-size:24px;line-height:1.05;font-weight:700;color:var(--hink)}
+.wch-strip .s{display:flex;align-items:center;gap:10px}
+.wch-strip .s svg{width:34px;height:34px;flex:none;color:#1A1F1B}
+.wch-strip .n{display:block;font-size:20px;font-weight:800;line-height:1;color:#111;letter-spacing:-.01em}
+.wch-strip .l{display:block;margin-top:3px;font-size:12px;line-height:1.2;color:#2A2F2B}
+
+.wch-panel{margin:18px 12px 0;border-radius:18px;background:var(--forest-d);color:#F8F4EA;padding:30px 22px}
+.wch-panel h2{font-size:34px;line-height:1.08;font-weight:700;position:relative;display:inline-block;padding-bottom:12px}
+.wch-panel h2 .ul{position:absolute;left:2px;bottom:-6px;width:58%;height:12px}
+.wch-panel ul{margin-top:26px;display:grid;grid-template-columns:1fr;gap:0}
+.wch-panel li a{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;padding:16px 0;border-top:1px solid rgba(255,255,255,.16)}
+.wch-panel li svg{grid-row:span 2;width:32px;height:32px;color:var(--lime2)}
+.wch-panel li b{font-size:15px;line-height:1.2;font-weight:800;color:#fff}
+.wch-panel li a>span{font-size:13px;line-height:1.35;color:#D7DACB}
+.wch-panel li .bl{display:inline}
+.wch-panel br.dk{display:none}
+@media (min-width:1024px){.wch-panel br.dk{display:inline}}
+
+.wch-lp{display:grid;gap:22px;padding:34px 20px 0}
+.wch-lp .pic img{width:100%;height:auto;display:block}
+.wch-lp .eyebrow{font-size:12px;letter-spacing:.06em;color:#2E4A1F}.wch-lp .eyebrow b{color:#9DB80F}
+.wch-lp h2{margin-top:6px;font-size:32px;line-height:1.05;font-weight:800;color:var(--hink);letter-spacing:-.02em}
+.wch-lp h2 .sp{display:none;color:var(--lime2);vertical-align:top;margin-left:4px}
+.wch-lp p{margin-top:10px;font-size:16px;line-height:1.45;font-weight:500;color:#111}
+.wch-lp .ctas{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px}
+.wch-lp .ctas .btn{height:44px;padding:0 20px;font-size:14.5px}
+
+.wch-sw{margin:30px 14px 0;border-radius:14px;background:#F1ECDD;padding:20px;display:grid;gap:16px}
+.wch-sw h2{font-size:24px;line-height:1.08;font-weight:800;color:var(--hink);position:relative;display:inline-block}
+.wch-sw h2 .ul{position:absolute;left:0;bottom:-8px;width:52%;height:9px}
+.wch-sw ul{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wch-sw li{background:#FAF5EC;border-radius:10px;padding:10px;display:flex;gap:10px;align-items:flex-start}
+.wch-sw li svg{width:38px;height:38px;flex:none}
+.wch-sw li b{display:block;font-size:13.5px;line-height:1.2;font-weight:800;color:#111}
+.wch-sw li span{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:#2A2F2B}
+
+.wch-steps{padding:34px 20px 10px;display:grid;gap:22px}
+.wch-steps h2{font-size:28px;line-height:1.05;font-weight:800;color:var(--hink);position:relative;display:inline-block}
+.wch-steps h2 .ul{position:absolute;left:0;bottom:-8px;width:72%;height:9px}
+.wch-steps ol{display:grid;grid-template-columns:1fr 1fr;gap:22px 14px}
+.wch-steps li{text-align:center;position:relative}
+.wch-steps .num{display:grid;place-items:center;margin:0 auto;width:26px;height:26px;border-radius:50%;background:var(--lime2);font-size:13px;font-weight:800;color:#1A1F1B}
+.wch-steps b{display:block;margin-top:8px;font-size:15.5px;font-weight:800;color:#111}
+.wch-steps span{display:block;margin-top:4px;font-size:13px;line-height:1.3;color:#2A2F2B}
+.wch-steps .arr{display:none}
+
+.wch-band{position:relative;margin-top:24px;background:url(${IMG}/band.webp) center/cover no-repeat;padding:34px 16px 26px}
+.wct{position:relative;max-width:560px;margin:0 auto;text-align:center}
+.wct figure{min-height:118px}
+.wct blockquote{font-family:'Fraunces Variable',Georgia,serif;font-variation-settings:'opsz' 18;font-weight:420;font-style:italic;font-size:19px;line-height:1.3;color:#141A15}
+.wct blockquote .q{font-style:normal;font-weight:900;color:var(--lime2);font-size:1.9em;line-height:0;vertical-align:-.32em;margin-right:.12em}
+.wct figcaption{margin-top:10px;font-size:13px;font-weight:700;color:#141A15}
+.wct .nav{position:absolute;top:50%;translate:0 -70%;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#fff;color:#141A15;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.wct .prev{left:-6px}.wct .next{right:-6px}
+.wct .dots{margin-top:12px;display:flex;justify-content:center;gap:4px}
+.wct .dots button{display:grid;place-items:center;width:18px;height:18px}
+.wct .dots i{display:block;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.75)}
+.wct .dots [aria-current] i{background:var(--lime2);box-shadow:0 0 0 1.5px #3C4A1A}
+@media (max-width:1023px){.wct{padding:0 40px}.wct .nav{width:36px;height:36px}}
+
+/* desktop: the design board, in artboard units */
+@media (min-width:1024px){
+  .wch{--u:calc(min(100vw,1920px) / 1024)}
+  .wch-art{max-width:1920px;margin:0 auto}
+  .wch-hero{height:calc(372*var(--u));padding:calc(23*var(--u)) 0 0 calc(40*var(--u))}
+  .wch-hero .eyebrow{font-size:calc(11.6*var(--u));line-height:calc(14*var(--u));gap:calc(9*var(--u))}
+  .wch-hero .eyebrow i{width:calc(60*var(--u));height:calc(3*var(--u))}
+  .wch-hero h1{margin-top:calc(9*var(--u));font-size:calc(48*var(--u));line-height:calc(46.5*var(--u));max-width:calc(430*var(--u));position:relative;z-index:1}
+  .wch-hero .lede{margin-top:calc(16*var(--u));font-size:calc(16.4*var(--u));line-height:calc(23*var(--u));max-width:calc(392*var(--u))}
+  .wch-hero .ctas{margin-top:calc(19*var(--u));gap:calc(13*var(--u));margin-left:calc(-5*var(--u))}
+  .wch-hero .ctas .btn{height:calc(40*var(--u));padding:0 calc(20*var(--u)) 0 calc(22*var(--u));font-size:calc(15*var(--u))}
+  .wch-hero .ctas .btn-line{height:calc(37*var(--u));padding:0 calc(16*var(--u));font-size:calc(14.6*var(--u))}
+  .wch-hero .ctas svg{width:calc(15*var(--u));height:calc(15*var(--u))}
+  .wch-hero .hand{margin-top:calc(8*var(--u));gap:calc(8*var(--u));margin-left:calc(5*var(--u))}
+  .wch-hero .hand svg.cup{width:calc(36*var(--u));height:calc(36*var(--u))}
+  .wch-hero .hand span{font-size:calc(19.5*var(--u));padding-bottom:calc(6*var(--u));transform:rotate(-2.2deg)}
+  .wch-hero .hand .ul{height:calc(7*var(--u))}
+  .wch-hero .pic{position:absolute;margin:0;left:calc(458*var(--u));right:0;top:calc(-2*var(--u));height:calc(372*var(--u));aspect-ratio:auto}
+
+  .wch-strip{margin:calc(11*var(--u)) calc(14*var(--u)) 0;height:calc(77*var(--u));border-radius:calc(14*var(--u));padding:0;gap:0;grid-template-columns:230fr 195fr 185fr 195fr 191fr;align-items:center}
+  .wch-strip .t{grid-column:auto;padding-left:calc(37*var(--u));font-size:calc(23.5*var(--u));line-height:calc(25*var(--u))}
+  .wch-strip .s{height:calc(50*var(--u));border-left:1px solid #D8D0C1;padding-left:calc(24*var(--u));gap:calc(12*var(--u))}
+  .wch-strip .s svg{width:calc(40*var(--u));height:calc(40*var(--u))}
+  .wch-strip .n{font-size:calc(20*var(--u))}
+  .wch-strip .l{margin-top:calc(2*var(--u));font-size:calc(11.4*var(--u));line-height:calc(14*var(--u))}
+
+  .wch-panel{margin:calc(22*var(--u)) calc(11*var(--u)) 0;min-height:calc(213*var(--u));border-radius:calc(18*var(--u));padding:0;display:grid;grid-template-columns:368fr 633fr;align-items:center}
+  .wch-panel h2{margin-left:calc(40*var(--u));font-size:calc(36*var(--u));line-height:calc(41*var(--u));padding-bottom:calc(10*var(--u))}
+  .wch-panel h2 .ul{bottom:calc(-16*var(--u));width:calc(156*var(--u));height:calc(14*var(--u));left:calc(3*var(--u))}
+  .wch-panel ul{margin:0;grid-template-columns:217fr 220fr 196fr;grid-template-rows:auto auto;padding:calc(12*var(--u)) 0 calc(18*var(--u))}
+  .wch-panel li{position:relative}
+  .wch-panel li:nth-child(n+4)::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:rgba(255,255,255,.2)}
+  .wch-panel li:nth-child(6)::before{right:calc(28*var(--u))}
+  .wch-panel li a{border:0;padding:0 calc(10*var(--u)) 0 0;gap:calc(5*var(--u)) calc(16*var(--u));align-content:start}
+  .wch-panel li:nth-child(-n+3) a{padding-bottom:calc(14*var(--u))}
+  .wch-panel li:nth-child(n+4) a{padding-top:calc(16*var(--u))}
+  .wch-panel ul{padding-top:calc(17*var(--u))}
+  .wch-panel li svg{width:calc(36*var(--u));height:calc(36*var(--u));stroke-width:1.5}
+  .wch-panel li b{font-size:calc(14.6*var(--u));line-height:calc(18*var(--u))}
+  .wch-panel li a>span{font-size:calc(12.4*var(--u));line-height:calc(15.5*var(--u));white-space:nowrap}
+
+  .wch-lp{grid-template-columns:505fr 519fr;gap:0;padding:calc(6*var(--u)) 0 0;align-items:start}
+  .wch-lp .txt{padding-top:calc(22*var(--u))}
+  .wch-lp .pic{height:calc(236*var(--u));border-right:1px solid rgba(26,31,27,.12)}
+  .wch-lp .pic img{height:100%;width:100%;object-fit:cover;object-position:left center}
+  .wch-lp .txt{padding-left:calc(37*var(--u))}
+  .wch-lp .eyebrow{font-size:calc(12*var(--u))}
+  .wch-lp h2{margin-top:calc(2*var(--u));font-size:calc(31.5*var(--u));line-height:calc(36*var(--u));white-space:nowrap}
+  .wch-lp h2 .sp{display:inline-block;width:calc(34*var(--u));height:calc(34*var(--u));transform:translate(calc(-4*var(--u)),calc(-30*var(--u)))}
+  .wch-lp p{margin-top:calc(6*var(--u));font-size:calc(15*var(--u));line-height:calc(20.5*var(--u));max-width:calc(365*var(--u))}
+  .wch-lp .ctas{margin-top:calc(14*var(--u));gap:calc(16*var(--u))}
+  .wch-lp .ctas .btn{height:calc(33*var(--u));padding:0 calc(17*var(--u));font-size:calc(14*var(--u))}
+  .wch-lp .ctas svg{width:calc(15*var(--u));height:calc(15*var(--u))}
+
+  .wch-sw{margin:calc(4*var(--u)) calc(14*var(--u)) 0;height:calc(96*var(--u));border-radius:calc(14*var(--u));padding:0;gap:0;grid-template-columns:320fr 676fr;align-items:center}
+  .wch-sw .t{padding-left:calc(37*var(--u));height:calc(76*var(--u));display:flex;align-items:center;border-right:1px solid #D3CDBC}
+  .wch-sw h2{font-size:calc(24*var(--u));line-height:calc(25*var(--u))}
+  .wch-sw h2 .ul{width:calc(128*var(--u));height:calc(9*var(--u));bottom:calc(-9*var(--u))}
+  .wch-sw ul{grid-template-columns:minmax(0,155fr) minmax(0,170fr) minmax(0,147fr) minmax(0,165fr);gap:calc(7*var(--u));padding:0 calc(7*var(--u)) 0 calc(10*var(--u));height:calc(76*var(--u))}
+  .wch-sw li{border-radius:calc(10*var(--u));padding:calc(10*var(--u)) calc(6*var(--u)) 0 calc(8*var(--u));gap:calc(10*var(--u))}
+  .wch-sw li svg{width:calc(40*var(--u));height:calc(40*var(--u))}
+  .wch-sw li b{font-size:calc(13*var(--u));line-height:calc(17*var(--u));white-space:nowrap}
+  .wch-sw li span{margin-top:calc(3*var(--u));font-size:calc(11.4*var(--u));line-height:calc(15.5*var(--u));letter-spacing:-.02em}
+
+  .wch-steps{grid-template-columns:180fr 820fr 24fr;padding:calc(14*var(--u)) 0 0;gap:0;align-items:start}
+  .wch-steps .t{padding:calc(16*var(--u)) 0 0 calc(48*var(--u))}
+  .wch-steps h2{font-size:calc(26*var(--u));line-height:calc(29*var(--u))}
+  .wch-steps h2 .ul{width:calc(110*var(--u));height:calc(9*var(--u));bottom:calc(-11*var(--u))}
+  .wch-steps ol{grid-template-columns:repeat(4,1fr);gap:0}
+  .wch-steps li{padding:0 calc(22*var(--u))}
+  .wch-steps .num{width:calc(22*var(--u));height:calc(22*var(--u));font-size:calc(11.5*var(--u))}
+  .wch-steps b{margin-top:calc(6*var(--u));font-size:calc(15*var(--u));line-height:calc(19*var(--u))}
+  .wch-steps span{margin:calc(3*var(--u)) auto 0;font-size:calc(12.4*var(--u));line-height:calc(16*var(--u));max-width:calc(128*var(--u))}
+  .wch-steps .arr{display:block;position:absolute;right:calc(-14*var(--u));top:calc(28*var(--u));width:calc(26*var(--u));height:calc(16*var(--u));color:#8E9089;stroke-width:2.6}
+
+  .wch-band{margin-top:calc(4*var(--u));height:calc(146*var(--u));padding:calc(31*var(--u)) 0 0}
+  .wct{max-width:none;width:calc(516*var(--u))}
+  .wct figure{min-height:calc(80*var(--u))}
+  .wct blockquote{font-size:calc(18.2*var(--u));line-height:calc(24.5*var(--u));padding:0 calc(46*var(--u))}
+  .wct figcaption{margin-top:calc(7*var(--u));font-size:calc(12.4*var(--u))}
+  .wct .nav{width:calc(42*var(--u));height:calc(42*var(--u));translate:0 0;top:calc(18*var(--u))}
+  .wct .nav svg{width:calc(20*var(--u));height:calc(20*var(--u))}
+  .wct .prev{left:calc(-21*var(--u))}.wct .next{right:calc(-21*var(--u))}
+  .wct .dots{margin-top:calc(9*var(--u));gap:calc(2*var(--u))}
+  .wct .dots button{width:calc(14*var(--u));height:calc(14*var(--u))}
+  .wct .dots i{width:calc(8*var(--u));height:calc(8*var(--u))}
+}
+`;
+
 export function AgencyHome({ org }: { org: PublicOrg }) {
   const base = `/site/${org.slug}`;
-  const phone = org.contact_phone || AGENCY.phone, email = org.contact_email || AGENCY.email, address = org.address || AGENCY.address;
-  const tel = `tel:${phone.replace(/[^\d+]/g, "")}`;
-  const images = readSite(org.rawSettings).images;
-  const appt = readApptSettings(org.rawSettings);
-  const meet = appt.enabled && appt.on_website ? `${base}/meet` : `${base}/quote`;
-  const lp = serviceBySlug("leadpages");
-  const [featured, ...others] = BUILT;
-
+  const statIcons = [Users, Monitor, Code2];
+  const quotes = TESTIMONIALS;
   return (
-    <>
-      {/* 01 — Hero */}
-      <section className="relative overflow-hidden" aria-labelledby="hero-h">
-        <OrganicClip id="ag-organic" />
-        <div className={`${WRAP} relative grid lg:min-h-[min(780px,calc(100svh-76px))] lg:grid-cols-[minmax(0,1.04fr)_minmax(0,0.96fr)]`}>
-          <div className="relative z-10 flex flex-col justify-center pb-10 pt-10 sm:pt-14 lg:py-16 lg:pr-6">
-            <p className={`ag-in ag-d1 flex items-center gap-3 ${eyebrow}`}><span>Independent digital studio · Canberra, Australia</span><span aria-hidden className="hidden h-[3px] w-16 rounded-full bg-[var(--lime)] sm:block" /></p>
-            <h1 id="hero-h" className="ag-serif ag-in ag-d2 mt-6 text-[2.875rem] font-semibold leading-[0.98] tracking-[-0.03em] text-[var(--ink)] sm:text-[4.25rem] lg:text-[3.5rem] xl:text-[4rem] 2xl:text-[5.25rem]">
-              Good people.<br />Great websites.<br /><em className="font-medium text-[var(--forest)]">Seriously clever tech.</em>
-            </h1>
-            <p className={`ag-in ag-d3 mt-7 max-w-[34rem] ${lede} text-[var(--text)]`}>We design, build, host and grow digital experiences for businesses with big ideas. All the clever stuff, without the complicated conversations.</p>
-            <div className="ag-in ag-d3 mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link href={`${base}/quote`} className={`${BTN.primary} px-7`}>Let&apos;s build something<Arrow /></Link>
-              <Link href={`${base}#work`} className={`${BTN.ghostLight} px-7`}>Explore our work<Arrow /></Link>
-            </div>
-            <p className="ag-in ag-d4 mt-9 flex items-end gap-3 text-[var(--ink)]">
-              <Cup className="h-9 w-9 shrink-0" />
-              <span className="relative pb-1.5"><span className="ag-hand text-[1.5rem] leading-none sm:text-[1.625rem]">Powered by curiosity, code &amp; probably too much coffee.</span><Underline draw className="absolute -bottom-1 left-[30%] h-3 w-[70%]" /></span>
-            </p>
+    <div className="wch">
+      <style>{HOME_CSS}</style>
+      <div className="wch-art">
+        {/* Hero */}
+        <section className="wch-hero" aria-labelledby="hero-h">
+          <p className="eyebrow ag-in ag-d1">Independent digital studio · Canberra, Australia<i aria-hidden /></p>
+          <h1 id="hero-h" className="serif ag-in ag-d2">Good people.<br />Great websites.<em>Seriously clever tech.</em></h1>
+          <p className="lede ag-in ag-d3">We design, build and support websites, web apps and custom software for businesses with big ideas.</p>
+          <div className="ctas ag-in ag-d3">
+            <Link href={`${base}/quote`} className="btn btn-dark">Let&apos;s build something<ArrowUpRight aria-hidden className="ag-arrow" strokeWidth={2.4} /></Link>
+            <Link href={`${base}#work`} className="btn btn-line">Explore our work<ArrowUpRight aria-hidden className="ag-arrow" strokeWidth={2.4} /></Link>
           </div>
-          <div className="relative -mx-5 sm:-mx-8 lg:mx-0">
-            <div className="ag-reveal relative h-[400px] overflow-hidden rounded-t-[40px] sm:h-[520px] lg:absolute lg:inset-y-0 lg:left-0 lg:right-[calc(-1*(100vw-min(100vw,1520px))/2-3rem)] lg:h-auto lg:rounded-none lg:[clip-path:url(#ag-organic)] 2xl:right-[calc(-1*(100vw-min(100vw,1520px))/2-4rem)]">
-              {images.hero
-                ? <img src={images.hero} alt="Inside the Web Culture studio" className="h-full w-full object-cover" fetchPriority="high" />
-                : <WorkspaceScene className="h-full w-full" />}
-            </div>
+          <p className="hand ag-in ag-d4"><Cup className="cup" /><span>Powered by curiosity, code &amp; probably too much coffee.<Underline draw className="ul" /></span></p>
+          <div className="pic ag-reveal">
+            <img src={`${IMG}/hero.webp`} alt="A laptop on a timber desk beside a trailing plant in a sunlit studio" fetchPriority="high" />
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Credibility strip */}
-      <section aria-label={`What we did in ${YEAR_STATS.year}`} className="relative z-10">
-        <div className={WRAP}>
-          <div className="grid items-center gap-6 rounded-[28px] border border-[var(--line)] bg-[var(--card)] px-6 py-7 sm:grid-cols-2 sm:px-10 lg:grid-cols-[minmax(0,1.3fr)_repeat(4,minmax(0,1fr))] lg:gap-0 lg:divide-x lg:divide-[var(--line)] lg:py-8">
-            <div className="sm:col-span-2 lg:col-span-1 lg:pr-8"><p className="ag-serif text-[1.875rem] font-semibold leading-[1.02] text-[var(--ink)]">Local. Reliable.<br />Proven.</p><p className="mt-2 text-[0.875rem] text-[var(--muted)]">Our {YEAR_STATS.year} in numbers</p></div>
-            {YEAR_STATS.items.map((s, i) => (
-              <div key={s.label} className="flex items-center gap-4 lg:px-8">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-[1.5px] border-[rgba(20,45,35,.8)] text-[var(--ink)]"><Icon k={(["design", "seo", "globe"] as const)[i]} className="h-5 w-5" /></span>
-                <span><span className="block text-[1.875rem] font-extrabold leading-none tracking-[-0.03em] text-[var(--ink)]">{s.value}</span><span className="mt-1 block text-[0.9375rem] leading-snug text-[var(--muted)]">{s.label[0].toUpperCase() + s.label.slice(1)}</span></span>
-              </div>
-            ))}
-            <div className="flex items-center gap-4 lg:px-8">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-[1.5px] border-[rgba(20,45,35,.8)] text-[var(--ink)]"><Icon k="map" className="h-5 w-5" /></span>
-              <span><span className="block text-[1.125rem] font-extrabold leading-tight text-[var(--ink)]">Local support</span><span className="mt-1 block text-[0.875rem] leading-snug text-[var(--muted)]">From our office in Mitchell, ACT</span></span>
+        {/* Local. Reliable. Proven. */}
+        <section id="about" className="wch-strip scroll-mt-24" aria-label={`Our ${YEAR_STATS.year} in numbers`}>
+          <p className="t serif">Local. Reliable.<br />Proven.</p>
+          {YEAR_STATS.items.map((s, i) => {
+            const I = statIcons[i];
+            return <div key={s.label} className="s"><I aria-hidden strokeWidth={1.4} /><span><span className="n">{s.value}+</span><span className="l">{s.label[0].toUpperCase() + s.label.slice(1)}</span></span></div>;
+          })}
+          <div className="s"><Cloud aria-hidden strokeWidth={1.4} /><span><span className="n">Local</span><span className="l">Canberra-based support</span></span></div>
+        </section>
+
+        {/* All things digital */}
+        <section className="wch-panel ag-dark" aria-labelledby="all-h">
+          <h2 id="all-h" className="serif">All things digital.<br />Under one roof.<Underline className="ul" color="var(--lime2)" /></h2>
+          <ul>
+            {CATEGORIES.map((c) => {
+              const I = CAT_ICONS[c.key as keyof typeof CAT_ICONS] ?? Monitor;
+              return (
+                <li key={c.key}>
+                  <Link href={`${base}/${c.href}`}><I aria-hidden strokeWidth={1.5} /><b>{(CAT_LINES[c.key] ?? [c.name]).map((l, j) => <span key={l} className="bl">{j > 0 && <br />}{l}</span>)}</b><span>{(CAT_DESC[c.key] ?? c.line).split("|").map((l, j) => <span key={l} className="bl">{j > 0 && <br className="dk" />}{j > 0 && " "}{l}</span>)}</span></Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        {/* Meet LeadPages */}
+        <section className="wch-lp" aria-labelledby="lp-h">
+          <div className="pic"><img src={`${IMG}/leadpages.webp`} alt="The LeadPages website editor open on a laptop" loading="lazy" /></div>
+          <div className="txt">
+            <p className="eyebrow"><b>Meet</b> LeadPages</p>
+            <h2 id="lp-h" className="serif">The smarter way to website.<Sparks className="sp" /></h2>
+            <p>Our Australian-built platform that makes it easy to create, manage and grow your website — without the complexity of traditional systems.</p>
+            <div className="ctas">
+              <Link href={`${base}/leadpages`} className="btn btn-dark">Explore LeadPages<ArrowUpRight aria-hidden className="ag-arrow" strokeWidth={2.4} /></Link>
+              <Link href={`${base}/leadpages#compare`} className="btn btn-line">Compare to WordPress</Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* 02 — Selected work */}
-      <section id="work" className="scroll-mt-24 py-20 sm:py-28" aria-labelledby="work-h">
-        <div className={`${WRAP} grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20`}>
-          <div className="lg:sticky lg:top-28 lg:self-start">
-            <H2 id="work-h" className="max-w-[13ch] text-[var(--ink)]">Good-looking websites that actually work.</H2>
-            <p className="mt-6 flex items-start gap-2 text-[var(--ink)]"><span className="ag-hand text-[1.75rem] leading-none">Real projects. Real results.</span><HandArrow className="mt-2 h-10 w-14 rotate-[-8deg] text-[var(--ink)]" /></p>
-            <p className={`mt-6 max-w-[40ch] ${lede}`}>A few of the Canberra businesses whose websites we&apos;ve designed, built or looked after.</p>
-            <Link href={`${base}/quote`} className={`${BTN.ghostLight} mt-8`}>Start your project<Arrow /></Link>
-          </div>
-          <ul className="border-t border-[rgba(20,45,35,.15)]">
-            {CLIENTS.map((c) => (
-              <li key={c} className="group border-b border-[rgba(20,45,35,.15)]">
-                <p className="ag-serif flex items-baseline justify-between gap-6 py-6 text-[1.75rem] font-medium leading-tight text-[var(--ink)] sm:py-7 sm:text-[2.5rem] xl:text-[2.875rem]">
-                  <span className="bg-[linear-gradient(var(--lime),var(--lime))] bg-[length:0%_0.22em] bg-[position:0_88%] bg-no-repeat transition-[background-size] duration-500 group-hover:bg-[length:100%_0.22em]">{c}</span>
-                </p>
-              </li>
+        {/* More than websites */}
+        <section id="work" className="wch-sw scroll-mt-24" aria-labelledby="sw-h">
+          <div className="t"><h2 id="sw-h" className="serif">More than websites.<br />Real business software.<Underline className="ul" color="var(--lime2)" /></h2></div>
+          <ul>
+            {PRODUCTS.map((p) => (
+              <li key={p.name}><ProductMark mark={p.mark} /><span><b>{p.name}</b><span>{p.text}</span></span></li>
             ))}
           </ul>
-        </div>
-      </section>
+        </section>
 
-      {/* 03 — All things digital */}
-      <section className="pb-20 sm:pb-28" aria-labelledby="all-h">
-        <div className={WRAP}>
-          <div className="ag-dark relative overflow-hidden rounded-[36px] bg-[var(--ink)] px-6 py-12 text-[var(--card)] sm:px-12 sm:py-16 xl:px-16 xl:py-20">
-            <div className="grid gap-12 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,2fr)] xl:gap-14">
-              <div>
-                <H2 id="all-h" className="relative inline-block text-[2.5rem] text-[var(--card)] sm:text-[3.5rem] xl:text-[3rem] 2xl:text-[3.375rem]"><span className="sm:whitespace-nowrap">All things digital.</span><br /><span className="sm:whitespace-nowrap">Under one roof.</span><Underline className="absolute -bottom-4 left-0 h-4 w-[70%]" /></H2>
-                <p className="mt-10 max-w-[32ch] text-[1.0625rem] leading-relaxed text-[rgba(252,250,245,.7)]">We build it, host it, keep it updated and help it grow. When something breaks, you talk to the people who built it.</p>
-              </div>
-              <ul className="grid gap-px overflow-hidden rounded-[20px] bg-[var(--line-dark)] sm:grid-cols-2 lg:grid-cols-3">
-                {CATEGORIES.map((c) => (
-                  <li key={c.key} className="bg-[var(--ink)]">
-                    <Link href={`${base}/${c.href}`} className="group grid h-full grid-cols-[auto_1fr] gap-x-4 p-5 transition-colors hover:bg-[var(--forest)] sm:flex sm:flex-col sm:p-7">
-                      <span className="row-span-2 text-[var(--lime)] transition-transform duration-300 group-hover:-translate-y-0.5"><Icon k={c.icon} className="h-7 w-7 sm:h-8 sm:w-8" /></span>
-                      <span className="flex sm:mt-5 items-start justify-between gap-3 text-[1.1875rem] font-bold leading-snug">{c.name}<ArrowUpRight aria-hidden className="ag-arrow mt-1 h-5 w-5 shrink-0 text-[var(--lime)] opacity-60 group-hover:opacity-100" strokeWidth={2} /></span>
-                      <span className="col-start-2 mt-1.5 text-[0.9688rem] leading-relaxed text-[rgba(252,250,245,.7)] sm:mt-2">{c.line}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 04 — The people behind the pixels */}
-      <section id="about" className="scroll-mt-24 border-t border-[var(--line)] py-20 sm:py-28" aria-labelledby="about-h">
-        <div className={`${WRAP} grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-20`}>
-          <div className="order-2 lg:order-1">
-            {images.about ? (
-              <img src={images.about} alt="The Web Culture team" loading="lazy" className="aspect-[5/4] w-full rounded-[36px] object-cover" />
-            ) : (
-              <div className="relative aspect-[5/4] w-full overflow-hidden rounded-[36px] bg-[var(--sage-pale)]">
-                <Brackets className="absolute left-[10%] top-[14%] h-16 w-24 text-[rgba(20,45,35,.8)]" />
-                <Cursor className="absolute right-[16%] top-[22%] h-12 w-10 rotate-[-8deg] text-[var(--ink)]" />
-                <Sparks className="absolute right-[12%] top-[14%] h-8 w-8 text-[var(--lime-ink)]" />
-                <div className="absolute inset-x-[10%] bottom-[14%]">
-                  <p className="ag-hand text-[2.25rem] leading-[1.05] text-[var(--ink)] sm:text-[2.75rem]">Upstairs from a coffee roastery,<br />in Mitchell, Canberra.</p>
-                  <Underline className="mt-1 h-4 w-[60%]" />
-                  <p className="mt-6 flex items-center gap-3 text-[1rem] font-semibold text-[var(--ink)]"><Cup className="h-8 w-8" />{address}</p>
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="order-1 lg:order-2">
-            <p className={eyebrow}>The people behind the pixels</p>
-            <H2 id="about-h" className="mt-5 text-[var(--ink)]">A little nerdy.<br /><em className="font-medium text-[var(--forest)]">A lot human.</em></H2>
-            <div className={`mt-7 max-w-[52ch] space-y-4 ${lede}`}>
-              <p>We&apos;re a Canberra-based team of designers, developers and digital problem-solvers. We love technology, but we&apos;re even more passionate about the people we work with.</p>
-              <p>When something goes wrong, you&apos;ll speak to someone who understands your business and knows how to fix it.</p>
-              <p className="font-semibold text-[var(--ink)]">No complicated conversations. No being passed around. Just good people who know their stuff.</p>
-            </div>
-            <ul className="mt-8 grid gap-x-8 gap-y-3 sm:grid-cols-2">
-              {POINTS.map((p) => <li key={p} className="flex items-start gap-3 text-[1rem] font-medium text-[var(--text)]"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--lime)] text-[var(--ink)]"><Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3} /></span>{p}</li>)}
-            </ul>
-            <Link href={meet} className={`${BTN.primary} mt-10`}>Get to know us<Arrow /></Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 05 — Meet LeadPages */}
-      <section className="bg-[var(--card)] py-20 sm:py-28" aria-labelledby="lp-h">
-        <div className={`${WRAP} grid items-center gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16`}>
-          <div className="ag-zoom relative">
-            <EditorLaptop className="ag-zoom-target relative w-full" />
-            <p className="ag-hand absolute -bottom-2 right-2 rotate-[-4deg] text-[1.5rem] text-[var(--ink)] sm:right-10">Click. Edit. Done.</p>
-          </div>
-          <div>
-            <p className={eyebrow}><span className="text-[var(--lime-ink)]">Meet</span> LeadPages</p>
-            <H2 id="lp-h" className="mt-5 text-[var(--ink)]">The smarter way to website.<Sparks className="ml-1 inline-block h-7 w-7 -translate-y-6 text-[var(--lime-ink)]" /></H2>
-            <p className={`mt-6 max-w-[48ch] ${lede}`}>Our Australian-built platform makes it easier to create, manage and grow your website — without the complexity of traditional systems.</p>
-            {lp && (
-              <ul className="mt-8 space-y-4">
-                {lp.benefits.filter((b) => ["Live visual editing", "An app marketplace", "Nothing to patch"].includes(b.title)).map((b) => (
-                  <li key={b.title} className="flex gap-4">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--ink)] text-[var(--lime)]"><Icon k={b.icon} /></span>
-                    <span><span className="block font-bold text-[var(--ink)]">{b.title}</span><span className="block text-[0.9688rem] leading-relaxed text-[var(--muted)]">{b.text}</span></span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link href={`${base}/leadpages`} className={BTN.primary}>Explore LeadPages<Arrow /></Link>
-              <Link href={`${base}/leadpages#compare`} className={BTN.ghostLight}>Compare with WordPress</Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 06 — Beyond websites */}
-      <section id="software" className="scroll-mt-24 py-20 sm:py-28" aria-labelledby="sw-h">
-        <div className={WRAP}>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end">
-            <div>
-              <p className={eyebrow}>Beyond websites</p>
-              <H2 id="sw-h" className="mt-5 text-[var(--ink)]">We build software,<br />not just websites.</H2>
-            </div>
-            <p className={`max-w-[50ch] ${lede} lg:justify-self-end`}>From business management platforms and booking systems to customer portals, integrations and automation, we build software that solves real business problems. These are products our team has built:</p>
-          </div>
-          <div className="mt-14 grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-            <article className="ag-dark relative flex flex-col overflow-hidden rounded-[32px] bg-[var(--ink)] p-8 text-[var(--card)] sm:p-11">
-              <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--lime)] text-[1.375rem] font-extrabold text-[var(--ink)]" aria-hidden>{featured.name.slice(0, 1)}</span>
-              <p className="mt-auto pt-16 text-[0.9375rem] font-semibold text-[var(--lime)]">{featured.kind}</p>
-              <h3 className="ag-serif mt-2 text-[2.5rem] font-semibold leading-none sm:text-[3.25rem]">{featured.name}</h3>
-              <p className="mt-5 max-w-[46ch] text-[1.125rem] leading-relaxed text-[rgba(252,250,245,.75)]">{featured.text}</p>
-              <ul className="mt-8 flex flex-wrap gap-2">{featured.tags.map((t) => <li key={t} className="ag-mono rounded-full border border-[var(--line-dark)] px-3 py-1 text-[0.75rem] text-[rgba(252,250,245,.8)]">{t}</li>)}</ul>
-            </article>
-            <ul className="grid gap-5 sm:grid-cols-2">
-              {others.slice(0, 4).map((b) => (
-                <li key={b.name} className="flex flex-col rounded-[28px] border border-[var(--line)] bg-[var(--card)] p-6 sm:p-7">
-                  <span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--ink)] text-[1rem] font-extrabold text-[var(--lime)]" aria-hidden>{b.name.slice(0, 1)}</span>
-                  <p className="mt-5 text-[0.875rem] font-semibold text-[var(--muted)]">{b.kind}</p>
-                  <h3 className="mt-1 text-[1.375rem] font-extrabold tracking-[-0.02em] text-[var(--ink)]">{b.name}</h3>
-                  <p className="mt-2 flex-1 text-[0.9375rem] leading-relaxed text-[var(--muted)]">{b.text}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <Link href={`${base}/ai-and-custom-apps`} className={`${BTN.ghostLight} mt-10`}>Explore custom software<Arrow /></Link>
-        </div>
-      </section>
-
-      {/* 07 — Process */}
-      <section className="border-t border-[var(--line)] py-20 sm:py-28" aria-labelledby="how-h">
-        <div className={`${WRAP} grid gap-12 xl:grid-cols-[minmax(0,0.6fr)_minmax(0,2fr)] xl:items-center xl:gap-16`}>
-          <H2 id="how-h" className="relative inline-block self-start text-[var(--ink)]">From idea<br />to internet.<Underline className="absolute -bottom-3 left-0 h-3 w-[75%]" /></H2>
-          <ol className="grid gap-8 md:grid-cols-4 md:gap-4">
-            {PROCESS.map((s, i) => (
-              <li key={s.title} className="relative flex gap-5 md:block md:pr-8">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--lime)] text-[1.0625rem] font-extrabold text-[var(--ink)]">{i + 1}</span>
-                {i < PROCESS.length - 1 && <StepArrow className="absolute right-0 top-3 hidden h-5 w-12 text-[rgba(20,45,35,.45)] md:block" />}
-                {i < PROCESS.length - 1 && <span aria-hidden className="absolute bottom-[-2rem] left-[21px] top-12 w-px bg-[rgba(20,45,35,.2)] md:hidden" />}
-                <span className="block md:mt-5">
-                  <span className="block text-[1.25rem] font-extrabold tracking-[-0.01em] text-[var(--ink)]">{s.title}</span>
-                  <span className="mt-2 block text-[1rem] leading-relaxed text-[var(--muted)]">{s.text}</span>
-                </span>
+        {/* From idea to launch */}
+        <section className="wch-steps" aria-labelledby="how-h">
+          <div className="t"><h2 id="how-h" className="serif">From idea<br />to launch.<Underline className="ul" color="var(--lime2)" /></h2></div>
+          <ol>
+            {LAUNCH.map((s, i) => (
+              <li key={s.title}>
+                <span className="num">{i + 1}</span><b>{s.title}</b><span>{s.text}</span>
+                {i < LAUNCH.length - 1 && <StepArrow className="arr" />}
               </li>
             ))}
           </ol>
-        </div>
-      </section>
+        </section>
 
-      {/* 08 — Reviews */}
-      <section className="bg-[var(--sage-pale)] py-20 sm:py-28" aria-labelledby="tst-h">
-        <div className={WRAP}>
-          <H2 id="tst-h" className="text-center text-[var(--ink)]">Nice things from nice people.</H2>
-          <div className="mt-12"><Testimonials items={TESTIMONIALS} /></div>
-        </div>
-      </section>
-
-      {/* 09 — FAQs */}
-      <section className="py-20 sm:py-28" aria-labelledby="faq-h">
-        <div className={`${WRAP} grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20`}>
-          <div>
-            <H2 id="faq-h" className="text-[var(--ink)]">Questions people ask us.</H2>
-            <p className={`mt-6 max-w-[36ch] ${lede}`}>Something else on your mind? Call us on <a href={tel} className="font-semibold text-[var(--ink)] underline decoration-[var(--lime)] decoration-2 underline-offset-4">{phone}</a> — a real person answers.</p>
-          </div>
-          <FaqList faqs={HOME_FAQS} />
-        </div>
-      </section>
-
-      {/* 10 — Contact */}
-      <section id="contact" className="scroll-mt-24 pb-20 sm:pb-28" aria-labelledby="cta-h">
-        <div className={WRAP}>
-          <div className="grid gap-10 overflow-hidden rounded-[36px] bg-[var(--card)] p-6 ring-1 ring-[var(--line)] sm:p-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16 xl:p-16">
-            <div>
-              <H2 id="cta-h" className="text-[var(--ink)]">Something brewing?<br /><em className="font-medium text-[var(--forest)]">Let&apos;s talk.</em></H2>
-              <p className={`mt-6 max-w-[44ch] ${lede}`}>Good things start with a conversation. Tell us what you&apos;re working on and we&apos;ll help you figure out the best way forward.</p>
-              <ul className="mt-9 space-y-4 text-[1.0625rem] font-semibold text-[var(--ink)]">
-                <li><a href={tel} className="inline-flex items-center gap-3 hover:underline hover:decoration-[var(--lime)] hover:decoration-2 hover:underline-offset-4"><span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--ink)] text-[var(--lime)]"><Phone aria-hidden className="h-[18px] w-[18px]" strokeWidth={1.8} /></span>{phone}</a></li>
-                <li><a href={`mailto:${email}`} className="inline-flex items-center gap-3 hover:underline hover:decoration-[var(--lime)] hover:decoration-2 hover:underline-offset-4"><span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--ink)] text-[var(--lime)]"><Mail aria-hidden className="h-[18px] w-[18px]" strokeWidth={1.8} /></span>{email}</a></li>
-                <li className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--ink)] text-[var(--lime)]"><MapPin aria-hidden className="h-[18px] w-[18px]" strokeWidth={1.8} /></span>{address}</li>
-              </ul>
-              <p className="mt-9 text-[0.9375rem] text-[var(--muted)]">Already a client with a problem? <Link href={`${base}/support`} className="font-semibold text-[var(--ink)] underline underline-offset-4">Lodge a support ticket</Link>.</p>
-            </div>
-            <div className="rounded-[28px] bg-[var(--paper)] p-6 sm:p-9">
-              <p className="mb-6 text-[1.375rem] font-extrabold tracking-[-0.02em] text-[var(--ink)]">Quick quote</p>
-              <QuoteForm slug={org.slug} variant="quick" />
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
+        {/* Review */}
+        <section className="wch-band" aria-label="What clients say">
+          <Testimonials items={quotes} compact />
+        </section>
+      </div>
+    </div>
   );
 }
