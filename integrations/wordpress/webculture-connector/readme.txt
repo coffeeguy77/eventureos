@@ -1,5 +1,5 @@
 === Web Culture Connector ===
-Stable tag: 1.4.1
+Stable tag: 1.5.0
 Requires at least: 6.0
 Requires PHP: 7.4
 License: GPLv2 or later
@@ -64,3 +64,20 @@ GET  /changes · POST /undo {"change_id"}                each change keeps an un
 
 == Automatic updates (1.4.1) ==
 The connector keeps itself up to date: WordPress's background updater installs new versions of this plugin (about twice a day) even when automatic updates are off for other plugins, and the command centre pushes the newest version to any site still behind.
+
+== SEO + AI search (1.5.0) ==
+Works with Yoast, Rank Math or SEOPress (writing into their own fields) and stands in for one when the site has none.
+GET  /seo/audit?offset=0&limit=10&budget=25  loads each public page as a visitor sees it: title, description, robots, H1s,
+                                             images and alt text (with library ids), schema types, words; next_offset until null.
+                                             offset 0 also returns site checks (sitemap, robots.txt, AI crawlers, llms.txt, verification)
+GET  /seo/site                               the site checks on their own
+GET  /seo/page?id=                           one page in depth (its text, headings, images) for writing fixes
+POST /seo/apply {"items":[{"id","title","description","focus_keyword","noindex","summary"}],"media":[{"id","alt"}],"summary"}
+                                             every change logged with an undo copy (POST /undo)
+GET  /seo/settings · POST /seo/settings {"settings":{business:{…},schema,faq_schema,llms,llms_intro,llms_pages,
+                                             ai_crawlers:"default|allow|block",noindex_types:[…],verify_google,verify_bing,
+                                             h1_class:"theme-title-class",alt_fill:true}}
+GET  /seo/llms                               the llms.txt the connector would serve
+Front end: business JSON-LD, FAQ JSON-LD from <details><summary> FAQs, /llms.txt (when no file is on the server),
+AI crawler rules in robots.txt, verification tags, hidden post types out of search and sitemaps, and — with no SEO
+plugin — the page's own title, description, robots and Open Graph tags.

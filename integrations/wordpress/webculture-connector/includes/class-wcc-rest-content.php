@@ -59,6 +59,14 @@ class WCC_Rest_Content {
 		self::route( '/menus/items', 'GET', fn( $p ) => WCC_Content::menu_items( (int) ( $p['menu'] ?? 0 ) ) );
 		self::route( '/menus/item', 'POST', fn( $p, $s ) => WCC_Content::save_menu_item( (array) ( $p['item'] ?? array() ), $s ) );
 		self::route( '/rest', 'POST', fn( $p, $s ) => WCC_Content::rest( (string) ( $p['method'] ?? 'GET' ), (string) ( $p['path'] ?? '' ), $p['body'] ?? null, $p['query'] ?? null, $s ) );
+		/* SEO + AI search (1.5.0) */
+		self::route( '/seo/audit', 'GET', fn( $p ) => WCC_Seo::audit( (int) ( $p['offset'] ?? 0 ), (int) ( $p['limit'] ?? 10 ), (int) ( $p['budget'] ?? 25 ) ) );
+		self::route( '/seo/site', 'GET', fn() => WCC_Seo::site_checks() );
+		self::route( '/seo/page', 'GET', fn( $p ) => WCC_Seo::page( (int) ( $p['id'] ?? 0 ) ) );
+		self::route( '/seo/apply', 'POST', fn( $p, $s ) => WCC_Seo::apply( $p['items'] ?? array(), $p['media'] ?? array(), $s ) );
+		self::route( '/seo/settings', 'GET', fn() => WCC_Seo::settings() );
+		self::route( '/seo/settings', 'POST', fn( $p, $s ) => WCC_Seo::save_settings( (array) ( $p['settings'] ?? array() ), $s ) );
+		self::route( '/seo/llms', 'GET', fn() => array( 'text' => WCC_Seo::llms_text() ) );
 		self::route( '/changes', 'GET', fn( $p ) => WCC_Content::changes( (int) ( $p['limit'] ?? 50 ) ) );
 		self::route( '/undo', 'POST', fn( $p ) => WCC_Content::undo( (string) ( $p['change_id'] ?? '' ) ) );
 	}

@@ -15,7 +15,7 @@ import { SiteSignIn } from "@/components/nerdherd/site-sign-in";
 import { LinkHosting } from "@/components/nerdherd/link-hosting";
 import { detectHost, HOST_LABEL } from "@/lib/nerdherd/host-detect";
 import { AiJobList, type AiJobRow } from "@/components/nerdherd/ai-maintenance";
-import { Bot } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 import { allPages } from "@/lib/supabase/all-pages";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +46,8 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     supabase.from("website_connectors").select("*").eq("organisation_id", org.id).eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null })),
     supabase.from("website_maintenance_runs").select("id, action, scope, ok, summary, created_at").eq("organisation_id", org.id).eq("website_id", id).neq("action", "check").order("created_at", { ascending: false }).limit(25).then((r) => r, () => ({ data: [] })),
   ]);
+  // SEO score for this site; nothing before update 0123
+  const { data: seo } = await supabase.from("nh_seo_sites").select("score, pages, issues, last_audit_at, auto").eq("website_id", id).maybeSingle().then((r) => r, () => ({ data: null }));
   // AI maintenance jobs on this site (the client's job file); nothing before update 0104
   const { data: aiJobs } = await supabase.from("nh_ai_jobs").select("id, number, kind, request, billable, source, status, stage_note, report_summary, changes, created_at, invoice_id").eq("organisation_id", org.id).eq("website_id", id).order("created_at", { ascending: false }).limit(30).then((r) => r, () => ({ data: [] }));
   const aiRows: AiJobRow[] = ((aiJobs ?? []) as { id: string; number: number; kind: string; request: string | null; billable: boolean; source: string; status: string; stage_note: string | null; report_summary: string | null; changes: unknown; created_at: string; invoice_id: string | null }[])
@@ -101,6 +103,12 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
               <CardHeader title="AI maintenance" subtitle="Changes and updates done by Claude on this site — backup first, report and changes for each job"
                 action={canManage(role) ? <ButtonLink href={`/nerd-herd/ai?site=${w.id}`} size="sm" variant="primary"><Bot className="h-3.5 w-3.5" />New AI job</ButtonLink> : undefined} />
               <div className="border-t border-line"><AiJobList rows={aiRows} showSite={false} /></div>
+            </Card>
+          )}
+          {connector && (
+            <Card>
+              <CardHeader title="SEO & AI search" subtitle={seo?.last_audit_at ? `Score ${seo.score ?? "—"}/100 · ${seo.pages} pages · ${seo.issues} to improve · checked ${relative(seo.last_audit_at)}${seo.auto ? " · automatic weekly" : ""}` : "Not checked yet — titles, descriptions, alt text, schema, llms.txt and Search Console"}
+                action={<ButtonLink href={`/nerd-herd/seo/${w.id}`} size="sm"><Sparkles className="h-3.5 w-3.5" />Open SEO</ButtonLink>} />
             </Card>
           )}
           <Card>

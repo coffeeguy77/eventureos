@@ -25,7 +25,7 @@ class WCC_Content {
 		return new WP_Error( $code, $msg, array( 'status' => $status ) );
 	}
 
-	private static function change_id() {
+	public static function change_id() {
 		return 'c' . time() . strtolower( wp_generate_password( 6, false, false ) );
 	}
 
@@ -96,7 +96,7 @@ class WCC_Content {
 	}
 
 	/** Remember what is about to change, so it can be undone. */
-	private static function remember( $post_id, $change_id, $summary, $fields, $meta_keys ) {
+	public static function remember( $post_id, $change_id, $summary, $fields, $meta_keys ) {
 		$p    = get_post( $post_id );
 		$prev = array( 'fields' => array(), 'meta' => array() );
 		foreach ( $fields as $f ) {
@@ -119,7 +119,7 @@ class WCC_Content {
 		update_post_meta( $post_id, self::UNDO_META, wp_slash( array_slice( $undo, 0, self::UNDO_KEEP ) ) );
 	}
 
-	private static function after_save( $post_id ) {
+	public static function after_save( $post_id ) {
 		// Elementor: rebuild this page's CSS file; caches: purge so the change shows straight away.
 		if ( class_exists( '\Elementor\Core\Files\CSS\Post' ) && 'elementor' === self::builder( $post_id ) ) {
 			try {
@@ -133,7 +133,7 @@ class WCC_Content {
 		WCC_Maintenance::purge_caches();
 	}
 
-	private static function log_change( $change_id, $message, $data = array() ) {
+	public static function log_change( $change_id, $message, $data = array() ) {
 		WCC_Maintenance::log( 'content', $message, array( 'change_id' => $change_id ) + $data );
 	}
 

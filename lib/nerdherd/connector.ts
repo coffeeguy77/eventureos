@@ -74,9 +74,21 @@ export async function callConnector<T>(siteUrl: string, key: string, method: "GE
     return { res, json, text };
   };
 
+  // A host's bot check (SiteGround's "One moment, please…") can answer instead of WordPress for a few seconds
+  // after a burst of requests; wait and try again rather than failing the job.
+  const botCheck = (x: { json: unknown; text: string }) => x.json === null && /One moment, please|sgcaptcha|captcha/i.test(x.text.slice(0, 4000));
+  const attemptPatient = async (url: string) => {
+    let x = await attempt(url);
+    for (let i = 0; i < 3 && botCheck(x); i++) {
+      await new Promise((res) => setTimeout(res, 5000 + i * 3000));
+      x = await attempt(url);
+    }
+    return x;
+  };
+
   let r;
   try {
-    r = await attempt(`${siteUrl}/wp-json${route}${query ? `?${query}` : ""}`);
+    r = await attemptPatient(`${siteUrl}/wp-json${route}${query ? `?${query}` : ""}`);
     // Sites without pretty links: fall back to ?rest_route=
     if (r.res.status === 404 && !(r.json && typeof r.json === "object" && "code" in (r.json as object) && String((r.json as { code: string }).code).startsWith("wcc_"))) {
       r = await attempt(`${siteUrl}/?rest_route=${encodeURIComponent(route)}${query ? `&${query}` : ""}`);
