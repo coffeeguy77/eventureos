@@ -63,6 +63,9 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
   // Past its expiry the quote can still be accepted while the event is to come — late: availability to be confirmed
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const respondable = v.status === "sent" || v.status === "viewed";
+  // The job's address so far (the customer confirms or changes it when they accept)
+  const eventAddress = d.event ? await createServiceClient().from("events").select("address").eq("id", d.event.id).maybeSingle()
+    .then(({ data: a }) => (a?.address as string | null) ?? null, () => null) : null;
   const open = respondable && canStillAccept(today, d.quote.expiry_date, d.event?.event_date ?? null);
   const late = open && isLateAcceptance(today, d.quote.expiry_date, d.event?.event_date ?? null);
   // ?preview=1 opened by the business (signed in): exactly what the customer sees, but nothing is recorded or saved
@@ -146,7 +149,8 @@ export default async function QuoteLinkPage({ params, searchParams }: { params: 
         {open && !isCopy && (
           <div className="mt-6">
             <LinkResponse token={token} versionNumber={v.number} total={total} defaultName={d.recipient.name ?? ""} businessName={d.org.name}
-              needsApproval={d.org.approval_on_accept} late={late} phone={d.org.contact_phone} />
+              needsApproval={d.org.approval_on_accept} late={late} phone={d.org.contact_phone}
+              location={d.event ? { apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() || null, mapId: process.env.NEXT_PUBLIC_GOOGLE_MAP_ID?.trim() || null, initial: eventAddress ?? d.event.venue ?? "" } : null} />
           </div>
         )}
 

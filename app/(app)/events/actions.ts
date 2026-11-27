@@ -122,6 +122,8 @@ export async function updateEventDetails(id: string, _prev: FormState, form: For
         : kind === "text" && ["requirements", "customer_notes", "internal_notes"].includes(col) ? (v ? "updated" : null) : v;
     changes[label] = [show(prev), show(next)];
   }
+  // The office typed a new address: the customer's old pin no longer matches it, so the address is used from now on
+  if ("address" in patch && (before as { location_pinned?: boolean }).location_pinned) { patch.location_pinned = false; patch.location_lat = null; patch.location_lng = null; }
   // Several days (each with its own hours) — day 1 also fills the job's date and times so everything else keeps working
   let newDays: EventDay[] | null = null;
   if (form.has("days")) {

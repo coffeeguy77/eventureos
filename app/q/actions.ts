@@ -66,6 +66,9 @@ export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormDat
     });
     if (error) return { error: error.message };
     if (decision === "accepted" && eventId) {
+      // Where the event is, if they confirmed it — saved before the calendar entry goes out so it carries the location
+      const loc = readLocation(form.get("location"));
+      if (loc) await saveEventLocation(db, eventId as string, loc).catch(() => undefined);
       const { alertBookingApproval } = await import("@/lib/email/booking-approval");
       await alertBookingApproval(db, eventId as string);
       // The calendar entry goes to Google now, not on the next sync
@@ -78,6 +81,33 @@ export async function respondViaQuoteLink(_prev: LinkRespondState, form: FormDat
     return { ok: true, decision };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Something went wrong — please try again." };
+  }
+}
+
+interface ConfirmedLocation { address: string | null; lat: number | null; lng: number | null; pinned: boolean; note: string | null }
+
+/** The location the customer gave with their acceptance (address search or a dropped pin), checked. */
+function readLocation(raw: FormDataEntryValue | null): ConfirmedLocation | null {
+  if (typeof raw !== "string" || !raw) return null;
+  let o: Record<string, unknown>;
+  try { o = JSON.parse(raw) as Record<string, unknown>; } catch { return null; }
+  const txt = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) || null : null);
+  const num = (v: unknown, lim: number) => { const x = typeof v === "number" ? v : NaN; return Number.isFinite(x) && Math.abs(x) <= lim ? Math.round(x * 1e6) / 1e6 : null; };
+  let lat = num(o.lat, 90), lng = num(o.lng, 180);
+  if (lat == null || lng == null) lat = lng = null;
+  const address = txt(o.address, 300), note = txt(o.note, 300);
+  if (!address && lat == null && !note) return null;
+  return { address, lat, lng, pinned: !!o.pinned && lat != null, note };
+}
+
+/** Saves it on the job (falls back to the address alone before the 0124 database update). */
+async function saveEventLocation(db: ReturnType<typeof createServiceClient>, eventId: string, l: ConfirmedLocation) {
+  const address = l.address ?? (l.lat != null ? `Pin ${l.lat}, ${l.lng}` : null);
+  const full: Record<string, unknown> = { ...(address ? { address } : {}), location_lat: l.lat, location_lng: l.lng, location_pinned: l.pinned, location_note: l.note };
+  const { error } = await db.from("events").update(full).eq("id", eventId);
+  if (error && /location_/.test(error.message)) {
+    const text = [address, l.lat != null && l.pinned ? `(${l.lat}, ${l.lng})` : null, l.note].filter(Boolean).join(" — ");
+    if (text) await db.from("events").update({ address: text.slice(0, 500) }).eq("id", eventId);
   }
 }
 

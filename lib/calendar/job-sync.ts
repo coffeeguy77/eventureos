@@ -35,7 +35,13 @@ export async function loadJobDays(db: SupabaseClient, orgId: string, eventId: st
   const e = ev as { id: string; number: number; name: string; venue: string | null; customer_id: string; event_date: string | null; setup_time: string | null; start_time: string | null; finish_time: string | null; days?: unknown; availability_tbc?: boolean };
   const { jobPlans } = await import("@/lib/crew/job-plan");
   const plan = (await jobPlans(db, orgId, [e])).get(e.id);
-  return { ev: e, days: plan?.days ?? jobDays(e, await quoteStaffDays(db, orgId, eventId)), travel: plan?.travel ?? 0, address: plan?.address ?? null };
+  // Where it is: the customer's dropped pin (exact spot), else the job's address, else the quote's travel address
+  let { data: loc, error: lErr } = await db.from("events").select("address, location_lat, location_lng, location_pinned").eq("id", eventId).maybeSingle();
+  if (lErr) ({ data: loc } = await db.from("events").select("address").eq("id", eventId).maybeSingle());
+  const l = (loc ?? {}) as { address?: string | null; location_lat?: number | null; location_lng?: number | null; location_pinned?: boolean };
+  const pin = l.location_pinned && l.location_lat != null && l.location_lng != null ? `${Number(l.location_lat)},${Number(l.location_lng)}` : null;
+  return { ev: e, days: plan?.days ?? jobDays(e, await quoteStaffDays(db, orgId, eventId)), travel: plan?.travel ?? 0,
+    address: l.address?.trim() || plan?.address || null, pin };
 }
 
 /** The calendar entry's title: "TBC - …" while availability is still to be confirmed (a late acceptance). */
@@ -92,7 +98,8 @@ export async function syncJobCalendar(db: SupabaseClient, orgId: string, eventId
     if (byDate.has(d) || !job.days.some((x) => x.date === d)) spare.push(r); else byDate.set(d, r);
   }
   const ids: string[] = [];
-  const location = jobLocation(job.ev.venue, job.address);
+  // A pin goes in as its coordinates, so Google Maps opens on the exact spot
+  const location = job.pin ?? jobLocation(job.ev.venue, job.address);
   for (const day of job.days) {
     const { startsAt, endsAt } = dayWindow(day, tz, job.travel);
     const have = byDate.get(day.date) ?? spare.shift();

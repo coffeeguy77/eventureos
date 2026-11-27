@@ -301,7 +301,19 @@ export default async function EventPage({ params, searchParams }: { params: Prom
                         <AddToCalendarButton eventId={e.id} onCalendar={cal.length > 0} hasDate={!!e.event_date} size="xs" className="-ml-2" />
                       </Field>
                       <Field label="Venue">{e.venue ?? "—"}</Field>
-                      <Field label="Address">{e.address ?? "—"}</Field>
+                      <Field label="Address">
+                        {(() => {
+                          const x = e as { address: string | null; location_lat?: number | null; location_lng?: number | null; location_pinned?: boolean; location_note?: string | null };
+                          const q = x.location_lat != null && x.location_lng != null ? `${x.location_lat},${x.location_lng}` : x.address;
+                          return (
+                            <>
+                              <span className="block">{x.address ?? "—"}</span>
+                              {x.location_note && <span className="block text-ink-muted">{x.location_note}</span>}
+                              {q && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`} target="_blank" rel="noopener noreferrer" className="text-[0.8125rem] font-medium text-brand-700 hover:underline dark:text-brand-300">{x.location_pinned ? "Open the pin in Google Maps" : "Open in Google Maps"}</a>}
+                            </>
+                          );
+                        })()}
+                      </Field>
                       <Field label="Guests">{e.guest_count ?? "—"}</Field>
                       {e.serves != null && <Field label="Serves">{e.serves}</Field>}
                       <Field label="Budget">{e.budget ? money(e.budget, cur, { cents: false }) : "—"}</Field>

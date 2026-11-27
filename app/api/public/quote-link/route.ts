@@ -14,6 +14,7 @@ export async function POST(req: Request) {
   const form = new FormData();
   for (const k of ["token", "decision", "name", "reason"]) if (body[k] != null) form.set(k, String(body[k]));
   if (body.agree) form.set("agree", "on");
+  if (body.location && typeof body.location === "object") form.set("location", JSON.stringify(body.location).slice(0, 2000));
   const r = await respondViaQuoteLink(undefined, form);
   return NextResponse.json(r ?? { error: "Something went wrong — please try again." });
 }

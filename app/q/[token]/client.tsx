@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { CheckCircle2, Printer } from "lucide-react";
 import { FormError, Input, Label, Textarea } from "@/components/ui/form";
 import type { LinkRespondState } from "../actions";
+import { AddressPicker, type PickedLocation } from "@/components/maps/address-picker";
 
 const post = (body: Record<string, unknown>) => fetch("/api/public/quote-link", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 import { cn } from "@/lib/cn";
@@ -34,9 +35,13 @@ const btn = (primary: boolean) => cn(
   primary ? "bg-[var(--portal-brand)] text-[color:var(--portal-brand-fg)] shadow-sm hover:brightness-95" : "bg-surface text-ink ring-1 ring-inset ring-line-strong hover:bg-zinc-50",
 );
 
-export function LinkResponse({ token, versionNumber, total, defaultName, businessName, needsApproval, late = false, phone = null }: {
+export function LinkResponse({ token, versionNumber, total, defaultName, businessName, needsApproval, late = false, phone = null, location = null }: {
   token: string; versionNumber: number; total: string; defaultName: string; businessName: string; needsApproval: boolean; late?: boolean; phone?: string | null;
+  /** Event quotes: confirm where it is (optional) — Google search / pin when a key is set */
+  location?: { apiKey: string | null; mapId: string | null; initial: string } | null;
 }) {
+  const [loc, setLoc] = useState<PickedLocation | null>(null);
+  const [note, setNote] = useState("");
   const [mode, setMode] = useState<"accept" | "decline">("accept");
   const [state, setState] = useState<LinkRespondState>(undefined);
   const [pending, startT] = useTransition();
@@ -45,7 +50,8 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
     e.preventDefault();
     startT(async () => {
       try {
-        const r = await post({ kind: "respond", token, decision: mode === "accept" ? "accepted" : "declined", name, reason, agree });
+        const r = await post({ kind: "respond", token, decision: mode === "accept" ? "accepted" : "declined", name, reason, agree,
+          ...(mode === "accept" && location && (loc || note.trim()) ? { location: { ...(loc ?? {}), note: note.trim() } } : {}) });
         setState((await r.json()) as LinkRespondState);
       } catch { setState({ error: "Couldn't reach us — check your connection and try again." }); }
     });
@@ -107,6 +113,17 @@ export function LinkResponse({ token, versionNumber, total, defaultName, busines
               <p className="rounded-xl bg-amber-50 px-4 py-3 text-[0.8125rem] text-amber-900 ring-1 ring-inset ring-amber-200">
                 <strong>Your booking isn&apos;t confirmed until {businessName} confirms it</strong> — they may need to check staff and equipment first.
               </p>
+            )}
+            {location && (
+              <fieldset className="space-y-3 rounded-xl p-4 ring-1 ring-inset ring-line-strong">
+                <legend className="px-1 text-[0.9375rem] font-semibold text-ink">Where is the event? <span className="font-normal text-ink-muted">(optional)</span></legend>
+                <p className="text-[0.8125rem] text-ink-muted">So our team goes to the right spot. No street address — a park, a field, a car park? Drop a pin instead.</p>
+                <AddressPicker apiKey={location.apiKey} mapId={location.mapId} initial={location.initial} value={loc} onChange={setLoc} />
+                <div>
+                  <Label htmlFor="accept-note" hint="Optional">Anything to help us find you</Label>
+                  <Input id="accept-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="e.g. Car park behind the oval, gate 2" className="bg-surface text-base sm:text-[0.875rem]" />
+                </div>
+              </fieldset>
             )}
             <div>
               <Label htmlFor="accept-name">Your full name</Label>
